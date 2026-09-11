@@ -2079,19 +2079,73 @@ paths:
           description: ID of the source collection to copy.
       requestBody:
         required: false
+        description: |
+          Optional field overrides for the cloned collection. All fields are optional — any field omitted here is inherited from the source collection. This schema mirrors CollectionConfig but with no required fields, since the required values are inherited from the source. The curation_order field is never accepted here and is always reset to 0 (copies are never curated).
         content:
           application/json:
             schema:
               type: object
+              description: |
+                Optional field overrides for the cloned collection. All fields are optional — any field omitted here is inherited from the source collection. This schema mirrors CollectionConfig but with no required fields, since the required values are inherited from the source. The curation_order field is never accepted here and is always reset to 0 (copies are never curated).
               properties:
                 name:
                   type: string
-                  description: Optional new name for the cloned collection. Defaults to the source name.
+                  description: New name for the copy. Defaults to source name.
+                description:
+                  type: string
+                  description: Override description.
+                category:
+                  type: string
+                  description: Deprecated — use domains.
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  description: Override tags.
+                pass_criteria:
+                  $ref: '#/components/schemas/PassCriteria'
+                  description: Override pass criteria.
+                benchmarks:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/CollectionBenchmarkConfig'
+                  description: Override benchmarks.
+                domains:
+                  type: array
+                  items:
+                    type: string
+                  description: Override domains.
+                tasks:
+                  type: array
+                  items:
+                    type: string
+                  description: Override tasks.
+                modalities:
+                  type: array
+                  items:
+                    type: string
+                  description: Override modalities.
+                industries:
+                  type: array
+                  items:
+                    type: string
+                  description: Override industries.
+                ai_entities:
+                  type: array
+                  items:
+                    type: string
+                  description: Override AI entities.
+                custom:
+                  type: object
+                  additionalProperties: true
+                  description: Override custom key-value data.
             examples:
-              CloneWithNewName:
-                summary: Clone with a custom name
+              CopyWithNewName:
+                summary: Copy with a new name and domain override
                 value:
-                  name: my-rag-evaluation
+                  name: my-custom-rag-eval
+                  domains:
+                    - grounded_document_understanding
       responses:
         '201':
           description: Cloned collection created successfully.

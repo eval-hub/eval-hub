@@ -102,6 +102,57 @@ type CollectionResource struct {
 	State *CollectionState `json:"state,omitempty"`
 }
 
+// ApplyOverrides returns a new CollectionConfig that is a copy of c with any
+// non-zero fields from overrides applied on top. CurationOrder is never copied
+// from overrides — it is always reset to 0 for caller-controlled collections.
+func (c CollectionConfig) ApplyOverrides(overrides *CollectionConfig) CollectionConfig {
+	if overrides == nil {
+		return c
+	}
+	if overrides.Name != "" {
+		c.Name = overrides.Name
+	}
+	if overrides.Description != "" {
+		c.Description = overrides.Description
+	}
+	if overrides.Category != "" {
+		c.Category = overrides.Category
+	}
+	if len(overrides.Tags) > 0 {
+		c.Tags = overrides.Tags
+	}
+	if overrides.PassCriteria != nil {
+		c.PassCriteria = overrides.PassCriteria
+	}
+	if len(overrides.Benchmarks) > 0 {
+		c.Benchmarks = overrides.Benchmarks
+	}
+	if len(overrides.Domains) > 0 {
+		c.Domains = overrides.Domains
+	}
+	if len(overrides.Tasks) > 0 {
+		c.Tasks = overrides.Tasks
+	}
+	if len(overrides.Modalities) > 0 {
+		c.Modalities = overrides.Modalities
+	}
+	if len(overrides.Industries) > 0 {
+		c.Industries = overrides.Industries
+	}
+	if len(overrides.AIEntities) > 0 {
+		c.AIEntities = overrides.AIEntities
+	}
+	if overrides.Custom != nil {
+		c.Custom = overrides.Custom
+	}
+	if overrides.Agent != nil {
+		c.Agent = overrides.Agent
+	}
+	// CurationOrder is admin-only — never accepted from user overrides
+	c.CurationOrder = 0
+	return c
+}
+
 // CollectionResourceList represents list of collection resources with pagination
 type CollectionResourceList struct {
 	Page

@@ -42,8 +42,24 @@ func (s *sqlStorage) createCollectionTxn(txn *sql.Tx, collection *api.Collection
 	return nil
 }
 
+// collectionStoredEntity is the internal representation persisted in the entity JSON column.
+// It embeds CollectionConfig (so all config fields are at the top level) and adds
+// server-managed fields that must also be persisted without requiring a schema migration.
+// Backward compatibility: old entity JSON (no state/version_counter fields) deserialises
+// with State=nil and VersionCounter=0, which are the correct zero values.
+type collectionStoredEntity struct {
+	api.CollectionConfig
+	State          *api.CollectionState `json:"state,omitempty"`
+	VersionCounter int                  `json:"version_counter,omitempty"`
+}
+
 func (s *sqlStorage) createCollectionEntity(collection *api.CollectionResource) ([]byte, error) {
-	collectionJSON, err := json.Marshal(collection.CollectionConfig)
+	entity := collectionStoredEntity{
+		CollectionConfig: collection.CollectionConfig,
+		State:            collection.State,
+		VersionCounter:   collection.Resource.VersionCounter,
+	}
+	collectionJSON, err := json.Marshal(entity)
 	if err != nil {
 		return nil, serviceerrors.NewServiceError(messages.InternalServerError, "Error", err.Error())
 	}
@@ -73,17 +89,20 @@ func (s *sqlStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 		return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "collection", "ResourceId", id)
 	}
 
-	// Unmarshal the entity JSON into EvaluationJobConfig
-	var collectionConfig api.CollectionConfig
-	err = json.Unmarshal([]byte(query.EntityJSON), &collectionConfig)
+	// Unmarshal the entity JSON into the stored entity (includes State and VersionCounter)
+	var entity collectionStoredEntity
+	err = json.Unmarshal([]byte(query.EntityJSON), &entity)
 	if err != nil {
-		s.logger.Error("Failed to unmarshal collection config", "error", err, "id", id)
+		s.logger.Error("Failed to unmarshal collection entity", "error", err, "id", id)
 		return nil, serviceerrors.NewServiceError(messages.JSONUnmarshalFailed, "Type", "collection", "Error", err.Error())
 	}
 
+	resource := query.Resource
+	resource.VersionCounter = entity.VersionCounter
 	collectionResource := api.CollectionResource{
-		Resource:         query.Resource,
-		CollectionConfig: collectionConfig,
+		Resource:         resource,
+		CollectionConfig: entity.CollectionConfig,
+		State:            entity.State,
 	}
 
 	return &collectionResource, nil
@@ -105,13 +124,14 @@ func (s *sqlStorage) UpdateCollection(id string, collection *api.CollectionConfi
 		if err != nil {
 			return err
 		}
-		if persistedCollection.Resource.IsSystemResource() {
+		if persistedCollection.Resource.IsSystemResource() || persistedCollection.CurationOrder > 0 {
 			return serviceerrors.NewServiceError(
 				messages.ReadOnlyCollection,
 				"CollectionID", id,
 			)
 		}
 		persistedCollection.CollectionConfig = *collection
+		persistedCollection.Resource.VersionCounter++
 		err = s.updateCollectionTransactional(txn, id, persistedCollection)
 		if err != nil {
 			return err
@@ -167,6 +187,25 @@ func (s *sqlStorage) DeleteCollection(id string) error {
 	})
 }
 
+func (s *sqlStorage) UpdateCollectionState(id string, state *api.CollectionState) (*api.CollectionResource, error) {
+	var updated *api.CollectionResource
+
+	err := s.withTransaction("update collection state", id, func(txn *sql.Tx) error {
+		coll, err := s.getCollectionTransactional(txn, id)
+		if err != nil {
+			return err
+		}
+		coll.State = state
+		if err = s.updateCollectionTransactional(txn, id, coll); err != nil {
+			return err
+		}
+		updated, err = s.getCollectionTransactional(txn, id)
+		return err
+	})
+
+	return updated, err
+}
+
 func (s *sqlStorage) PatchCollection(id string, patches *api.Patch) (*api.CollectionResource, error) {
 	var updated *api.CollectionResource
 
@@ -175,11 +214,16 @@ func (s *sqlStorage) PatchCollection(id string, patches *api.Patch) (*api.Collec
 		if err != nil {
 			return err
 		}
-		if persistedCollection.Resource.Owner == "system" {
+		if persistedCollection.Resource.Owner == "system" || persistedCollection.CurationOrder > 0 {
 			return serviceerrors.NewServiceError(
 				messages.ReadOnlyCollection,
 				"CollectionID", id,
 			)
+		}
+		// Ensure State is non-nil before serializing for JSON Patch so that
+		// /state/pinned_order add/replace operations have a parent key to target.
+		if persistedCollection.State == nil {
+			persistedCollection.State = &api.CollectionState{}
 		}
 		// convert persistedCollection to json
 		persistedCollectionJSON, err := s.createCollectionEntity(persistedCollection)
@@ -191,23 +235,24 @@ func (s *sqlStorage) PatchCollection(id string, patches *api.Patch) (*api.Collec
 		if err != nil {
 			return err
 		}
-		// convert the patchedCollectionJSON back to a CollectionResource
-		var patchedCollection api.CollectionResource
-		err = json.Unmarshal([]byte(patchedCollectionJSON), &patchedCollection)
+		// Unmarshal back into the stored entity to preserve State and VersionCounter
+		var patchedEntity collectionStoredEntity
+		err = json.Unmarshal([]byte(patchedCollectionJSON), &patchedEntity)
 		if err != nil {
 			return err
 		}
-		// convert the patched config back to a CollectionResource
-		resource := patchedCollection.Resource
+		resource := persistedCollection.Resource
 		if resource.CreatedAt.IsZero() {
 			resource.CreatedAt = time.Now()
 		}
 		if resource.UpdatedAt.IsZero() {
 			resource.UpdatedAt = resource.CreatedAt
 		}
+		resource.VersionCounter = patchedEntity.VersionCounter + 1
 		result := api.CollectionResource{
 			Resource:         resource,
-			CollectionConfig: patchedCollection.CollectionConfig,
+			CollectionConfig: patchedEntity.CollectionConfig,
+			State:            patchedEntity.State,
 		}
 		err = s.updateCollectionTransactional(txn, id, &result)
 		if err != nil {

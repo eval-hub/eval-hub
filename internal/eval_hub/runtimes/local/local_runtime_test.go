@@ -96,6 +96,9 @@ func (f *fakeStorage) UpdateCollection(_ string, _ *api.CollectionConfig) (*api.
 	return nil, nil
 }
 func (f *fakeStorage) DeleteCollection(_ string) error { return nil }
+func (f *fakeStorage) UpdateCollectionState(_ string, _ *api.CollectionState) (*api.CollectionResource, error) {
+	return nil, nil
+}
 func (f *fakeStorage) LoadSystemResources(_ map[string]api.CollectionResource, _ map[string]api.ProviderResource) error {
 	return nil
 }

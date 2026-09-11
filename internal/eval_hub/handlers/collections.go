@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	// these are the allowed patches for the user-defined collection config
+	// allowedCollectionPatches are the allowed patches for user-defined collection config fields.
 	allowedCollectionPatches = []allowedPatch{
 		{Path: "/name", Op: api.PatchOpReplace, Prefix: false},
 
@@ -44,6 +44,30 @@ var (
 		{Path: "/pass_criteria", Op: api.PatchOpAdd, Prefix: false},
 		{Path: "/pass_criteria", Op: api.PatchOpRemove, Prefix: false},
 		{Path: "/pass_criteria", Op: api.PatchOpReplace, Prefix: false},
+
+		{Path: "/domains", Op: api.PatchOpAdd, Prefix: true},
+		{Path: "/domains", Op: api.PatchOpRemove, Prefix: true},
+		{Path: "/domains", Op: api.PatchOpReplace, Prefix: true},
+
+		{Path: "/tasks", Op: api.PatchOpAdd, Prefix: true},
+		{Path: "/tasks", Op: api.PatchOpRemove, Prefix: true},
+		{Path: "/tasks", Op: api.PatchOpReplace, Prefix: true},
+
+		{Path: "/modalities", Op: api.PatchOpAdd, Prefix: true},
+		{Path: "/modalities", Op: api.PatchOpRemove, Prefix: true},
+		{Path: "/modalities", Op: api.PatchOpReplace, Prefix: true},
+
+		{Path: "/industries", Op: api.PatchOpAdd, Prefix: true},
+		{Path: "/industries", Op: api.PatchOpRemove, Prefix: true},
+		{Path: "/industries", Op: api.PatchOpReplace, Prefix: true},
+
+		{Path: "/ai_entities", Op: api.PatchOpAdd, Prefix: true},
+		{Path: "/ai_entities", Op: api.PatchOpRemove, Prefix: true},
+		{Path: "/ai_entities", Op: api.PatchOpReplace, Prefix: true},
+
+		// Tenant-controlled pin ordering (state field)
+		{Path: "/state/pinned_order", Op: api.PatchOpAdd, Prefix: false},
+		{Path: "/state/pinned_order", Op: api.PatchOpReplace, Prefix: false},
 	}
 )
 
@@ -69,16 +93,22 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 				return err
 			}
 
-			err = CheckScope(filter)
-			if err != nil {
+			if err = CheckScope(filter); err != nil {
 				return err
 			}
 
-			allowedParams := []string{"limit", "offset", "name", "category", "tags", "owner", "scope"}
+			allowedParams := []string{"limit", "offset", "name", "category", "tags", "owner", "scope",
+				"domains", "tasks", "modalities", "industries", "ai_entities", "sort_by"}
 			badParams := getAllParams(req, allowedParams...)
 			if len(badParams) > 0 {
-				// just report the first bad parameter
 				return serviceerrors.NewServiceError(messages.QueryBadParameter, "ParameterName", badParams[0], "AllowedParameters", strings.Join(allowedParams, ", "))
+			}
+
+			// Handle new array filters (use first value from each param)
+			for _, key := range []string{"domains", "tasks", "modalities", "industries", "ai_entities"} {
+				if vals := req.Query(key); len(vals) > 0 && vals[0] != "" {
+					filter.Params[key] = vals[0]
+				}
 			}
 
 			ofilter = filter
@@ -98,7 +128,8 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			collections, err := storage.WithContext(runtimeCtx).GetCollections(ofilter)
+			scoped := storage.WithContext(runtimeCtx)
+			collections, err := scoped.GetCollections(ofilter)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -109,6 +140,13 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 				w.Error(err, ctx.RequestID)
 				return err
 			}
+
+			// Enrich benchmarks from providers and auto-populate classification fields
+			ptrs := make([]*api.CollectionResource, len(collections.Items))
+			for i := range collections.Items {
+				ptrs[i] = &collections.Items[i]
+			}
+			EnrichCollectionFromProviders(scoped, ptrs...)
 
 			result := api.CollectionResourceList{
 				Page:  *page,
@@ -125,6 +163,80 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 		"count", strconv.Itoa(count),
 		"total_count", strconv.Itoa(totalCount),
 	)
+}
+
+// EnrichCollectionFromProviders enriches each collection's benchmarks with Description and URL
+// from the provider config, and auto-populates Domains/Tasks/Modalities on the collection
+// from the union of its benchmarks' corresponding fields when not explicitly set.
+func EnrichCollectionFromProviders(storage abstractions.Storage, collections ...*api.CollectionResource) {
+	loaded := make(map[string]*api.ProviderResource)
+	failed := make(map[string]struct{})
+	for _, coll := range collections {
+		if coll == nil {
+			continue
+		}
+		domainsSet := make(map[string]struct{})
+		tasksSet := make(map[string]struct{})
+		modalitiesSet := make(map[string]struct{})
+
+		for j := range coll.Benchmarks {
+			b := &coll.Benchmarks[j]
+			pid, bid := b.ProviderID, b.ID
+			if pid == "" || bid == "" {
+				continue
+			}
+			b.URL = ""
+			if _, miss := failed[pid]; miss {
+				continue
+			}
+			p, ok := loaded[pid]
+			if !ok {
+				var err error
+				p, err = storage.GetProvider(pid)
+				if err != nil || p == nil {
+					failed[pid] = struct{}{}
+					continue
+				}
+				loaded[pid] = p
+			}
+			for k := range p.Benchmarks {
+				pb := &p.Benchmarks[k]
+				if pb.ID != bid {
+					continue
+				}
+				if pb.URL != "" {
+					b.URL = pb.URL
+				}
+				for _, d := range pb.Domains {
+					domainsSet[d] = struct{}{}
+				}
+				for _, t := range pb.Tasks {
+					tasksSet[t] = struct{}{}
+				}
+				for _, m := range pb.Modalities {
+					modalitiesSet[m] = struct{}{}
+				}
+				break
+			}
+		}
+
+		// Auto-populate classification fields from benchmarks if not explicitly set
+		if len(coll.Domains) == 0 {
+			for d := range domainsSet {
+				coll.Domains = append(coll.Domains, d)
+			}
+		}
+		if len(coll.Tasks) == 0 {
+			for t := range tasksSet {
+				coll.Tasks = append(coll.Tasks, t)
+			}
+		}
+		if len(coll.Modalities) == 0 {
+			for m := range modalitiesSet {
+				coll.Modalities = append(coll.Modalities, m)
+			}
+		}
+	}
 }
 
 // EnrichBenchmarkURLsFromProviders clears each benchmark URL (when provider_id and id are set), then sets it
@@ -309,6 +421,7 @@ func (h *Handlers) HandleGetCollection(ctx *executioncontext.ExecutionContext, r
 				w.Error(err, ctx.RequestID)
 				return err
 			}
+			EnrichCollectionFromProviders(scoped, response)
 			w.WriteJSON(response, 200)
 			return nil
 		},
@@ -356,8 +469,20 @@ func (h *Handlers) HandleUpdateCollection(ctx *executioncontext.ExecutionContext
 		ctx,
 		func(runtimeCtx context.Context) error {
 			scoped := storage.WithContext(runtimeCtx)
+
+			// 403 for system or curated (curation_order > 0) collections
+			existing, err := scoped.GetCollection(collectionID)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			if existing.Resource.IsSystemResource() || existing.CurationOrder > 0 {
+				w.Error(serviceerrors.NewServiceError(messages.ReadOnlyCollection, "CollectionID", collectionID), ctx.RequestID)
+				return nil
+			}
+
 			toUpdate := &api.CollectionResource{CollectionConfig: *request}
-			EnrichBenchmarkURLsFromProviders(scoped, toUpdate)
+			EnrichCollectionFromProviders(scoped, toUpdate)
 			result, err := scoped.UpdateCollection(collectionID, &toUpdate.CollectionConfig)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
@@ -416,6 +541,18 @@ func (h *Handlers) HandlePatchCollection(ctx *executioncontext.ExecutionContext,
 		ctx,
 		func(runtimeCtx context.Context) error {
 			scoped := storage.WithContext(runtimeCtx)
+
+			// 403 for system or curated (curation_order > 0) collections
+			existing, err := scoped.GetCollection(collectionID)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			if existing.Resource.IsSystemResource() || existing.CurationOrder > 0 {
+				w.Error(serviceerrors.NewServiceError(messages.ReadOnlyCollection, "CollectionID", collectionID), ctx.RequestID)
+				return nil
+			}
+
 			if err := enrichEntireBenchmarkPatchValues(scoped, &patches); err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -425,13 +562,96 @@ func (h *Handlers) HandlePatchCollection(ctx *executioncontext.ExecutionContext,
 				w.Error(err, ctx.RequestID)
 				return err
 			}
-
 			w.WriteJSON(result, 200)
 			return nil
 		},
 		"storage",
 		"patch-collection",
 		"collection.id", collectionID,
+	)
+}
+
+// HandleCloneCollection handles POST /api/v1/evaluations/collections/{collection_id}/clones
+func (h *Handlers) HandleCloneCollection(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
+
+	logging.LogRequestStarted(ctx)
+
+	sourceID := req.PathValue(constants.PathParameterCollectionID)
+	if sourceID == "" {
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PathParameterCollectionID), ctx.RequestID)
+		return
+	}
+
+	_ = h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			scoped := storage.WithContext(runtimeCtx)
+
+			// Fetch source collection
+			source, err := scoped.GetCollection(sourceID)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+
+			// Parse optional body as overrides — required fields are inherited from source.
+			// Invalid JSON is rejected; missing body or empty body is accepted (no overrides).
+			overrides := &api.CollectionConfig{}
+			bodyBytes, bErr := req.BodyAsBytes()
+			if bErr != nil {
+				w.Error(bErr, ctx.RequestID)
+				return bErr
+			}
+			if len(bodyBytes) > 0 {
+				if err = json.Unmarshal(bodyBytes, overrides); err != nil {
+					svcErr := serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", err.Error())
+					w.Error(svcErr, ctx.RequestID)
+					return svcErr
+				}
+			}
+
+			// Build new config by applying overrides on top of the source.
+			// ApplyOverrides always resets CurationOrder to 0.
+			newConfig := source.ApplyOverrides(overrides)
+
+			// Validate merged config — benchmarks still require non-empty id and provider_id.
+			if err = h.validate.StructCtx(runtimeCtx, newConfig); err != nil {
+				svcErr := serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error", err.Error())
+				w.Error(svcErr, ctx.RequestID)
+				return svcErr
+			}
+
+			newID := common.GUID()
+			now := time.Now()
+			newCollection := &api.CollectionResource{
+				Resource: api.Resource{
+					ID:             newID,
+					CreatedAt:      now,
+					UpdatedAt:      now,
+					Owner:          ctx.User,
+					Tenant:         ctx.Tenant,
+					VersionCounter: 1,
+				},
+				CollectionConfig: newConfig,
+				State: &api.CollectionState{
+					DerivedFrom: sourceID,
+				},
+			}
+
+			EnrichCollectionFromProviders(scoped, newCollection)
+
+			if err = scoped.CreateCollection(newCollection); err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+
+			w.WriteJSON(newCollection, 201)
+			return nil
+		},
+		"storage",
+		"clone-collection",
+		"collection.source_id", sourceID,
 	)
 }
 

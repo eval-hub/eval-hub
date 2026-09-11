@@ -87,7 +87,7 @@ func (s *sqliteStatementsFactory) GetAllowedFilterColumns(tableName string) []st
 	case shared.TableProviders:
 		return allColumns // "benchmarks" and "scope" are not allowed filters for providers from the database
 	case shared.TableCollections:
-		return append(allColumns, "category") // "scope" is not allowed filter for collections from the database
+		return append(allColumns, "category", "scope_curated", "domains", "tasks", "modalities", "industries", "ai_entities")
 	default:
 		return nil
 	}
@@ -120,12 +120,17 @@ func (s *sqliteStatementsFactory) CreateEntityFilterCondition(key string, value 
 		return fmt.Sprintf("json_extract(entity, '%s') = ?", namePath), []any{value}
 	case "category":
 		if tableName == shared.TableCollections {
-			// collections: category at entity root
-			categoryPath := "$.category"
-			return fmt.Sprintf("json_extract(entity, '%s') = ?", categoryPath), []any{value}
+			return "json_extract(entity, '$.category') = ?", []any{value}
 		}
-		// should never get here as we validate the filter before calling this function
 		return "", []any{}
+	case "scope_curated":
+		// Filter to curated collections: curation_order > 0
+		return "CAST(json_extract(entity, '$.curation_order') AS INTEGER) > 0", []any{}
+	case "domains", "tasks", "modalities", "industries", "ai_entities":
+		// Array-contains filter on JSON array fields
+		fieldStr, _ := value.(string)
+		jsonPath := fmt.Sprintf("$.%s", key)
+		return fmt.Sprintf("json_type(json_extract(entity, '%s')) = 'array' AND EXISTS (SELECT 1 FROM json_each(json_extract(entity, '%s')) WHERE value = ?)", jsonPath, jsonPath), []any{fieldStr}
 	case "tags":
 		tagStr, _ := value.(string)
 		// evaluations: tags at config.tags; providers and collections: tags at entity root
