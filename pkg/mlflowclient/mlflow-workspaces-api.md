@@ -135,13 +135,30 @@ Update workspace metadata.
 | ------------------------------------------- | ----------- |
 | `3.0/mlflow/workspaces/{workspace_name}`   | `DELETE`    |
 
-Delete a workspace.
+Delete a workspace. By default the server uses **RESTRICT** semantics: the
+request fails if the workspace contains any experiments, runs, or other
+resources. Callers can override this by passing a `deletion_mode` field in
+the request body:
+
+- **`RESTRICT`** (default) — reject deletion when the workspace is non-empty.
+- **`CASCADE`** — delete the workspace and all resources it contains.
+- **`SET_DEFAULT`** — move all resources to the `default` workspace before
+  deleting.
+
+The reserved `default` workspace cannot be deleted regardless of the
+deletion mode.
 
 #### Delete Workspace Path Parameters
 
 | Parameter        | Type   | Description                                              |
 | ---------------- | ------ | -------------------------------------------------------- |
 | `workspace_name` | STRING | Name of the workspace to delete. **Required.**           |
+
+#### Delete Workspace Request
+
+| Field Name      | Type   | Description                                                                                         |
+| --------------- | ------ | --------------------------------------------------------------------------------------------------- |
+| `deletion_mode` | STRING | Optional. One of `RESTRICT` (default), `CASCADE`, or `SET_DEFAULT`. Controls non-empty workspace handling. |
 
 ---
 
@@ -151,7 +168,9 @@ Delete a workspace.
 | ------------------------------ | ----------- |
 | `3.0/mlflow/workspaces`       | `GET`       |
 
-List all workspaces.
+List accessible workspaces. When authentication and workspaces are both
+enabled, the response contains only the workspaces that the authenticated
+caller is permitted to access.
 
 #### List Workspaces Response
 
@@ -169,7 +188,7 @@ scope the operation:
 
 | Header Name          | Type            | Description                                              |
 | -------------------- | --------------- | -------------------------------------------------------- |
-| `X-MLFLOW-WORKSPACE` | STRING or NULL | Workspace name to scope the request to. When omitted or null, the server uses the `default` workspace. |
+| `X-MLFLOW-WORKSPACE` | STRING or NULL | Workspace name to scope the request to. When the header is omitted or set to NULL, no workspace header is sent and the server falls back to its configured default workspace (if one exists). When no default workspace is configured on the server, callers must provide an explicit workspace name. |
 
 ---
 
