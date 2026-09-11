@@ -884,7 +884,7 @@ func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
 		t.Fatalf("expected init command [%q, %q], got %v", defaultTestDataHFInitCmd, defaultTestDataHFInitScript, initContainer.Command)
 	}
 
-	var foundRepoID bool
+	var foundRepoID, foundRevision bool
 	for _, env := range initContainer.Env {
 		switch env.Name {
 		case envTestDataHFRepoIDName:
@@ -893,10 +893,14 @@ func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
 			if env.Value != "main" {
 				t.Fatalf("expected revision main, got %q", env.Value)
 			}
+			foundRevision = true
 		}
 	}
 	if !foundRepoID {
 		t.Fatal("expected repo_id env var on HF init container")
+	}
+	if !foundRevision {
+		t.Fatal("expected revision env var on HF init container")
 	}
 
 	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
