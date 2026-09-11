@@ -29,10 +29,11 @@ TOKEN_KEY = "token"
 ENV_REPO_ID = "TEST_DATA_HF_REPO_ID"
 ENV_REVISION = "TEST_DATA_HF_REVISION"
 ENV_SUB_PATH = "TEST_DATA_HF_SUBPATH"
-ENV_DOWNLOAD_TIMEOUT = "TEST_DATA_DOWNLOAD_TIMEOUT"
+ENV_DOWNLOAD_TIMEOUT = "TEST_DATA_HF_TIMEOUT"
 ENV_HF_ENDPOINT = "HF_ENDPOINT"
 
 DEFAULT_TIMEOUT_SECONDS = 600
+DEFAULT_HF_HUB_ENDPOINT = "https://huggingface.co"
 # OpenShift/Kubernetes init containers often run as a random UID without $HOME;
 # huggingface_hub otherwise tries to write under /.cache and fails with EACCES.
 DEFAULT_HF_CACHE_DIR = Path("/tmp/huggingface")
@@ -128,6 +129,16 @@ def _validate_hf_endpoint(endpoint: str) -> str | None:
         raise ValueError(f"{ENV_HF_ENDPOINT} must use https scheme")
     if not parsed.hostname:
         raise ValueError(f"{ENV_HF_ENDPOINT} must include a hostname")
+    return endpoint
+
+
+def _resolve_hf_endpoint() -> str:
+    raw = os.environ.get(ENV_HF_ENDPOINT, "").strip()
+    if not raw:
+        return DEFAULT_HF_HUB_ENDPOINT
+    endpoint = _validate_hf_endpoint(raw)
+    if endpoint is None:
+        return DEFAULT_HF_HUB_ENDPOINT
     return endpoint
 
 
@@ -386,13 +397,12 @@ def main() -> int:
     sub_path = os.environ.get(ENV_SUB_PATH, "").strip()
 
     try:
-        endpoint = _validate_hf_endpoint(os.environ.get(ENV_HF_ENDPOINT, ""))
+        endpoint = _resolve_hf_endpoint()
         timeout_seconds = _parse_timeout_seconds()
     except ValueError as err:
         return _fail(str(err))
 
-    if endpoint:
-        os.environ["HF_ENDPOINT"] = endpoint
+    os.environ["HF_ENDPOINT"] = endpoint
 
     try:
         status, commit_sha, error_message = _run_download_with_timeout(

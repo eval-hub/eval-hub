@@ -2,10 +2,8 @@ package k8s
 
 import (
 	"testing"
-	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
-	"github.com/eval-hub/eval-hub/internal/testdatainit"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -855,20 +853,18 @@ func TestBuildJobWithGitTestDataMissingInitImage(t *testing.T) {
 
 func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
 	cfg := &jobConfig{
-		jobID:                   "job-hf-public",
-		resourceGUID:            "guid-hf-public",
-		benchmarkIndex:          0,
-		namespace:               "default",
-		providerID:              "provider-1",
-		benchmarkID:             "bench-1",
-		adapterImage:            "adapter:latest",
-		defaultEnv:              []api.EnvVar{},
-		testDataInitImage:       "quay.io/evalhub/evalhub:test",
-		testDataDownloadTimeout: 15 * time.Minute,
+		jobID:             "job-hf-public",
+		resourceGUID:      "guid-hf-public",
+		benchmarkIndex:    0,
+		namespace:         "default",
+		providerID:        "provider-1",
+		benchmarkID:       "bench-1",
+		adapterImage:      "adapter:latest",
+		defaultEnv:        []api.EnvVar{},
+		testDataInitImage: "quay.io/evalhub/evalhub:test",
 		testDataHF: hfTestDataConfig{
-			repoID:      "cais/mmlu",
-			revision:    "main",
-			hubEndpoint: "https://huggingface.co",
+			repoID:   "cais/mmlu",
+			revision: "main",
 		},
 	}
 
@@ -888,7 +884,7 @@ func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
 		t.Fatalf("expected init command [%q, %q], got %v", defaultTestDataHFInitCmd, defaultTestDataHFInitScript, initContainer.Command)
 	}
 
-	var foundRepoID, foundEndpoint, foundTimeout bool
+	var foundRepoID bool
 	for _, env := range initContainer.Env {
 		switch env.Name {
 		case envTestDataHFRepoIDName:
@@ -897,20 +893,10 @@ func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
 			if env.Value != "main" {
 				t.Fatalf("expected revision main, got %q", env.Value)
 			}
-		case envTestDataHFEndpointName:
-			foundEndpoint = env.Value == "https://huggingface.co"
-		case testdatainit.EnvDownloadTimeout:
-			foundTimeout = env.Value == (15 * time.Minute).String()
 		}
 	}
 	if !foundRepoID {
 		t.Fatal("expected repo_id env var on HF init container")
-	}
-	if !foundEndpoint {
-		t.Fatal("expected HF endpoint env var on HF init container")
-	}
-	if !foundTimeout {
-		t.Fatal("expected download timeout env var on HF init container")
 	}
 
 	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
@@ -940,9 +926,8 @@ func TestBuildJobWithHFTestDataPrivateRepo(t *testing.T) {
 		defaultEnv:        []api.EnvVar{},
 		testDataInitImage: "quay.io/evalhub/evalhub:test",
 		testDataHF: hfTestDataConfig{
-			repoID:      "org/gated-dataset",
-			secretRef:   "my-hf-secret",
-			hubEndpoint: "https://huggingface.co",
+			repoID:    "org/gated-dataset",
+			secretRef: "my-hf-secret",
 		},
 	}
 

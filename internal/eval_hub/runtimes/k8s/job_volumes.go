@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/eval-hub/eval-hub/internal/testdatainit"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
@@ -411,10 +410,10 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			ImagePullPolicy: corev1.PullIfNotPresent,
 			Command:         []string{defaultTestDataInitCmd},
 			Resources:       initResources,
-			Env: appendTestDataDownloadTimeoutEnv([]corev1.EnvVar{
+			Env: []corev1.EnvVar{
 				{Name: envTestDataS3BucketName, Value: cfg.testDataS3.bucket},
 				{Name: envTestDataS3KeyName, Value: normalizeS3Key(cfg.testDataS3.key)},
-			}, cfg),
+			},
 			SecurityContext: defaultSecurityContext(),
 			VolumeMounts: []corev1.VolumeMount{
 				{
@@ -448,10 +447,10 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			},
 		)
 
-		envVars := appendTestDataDownloadTimeoutEnv([]corev1.EnvVar{
+		envVars := []corev1.EnvVar{
 			{Name: envTestDataGitURLName, Value: cfg.testDataGit.url},
 			{Name: envTestDataGitRefName, Value: cfg.testDataGit.ref},
-		}, cfg)
+		}
 		if cfg.testDataGit.subPath != "" {
 			envVars = append(envVars, corev1.EnvVar{Name: envTestDataGitSubPathName, Value: cfg.testDataGit.subPath})
 		}
@@ -513,10 +512,9 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			},
 		)
 
-		envVars := appendTestDataDownloadTimeoutEnv([]corev1.EnvVar{
+		envVars := []corev1.EnvVar{
 			{Name: envTestDataHFRepoIDName, Value: cfg.testDataHF.repoID},
-			{Name: envTestDataHFEndpointName, Value: cfg.testDataHF.hubEndpoint},
-		}, cfg)
+		}
 		if cfg.testDataHF.revision != "" {
 			envVars = append(envVars, corev1.EnvVar{Name: envTestDataHFRevisionName, Value: cfg.testDataHF.revision})
 		}
@@ -642,16 +640,6 @@ func hasGitTestData(cfg *jobConfig) bool {
 
 func hasHFTestData(cfg *jobConfig) bool {
 	return strings.TrimSpace(cfg.testDataHF.repoID) != ""
-}
-
-func appendTestDataDownloadTimeoutEnv(envVars []corev1.EnvVar, cfg *jobConfig) []corev1.EnvVar {
-	if cfg == nil || cfg.testDataDownloadTimeout <= 0 {
-		return envVars
-	}
-	return append(envVars, corev1.EnvVar{
-		Name:  testdatainit.EnvDownloadTimeout,
-		Value: cfg.testDataDownloadTimeout.String(),
-	})
 }
 
 func normalizeS3Key(key string) string {

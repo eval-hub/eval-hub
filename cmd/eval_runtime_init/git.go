@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	git "github.com/go-git/go-git/v5"
 	gitconfig "github.com/go-git/go-git/v5/config"
@@ -19,7 +20,6 @@ import (
 	"github.com/go-git/go-git/v5/storage/memory"
 
 	"github.com/eval-hub/eval-hub/internal/runtimeenv"
-	"github.com/eval-hub/eval-hub/internal/testdatainit"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -43,9 +43,13 @@ func runGit() error {
 		return fmt.Errorf("%s is required", envGitRef)
 	}
 
-	timeout, err := testdatainit.ParseDownloadTimeout(envGitTimeout)
-	if err != nil {
-		return err
+	timeout := defaultTimeout
+	if raw := strings.TrimSpace(os.Getenv(envGitTimeout)); raw != "" {
+		parsed, err := time.ParseDuration(raw)
+		if err != nil {
+			return fmt.Errorf("invalid %s: %w", envGitTimeout, err)
+		}
+		timeout = parsed
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)

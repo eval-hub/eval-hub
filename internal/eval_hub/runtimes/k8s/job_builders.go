@@ -78,7 +78,6 @@ const (
 	envTestDataHFRepoIDName         = "TEST_DATA_HF_REPO_ID"
 	envTestDataHFRevisionName       = "TEST_DATA_HF_REVISION"
 	envTestDataHFSubPathName        = "TEST_DATA_HF_SUBPATH"
-	envTestDataHFEndpointName       = "HF_ENDPOINT"
 	testDataGitAuthVolumeName       = "test-data-git-auth"
 	testDataHFAuthVolumeName        = "test-data-hf-auth"
 	defaultTestDataHFInitCmd        = "python3.11"

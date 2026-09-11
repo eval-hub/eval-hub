@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
@@ -82,7 +81,6 @@ type jobConfig struct {
 	testDataGit                gitTestDataConfig
 	testDataHF                 hfTestDataConfig
 	testDataInitImage          string
-	testDataDownloadTimeout    time.Duration
 	sidecarConfig              *config.SidecarConfig
 	// queueKind and queueName come from a queue-backed HardwareProfile when set,
 	// otherwise from effective hardware_config.queue, else deprecated evaluation.queue
@@ -110,11 +108,10 @@ type gitTestDataConfig struct {
 }
 
 type hfTestDataConfig struct {
-	repoID      string
-	revision    string
-	subPath     string
-	secretRef   string
-	hubEndpoint string // service.test_data_ref.hf.endpoint; injected into HF init container
+	repoID    string
+	revision  string
+	subPath   string
+	secretRef string
 }
 
 func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkConfig *api.EvaluationBenchmarkConfig, benchmarkIndex int, serviceConfig *config.Config, hardwareProfile *hardwareProfileResources) (*jobConfig, error) {
