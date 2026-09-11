@@ -245,7 +245,7 @@ func (r *LocalRuntime) runBenchmark(
 	}
 
 	// Build job spec JSON using shared logic
-	spec, err := shared.BuildJobSpec(evaluation, bench.ProviderID, &bench, benchmarkIndex, callbackURL)
+	spec, err := shared.BuildJobSpec(evaluation, bench.ProviderID, &bench, benchmarkIndex, callbackURL, provider)
 	if err != nil {
 		return fmt.Errorf("build job spec: %w", err)
 	}
