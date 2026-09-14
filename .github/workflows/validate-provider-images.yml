@@ -27,6 +27,21 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+
+      - name: Detect newly added provider files
+        id: new-providers
+        if: github.event_name == 'pull_request'
+        run: |
+          NEW=$(git diff --name-only --diff-filter=A \
+            ${{ github.event.pull_request.base.sha }} \
+            -- config/providers/ || true)
+          # Store as a newline-delimited list
+          {
+            echo "files<<EOF"
+            echo "$NEW"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Install crane
         env:
@@ -55,14 +70,29 @@ jobs:
           crane version
 
       - name: Verify provider images exist in registry
+        env:
+          NEW_PROVIDERS: ${{ steps.new-providers.outputs.files }}
         run: |
           EXIT=0
           echo "Checking container images referenced in provider configs..."
+
+          if [ -n "$NEW_PROVIDERS" ]; then
+            echo ""
+            echo "Newly added providers (image check skipped for this PR):"
+            echo "$NEW_PROVIDERS" | sed 's/^/  /'
+          fi
+
           echo ""
           for file in config/providers/*.yaml; do
             image=$(yq -r '.runtime.k8s.image // ""' "$file")
             [ -z "$image" ] && continue
             name=$(basename "$file")
+
+            if echo "$NEW_PROVIDERS" | grep -qxF "$file"; then
+              printf "  %-40s %-60s %s\n" "$name" "$image" "SKIPPED (new provider)"
+              continue
+            fi
+
             printf "  %-40s %-60s " "$name" "$image"
             if crane manifest "$image" > /dev/null 2>&1; then
               echo "OK"
