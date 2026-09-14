@@ -4,6 +4,8 @@ category: instruction_output
 description: >
   Evaluates whether models produce outputs that conform to structural constraints.
   JSONSchemaBench tests JSON schema compliance across easy, medium, and hard splits.
+  IFBench tests precise instruction-following generalization on 58 out-of-domain
+  verifiable constraints with programmatic scoring.
   Note: lm-eval runs LM-only (no constrained decoding); scores vary drastically by split.
   Part of the Curated Collections taxonomy (#916).
 tags:
@@ -11,11 +13,12 @@ tags:
   - structured-output
   - json
   - lm_eval
+  - ifbench
   - curated
 domains:
   - instruction_and_output_reliability
 pass_criteria:
-  threshold: 0.60
+  threshold: 0.325
 benchmarks:
   - id: jsonschema_bench
     provider_id: lm_evaluation_harness
@@ -25,3 +28,12 @@ benchmarks:
       lower_is_better: false
     pass_criteria:
       threshold: 0.60
+
+  - id: ifbench
+    provider_id: ifbench
+    weight: 1
+    primary_score:
+      metric: accuracy
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.05
