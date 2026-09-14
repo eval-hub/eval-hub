@@ -9,6 +9,8 @@
 [![Signed release](https://github.com/eval-hub/eval-hub/actions/workflows/signed-release.yml/badge.svg)](https://github.com/eval-hub/eval-hub/actions/workflows/signed-release.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/eval-hub/eval-hub/badge)](https://scorecard.dev/viewer/?uri=github.com/eval-hub/eval-hub)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13751/badge)](https://www.bestpractices.dev/projects/13751)
+[![SDK PyPI Version](https://img.shields.io/pypi/v/eval-hub-sdk?label=SDK%20PyPI%20Version)](https://pypi.org/project/eval-hub-sdk/)
+[![SDK Version](https://img.shields.io/github/v/release/eval-hub/eval-hub-sdk?label=SDK)](https://github.com/eval-hub/eval-hub-sdk/releases/latest)
 
 A lightweight REST API service for orchestrating LLM evaluations across multiple backends. Written in Go, it routes evaluation requests to frameworks like lm-evaluation-harness, RAGAS, Garak, and GuideLLM orchestrated via a [complementary SDK](https://github.com/eval-hub/eval-hub-sdk), tracks experiments via MLflow, and runs natively on OpenShift.
 

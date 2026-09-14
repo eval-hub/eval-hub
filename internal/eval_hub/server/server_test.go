@@ -59,7 +59,7 @@ func (r *stubRuntime) RunEvaluationJob(
 		return fmt.Errorf("provider %q not found", bench.ProviderID)
 	}
 
-	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, &bench, 0, nil)
+	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, &bench, 0, nil, &provider)
 	if err != nil {
 		return fmt.Errorf("build job spec: %w", err)
 	}
