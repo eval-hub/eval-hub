@@ -90,6 +90,7 @@ type LocalRuntime struct {
 	tracker              jobTracker
 	callbackURL          *string
 	mlflowTrackingURI    string
+	otelEndpoint         string                     // OTEL_EXPORTER_OTLP_ENDPOINT for adapter subprocesses; empty when OTEL is not configured
 	sidecarBaseURL       string                     // non-empty when local sidecar mode is active
 	sidecarModelDefaults *config.SidecarModelConfig // model proxy defaults from config; may be nil
 }
@@ -101,6 +102,7 @@ func NewLocalRuntime(
 	var sidecarBaseURL string
 	var sidecarModelDefaults *config.SidecarModelConfig
 	var mlflowTrackingURI string
+	var otelEndpoint string
 	if serviceConfig != nil && serviceConfig.MLFlow != nil {
 		mlflowTrackingURI = serviceConfig.MLFlow.EffectiveTrackingURI()
 	}
@@ -108,10 +110,12 @@ func NewLocalRuntime(
 		sidecarBaseURL = serviceConfig.Sidecar.BaseURL
 		sidecarModelDefaults = serviceConfig.Sidecar.Model
 	}
+	otelEndpoint = otelEndpointFromConfig(serviceConfig)
 	return &LocalRuntime{
 		logger:               logger,
 		callbackURL:          buildCallbackURL(serviceConfig),
 		mlflowTrackingURI:    mlflowTrackingURI,
+		otelEndpoint:         otelEndpoint,
 		sidecarBaseURL:       sidecarBaseURL,
 		sidecarModelDefaults: sidecarModelDefaults,
 		tracker: &pidTracker{
@@ -137,6 +141,25 @@ func buildCallbackURL(serviceConfig *config.Config) *string {
 	return &u
 }
 
+// otelEndpointFromConfig derives the OTEL_EXPORTER_OTLP_ENDPOINT value from
+// service config. Returns empty when OTEL is not enabled or no endpoint is set.
+func otelEndpointFromConfig(serviceConfig *config.Config) string {
+	if serviceConfig == nil || serviceConfig.OTEL == nil || !serviceConfig.OTEL.Enabled {
+		return ""
+	}
+	ep := strings.TrimSpace(serviceConfig.OTEL.ExporterEndpoint)
+	if ep == "" {
+		return ""
+	}
+	if strings.HasPrefix(strings.ToLower(ep), "http://") || strings.HasPrefix(strings.ToLower(ep), "https://") {
+		return ep
+	}
+	if serviceConfig.OTEL.ExporterInsecure {
+		return "http://" + ep
+	}
+	return "https://" + ep
+}
+
 func (r *LocalRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
 	return &LocalRuntime{
 		logger:               logger,
@@ -144,6 +167,7 @@ func (r *LocalRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
 		tracker:              r.tracker,
 		callbackURL:          r.callbackURL,
 		mlflowTrackingURI:    r.mlflowTrackingURI,
+		otelEndpoint:         r.otelEndpoint,
 		sidecarBaseURL:       r.sidecarBaseURL,
 		sidecarModelDefaults: r.sidecarModelDefaults,
 	}
@@ -156,6 +180,7 @@ func (r *LocalRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 		tracker:              r.tracker,
 		callbackURL:          r.callbackURL,
 		mlflowTrackingURI:    r.mlflowTrackingURI,
+		otelEndpoint:         r.otelEndpoint,
 		sidecarBaseURL:       r.sidecarBaseURL,
 		sidecarModelDefaults: r.sidecarModelDefaults,
 	}
@@ -314,6 +339,10 @@ func (r *LocalRuntime) runBenchmark(
 	cmd.Env = replaceEnvironmentVariable(cmd.Env, evalHubModeEnv, "local")
 	if r.mlflowTrackingURI != "" {
 		cmd.Env = replaceEnvironmentVariable(cmd.Env, mlflowTrackingURIEnv, r.mlflowTrackingURI)
+	}
+	if r.otelEndpoint != "" {
+		cmd.Env = replaceEnvironmentVariable(cmd.Env, "OTEL_EXPORTER_OTLP_ENDPOINT", r.otelEndpoint)
+		cmd.Env = replaceEnvironmentVariable(cmd.Env, "OTEL_SERVICE_NAME", "evalhub-adapter")
 	}
 	for _, envVar := range provider.Runtime.Local.Env {
 		if envVar.Name != "" {
