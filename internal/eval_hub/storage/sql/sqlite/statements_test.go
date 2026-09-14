@@ -47,10 +47,10 @@ func TestCreateProviderAddEntityStatementIncludesTimestamps(t *testing.T) {
 	}
 }
 
-func TestGetAllowedFilterColumns_IncludesCuratedCollectionFilters(t *testing.T) {
+func TestGetAllowedFilterColumns_IncludesCollectionFilters(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
 	cols := f.GetAllowedFilterColumns(shared.TableCollections)
-	required := []string{"scope_curated", "domains", "tasks", "modalities", "industries", "ai_entities"}
+	required := []string{"domains", "tasks", "modalities", "industries", "evaluation_targets"}
 	colSet := make(map[string]struct{}, len(cols))
 	for _, c := range cols {
 		colSet[c] = struct{}{}
@@ -62,20 +62,9 @@ func TestGetAllowedFilterColumns_IncludesCuratedCollectionFilters(t *testing.T) 
 	}
 }
 
-func TestCreateEntityFilterCondition_ScopeCurated(t *testing.T) {
-	f := NewStatementsFactory(slog.Default())
-	cond, args := f.CreateEntityFilterCondition("scope_curated", "true", 1, shared.TableCollections)
-	if !strings.Contains(cond, "curation_order") {
-		t.Errorf("scope_curated condition missing curation_order: %q", cond)
-	}
-	if len(args) != 0 {
-		t.Errorf("scope_curated should have no args, got %v", args)
-	}
-}
-
 func TestCreateEntityFilterCondition_ArrayFields(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
-	for _, key := range []string{"domains", "tasks", "modalities", "industries", "ai_entities"} {
+	for _, key := range []string{"domains", "tasks", "modalities", "industries", "evaluation_targets"} {
 		cond, args := f.CreateEntityFilterCondition(key, "rag", 1, shared.TableCollections)
 		if cond == "" {
 			t.Errorf("empty condition for key %q", key)

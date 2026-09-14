@@ -81,12 +81,14 @@ properties:
       Business industries this collection is relevant for (snake_case).
       Collection-level field; the same benchmarks may serve different industries.
       Example values: health, telco, financial, government.
-  ai_entities:
+  evaluation_targets:
     type: array
     items:
       type: string
     description: >
       AI entity types this collection evaluates (snake_case).
+      If not explicitly set, the handler returns the union of evaluation_targets from
+      the collection's benchmarks (via BenchmarkResource.evaluation_targets).
       Example values: model, agent.
 required:
   - name

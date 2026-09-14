@@ -87,7 +87,7 @@ func (s *sqliteStatementsFactory) GetAllowedFilterColumns(tableName string) []st
 	case shared.TableProviders:
 		return allColumns // "benchmarks" and "scope" are not allowed filters for providers from the database
 	case shared.TableCollections:
-		return append(allColumns, "category", "scope_curated", "domains", "tasks", "modalities", "industries", "ai_entities")
+		return append(allColumns, "category", "domains", "tasks", "modalities", "industries", "evaluation_targets")
 	default:
 		return nil
 	}
@@ -123,10 +123,7 @@ func (s *sqliteStatementsFactory) CreateEntityFilterCondition(key string, value 
 			return "json_extract(entity, '$.category') = ?", []any{value}
 		}
 		return "", []any{}
-	case "scope_curated":
-		// Filter to curated collections: curation_order > 0
-		return "CAST(json_extract(entity, '$.curation_order') AS INTEGER) > 0", []any{}
-	case "domains", "tasks", "modalities", "industries", "ai_entities":
+	case "domains", "tasks", "modalities", "industries", "evaluation_targets":
 		// Array-contains filter on JSON array fields
 		fieldStr, _ := value.(string)
 		jsonPath := fmt.Sprintf("$.%s", key)

@@ -1462,11 +1462,10 @@ paths:
             type: string
             enum:
               - system
-              - curated
               - tenant
             title: Scope of collections
           description: |
-            Filters the result set by collection scope, within the collections visible to the requesting tenant. `system` returns all system-defined collections (curated and non-curated). `curated` returns only curated system collections (those with curation_order > 0). `tenant` returns only this tenant's own custom collections. When omitted, all collections visible to this tenant are returned (system + this tenant's custom collections).
+            Filters the result set by collection scope, within the collections visible to the requesting tenant. `system` returns all system-defined collections (including curated ones, identified by curation_order > 0). `tenant` returns only this tenant's own custom collections. When omitted, all collections visible to this tenant are returned (system + this tenant's custom collections).
         - name: modalities
           in: query
           required: false
@@ -1499,14 +1498,14 @@ paths:
             title: Industry filter
           description: |
             Filter collections by target industry (snake_case). Returns collections whose industries array contains this value. May be repeated for multiple values.
-        - name: ai_entities
+        - name: evaluation_targets
           in: query
           required: false
           schema:
             type: string
-            title: AI entity filter
+            title: Evaluation target filter
           description: |
-            Filter collections by AI entity type (snake_case). Example values: model, agent. Returns collections whose AI entities array contains this value. May be repeated for multiple values.
+            Filter collections by evaluation target type (snake_case). Example values: model, agent. Returns collections whose evaluation_targets array contains this value. May be repeated for multiple values.
         - name: sort_by
           in: query
           required: false
@@ -2067,7 +2066,7 @@ paths:
         - Collections
       summary: Copy Collection
       description: |
-        Creates a new tenant-scoped (custom) collection as a copy of the specified source collection. The server copies all CollectionConfig fields from the source, assigns a new ID with scope=tenant, and records the source ID in CollectionState.derived_from for provenance. The request body may include optional overrides (e.g. a new name).
+        Creates a new tenant-scoped (custom) collection as a copy of the specified source collection. The server copies all CollectionConfig fields from the source, assigns a new ID with scope=tenant, and records the source ID in derived_from for provenance. The request body may include optional overrides (e.g. a new name).
       operationId: post_collections_id_clones
       parameters:
         - name: id
@@ -2080,65 +2079,11 @@ paths:
       requestBody:
         required: false
         description: |
-          Optional field overrides for the cloned collection. All fields are optional — any field omitted here is inherited from the source collection. This schema mirrors CollectionConfig but with no required fields, since the required values are inherited from the source. The curation_order field is never accepted here and is always reset to 0 (copies are never curated).
+          Optional field overrides for the cloned collection. All fields are optional — any field omitted here is inherited from the source collection.
         content:
           application/json:
             schema:
-              type: object
-              description: |
-                Optional field overrides for the cloned collection. All fields are optional — any field omitted here is inherited from the source collection. This schema mirrors CollectionConfig but with no required fields, since the required values are inherited from the source. The curation_order field is never accepted here and is always reset to 0 (copies are never curated).
-              properties:
-                name:
-                  type: string
-                  description: New name for the copy. Defaults to source name.
-                description:
-                  type: string
-                  description: Override description.
-                category:
-                  type: string
-                  description: Deprecated — use domains.
-                tags:
-                  type: array
-                  items:
-                    type: string
-                  description: Override tags.
-                pass_criteria:
-                  $ref: '#/components/schemas/PassCriteria'
-                  description: Override pass criteria.
-                benchmarks:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/CollectionBenchmarkConfig'
-                  description: Override benchmarks.
-                domains:
-                  type: array
-                  items:
-                    type: string
-                  description: Override domains.
-                tasks:
-                  type: array
-                  items:
-                    type: string
-                  description: Override tasks.
-                modalities:
-                  type: array
-                  items:
-                    type: string
-                  description: Override modalities.
-                industries:
-                  type: array
-                  items:
-                    type: string
-                  description: Override industries.
-                ai_entities:
-                  type: array
-                  items:
-                    type: string
-                  description: Override AI entities.
-                custom:
-                  type: object
-                  additionalProperties: true
-                  description: Override custom key-value data.
+              $ref: '#/components/schemas/CollectionCloneRequest'
             examples:
               CopyWithNewName:
                 summary: Copy with a new name and domain override
@@ -2163,9 +2108,8 @@ paths:
                       created_at: '2026-08-25T10:00:00Z'
                       updated_at: '2026-08-25T10:00:00Z'
                       owner: user@example.com
-                      version_counter: 1
+                    derived_from: e5f6a7b8-9012-3456-cdef-0123456789ab
                     state:
-                      derived_from: e5f6a7b8-9012-3456-cdef-0123456789ab
                       run_count: 0
                       pinned_order: 0
                     name: my-rag-evaluation
@@ -2266,14 +2210,6 @@ components:
         owner:
           type: string
           description: Owner of the resource
-        version_counter:
-          type: integer
-          description: |
-            Server-managed mutation counter for custom (tenant-scoped) collections. Auto-incremented on every successful PUT or PATCH; starts at 1 on creation.
-            Sentinel values:
-              0 — pre-versioning mechanism, or resource type that does not support versioning
-                  (e.g. system collections, evaluations, providers).
-             >0 — valid version counter.
     EvaluationResource:
       type: object
       description: Evaluation resource (base fields for an evaluation)
@@ -3225,16 +3161,11 @@ components:
           type: string
           description: |
             The unique identifier of the collection.
-        version_counter:
-          type: integer
+        collection_updated_at:
+          type: string
+          format: date-time
           description: |
-            The version_counter of the referenced collection at the moment this evaluation job was created. Set by the server; not accepted from the client.
-            Sentinel values:
-              0 — job predates version tracking; the collection's version at that time is
-                  unknown. Reproducibility comparison against other runs is not possible.
-             >0 — the collection's version_counter at job-creation time. Two evaluation jobs
-                  that reference the same collection_id and version_counter used an identical
-                  collection definition (R8 reproducibility).
+            The collection's updated_at timestamp at the moment this evaluation job was created. Set by the server; not accepted from the client. Compare against the current collection's updated_at to detect post-creation changes: if the current updated_at is later, the collection definition has changed since the job was created. Absent for jobs created before this field was introduced.
         benchmarks:
           type: array
           items:
@@ -3614,6 +3545,12 @@ components:
             type: string
           description: |
             Data modalities this benchmark uses (snake_case). Matches the CollectionConfig.modalities vocabulary. Used to auto-populate collection-level modalities when not explicitly set on the collection. Known values: text, vision, multimodal.
+        evaluation_targets:
+          type: array
+          items:
+            type: string
+          description: |
+            AI entity types this benchmark evaluates (snake_case). Matches the CollectionConfig.evaluation_targets vocabulary. Used to auto-populate collection-level evaluation_targets when not explicitly set on the collection. Example values: model, agent.
     ProviderConfig:
       type: object
       description: Evaluation provider (configuration and available benchmarks)
@@ -3698,12 +3635,8 @@ components:
     CollectionState:
       type: object
       description: |
-        Server-managed runtime state for custom (tenant-scoped) collections. Never user-supplied and never written to YAML configuration. Present only on collections with scope=tenant; absent on system collections.
+        Server-managed mutable runtime state for custom (tenant-scoped) collections. Never user-supplied and never written to YAML configuration. Present only on custom (tenant-scoped) collections; absent on system collections.
       properties:
-        derived_from:
-          type: string
-          description: |
-            ID of the collection this was copied from. Set by the server when POST /collections/{id}/clones is called; never user-supplied. Provides provenance (e.g. "copied from RAG Evaluation v1").
         run_count:
           type: integer
           description: |
@@ -3811,12 +3744,12 @@ components:
             type: string
           description: |
             Business industries this collection is relevant for (snake_case). Collection-level field; the same benchmarks may serve different industries. Example values: health, telco, financial, government.
-        ai_entities:
+        evaluation_targets:
           type: array
           items:
             type: string
           description: |
-            AI entity types this collection evaluates (snake_case). Example values: model, agent.
+            AI entity types this collection evaluates (snake_case). If not explicitly set, the handler returns the union of evaluation_targets from the collection's benchmarks (via BenchmarkResource.evaluation_targets). Example values: model, agent.
       required:
         - name
         - category
@@ -3830,10 +3763,14 @@ components:
             resource:
               $ref: '#/components/schemas/Resource'
               description: Resource metadata
+            derived_from:
+              type: string
+              description: |
+                ID of the collection this was copied from. Set by the server when POST /collections/{id}/clones is called; immutable thereafter. Absent when the collection was not created via clone.
             state:
               $ref: '#/components/schemas/CollectionState'
               description: |
-                Server-managed runtime state for custom (tenant-scoped) collections. Present only on collections with scope=tenant; absent on system collections. Never user-supplied.
+                Server-managed mutable runtime state for custom (tenant-scoped) collections. Present only on custom collections; absent on system collections. Never user-supplied.
         - $ref: '#/components/schemas/CollectionConfig'
     CollectionResourceList:
       type: object
@@ -3847,6 +3784,67 @@ components:
               items:
                 $ref: '#/components/schemas/CollectionResource'
               description: Collection resources
+    CollectionCloneRequest:
+      type: object
+      description: |
+        Optional field overrides for the cloned collection. All fields are optional — any omitted field is inherited from the source collection. This schema mirrors CollectionConfig but with no required fields, since the required values are inherited from the source. The curation_order field is never accepted here and is always reset to 0 (copies are never curated).
+      properties:
+        name:
+          type: string
+          description: New name for the copy. Defaults to source name.
+        description:
+          type: string
+          description: Override description.
+        category:
+          type: string
+          description: Deprecated — use domains.
+        tags:
+          type: array
+          items:
+            type: string
+          description: Override tags.
+        pass_criteria:
+          $ref: '#/components/schemas/PassCriteria'
+          description: Override pass criteria.
+        benchmarks:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionBenchmarkConfig'
+          description: Override benchmarks.
+        domains:
+          type: array
+          items:
+            type: string
+          description: Override domains.
+        tasks:
+          type: array
+          items:
+            type: string
+          description: Override tasks.
+        modalities:
+          type: array
+          items:
+            type: string
+          description: Override modalities.
+        industries:
+          type: array
+          items:
+            type: string
+          description: Override industries.
+        evaluation_targets:
+          type: array
+          items:
+            type: string
+          description: |
+            Override evaluation targets (AI entity types). Example values: model, agent.
+        custom:
+          type: object
+          additionalProperties: true
+          description: Override custom key-value data.
+        agent:
+          type: object
+          description: |
+            Override agent metadata for AI agent consumption.
   examples:
     NotFoundError:
       summary: Not found error with status code 404

@@ -11,9 +11,8 @@ import (
 )
 
 const (
-	ScopeSystem  = "system"
-	ScopeCurated = "curated"
-	ScopeTenant  = "tenant"
+	ScopeSystem = "system"
+	ScopeTenant = "tenant"
 
 	OwnerSystem = "system"
 )

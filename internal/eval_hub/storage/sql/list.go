@@ -43,10 +43,6 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 			tenant = ""
 		case abstractions.ScopeTenant:
 			params["owner"] = "!" + abstractions.OwnerSystem
-		case abstractions.ScopeCurated:
-			// Curated = system collections with curation_order > 0
-			params["scope_curated"] = "true"
-			tenant = ""
 		}
 		delete(params, "scope")
 	}
@@ -133,10 +129,9 @@ func scanResource[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 		storedEntity := collectionStoredEntity{}
 		err = json.Unmarshal([]byte(query.EntityJSON), &storedEntity)
 		if err == nil {
-			r := query.Resource
-			r.VersionCounter = storedEntity.VersionCounter
 			resource := &api.CollectionResource{
-				Resource:         r,
+				Resource:         query.Resource,
+				DerivedFrom:      storedEntity.DerivedFrom,
 				CollectionConfig: storedEntity.CollectionConfig,
 				State:            storedEntity.State,
 			}

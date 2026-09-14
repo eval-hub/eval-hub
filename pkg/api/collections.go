@@ -70,19 +70,16 @@ type CollectionConfig struct {
 	// Collection-level only — same benchmark may serve different industries depending on context.
 	Industries []string `mapstructure:"industries" json:"industries,omitempty"`
 
-	// AIEntities lists the AI entity types evaluated (snake_case).
+	// EvaluationTargets lists the AI entity types this collection evaluates (snake_case).
+	// If not set, the handler auto-computes the union from BenchmarkResource.EvaluationTargets entries.
 	// Example values: model, agent.
-	AIEntities []string `mapstructure:"ai_entities" json:"ai_entities,omitempty"`
+	EvaluationTargets []string `mapstructure:"evaluation_targets" json:"evaluation_targets,omitempty"`
 }
 
-// CollectionState holds server-managed runtime state for custom (tenant-scoped) collections.
+// CollectionState holds server-managed mutable runtime state for custom (tenant-scoped) collections.
 // It is never user-supplied and never written to YAML configuration.
 // Absent on system collections.
 type CollectionState struct {
-	// DerivedFrom is the ID of the collection this was copied from.
-	// Set by the server when POST /collections/{id}/clones is called; never user-supplied.
-	DerivedFrom string `json:"derived_from,omitempty"`
-
 	// RunCount is the number of EvaluationJobs created from this collection by its owning tenant.
 	// Per-tenant counter, incremented at job creation.
 	RunCount int `json:"run_count,omitempty"`
@@ -95,9 +92,15 @@ type CollectionState struct {
 // CollectionResource represents collection resource
 type CollectionResource struct {
 	Resource Resource `json:"resource"`
+
+	// DerivedFrom is the ID of the collection this was copied from.
+	// Set by the server when POST /collections/{id}/clones is called; immutable thereafter.
+	// Absent when the collection was not created via clone.
+	DerivedFrom string `json:"derived_from,omitempty"`
+
 	CollectionConfig
 
-	// State holds server-managed runtime state. Present only on custom (tenant-scoped)
+	// State holds server-managed mutable runtime state. Present only on custom (tenant-scoped)
 	// collections; nil for system collections.
 	State *CollectionState `json:"state,omitempty"`
 }
@@ -139,8 +142,8 @@ func (c CollectionConfig) ApplyOverrides(overrides *CollectionConfig) Collection
 	if len(overrides.Industries) > 0 {
 		c.Industries = overrides.Industries
 	}
-	if len(overrides.AIEntities) > 0 {
-		c.AIEntities = overrides.AIEntities
+	if len(overrides.EvaluationTargets) > 0 {
+		c.EvaluationTargets = overrides.EvaluationTargets
 	}
 	if overrides.Custom != nil {
 		c.Custom = overrides.Custom

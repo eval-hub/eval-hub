@@ -65,7 +65,7 @@ func TestCollectionConfigNewFieldsSerialization(t *testing.T) {
 		"tasks": ["rag", "grounding_discipline"],
 		"modalities": ["text"],
 		"industries": ["health", "financial"],
-		"ai_entities": ["model"],
+		"evaluation_targets": ["model"],
 		"benchmarks": [{"id": "crag", "provider_id": "ragas"}]
 	}`
 
@@ -89,8 +89,8 @@ func TestCollectionConfigNewFieldsSerialization(t *testing.T) {
 	if !reflect.DeepEqual(config.Industries, []string{"health", "financial"}) {
 		t.Errorf("Industries: got %v", config.Industries)
 	}
-	if !reflect.DeepEqual(config.AIEntities, []string{"model"}) {
-		t.Errorf("AIEntities: got %v", config.AIEntities)
+	if !reflect.DeepEqual(config.EvaluationTargets, []string{"model"}) {
+		t.Errorf("EvaluationTargets: got %v", config.EvaluationTargets)
 	}
 
 	// Round-trip
@@ -141,7 +141,8 @@ func TestCollectionConfigNewFieldsAreOptional(t *testing.T) {
 
 func TestCollectionStateFieldsSerialization(t *testing.T) {
 	resource := api.CollectionResource{
-		Resource: api.Resource{ID: "abc123", VersionCounter: 3},
+		Resource:    api.Resource{ID: "abc123"},
+		DerivedFrom: "source-collection-id",
 		CollectionConfig: api.CollectionConfig{
 			Name:     "my-collection",
 			Category: "software",
@@ -150,7 +151,6 @@ func TestCollectionStateFieldsSerialization(t *testing.T) {
 			},
 		},
 		State: &api.CollectionState{
-			DerivedFrom: "source-collection-id",
 			RunCount:    5,
 			PinnedOrder: 2,
 		},
@@ -166,20 +166,17 @@ func TestCollectionStateFieldsSerialization(t *testing.T) {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
 
+	if rt.DerivedFrom != "source-collection-id" {
+		t.Errorf("DerivedFrom: got %q, want %q", rt.DerivedFrom, "source-collection-id")
+	}
 	if rt.State == nil {
 		t.Fatal("State should not be nil after round-trip")
-	}
-	if rt.State.DerivedFrom != "source-collection-id" {
-		t.Errorf("DerivedFrom: got %q, want %q", rt.State.DerivedFrom, "source-collection-id")
 	}
 	if rt.State.RunCount != 5 {
 		t.Errorf("RunCount: got %d, want 5", rt.State.RunCount)
 	}
 	if rt.State.PinnedOrder != 2 {
 		t.Errorf("PinnedOrder: got %d, want 2", rt.State.PinnedOrder)
-	}
-	if rt.Resource.VersionCounter != 3 {
-		t.Errorf("Resource.VersionCounter: got %d, want 3", rt.Resource.VersionCounter)
 	}
 }
 
@@ -205,31 +202,20 @@ func TestCollectionStateAbsentForSystemCollections(t *testing.T) {
 	}
 }
 
-func TestResourceVersionField(t *testing.T) {
-	r := api.Resource{ID: "r1", VersionCounter: 7}
-	out, err := json.Marshal(r)
+func TestCollectionDerivedFromOmittedWhenEmpty(t *testing.T) {
+	resource := api.CollectionResource{
+		Resource: api.Resource{ID: "r1"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "n", Category: "c",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
+		},
+	}
+	out, err := json.Marshal(resource)
 	if err != nil {
 		t.Fatalf("marshal failed: %v", err)
 	}
-
-	var rt api.Resource
-	if err := json.Unmarshal(out, &rt); err != nil {
-		t.Fatalf("unmarshal failed: %v", err)
-	}
-	if rt.VersionCounter != 7 {
-		t.Errorf("Version: got %d, want 7", rt.VersionCounter)
-	}
-}
-
-func TestResourceVersionOmittedWhenZero(t *testing.T) {
-	r := api.Resource{ID: "r1"}
-	out, err := json.Marshal(r)
-	if err != nil {
-		t.Fatalf("marshal failed: %v", err)
-	}
-
-	if strings.Contains(string(out), `"version_counter"`) {
-		t.Error("version_counter must be omitted when zero")
+	if strings.Contains(string(out), `"derived_from"`) {
+		t.Error("derived_from must be omitted when empty")
 	}
 }
 
@@ -293,14 +279,14 @@ func TestApplyOverrides(t *testing.T) {
 		}
 	})
 
-	t.Run("domains/tasks/modalities/industries/ai_entities override applied", func(t *testing.T) {
+	t.Run("domains/tasks/modalities/industries/evaluation_targets override applied", func(t *testing.T) {
 		t.Parallel()
 		result := base.ApplyOverrides(&api.CollectionConfig{
-			Domains:    []string{"d1"},
-			Tasks:      []string{"t1"},
-			Modalities: []string{"text"},
-			Industries: []string{"health"},
-			AIEntities: []string{"model"},
+			Domains:           []string{"d1"},
+			Tasks:             []string{"t1"},
+			Modalities:        []string{"text"},
+			Industries:        []string{"health"},
+			EvaluationTargets: []string{"model"},
 		})
 		if len(result.Domains) == 0 || result.Domains[0] != "d1" {
 			t.Errorf("Domains not applied: %v", result.Domains)

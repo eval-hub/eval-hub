@@ -1050,14 +1050,11 @@ func TestHandleCloneCollection_Success(t *testing.T) {
 	if storage.created.Name != "my-clone" {
 		t.Errorf("expected name 'my-clone', got %q", storage.created.Name)
 	}
-	if storage.created.State == nil || storage.created.State.DerivedFrom != "src-1" {
-		t.Errorf("expected DerivedFrom 'src-1', got %v", storage.created.State)
+	if storage.created.DerivedFrom != "src-1" {
+		t.Errorf("expected DerivedFrom 'src-1', got %q", storage.created.DerivedFrom)
 	}
 	if storage.created.CurationOrder != 0 {
 		t.Errorf("cloned collection must have CurationOrder=0, got %d", storage.created.CurationOrder)
-	}
-	if storage.created.Resource.VersionCounter != 1 {
-		t.Errorf("expected VersionCounter=1, got %d", storage.created.Resource.VersionCounter)
 	}
 }
 
@@ -1126,7 +1123,7 @@ func TestHandleListCollections_NewParamsAccepted(t *testing.T) {
 	storage := &listCollectionsStorage{fakeStorage: &fakeStorage{}, collections: []api.CollectionResource{}}
 	h := handlers.New(storage, validator, &fakeRuntime{}, nil, nil, nil)
 
-	newParams := []string{"domains", "tasks", "modalities", "industries", "ai_entities"}
+	newParams := []string{"domains", "tasks", "modalities", "industries", "evaluation_targets"}
 	for _, param := range newParams {
 		param := param
 		t.Run(param, func(t *testing.T) {
@@ -1332,23 +1329,12 @@ func TestEnrichCollectionFromProviders_ExplicitValuesNotOverridden(t *testing.T)
 	}
 }
 
-func TestHandleListCollections_ScopeCuratedFilter(t *testing.T) {
+func TestHandleListCollections_ScopeCuratedRejected(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	validator := testhelpers.NewValidator(t)
 
-	collections := []api.CollectionResource{
-		{
-			Resource: api.Resource{ID: "curated-c"},
-			CollectionConfig: api.CollectionConfig{
-				Name:          "Curated",
-				Category:      "test",
-				CurationOrder: 1,
-				Benchmarks:    []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
-			},
-		},
-	}
-	storage := &listCollectionsStorage{fakeStorage: &fakeStorage{}, collections: collections}
+	storage := &listCollectionsStorage{fakeStorage: &fakeStorage{}, collections: nil}
 	h := handlers.New(storage, validator, &fakeRuntime{}, nil, nil, nil)
 
 	req := &providersRequest{
@@ -1362,9 +1348,9 @@ func TestHandleListCollections_ScopeCuratedFilter(t *testing.T) {
 
 	h.HandleListCollections(ctx, req, resp)
 
-	// Should not return 400 — scope=curated is a valid value now
-	if recorder.Code == 400 {
-		t.Errorf("scope=curated should be accepted, got 400: %s", recorder.Body.String())
+	// scope=curated is no longer a valid scope value; only system and tenant are accepted
+	if recorder.Code != 400 {
+		t.Errorf("scope=curated should be rejected with 400, got %d: %s", recorder.Code, recorder.Body.String())
 	}
 }
 
@@ -1576,17 +1562,17 @@ func TestApplyOverrides_AllFields(t *testing.T) {
 	}
 	customData := map[string]any{"key": "value"}
 	overrides := &api.CollectionConfig{
-		Name:        "Override",
-		Description: "desc",
-		Category:    "override-cat",
-		Tags:        []string{"t1"},
-		Custom:      &customData,
-		Domains:     []string{"d1"},
-		Tasks:       []string{"t1"},
-		Modalities:  []string{"text"},
-		Industries:  []string{"health"},
-		AIEntities:  []string{"agent"},
-		Agent:       &api.CollectionAgentMetadata{Summary: "override-agent"},
+		Name:              "Override",
+		Description:       "desc",
+		Category:          "override-cat",
+		Tags:              []string{"t1"},
+		Custom:            &customData,
+		Domains:           []string{"d1"},
+		Tasks:             []string{"t1"},
+		Modalities:        []string{"text"},
+		Industries:        []string{"health"},
+		EvaluationTargets: []string{"agent"},
+		Agent:             &api.CollectionAgentMetadata{Summary: "override-agent"},
 	}
 
 	result := base.ApplyOverrides(overrides)

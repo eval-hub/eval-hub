@@ -6,10 +6,15 @@ allOf:
       resource:
         $ref: ./Resource.yaml
         description: Resource metadata
+      derived_from:
+        type: string
+        description: >
+          ID of the collection this was copied from. Set by the server when
+          POST /collections/{id}/clones is called; immutable thereafter.
+          Absent when the collection was not created via clone.
       state:
         $ref: ./CollectionState.yaml
         description: >
-          Server-managed runtime state for custom (tenant-scoped) collections.
-          Present only on collections with scope=tenant; absent on system
-          collections. Never user-supplied.
+          Server-managed mutable runtime state for custom (tenant-scoped) collections.
+          Present only on custom collections; absent on system collections. Never user-supplied.
   - $ref: ./CollectionConfig.yaml

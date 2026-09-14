@@ -61,9 +61,9 @@ var (
 		{Path: "/industries", Op: api.PatchOpRemove, Prefix: true},
 		{Path: "/industries", Op: api.PatchOpReplace, Prefix: true},
 
-		{Path: "/ai_entities", Op: api.PatchOpAdd, Prefix: true},
-		{Path: "/ai_entities", Op: api.PatchOpRemove, Prefix: true},
-		{Path: "/ai_entities", Op: api.PatchOpReplace, Prefix: true},
+		{Path: "/evaluation_targets", Op: api.PatchOpAdd, Prefix: true},
+		{Path: "/evaluation_targets", Op: api.PatchOpRemove, Prefix: true},
+		{Path: "/evaluation_targets", Op: api.PatchOpReplace, Prefix: true},
 
 		// Tenant-controlled pin ordering (state field)
 		{Path: "/state/pinned_order", Op: api.PatchOpAdd, Prefix: false},
@@ -98,14 +98,14 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 			}
 
 			allowedParams := []string{"limit", "offset", "name", "category", "tags", "owner", "scope",
-				"domains", "tasks", "modalities", "industries", "ai_entities", "sort_by"}
+				"domains", "tasks", "modalities", "industries", "evaluation_targets", "sort_by"}
 			badParams := getAllParams(req, allowedParams...)
 			if len(badParams) > 0 {
 				return serviceerrors.NewServiceError(messages.QueryBadParameter, "ParameterName", badParams[0], "AllowedParameters", strings.Join(allowedParams, ", "))
 			}
 
 			// Handle new array filters (use first value from each param)
-			for _, key := range []string{"domains", "tasks", "modalities", "industries", "ai_entities"} {
+			for _, key := range []string{"domains", "tasks", "modalities", "industries", "evaluation_targets"} {
 				if vals := req.Query(key); len(vals) > 0 && vals[0] != "" {
 					filter.Params[key] = vals[0]
 				}
@@ -166,8 +166,8 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 }
 
 // EnrichCollectionFromProviders enriches each collection's benchmarks with Description and URL
-// from the provider config, and auto-populates Domains/Tasks/Modalities on the collection
-// from the union of its benchmarks' corresponding fields when not explicitly set.
+// from the provider config, and auto-populates Domains/Tasks/Modalities/EvaluationTargets on
+// the collection from the union of its benchmarks' corresponding fields when not explicitly set.
 func EnrichCollectionFromProviders(storage abstractions.Storage, collections ...*api.CollectionResource) {
 	loaded := make(map[string]*api.ProviderResource)
 	failed := make(map[string]struct{})
@@ -178,6 +178,7 @@ func EnrichCollectionFromProviders(storage abstractions.Storage, collections ...
 		domainsSet := make(map[string]struct{})
 		tasksSet := make(map[string]struct{})
 		modalitiesSet := make(map[string]struct{})
+		evalTargetsSet := make(map[string]struct{})
 
 		for j := range coll.Benchmarks {
 			b := &coll.Benchmarks[j]
@@ -216,6 +217,9 @@ func EnrichCollectionFromProviders(storage abstractions.Storage, collections ...
 				for _, m := range pb.Modalities {
 					modalitiesSet[m] = struct{}{}
 				}
+				for _, e := range pb.EvaluationTargets {
+					evalTargetsSet[e] = struct{}{}
+				}
 				break
 			}
 		}
@@ -234,6 +238,11 @@ func EnrichCollectionFromProviders(storage abstractions.Storage, collections ...
 		if len(coll.Modalities) == 0 {
 			for m := range modalitiesSet {
 				coll.Modalities = append(coll.Modalities, m)
+			}
+		}
+		if len(coll.EvaluationTargets) == 0 {
+			for e := range evalTargetsSet {
+				coll.EvaluationTargets = append(coll.EvaluationTargets, e)
 			}
 		}
 	}
@@ -626,17 +635,15 @@ func (h *Handlers) HandleCloneCollection(ctx *executioncontext.ExecutionContext,
 			now := time.Now()
 			newCollection := &api.CollectionResource{
 				Resource: api.Resource{
-					ID:             newID,
-					CreatedAt:      now,
-					UpdatedAt:      now,
-					Owner:          ctx.User,
-					Tenant:         ctx.Tenant,
-					VersionCounter: 1,
+					ID:        newID,
+					CreatedAt: now,
+					UpdatedAt: now,
+					Owner:     ctx.User,
+					Tenant:    ctx.Tenant,
 				},
+				DerivedFrom:      sourceID,
 				CollectionConfig: newConfig,
-				State: &api.CollectionState{
-					DerivedFrom: sourceID,
-				},
+				State:            &api.CollectionState{},
 			}
 
 			EnrichCollectionFromProviders(scoped, newCollection)

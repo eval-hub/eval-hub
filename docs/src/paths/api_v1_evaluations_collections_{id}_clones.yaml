@@ -5,7 +5,7 @@ post:
   description: >
     Creates a new tenant-scoped (custom) collection as a copy of the specified source
     collection. The server copies all CollectionConfig fields from the source, assigns
-    a new ID with scope=tenant, and records the source ID in CollectionState.derived_from
+    a new ID with scope=tenant, and records the source ID in derived_from
     for provenance. The request body may include optional overrides (e.g. a new name).
   operationId: post_collections_id_clones
   parameters:
@@ -21,71 +21,10 @@ post:
     description: >
       Optional field overrides for the cloned collection. All fields are optional —
       any field omitted here is inherited from the source collection.
-      This schema mirrors CollectionConfig but with no required fields, since the
-      required values are inherited from the source. The curation_order field
-      is never accepted here and is always reset to 0 (copies are never curated).
     content:
       application/json:
         schema:
-          type: object
-          description: >
-            Optional field overrides for the cloned collection. All fields are optional —
-            any field omitted here is inherited from the source collection.
-            This schema mirrors CollectionConfig but with no required fields, since the
-            required values are inherited from the source. The curation_order field
-            is never accepted here and is always reset to 0 (copies are never curated).
-          properties:
-            name:
-              type: string
-              description: New name for the copy. Defaults to source name.
-            description:
-              type: string
-              description: Override description.
-            category:
-              type: string
-              description: Deprecated — use domains.
-            tags:
-              type: array
-              items:
-                type: string
-              description: Override tags.
-            pass_criteria:
-              $ref: ../components/schemas/PassCriteria.yaml
-              description: Override pass criteria.
-            benchmarks:
-              type: array
-              items:
-                $ref: ../components/schemas/CollectionBenchmarkConfig.yaml
-              description: Override benchmarks.
-            domains:
-              type: array
-              items:
-                type: string
-              description: Override domains.
-            tasks:
-              type: array
-              items:
-                type: string
-              description: Override tasks.
-            modalities:
-              type: array
-              items:
-                type: string
-              description: Override modalities.
-            industries:
-              type: array
-              items:
-                type: string
-              description: Override industries.
-            ai_entities:
-              type: array
-              items:
-                type: string
-              description: Override AI entities.
-            custom:
-              type: object
-              additionalProperties: true
-              description: Override custom key-value data.
+          $ref: ../components/schemas/CollectionCloneRequest.yaml
         examples:
           CopyWithNewName:
             summary: Copy with a new name and domain override
@@ -110,9 +49,8 @@ post:
                   created_at: "2026-08-25T10:00:00Z"
                   updated_at: "2026-08-25T10:00:00Z"
                   owner: "user@example.com"
-                  version_counter: 1
+                derived_from: "e5f6a7b8-9012-3456-cdef-0123456789ab"
                 state:
-                  derived_from: "e5f6a7b8-9012-3456-cdef-0123456789ab"
                   run_count: 0
                   pinned_order: 0
                 name: "my-rag-evaluation"

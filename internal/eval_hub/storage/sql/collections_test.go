@@ -276,7 +276,7 @@ func TestCollectionState_SetAndIncrement(t *testing.T) {
 			scoped := store.WithTenant("t1").WithOwner("user1")
 
 			// UpdateCollectionState
-			state := &api.CollectionState{DerivedFrom: "original-id", RunCount: 3, PinnedOrder: 2}
+			state := &api.CollectionState{RunCount: 3, PinnedOrder: 2}
 			updated, err := scoped.UpdateCollectionState("coll-state-test", state)
 			if err != nil {
 				t.Fatalf("UpdateCollectionState: %v", err)
@@ -284,122 +284,60 @@ func TestCollectionState_SetAndIncrement(t *testing.T) {
 			if updated.State == nil {
 				t.Fatal("expected State to be set")
 			}
-			if updated.State.DerivedFrom != "original-id" {
-				t.Errorf("DerivedFrom: got %q, want %q", updated.State.DerivedFrom, "original-id")
-			}
 			if updated.State.RunCount != 3 {
 				t.Errorf("RunCount: got %d, want 3", updated.State.RunCount)
 			}
 
-			// VersionCounter increments on each UpdateCollection
+			// UpdateCollection must preserve State
 			config := coll.CollectionConfig
 			v1, err := scoped.UpdateCollection("coll-state-test", &config)
 			if err != nil {
 				t.Fatalf("UpdateCollection (first): %v", err)
-			}
-			if v1.Resource.VersionCounter != 1 {
-				t.Errorf("VersionCounter after first update: got %d, want 1", v1.Resource.VersionCounter)
 			}
 
 			v2, err := scoped.UpdateCollection("coll-state-test", &config)
 			if err != nil {
 				t.Fatalf("UpdateCollection (second): %v", err)
 			}
-			if v2.Resource.VersionCounter != 2 {
-				t.Errorf("VersionCounter after second update: got %d, want 2", v2.Resource.VersionCounter)
+
+			// updated_at must advance on each mutation (change-detection signal)
+			if !v2.Resource.UpdatedAt.After(v1.Resource.UpdatedAt) && v2.Resource.UpdatedAt != v1.Resource.UpdatedAt {
+				t.Errorf("updated_at should be >= after second update: v1=%v v2=%v", v1.Resource.UpdatedAt, v2.Resource.UpdatedAt)
 			}
 
 			// State should be preserved through UpdateCollection
-			if v2.State == nil || v2.State.DerivedFrom != "original-id" {
-				t.Error("State should be preserved through UpdateCollection")
+			if v2.State == nil || v2.State.RunCount != 3 {
+				t.Error("State.RunCount should be preserved through UpdateCollection")
 			}
 		})
 	}
 }
 
-func TestCollectionState_SystemCollectionVersionCounterZero(t *testing.T) {
+func TestCollectionDerivedFrom_StoredAndRetrieved(t *testing.T) {
 	t.Parallel()
 	store, err := getTestStorage(t, "sqlite", getDBName())
 	if err != nil {
 		t.Fatalf("getTestStorage: %v", err)
 	}
 
-	sysColl := &api.CollectionResource{
-		Resource: api.Resource{ID: "sys-coll-v", Owner: "system", Tenant: ""},
+	coll := &api.CollectionResource{
+		Resource:    api.Resource{ID: "derived-test", Owner: "user1", Tenant: "t1"},
+		DerivedFrom: "source-coll-id",
 		CollectionConfig: api.CollectionConfig{
-			Name: "Sys Coll", Category: "test",
+			Name: "Derived", Category: "test",
 			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
 		},
 	}
-	if err := store.CreateCollection(sysColl); err != nil {
+	if err := store.WithTenant("t1").WithOwner("user1").CreateCollection(coll); err != nil {
 		t.Fatalf("CreateCollection: %v", err)
 	}
 
-	// System collections always have VersionCounter == 0 (version tracking is for custom only)
-	fetched, err := store.GetCollection("sys-coll-v")
+	fetched, err := store.WithTenant("t1").WithOwner("user1").GetCollection("derived-test")
 	if err != nil {
 		t.Fatalf("GetCollection: %v", err)
 	}
-	if fetched.Resource.VersionCounter != 0 {
-		t.Errorf("system collection VersionCounter should be 0, got %d", fetched.Resource.VersionCounter)
-	}
-}
-
-func TestCollectionFilters_ScopeCurated(t *testing.T) {
-	t.Parallel()
-	store, err := getTestStorage(t, "sqlite", getDBName())
-	if err != nil {
-		t.Fatalf("getTestStorage: %v", err)
-	}
-
-	scoped := store.WithTenant("t1").WithOwner("user1")
-
-	// Create a curated collection (curation_order > 0)
-	curatedColl := &api.CollectionResource{
-		Resource: api.Resource{ID: "curated-filter", Owner: "user1", Tenant: "t1"},
-		CollectionConfig: api.CollectionConfig{
-			Name: "Curated", Category: "test", CurationOrder: 1,
-			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
-		},
-	}
-	if err := scoped.CreateCollection(curatedColl); err != nil {
-		t.Fatalf("CreateCollection curated: %v", err)
-	}
-
-	// Create a non-curated collection (curation_order == 0)
-	plainColl := &api.CollectionResource{
-		Resource: api.Resource{ID: "plain-filter", Owner: "user1", Tenant: "t1"},
-		CollectionConfig: api.CollectionConfig{
-			Name: "Plain", Category: "test", CurationOrder: 0,
-			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b2"}, ProviderID: "p1"}},
-		},
-	}
-	if err := scoped.CreateCollection(plainColl); err != nil {
-		t.Fatalf("CreateCollection plain: %v", err)
-	}
-
-	// Filter scope_curated should return only curated
-	filter := &abstractions.QueryFilter{
-		Limit: 50, Offset: 0,
-		Params: map[string]any{"scope_curated": "true"},
-	}
-	results, err := scoped.GetCollections(filter)
-	if err != nil {
-		t.Fatalf("GetCollections scope_curated: %v", err)
-	}
-	for _, c := range results.Items {
-		if c.CurationOrder <= 0 {
-			t.Errorf("scope_curated filter returned non-curated collection %q", c.Resource.ID)
-		}
-	}
-	found := false
-	for _, c := range results.Items {
-		if c.Resource.ID == "curated-filter" {
-			found = true
-		}
-	}
-	if !found {
-		t.Error("curated collection not returned by scope_curated filter")
+	if fetched.DerivedFrom != "source-coll-id" {
+		t.Errorf("DerivedFrom: got %q, want %q", fetched.DerivedFrom, "source-coll-id")
 	}
 }
 
@@ -416,12 +354,12 @@ func TestCollectionFilters_ArrayFields(t *testing.T) {
 		Resource: api.Resource{ID: "array-filter-test", Owner: "user1", Tenant: "t1"},
 		CollectionConfig: api.CollectionConfig{
 			Name: "Array Filter", Category: "test",
-			Domains:    []string{"grounded_document_understanding"},
-			Tasks:      []string{"rag", "summarization"},
-			Modalities: []string{"text"},
-			Industries: []string{"health"},
-			AIEntities: []string{"model"},
-			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+			Domains:           []string{"grounded_document_understanding"},
+			Tasks:             []string{"rag", "summarization"},
+			Modalities:        []string{"text"},
+			Industries:        []string{"health"},
+			EvaluationTargets: []string{"model"},
+			Benchmarks:        []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
 		},
 	}
 	if err := scoped.CreateCollection(coll); err != nil {
@@ -436,7 +374,7 @@ func TestCollectionFilters_ArrayFields(t *testing.T) {
 		{"tasks", "rag"},
 		{"modalities", "text"},
 		{"industries", "health"},
-		{"ai_entities", "model"},
+		{"evaluation_targets", "model"},
 	} {
 		tc := tc
 		t.Run(tc.key, func(t *testing.T) {
@@ -556,10 +494,6 @@ func TestCollectionPatchCollection(t *testing.T) {
 			}
 			if updated.Name != "Patched Name" {
 				t.Errorf("expected name 'Patched Name', got %q", updated.Name)
-			}
-			// VersionCounter should have been incremented
-			if updated.Resource.VersionCounter != 1 {
-				t.Errorf("expected VersionCounter=1 after patch, got %d", updated.Resource.VersionCounter)
 			}
 		})
 	}

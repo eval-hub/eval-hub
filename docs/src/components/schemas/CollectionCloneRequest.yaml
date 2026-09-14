@@ -1,0 +1,64 @@
+type: object
+description: >
+  Optional field overrides for the cloned collection. All fields are optional —
+  any omitted field is inherited from the source collection.
+  This schema mirrors CollectionConfig but with no required fields, since the
+  required values are inherited from the source. The curation_order field
+  is never accepted here and is always reset to 0 (copies are never curated).
+properties:
+  name:
+    type: string
+    description: New name for the copy. Defaults to source name.
+  description:
+    type: string
+    description: Override description.
+  category:
+    type: string
+    description: Deprecated — use domains.
+  tags:
+    type: array
+    items:
+      type: string
+    description: Override tags.
+  pass_criteria:
+    $ref: ./PassCriteria.yaml
+    description: Override pass criteria.
+  benchmarks:
+    type: array
+    items:
+      $ref: ./CollectionBenchmarkConfig.yaml
+    description: Override benchmarks.
+  domains:
+    type: array
+    items:
+      type: string
+    description: Override domains.
+  tasks:
+    type: array
+    items:
+      type: string
+    description: Override tasks.
+  modalities:
+    type: array
+    items:
+      type: string
+    description: Override modalities.
+  industries:
+    type: array
+    items:
+      type: string
+    description: Override industries.
+  evaluation_targets:
+    type: array
+    items:
+      type: string
+    description: >
+      Override evaluation targets (AI entity types). Example values: model, agent.
+  custom:
+    type: object
+    additionalProperties: true
+    description: Override custom key-value data.
+  agent:
+    type: object
+    description: >
+      Override agent metadata for AI agent consumption.

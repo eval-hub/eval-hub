@@ -95,7 +95,7 @@ func (s *postgresStatementsFactory) GetAllowedFilterColumns(tableName string) []
 	case shared.TableProviders:
 		return allColumns // "benchmarks" and "scope" are not allowed filters for providers from the database
 	case shared.TableCollections:
-		return append(allColumns, "category", "scope_curated", "domains", "tasks", "modalities", "industries", "ai_entities")
+		return append(allColumns, "category", "domains", "tasks", "modalities", "industries", "evaluation_targets")
 	default:
 		return nil
 	}
@@ -120,10 +120,7 @@ func (s *postgresStatementsFactory) CreateEntityFilterCondition(key string, valu
 			return fmt.Sprintf("%s = $%d", categoryPath, index), []any{value}
 		}
 		return "", []any{}
-	case "scope_curated":
-		// Filter to curated collections: curation_order > 0
-		return "(entity->>'curation_order')::int > 0", []any{}
-	case "domains", "tasks", "modalities", "industries", "ai_entities":
+	case "domains", "tasks", "modalities", "industries", "evaluation_targets":
 		// Array-contains filter on JSON array fields
 		fieldStr, _ := value.(string)
 		jsonPath := fmt.Sprintf("entity->'%s'", key)

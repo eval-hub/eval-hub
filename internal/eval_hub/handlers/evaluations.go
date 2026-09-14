@@ -220,6 +220,9 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				if err := validation.ValidateCollectionOverrides(evaluation.Collection.Benchmarks, collection.Benchmarks); err != nil {
 					return err
 				}
+				// Capture the collection's updated_at for change-detection metadata on the job.
+				t := collection.Resource.UpdatedAt
+				evaluation.Collection.CollectionUpdatedAt = &t
 			}
 			jobForResolve := &api.EvaluationJobResource{EvaluationJobConfig: *evaluation}
 			benchmarks, err = GetJobBenchmarks(jobForResolve, collection)

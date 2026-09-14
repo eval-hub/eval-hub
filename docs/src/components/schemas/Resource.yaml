@@ -18,13 +18,3 @@ properties:
   owner:
     type: string
     description: Owner of the resource
-  version_counter:
-    type: integer
-    description: >
-      Server-managed mutation counter for custom (tenant-scoped) collections.
-      Auto-incremented on every successful PUT or PATCH; starts at 1 on creation.
-
-      Sentinel values:
-        0 — pre-versioning mechanism, or resource type that does not support versioning
-            (e.g. system collections, evaluations, providers).
-       >0 — valid version counter.

@@ -68,3 +68,12 @@ properties:
       CollectionConfig.modalities vocabulary. Used to auto-populate
       collection-level modalities when not explicitly set on the collection.
       Known values: text, vision, multimodal.
+  evaluation_targets:
+    type: array
+    items:
+      type: string
+    description: >
+      AI entity types this benchmark evaluates (snake_case). Matches the
+      CollectionConfig.evaluation_targets vocabulary. Used to auto-populate
+      collection-level evaluation_targets when not explicitly set on the collection.
+      Example values: model, agent.
