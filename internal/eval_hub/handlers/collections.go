@@ -653,7 +653,16 @@ func (h *Handlers) HandleCloneCollection(ctx *executioncontext.ExecutionContext,
 				return err
 			}
 
-			w.WriteJSON(newCollection, 201)
+			// Re-fetch from storage so the response reflects the persisted state
+			// (timestamps set by the DB, any storage-layer transformations).
+			persisted, err := scoped.GetCollection(newID)
+			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			EnrichCollectionFromProviders(scoped, persisted)
+
+			w.WriteJSON(persisted, 201)
 			return nil
 		},
 		"storage",

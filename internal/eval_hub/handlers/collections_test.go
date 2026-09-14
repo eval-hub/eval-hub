@@ -1006,6 +1006,9 @@ func (s *cloneCollectionStorage) GetCollection(id string) (*api.CollectionResour
 	if s.source != nil && s.source.Resource.ID == id {
 		return s.source, nil
 	}
+	if s.created != nil && s.created.Resource.ID == id {
+		return s.created, nil
+	}
 	return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "collection", "ResourceId", id)
 }
 
