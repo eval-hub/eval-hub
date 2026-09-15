@@ -1541,6 +1541,42 @@ func TestHandleListCollections_MultiValueFilter(t *testing.T) {
 	}
 }
 
+func TestHandleCloneCollection_UnknownFieldRejected(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	validator := testhelpers.NewValidator(t)
+
+	source := &api.CollectionResource{
+		Resource: api.Resource{ID: "src-unk", Owner: "system"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "Source", Category: "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	storage := &cloneCollectionStorage{fakeStorage: &fakeStorage{}, source: source}
+	h := handlers.New(storage, validator, &fakeRuntime{}, nil, nil, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/collections/src-unk/clones"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{constants.PathParameterCollectionID: "src-unk"},
+	}
+	// unknown_field is not a CollectionConfig field and should be rejected by DisallowUnknownFields
+	req.SetBody([]byte(`{"unknown_field": "oops"}`))
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user1", "tenant1")
+
+	h.HandleCloneCollection(ctx, req, resp)
+
+	if recorder.Code != 400 {
+		t.Errorf("expected 400 for unknown field in clone body, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if storage.created != nil {
+		t.Error("collection must not be persisted when unknown field is present")
+	}
+}
+
 func TestHandleCloneCollection_InvalidJSONBody(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))

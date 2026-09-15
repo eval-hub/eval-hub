@@ -3681,6 +3681,39 @@ components:
                 to clone a repository via a pre-run init container, or **`hf`** to download content
                 from a Hugging Face Hub repository via a pre-run init container. Omit if the benchmark does
                 not need mounted files.
+    CollectionAgentMetadata:
+      type: object
+      description: Structured metadata for AI agent consumption at the collection level.
+      properties:
+        evaluates:
+          type: array
+          items:
+            type: string
+          description: Semantic tags describing what this collection measures.
+        recommended_when:
+          type: array
+          items:
+            type: string
+          description: Natural-language conditions under which an agent should recommend this collection.
+        summary:
+          type: string
+          maxLength: 200
+          description: Concise description optimised for agent tool listings.
+        complements:
+          type: array
+          items:
+            type: string
+          description: Collection or provider IDs that pair well with this one.
+        hints:
+          type: array
+          items:
+            type: string
+          description: Free-form operational guidance for agents constructing job requests.
+        result_interpretation:
+          type: array
+          items:
+            type: string
+          description: Guidance for interpreting evaluation results produced by this collection.
     CollectionConfig:
       type: object
       description: Request to create or update a collection.
@@ -3748,7 +3781,7 @@ components:
           description: |
             AI entity types this collection evaluates (snake_case). If not explicitly set, the handler returns the union of evaluation_targets from the collection's benchmarks (via BenchmarkResource.evaluation_targets). Example values: model, agent.
         agent:
-          $ref: '#/components/schemas/AgentMetadata'
+          $ref: '#/components/schemas/CollectionAgentMetadata'
           description: Structured metadata for AI agent discoverability at the collection level.
       required:
         - name
@@ -3769,6 +3802,7 @@ components:
                 ID of the collection this was copied from. Set by the server when POST /collections/{id}/clones is called; immutable thereafter. Absent when the collection was not created via clone.
             pinned_order:
               type: integer
+              minimum: 0
               description: |
                 Tenant-controlled pin ordering. 0 = not pinned. Positive integers give the tenant's personal tile ordering (ascending). Co-located with curation_order so both ordering fields are visible at the same level. Settable by the collection owner via PATCH /collections/{id}.
             state:

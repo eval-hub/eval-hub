@@ -602,6 +602,31 @@ func TestCollectionPatch_PinnedOrderTopLevel(t *testing.T) {
 	}
 }
 
+func TestCollectionPatch_NegativePinnedOrderRejected(t *testing.T) {
+	t.Parallel()
+	store, err := getTestStorage(t, "sqlite", getDBName())
+	if err != nil {
+		t.Fatalf("getTestStorage: %v", err)
+	}
+	scoped := store.WithTenant("t-neg-pin").WithOwner("user1")
+
+	coll := &api.CollectionResource{
+		Resource: api.Resource{ID: "neg-pin-test", Owner: "user1", Tenant: "t-neg-pin"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "NegPin", Category: "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	if err := scoped.CreateCollection(coll); err != nil {
+		t.Fatalf("CreateCollection: %v", err)
+	}
+
+	patches := &api.Patch{{Op: api.PatchOpAdd, Path: "/pinned_order", Value: float64(-1)}}
+	if _, err := scoped.PatchCollection("neg-pin-test", patches); err == nil {
+		t.Error("expected error for negative pinned_order, got nil")
+	}
+}
+
 func TestCollectionFilters_MultiValueArrayField(t *testing.T) {
 	t.Parallel()
 	store, err := getTestStorage(t, "sqlite", getDBName())

@@ -236,6 +236,9 @@ func (s *sqlStorage) PatchCollection(id string, patches *api.Patch) (*api.Collec
 		if err != nil {
 			return err
 		}
+		if patchedEntity.PinnedOrder < 0 {
+			return serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error", "pinned_order must be 0 or positive")
+		}
 		result := api.CollectionResource{
 			Resource:         persistedCollection.Resource,
 			DerivedFrom:      patchedEntity.DerivedFrom,

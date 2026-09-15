@@ -616,7 +616,8 @@ func (h *Handlers) HandleCloneCollection(ctx *executioncontext.ExecutionContext,
 			}
 
 			// Parse optional body as overrides — required fields are inherited from source.
-			// Invalid JSON is rejected; missing body or empty body is accepted (no overrides).
+			// Unknown fields are rejected (DisallowUnknownFields) to catch typos early.
+			// Missing body or empty body is accepted (no overrides).
 			overrides := &api.CollectionConfig{}
 			bodyBytes, bErr := req.BodyAsBytes()
 			if bErr != nil {
@@ -624,8 +625,10 @@ func (h *Handlers) HandleCloneCollection(ctx *executioncontext.ExecutionContext,
 				return bErr
 			}
 			if len(bodyBytes) > 0 {
-				if err = json.Unmarshal(bodyBytes, overrides); err != nil {
-					svcErr := serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", err.Error())
+				dec := json.NewDecoder(strings.NewReader(string(bodyBytes)))
+				dec.DisallowUnknownFields()
+				if decErr := dec.Decode(overrides); decErr != nil {
+					svcErr := serviceerrors.NewServiceError(messages.InvalidJSONRequest, "Error", decErr.Error())
 					w.Error(svcErr, ctx.RequestID)
 					return svcErr
 				}

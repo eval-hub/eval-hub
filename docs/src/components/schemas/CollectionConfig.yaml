@@ -91,7 +91,7 @@ properties:
       the collection's benchmarks (via BenchmarkResource.evaluation_targets).
       Example values: model, agent.
   agent:
-    $ref: ./AgentMetadata.yaml
+    $ref: ./CollectionAgentMetadata.yaml
     description: Structured metadata for AI agent discoverability at the collection level.
 required:
   - name

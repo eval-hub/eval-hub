@@ -14,6 +14,7 @@ allOf:
           Absent when the collection was not created via clone.
       pinned_order:
         type: integer
+        minimum: 0
         description: >
           Tenant-controlled pin ordering. 0 = not pinned. Positive integers give
           the tenant's personal tile ordering (ascending). Co-located with
