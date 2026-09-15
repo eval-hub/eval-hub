@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	semconv "go.opentelemetry.io/otel/semconv/v1.39.0"
 )
 
 func TestParseMeterExportInterval(t *testing.T) {
@@ -622,4 +623,66 @@ func TestSetupOTEL(t *testing.T) {
 		}
 		_ = shutdown(ctx)
 	})
+}
+
+func TestCreateResource(t *testing.T) {
+	t.Parallel()
+
+	logger := slog.Default()
+
+	t.Run("default service name, no version", func(t *testing.T) {
+		res, err := createResource(context.Background(), &config.OTELConfig{}, logger)
+		if err != nil {
+			t.Fatalf("createResource: %v", err)
+		}
+		attrs := res.Set()
+		name, ok := attrs.Value(semconv.ServiceNameKey)
+		if !ok || name.AsString() != ServiceName {
+			t.Errorf("expected service.name=%q, got %q (ok=%v)", ServiceName, name.AsString(), ok)
+		}
+		if _, ok := attrs.Value(semconv.ServiceVersionKey); ok {
+			t.Error("expected no service.version attribute when ServiceVersion is unset")
+		}
+	})
+
+	t.Run("custom service name and version", func(t *testing.T) {
+		res, err := createResource(context.Background(), &config.OTELConfig{
+			ServiceName:    "custom-service",
+			ServiceVersion: "1.2.3",
+		}, logger)
+		if err != nil {
+			t.Fatalf("createResource: %v", err)
+		}
+		attrs := res.Set()
+		name, ok := attrs.Value(semconv.ServiceNameKey)
+		if !ok || name.AsString() != "custom-service" {
+			t.Errorf("expected service.name=custom-service, got %q (ok=%v)", name.AsString(), ok)
+		}
+		version, ok := attrs.Value(semconv.ServiceVersionKey)
+		if !ok || version.AsString() != "1.2.3" {
+			t.Errorf("expected service.version=1.2.3, got %q (ok=%v)", version.AsString(), ok)
+		}
+	})
+}
+
+// TestNewTracerProviderStdoutSucceedsWithResourceConfig is a smoke test that the
+// stdout branch of newTracerProvider still builds a usable provider once it also
+// calls createResource; the resource attribute content itself is covered by
+// TestCreateResource.
+func TestNewTracerProviderStdoutSucceedsWithResourceConfig(t *testing.T) {
+	t.Parallel()
+
+	tp, err := newTracerProvider(context.Background(), &config.OTELConfig{
+		ExporterType:   ExporterTypeStdout,
+		ServiceName:    "stdout-test-service",
+		ServiceVersion: "9.9.9",
+	}, slog.Default())
+	if err != nil {
+		t.Fatalf("newTracerProvider: %v", err)
+	}
+	defer func() { _ = tp.Shutdown(context.Background()) }()
+
+	if tp == nil {
+		t.Fatal("expected non-nil tracer provider")
+	}
 }
