@@ -75,9 +75,13 @@ const (
 	envTestDataGitURLName           = "TEST_DATA_GIT_URL"
 	envTestDataGitRefName           = "TEST_DATA_GIT_REF"
 	envTestDataGitSubPathName       = "TEST_DATA_GIT_SUBPATH"
+	envTestDataHFRepoIDName         = "TEST_DATA_HF_REPO_ID"
+	envTestDataHFRevisionName       = "TEST_DATA_HF_REVISION"
+	envTestDataHFSubPathName        = "TEST_DATA_HF_SUBPATH"
 	envOTELExporterEndpointName     = "OTEL_EXPORTER_OTLP_ENDPOINT"
 	envOTELServiceNameName          = "OTEL_SERVICE_NAME"
 	testDataGitAuthVolumeName       = "test-data-git-auth"
+	testDataHFAuthVolumeName        = "test-data-hf-auth"
 	initMetadataVolumeName          = "init-metadata" // emptyDir shared between init container and sidecar only
 	initMetadataMountPath           = runtimeenv.InitMetadataDir
 	defaultInitCPURequest           = "100m"

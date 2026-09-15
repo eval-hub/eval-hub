@@ -156,6 +156,68 @@ func TestSidecarForJobPodSetsIsGitJob(t *testing.T) {
 	}
 }
 
+func TestSidecarForJobPodSetsIsGitJobForHFSource(t *testing.T) {
+	cfg := &config.Config{
+		Sidecar: &config.SidecarConfig{BaseURL: config.DefaultSidecarBaseURL},
+	}
+	jc := &jobConfig{
+		jobID:      "hf-job-id",
+		evalHubURL: "http://eval-hub:8080",
+		testDataHF: hfTestDataConfig{
+			repoID: "cais/mmlu",
+		},
+	}
+
+	export, err := sidecarForJobPod(cfg, jc)
+	if err != nil {
+		t.Fatalf("sidecarForJobPod: %v", err)
+	}
+	if export.InitContainer == nil || !export.InitContainer.IsGitJob {
+		t.Fatal("expected InitContainer.IsGitJob=true in sidecar config for HF source job")
+	}
+}
+
+func TestSidecarForJobPodSetsIsGitJobWithoutEvalHubURL(t *testing.T) {
+	cfg := &config.Config{}
+
+	t.Run("git source", func(t *testing.T) {
+		jc := &jobConfig{
+			testDataGit: gitTestDataConfig{
+				url: "https://github.com/org/repo.git",
+				ref: "main",
+			},
+		}
+		export, err := sidecarForJobPod(cfg, jc)
+		if err != nil {
+			t.Fatalf("sidecarForJobPod: %v", err)
+		}
+		if export == nil {
+			t.Fatal("expected sidecar config, got nil")
+		}
+		if export.InitContainer == nil || !export.InitContainer.IsGitJob {
+			t.Fatal("expected InitContainer.IsGitJob=true for git source without eval hub URL")
+		}
+	})
+
+	t.Run("HF source", func(t *testing.T) {
+		jc := &jobConfig{
+			testDataHF: hfTestDataConfig{
+				repoID: "cais/mmlu",
+			},
+		}
+		export, err := sidecarForJobPod(cfg, jc)
+		if err != nil {
+			t.Fatalf("sidecarForJobPod: %v", err)
+		}
+		if export == nil {
+			t.Fatal("expected sidecar config, got nil")
+		}
+		if export.InitContainer == nil || !export.InitContainer.IsGitJob {
+			t.Fatal("expected InitContainer.IsGitJob=true for HF source without eval hub URL")
+		}
+	})
+}
+
 func TestSidecarForJobPodIsGitJobFalseForNonGitJob(t *testing.T) {
 	cfg := &config.Config{
 		Sidecar: &config.SidecarConfig{BaseURL: config.DefaultSidecarBaseURL},

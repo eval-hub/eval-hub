@@ -1276,7 +1276,7 @@ Feature: Evaluation Jobs
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_pvc_and_s3.json"
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
-    And the response should contain the value "exactly one of s3, pvc, or git must be set" at path "$.message"
+    And the response should contain the value "exactly one of s3, pvc, git, or hf must be set" at path "$.message"
 
   # Requires trustyai-service-operator eval-job failure reconciler (unschedulable PVC → FAILED after scheduling grace).
   # Wait deadline must exceed that grace period with margin.
@@ -1390,7 +1390,7 @@ Feature: Evaluation Jobs
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_and_s3.json"
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
-    And the response should contain the value "exactly one of s3, pvc, or git must be set" at path "$.message"
+    And the response should contain the value "exactly one of s3, pvc, git, or hf must be set" at path "$.message"
 
   @git
   @negative
@@ -1399,7 +1399,7 @@ Feature: Evaluation Jobs
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_git_and_pvc.json"
     Then the response code should be 400
     And the response should contain the value "request_validation_failed" at path "$.message_code"
-    And the response should contain the value "exactly one of s3, pvc, or git must be set" at path "$.message"
+    And the response should contain the value "exactly one of s3, pvc, git, or hf must be set" at path "$.message"
 
   @git
   @negative

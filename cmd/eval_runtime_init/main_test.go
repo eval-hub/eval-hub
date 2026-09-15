@@ -238,6 +238,8 @@ func TestDownloadObjectS3Error(t *testing.T) {
 // ListObjects (no real S3) — enough to reach and execute the TM construction line.
 func TestRunMissingEnvVars(t *testing.T) {
 	// Not parallel — modifies process env vars
+	t.Setenv(envHFRepoID, "")
+	t.Setenv(envGitURL, "")
 	t.Setenv(envBucket, "")
 	t.Setenv(envKey, "")
 
@@ -247,6 +249,40 @@ func TestRunMissingEnvVars(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), envBucket) && !strings.Contains(err.Error(), envKey) {
 		t.Fatalf("run() error = %v, want mention of missing env vars", err)
+	}
+}
+
+func TestRunHF_RoutesBeforeS3AndGit(t *testing.T) {
+	t.Setenv(envHFRepoID, "org/offline-dataset")
+	t.Setenv(envGitURL, "")
+	t.Setenv(envBucket, "")
+	t.Setenv(envKey, "")
+
+	err := run()
+	if err == nil {
+		t.Fatal("run() = nil, want HF download error")
+	}
+	if strings.Contains(err.Error(), envBucket) || strings.Contains(err.Error(), envKey) {
+		t.Fatalf("run() routed to S3, got: %v", err)
+	}
+	if strings.Contains(err.Error(), envGitURL) {
+		t.Fatalf("run() routed to git, got: %v", err)
+	}
+}
+
+func TestRunHF_RejectsNonPositiveTimeout(t *testing.T) {
+	t.Setenv(envHFRepoID, "org/offline-dataset")
+	for _, raw := range []string{"0s", "-1s", "0"} {
+		t.Run(raw, func(t *testing.T) {
+			t.Setenv(envHFTimeout, raw)
+			err := runHF()
+			if err == nil {
+				t.Fatal("runHF() = nil, want error for non-positive timeout")
+			}
+			if !strings.Contains(err.Error(), envHFTimeout) {
+				t.Fatalf("runHF() error = %v, want mention of %s", err, envHFTimeout)
+			}
+		})
 	}
 }
 
@@ -338,5 +374,31 @@ func TestDownloadObjectWritesNestedFile(t *testing.T) {
 	}
 	if string(got) != "hello" {
 		t.Fatalf("file contents = %q, want %q", got, "hello")
+	}
+}
+
+func TestReadOptionalSecret(t *testing.T) {
+	secret := t.TempDir()
+	if err := os.WriteFile(filepath.Join(secret, "token"), []byte("hf_abc\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	orig := scrtDir
+	scrtDir = secret
+	t.Cleanup(func() { scrtDir = orig })
+
+	got, err := readOptionalSecret("token")
+	if err != nil {
+		t.Fatalf("readOptionalSecret: %v", err)
+	}
+	if got != "hf_abc" {
+		t.Errorf("readOptionalSecret = %q, want hf_abc", got)
+	}
+
+	got, err = readOptionalSecret("missing")
+	if err != nil {
+		t.Fatalf("readOptionalSecret(missing): %v", err)
+	}
+	if got != "" {
+		t.Errorf("readOptionalSecret(missing) = %q, want empty", got)
 	}
 }

@@ -572,7 +572,7 @@ func TestRequiredWithoutAllFields(t *testing.T) {
 		ref := api.TestDataRef{}
 		err := validate.Struct(ref)
 		if err == nil {
-			t.Fatal("expected validation error when neither s3 nor pvc nor git is set")
+			t.Fatal("expected validation error when neither s3, pvc, git, nor hf is set")
 		}
 	}
 	{
@@ -600,6 +600,15 @@ func TestRequiredWithoutAllFields(t *testing.T) {
 		err := validate.Struct(ref)
 		if err != nil {
 			t.Fatalf("expected no error when git is set, got: %v", err)
+		}
+	}
+	{
+		ref := api.TestDataRef{
+			HF: &api.HFTestDataRef{RepoID: "cais/mmlu"},
+		}
+		err := validate.Struct(ref)
+		if err != nil {
+			t.Fatalf("expected no error when hf is set, got: %v", err)
 		}
 	}
 	{
@@ -704,6 +713,27 @@ func TestTestDataRef_GitAndPVCRejected(t *testing.T) {
 	}
 	if err := validate.Struct(ref); err == nil {
 		t.Fatal("expected validation error when both git and pvc are set")
+	}
+}
+
+func TestTestDataRef_HFOnlyAccepted(t *testing.T) {
+	validate := newTestValidator(t)
+	ref := api.TestDataRef{
+		HF: &api.HFTestDataRef{RepoID: "cais/mmlu"},
+	}
+	if err := validate.Struct(ref); err != nil {
+		t.Fatalf("expected no error for valid hf-only TestDataRef, got: %v", err)
+	}
+}
+
+func TestTestDataRef_HFAndS3Rejected(t *testing.T) {
+	validate := newTestValidator(t)
+	ref := api.TestDataRef{
+		HF: &api.HFTestDataRef{RepoID: "cais/mmlu"},
+		S3: &api.S3TestDataRef{Bucket: "b", Key: "k", SecretRef: "s"},
+	}
+	if err := validate.Struct(ref); err == nil {
+		t.Fatal("expected validation error when both hf and s3 are set")
 	}
 }
 
