@@ -1,4 +1,5 @@
 type: object
+additionalProperties: false
 description: >
   Optional field overrides for the cloned collection. All fields are optional —
   any omitted field is inherited from the source collection.

@@ -90,6 +90,9 @@ properties:
       If not explicitly set, the handler returns the union of evaluation_targets from
       the collection's benchmarks (via BenchmarkResource.evaluation_targets).
       Example values: model, agent.
+  agent:
+    $ref: ./AgentMetadata.yaml
+    description: Structured metadata for AI agent discoverability at the collection level.
 required:
   - name
   - category

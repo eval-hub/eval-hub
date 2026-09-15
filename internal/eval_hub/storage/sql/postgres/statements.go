@@ -121,9 +121,18 @@ func (s *postgresStatementsFactory) CreateEntityFilterCondition(key string, valu
 		}
 		return "", []any{}
 	case "domains", "tasks", "modalities", "industries", "evaluation_targets":
-		// Array-contains filter on JSON array fields
-		fieldStr, _ := value.(string)
+		// Array-contains filter: single string or []string (AND semantics for multiple values).
 		jsonPath := fmt.Sprintf("entity->'%s'", key)
+		if strs, ok := value.([]string); ok {
+			var parts []string
+			var multiArgs []any
+			for i, s := range strs {
+				parts = append(parts, fmt.Sprintf("jsonb_typeof(%s) = 'array' AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(%s) AS val WHERE val = $%d)", jsonPath, jsonPath, index+i))
+				multiArgs = append(multiArgs, s)
+			}
+			return "(" + strings.Join(parts, " AND ") + ")", multiArgs
+		}
+		fieldStr, _ := value.(string)
 		return fmt.Sprintf("jsonb_typeof(%s) = 'array' AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(%s) AS val WHERE val = $%d)", jsonPath, jsonPath, index), []any{fieldStr}
 	case "tags":
 		tagStr, _ := value.(string)

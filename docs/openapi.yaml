@@ -3530,6 +3530,9 @@ components:
             type: string
           description: |
             AI entity types this collection evaluates (snake_case). If not explicitly set, the handler returns the union of evaluation_targets from the collection's benchmarks (via BenchmarkResource.evaluation_targets). Example values: model, agent.
+        agent:
+          $ref: '#/components/schemas/AgentMetadata'
+          description: Structured metadata for AI agent discoverability at the collection level.
       required:
         - name
         - category
@@ -3570,6 +3573,7 @@ components:
               description: Collection resources
     CollectionCloneRequest:
       type: object
+      additionalProperties: false
       description: |
         Optional field overrides for the cloned collection. All fields are optional — any omitted field is inherited from the source collection. This schema mirrors CollectionConfig but with no required fields, since the required values are inherited from the source. The curation_order field is never accepted here and is always reset to 0 (copies are never curated).
       properties:

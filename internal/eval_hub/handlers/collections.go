@@ -104,10 +104,19 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 				return serviceerrors.NewServiceError(messages.QueryBadParameter, "ParameterName", badParams[0], "AllowedParameters", strings.Join(allowedParams, ", "))
 			}
 
-			// Handle new array filters (use first value from each param)
+			// Collect all repeated values for array-field filters (AND semantics:
+			// ?domains=a&domains=b matches collections containing both a and b).
 			for _, key := range []string{"domains", "tasks", "modalities", "industries", "evaluation_targets"} {
-				if vals := req.Query(key); len(vals) > 0 && vals[0] != "" {
-					filter.Params[key] = vals[0]
+				var nonempty []string
+				for _, v := range req.Query(key) {
+					if v != "" {
+						nonempty = append(nonempty, v)
+					}
+				}
+				if len(nonempty) == 1 {
+					filter.Params[key] = nonempty[0]
+				} else if len(nonempty) > 1 {
+					filter.Params[key] = nonempty
 				}
 			}
 
@@ -392,7 +401,9 @@ func (h *Handlers) HandleCreateCollection(ctx *executioncontext.ExecutionContext
 				},
 				CollectionConfig: *collection,
 			}
-			EnrichBenchmarkURLsFromProviders(scoped, collectionResource)
+			// Enrich benchmark URLs and auto-populate classification fields before persisting
+			// so that entity JSON stored in the DB can be matched by array-field SQL filters.
+			EnrichCollectionFromProviders(scoped, collectionResource)
 			err := scoped.CreateCollection(collectionResource)
 			if err != nil {
 				w.Error(err, ctx.RequestID)

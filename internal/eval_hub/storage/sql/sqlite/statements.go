@@ -124,10 +124,20 @@ func (s *sqliteStatementsFactory) CreateEntityFilterCondition(key string, value 
 		}
 		return "", []any{}
 	case "domains", "tasks", "modalities", "industries", "evaluation_targets":
-		// Array-contains filter on JSON array fields
-		fieldStr, _ := value.(string)
+		// Array-contains filter: single string or []string (AND semantics for multiple values).
 		jsonPath := fmt.Sprintf("$.%s", key)
-		return fmt.Sprintf("json_type(json_extract(entity, '%s')) = 'array' AND EXISTS (SELECT 1 FROM json_each(json_extract(entity, '%s')) WHERE value = ?)", jsonPath, jsonPath), []any{fieldStr}
+		memberCond := fmt.Sprintf("json_type(json_extract(entity, '%s')) = 'array' AND EXISTS (SELECT 1 FROM json_each(json_extract(entity, '%s')) WHERE value = ?)", jsonPath, jsonPath)
+		if strs, ok := value.([]string); ok {
+			var parts []string
+			var multiArgs []any
+			for _, s := range strs {
+				parts = append(parts, memberCond)
+				multiArgs = append(multiArgs, s)
+			}
+			return "(" + strings.Join(parts, " AND ") + ")", multiArgs
+		}
+		fieldStr, _ := value.(string)
+		return memberCond, []any{fieldStr}
 	case "tags":
 		tagStr, _ := value.(string)
 		// evaluations: tags at config.tags; providers and collections: tags at entity root
