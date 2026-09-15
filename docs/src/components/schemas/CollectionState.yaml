@@ -9,9 +9,3 @@ properties:
     description: >
       Number of evaluation jobs created from this collection by its owning tenant.
       Per-tenant counter, incremented at job creation.
-  pinned_order:
-    type: integer
-    description: >
-      Tenant-controlled pin ordering. 0 = not pinned. Positive integers give
-      the tenant's personal tile ordering (ascending). Settable by the
-      collection owner via PATCH /collections/{id}.

@@ -3031,9 +3031,9 @@
                         "owner": "user@example.com"
                       },
                       "derived_from": "e5f6a7b8-9012-3456-cdef-0123456789ab",
+                      "pinned_order": 0,
                       "state": {
-                        "run_count": 0,
-                        "pinned_order": 0
+                        "run_count": 0
                       },
                       "name": "my-rag-evaluation",
                       "category": "document_understanding",
@@ -4883,10 +4883,6 @@
           "run_count": {
             "type": "integer",
             "description": "Number of evaluation jobs created from this collection by its owning tenant. Per-tenant counter, incremented at job creation.\n"
-          },
-          "pinned_order": {
-            "type": "integer",
-            "description": "Tenant-controlled pin ordering. 0 = not pinned. Positive integers give the tenant's personal tile ordering (ascending). Settable by the collection owner via PATCH /collections/{id}.\n"
           }
         }
       },
@@ -5036,6 +5032,10 @@
               "derived_from": {
                 "type": "string",
                 "description": "ID of the collection this was copied from. Set by the server when POST /collections/{id}/clones is called; immutable thereafter. Absent when the collection was not created via clone.\n"
+              },
+              "pinned_order": {
+                "type": "integer",
+                "description": "Tenant-controlled pin ordering. 0 = not pinned. Positive integers give the tenant's personal tile ordering (ascending). Co-located with curation_order so both ordering fields are visible at the same level. Settable by the collection owner via PATCH /collections/{id}.\n"
               },
               "state": {
                 "$ref": "#/components/schemas/CollectionState",

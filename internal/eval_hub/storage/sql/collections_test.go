@@ -276,7 +276,7 @@ func TestCollectionState_SetAndIncrement(t *testing.T) {
 			scoped := store.WithTenant("t1").WithOwner("user1")
 
 			// UpdateCollectionState
-			state := &api.CollectionState{RunCount: 3, PinnedOrder: 2}
+			state := &api.CollectionState{RunCount: 3}
 			updated, err := scoped.UpdateCollectionState("coll-state-test", state)
 			if err != nil {
 				t.Fatalf("UpdateCollectionState: %v", err)
@@ -572,7 +572,7 @@ func TestCollectionPatchCuratedCollectionRejected(t *testing.T) {
 	}
 }
 
-func TestCollectionPatch_NilStateInitialized(t *testing.T) {
+func TestCollectionPatch_PinnedOrderTopLevel(t *testing.T) {
 	t.Parallel()
 	store, err := getTestStorage(t, "sqlite", getDBName())
 	if err != nil {
@@ -580,25 +580,24 @@ func TestCollectionPatch_NilStateInitialized(t *testing.T) {
 	}
 	scoped := store.WithTenant("t-patch-state").WithOwner("user1")
 
-	// Create a tenant collection without explicit State (simulates legacy record)
+	// Create a tenant collection without a pinned_order set
 	coll := &api.CollectionResource{
 		Resource: api.Resource{ID: "patch-state-nil", Owner: "user1", Tenant: "t-patch-state"},
 		CollectionConfig: api.CollectionConfig{
 			Name: "NilState", Category: "test",
 			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
 		},
-		State: nil,
 	}
 	if err := scoped.CreateCollection(coll); err != nil {
 		t.Fatalf("CreateCollection: %v", err)
 	}
 
-	patches := &api.Patch{{Op: api.PatchOpAdd, Path: "/state/pinned_order", Value: float64(3)}}
+	patches := &api.Patch{{Op: api.PatchOpAdd, Path: "/pinned_order", Value: float64(3)}}
 	updated, err := scoped.PatchCollection("patch-state-nil", patches)
 	if err != nil {
-		t.Fatalf("PatchCollection /state/pinned_order on nil-State collection: %v", err)
+		t.Fatalf("PatchCollection /pinned_order on nil-State collection: %v", err)
 	}
-	if updated.State == nil || updated.State.PinnedOrder != 3 {
-		t.Errorf("expected PinnedOrder=3, got state=%+v", updated.State)
+	if updated.PinnedOrder != 3 {
+		t.Errorf("expected PinnedOrder=3, got %d", updated.PinnedOrder)
 	}
 }

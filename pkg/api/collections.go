@@ -83,10 +83,6 @@ type CollectionState struct {
 	// RunCount is the number of EvaluationJobs created from this collection by its owning tenant.
 	// Per-tenant counter, incremented at job creation.
 	RunCount int `json:"run_count,omitempty"`
-
-	// PinnedOrder is the tenant's personal pin ordering.
-	// 0 = not pinned. Positive integers give explicit ordering (ascending).
-	PinnedOrder int `json:"pinned_order,omitempty"`
 }
 
 // CollectionResource represents collection resource
@@ -97,6 +93,11 @@ type CollectionResource struct {
 	// Set by the server when POST /collections/{id}/clones is called; immutable thereafter.
 	// Absent when the collection was not created via clone.
 	DerivedFrom string `json:"derived_from,omitempty"`
+
+	// PinnedOrder is the tenant's personal pin ordering for this collection.
+	// 0 = not pinned. Positive integers give explicit ordering (ascending).
+	// Settable by the collection owner via PATCH /collections/{id}.
+	PinnedOrder int `json:"pinned_order,omitempty"`
 
 	CollectionConfig
 

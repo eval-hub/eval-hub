@@ -65,9 +65,9 @@ var (
 		{Path: "/evaluation_targets", Op: api.PatchOpRemove, Prefix: true},
 		{Path: "/evaluation_targets", Op: api.PatchOpReplace, Prefix: true},
 
-		// Tenant-controlled pin ordering (state field)
-		{Path: "/state/pinned_order", Op: api.PatchOpAdd, Prefix: false},
-		{Path: "/state/pinned_order", Op: api.PatchOpReplace, Prefix: false},
+		// Tenant-controlled pin ordering (top-level field alongside curation_order)
+		{Path: "/pinned_order", Op: api.PatchOpAdd, Prefix: false},
+		{Path: "/pinned_order", Op: api.PatchOpReplace, Prefix: false},
 	}
 )
 

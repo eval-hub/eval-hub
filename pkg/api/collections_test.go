@@ -150,9 +150,9 @@ func TestCollectionStateFieldsSerialization(t *testing.T) {
 				{Ref: api.Ref{ID: "lcb"}, ProviderID: "lighteval"},
 			},
 		},
+		PinnedOrder: 2,
 		State: &api.CollectionState{
-			RunCount:    5,
-			PinnedOrder: 2,
+			RunCount: 5,
 		},
 	}
 
@@ -175,8 +175,8 @@ func TestCollectionStateFieldsSerialization(t *testing.T) {
 	if rt.State.RunCount != 5 {
 		t.Errorf("RunCount: got %d, want 5", rt.State.RunCount)
 	}
-	if rt.State.PinnedOrder != 2 {
-		t.Errorf("PinnedOrder: got %d, want 2", rt.State.PinnedOrder)
+	if rt.PinnedOrder != 2 {
+		t.Errorf("PinnedOrder: got %d, want 2", rt.PinnedOrder)
 	}
 }
 

@@ -132,6 +132,7 @@ func scanResource[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 			resource := &api.CollectionResource{
 				Resource:         query.Resource,
 				DerivedFrom:      storedEntity.DerivedFrom,
+				PinnedOrder:      storedEntity.PinnedOrder,
 				CollectionConfig: storedEntity.CollectionConfig,
 				State:            storedEntity.State,
 			}

@@ -49,6 +49,7 @@ func (s *sqlStorage) createCollectionTxn(txn *sql.Tx, collection *api.Collection
 type collectionStoredEntity struct {
 	api.CollectionConfig
 	DerivedFrom string               `json:"derived_from,omitempty"`
+	PinnedOrder int                  `json:"pinned_order,omitempty"`
 	State       *api.CollectionState `json:"state,omitempty"`
 }
 
@@ -56,6 +57,7 @@ func (s *sqlStorage) createCollectionEntity(collection *api.CollectionResource) 
 	entity := collectionStoredEntity{
 		CollectionConfig: collection.CollectionConfig,
 		DerivedFrom:      collection.DerivedFrom,
+		PinnedOrder:      collection.PinnedOrder,
 		State:            collection.State,
 	}
 	collectionJSON, err := json.Marshal(entity)
@@ -99,6 +101,7 @@ func (s *sqlStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 	collectionResource := api.CollectionResource{
 		Resource:         query.Resource,
 		DerivedFrom:      entity.DerivedFrom,
+		PinnedOrder:      entity.PinnedOrder,
 		CollectionConfig: entity.CollectionConfig,
 		State:            entity.State,
 	}
@@ -217,11 +220,6 @@ func (s *sqlStorage) PatchCollection(id string, patches *api.Patch) (*api.Collec
 				"CollectionID", id,
 			)
 		}
-		// Ensure State is non-nil before serializing for JSON Patch so that
-		// /state/pinned_order add/replace operations have a parent key to target.
-		if persistedCollection.State == nil {
-			persistedCollection.State = &api.CollectionState{}
-		}
 		// convert persistedCollection to json
 		persistedCollectionJSON, err := s.createCollectionEntity(persistedCollection)
 		if err != nil {
@@ -241,6 +239,7 @@ func (s *sqlStorage) PatchCollection(id string, patches *api.Patch) (*api.Collec
 		result := api.CollectionResource{
 			Resource:         persistedCollection.Resource,
 			DerivedFrom:      patchedEntity.DerivedFrom,
+			PinnedOrder:      patchedEntity.PinnedOrder,
 			CollectionConfig: patchedEntity.CollectionConfig,
 			State:            patchedEntity.State,
 		}
