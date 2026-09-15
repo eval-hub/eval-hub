@@ -288,7 +288,35 @@ make stop-signoz
 
 SigNoz UI is mapped to **3301** so it does not clash with eval-hub on `:8080`.
 
-Impersonation mode is enabled by default, so the UI loads without a login screen. If you need authentication, remove the `SIGNOZ_IDENTN_*` variables from `compose.yaml`.
+**Impersonation mode** is enabled by default — the UI loads without a login screen, which is convenient for local development. **Login mode** uses standard SigNoz authentication with a login screen.
+
+Both modes require root-user credentials via environment variables when running `bootstrap-pours.sh`. SigNoz seeds a root user on startup; the credentials must satisfy:
+
+- **`SIGNOZ_USER_ROOT_EMAIL`** — a valid email address
+- **`SIGNOZ_USER_ROOT_PASSWORD`** — at least 8 characters, containing uppercase, lowercase, and a digit
+
+Impersonation mode (default):
+
+```bash
+cd tests/otel
+SIGNOZ_USER_ROOT_EMAIL=<email> \
+  SIGNOZ_USER_ROOT_PASSWORD=<password> \
+  ./scripts/bootstrap-pours.sh
+make start-signoz
+```
+
+Login mode:
+
+```bash
+cd tests/otel
+SIGNOZ_AUTH_MODE=login \
+  SIGNOZ_USER_ROOT_EMAIL=<email> \
+  SIGNOZ_USER_ROOT_PASSWORD=<password> \
+  ./scripts/bootstrap-pours.sh
+make start-signoz
+```
+
+The credentials are written into the generated `.env` file at `tests/otel/pours/deployment/.env` (git-ignored). Re-running `bootstrap-pours.sh` preserves existing credentials from the `.env` unless explicitly overridden via environment variables.
 
 Point eval-hub at SigNoz (local plaintext gRPC):
 
