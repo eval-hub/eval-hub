@@ -190,7 +190,7 @@ type GitTestDataRef struct {
 // The repository (or sub_path within it) is downloaded into /test_data before the adapter runs.
 // SecretRef is optional for public repositories; gated resources require a Kubernetes Secret.
 type HFTestDataRef struct {
-	RepoID    string `json:"repo_id" mapstructure:"repo_id" validate:"required"`
+	RepoID    string `json:"repo_id" mapstructure:"repo_id" validate:"notblank"`
 	Revision  string `json:"revision,omitempty" mapstructure:"revision,omitempty"`
 	SubPath   string `json:"sub_path,omitempty" mapstructure:"sub_path,omitempty"`
 	SecretRef string `json:"secret_ref,omitempty" mapstructure:"secret_ref,omitempty" validate:"omitempty,rfc1123_dns_label"`

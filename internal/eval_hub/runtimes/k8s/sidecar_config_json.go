@@ -8,7 +8,7 @@ import (
 // sidecarForJobPod builds sidecar_config.json for the job ConfigMap from server
 // sidecar YAML plus per-job fields. Omits sidecar_container (image/resources); that is only for job spec.
 func sidecarForJobPod(cfg *config.Config, jc *jobConfig) (*config.SidecarConfig, error) {
-	if cfg != nil && cfg.Sidecar == nil && jc != nil && jc.evalHubURL == "" && jc.mlflowTrackingURI == "" && jc.modelTargetURL == "" {
+	if cfg != nil && cfg.Sidecar == nil && jc != nil && jc.evalHubURL == "" && jc.mlflowTrackingURI == "" && jc.modelTargetURL == "" && !hasGitTestData(jc) && !hasHFTestData(jc) {
 		return nil, nil
 	}
 
@@ -31,7 +31,7 @@ func sidecarForJobPod(cfg *config.Config, jc *jobConfig) (*config.SidecarConfig,
 				export.EvalHub.InsecureSkipVerify = false
 			}
 		}
-		if hasGitTestData(jc) {
+		if hasGitTestData(jc) || hasHFTestData(jc) {
 			export.InitContainer = &config.InitContainerConfig{IsGitJob: true}
 		}
 		if jc.mlflowTrackingURI != "" {

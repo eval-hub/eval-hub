@@ -1469,3 +1469,52 @@ func TestResolveImagePullPolicy(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildJobConfigTestDataHF(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-hf"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: &api.ModelRef{URL: "http://model", Name: "model"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{
+					Ref: api.Ref{ID: "bench-1"},
+					TestDataRef: &api.TestDataRef{
+						HF: &api.HFTestDataRef{
+							RepoID:    "org/dataset",
+							Revision:  "main",
+							SubPath:   "data",
+							SecretRef: "hf-token",
+						},
+					},
+				},
+			},
+		},
+	}
+	provider := &api.ProviderResource{
+		Resource: api.Resource{ID: "provider-1"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{Image: "adapter:latest"},
+			},
+		},
+	}
+
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
+	if err != nil {
+		t.Fatalf("buildJobConfig returned error: %v", err)
+	}
+	if cfg.testDataHF.repoID != "org/dataset" {
+		t.Fatalf("expected testDataHF.repoID %q, got %q", "org/dataset", cfg.testDataHF.repoID)
+	}
+	if cfg.testDataHF.revision != "main" {
+		t.Fatalf("expected testDataHF.revision %q, got %q", "main", cfg.testDataHF.revision)
+	}
+	if cfg.testDataHF.subPath != "data" {
+		t.Fatalf("expected testDataHF.subPath %q, got %q", "data", cfg.testDataHF.subPath)
+	}
+	if cfg.testDataHF.secretRef != "hf-token" {
+		t.Fatalf("expected testDataHF.secretRef %q, got %q", "hf-token", cfg.testDataHF.secretRef)
+	}
+}
