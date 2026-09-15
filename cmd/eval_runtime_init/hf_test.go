@@ -164,6 +164,17 @@ func TestClassifyHFError(t *testing.T) {
 		t.Fatalf("expected not found message, got %v", notFound)
 	}
 
+	// HF returns 401 with "Repository Not Found" for missing/private repos without a token.
+	hfMissing := classifyHFError("SobhaCh/invalid-db", errors.New(
+		"401 Client Error. (Request ID: Root=1-abc)\n\nRepository Not Found for url: https://huggingface.co/api/datasets/SobhaCh/invalid-db.\nPlease make sure you specified the correct `repo_id` and `repo_type`.\nIf you are trying to access a private or gated repo, make sure you are authenticated.",
+	))
+	if !strings.HasPrefix(hfMissing.Error(), "repository not found:") {
+		t.Fatalf("expected not found prefix for 401+missing repo, got %v", hfMissing)
+	}
+	if strings.Contains(hfMissing.Error(), "provide secret_ref") {
+		t.Fatalf("expected not to classify missing repo as gated, got %v", hfMissing)
+	}
+
 	raw := errors.New("connection reset by peer")
 	if classifyHFError("org/repo", raw) != raw {
 		t.Fatalf("expected unclassified error to pass through unchanged")

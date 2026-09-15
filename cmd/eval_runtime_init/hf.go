@@ -358,11 +358,13 @@ func classifyHFError(repoID string, err error) error {
 	}
 
 	lower := strings.ToLower(err.Error())
+	// HF often returns 401 with "Repository Not Found" for missing or inaccessible
+	// repos when unauthenticated; treat that as not-found before the gated branch.
 	switch {
-	case strings.Contains(lower, "401"), strings.Contains(lower, "gated"):
-		return fmt.Errorf("repository %s is gated; provide secret_ref with a Hugging Face token", repoID)
 	case strings.Contains(lower, "404"), strings.Contains(lower, "not found"):
 		return fmt.Errorf("repository not found: %v", err)
+	case strings.Contains(lower, "401"), strings.Contains(lower, "gated"):
+		return fmt.Errorf("repository %s is gated; provide secret_ref with a Hugging Face token", repoID)
 	default:
 		return err
 	}
