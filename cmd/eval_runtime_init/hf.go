@@ -61,9 +61,9 @@ func runHF() error {
 		timeout = parsed
 	}
 
-	token, err := readOptionalSecret(hfTokenKey)
+	token, err := resolveHFToken()
 	if err != nil {
-		return failHF(fmt.Errorf("read hugging face token: %w", err))
+		return failHF(err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -80,6 +80,20 @@ func runHF() error {
 
 	slog.Info("hf source ready", "dest", destDir, "commit_sha", commitSHA)
 	return nil
+}
+
+// resolveHFToken reads the Hugging Face token when secret_ref mounted the credentials
+// volume. No secret dir means public access is allowed. A mounted dir without a valid
+// token key is a misconfiguration (same contract as git auth).
+func resolveHFToken() (string, error) {
+	if _, err := os.Stat(scrtDir); os.IsNotExist(err) {
+		return "", nil
+	}
+	token, err := readSecret(hfTokenKey)
+	if err != nil {
+		return "", fmt.Errorf("hugging face auth: %w", err)
+	}
+	return token, nil
 }
 
 func downloadHFRepo(ctx context.Context, repoID, revision, subPath, token string) (string, error) {
@@ -353,28 +367,40 @@ func fileMatchesSubPath(fileName, subPath string) bool {
 	return fileName == normalized || strings.HasPrefix(fileName, normalized+"/")
 }
 
+func hfRepoNotFoundOrPrivateMessage(repoID string) error {
+	return fmt.Errorf(
+		"repository %s not found or is private; provide secret_ref with a Hugging Face token if the dataset is private or gated",
+		repoID,
+	)
+}
+
 func classifyHFError(repoID string, authenticated bool, err error) error {
 	if err == nil {
 		return nil
 	}
 
+	slog.Error("hugging face hub error", "repo_id", repoID, "error", err)
+
 	lower := strings.ToLower(err.Error())
-	// go-huggingface surfaces missing/private datasets as 401 "Invalid username or password"
-	// (no "not found" text). huggingface_hub wraps the same API response as "Repository Not Found".
+	// HF returns 401 for missing and private datasets without a token; 404 when the repo
+	// is explicitly not found. Use one operator-facing message for both cases.
 	switch {
-	case strings.Contains(lower, "404"),
-		strings.Contains(lower, "repository not found"),
-		strings.Contains(lower, "not found for url"):
-		return fmt.Errorf("repository not found: %v", err)
 	case isHFGatedRepoError(lower):
 		return fmt.Errorf("repository %s is gated; provide secret_ref with a Hugging Face token", repoID)
 	case strings.Contains(lower, "401"),
 		strings.Contains(lower, "invalid username or password"):
 		if authenticated {
-			return fmt.Errorf("hugging face authentication failed: %v", err)
+			return fmt.Errorf("hugging face authentication failed for repository %s; check secret_ref token", repoID)
 		}
-		return fmt.Errorf("repository not found: %v", err)
+		return hfRepoNotFoundOrPrivateMessage(repoID)
+	case strings.Contains(lower, "404"),
+		strings.Contains(lower, "repository not found"),
+		strings.Contains(lower, "not found for url"):
+		return hfRepoNotFoundOrPrivateMessage(repoID)
 	default:
+		if strings.Contains(lower, "huggingface.co") {
+			return fmt.Errorf("failed to download repository %s from Hugging Face Hub", repoID)
+		}
 		return err
 	}
 }

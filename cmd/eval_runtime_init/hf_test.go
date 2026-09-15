@@ -154,41 +154,40 @@ func TestClassifyHFError(t *testing.T) {
 		t.Fatalf("expected gated message, got %v", gatedOnly)
 	}
 
-	notFound := classifyHFError("org/repo", false, errors.New("404 Repository Not Found"))
-	if !strings.Contains(notFound.Error(), "not found") {
-		t.Fatalf("expected not found message, got %v", notFound)
+	wantMissingOrPrivate := "repository SobhaCh/invalid-db not found or is private; provide secret_ref with a Hugging Face token if the dataset is private or gated"
+
+	notFound := classifyHFError("SobhaCh/invalid-db", false, errors.New("404 Repository Not Found"))
+	if notFound.Error() != wantMissingOrPrivate {
+		t.Fatalf("expected common missing/private message for 404, got %v", notFound)
 	}
 
 	// huggingface_hub wraps missing/private repos as 401 + "Repository Not Found".
 	hfMissing := classifyHFError("SobhaCh/invalid-db", false, errors.New(
 		"401 Client Error. (Request ID: Root=1-abc)\n\nRepository Not Found for url: https://huggingface.co/api/datasets/SobhaCh/invalid-db.\nPlease make sure you specified the correct `repo_id` and `repo_type`.\nIf you are trying to access a private or gated repo, make sure you are authenticated.",
 	))
-	if !strings.HasPrefix(hfMissing.Error(), "repository not found:") {
-		t.Fatalf("expected not found prefix for 401+missing repo, got %v", hfMissing)
-	}
-	if strings.Contains(hfMissing.Error(), "provide secret_ref") {
-		t.Fatalf("expected not to classify missing repo as gated, got %v", hfMissing)
+	if hfMissing.Error() != wantMissingOrPrivate {
+		t.Fatalf("expected common missing/private message, got %v", hfMissing)
 	}
 
 	// go-huggingface returns only 401 + "Invalid username or password" for missing repos.
 	goHFMissing := classifyHFError("SobhaCh/invalid-db", false, errors.New(
 		`failed to download repository info: while downloading "https://huggingface.co/api/datasets/SobhaCh/invalid-db/revision/main?blobs=true": bad status code 401: Invalid username or password.`,
 	))
-	if !strings.HasPrefix(goHFMissing.Error(), "repository not found:") {
-		t.Fatalf("expected not found prefix for go-huggingface 401, got %v", goHFMissing)
+	if goHFMissing.Error() != wantMissingOrPrivate {
+		t.Fatalf("expected common missing/private message for go-huggingface 401, got %v", goHFMissing)
 	}
-	if strings.Contains(goHFMissing.Error(), "provide secret_ref") {
-		t.Fatalf("expected not to classify missing repo as gated, got %v", goHFMissing)
+	if strings.Contains(goHFMissing.Error(), "huggingface.co") {
+		t.Fatalf("expected user-facing message without hub URL, got %v", goHFMissing)
 	}
 
 	authFailed := classifyHFError("org/repo", true, errors.New(
 		`bad status code 401: Invalid username or password.`,
 	))
-	if !strings.HasPrefix(authFailed.Error(), "hugging face authentication failed:") {
-		t.Fatalf("expected auth failure prefix for authenticated 401, got %v", authFailed)
+	if authFailed.Error() != "hugging face authentication failed for repository org/repo; check secret_ref token" {
+		t.Fatalf("expected clean auth failure message, got %v", authFailed)
 	}
-	if strings.Contains(authFailed.Error(), "repository not found") {
-		t.Fatalf("expected not to classify authenticated 401 as not found, got %v", authFailed)
+	if strings.Contains(authFailed.Error(), "not found or is private") {
+		t.Fatalf("expected not to classify authenticated 401 as missing/private, got %v", authFailed)
 	}
 
 	raw := errors.New("connection reset by peer")
@@ -649,6 +648,21 @@ func TestCopyHFRepoFile_CopiesContent(t *testing.T) {
 	}
 }
 
+func TestResolveHFToken_MissingKeyWhenSecretMounted(t *testing.T) {
+	secretDir := t.TempDir()
+	orig := scrtDir
+	scrtDir = secretDir
+	t.Cleanup(func() { scrtDir = orig })
+
+	_, err := resolveHFToken()
+	if err == nil || !strings.Contains(err.Error(), "hugging face auth") {
+		t.Fatalf("resolveHFToken() = %v, want hugging face auth error", err)
+	}
+	if strings.Contains(err.Error(), "huggingface.co") {
+		t.Fatalf("expected clean auth error without hub URL, got %v", err)
+	}
+}
+
 func TestRunHF_SecretReadFailure(t *testing.T) {
 	dest := t.TempDir()
 	meta := t.TempDir()
@@ -661,8 +675,8 @@ func TestRunHF_SecretReadFailure(t *testing.T) {
 	t.Setenv(envHFRepoID, "org/offline-dataset")
 
 	err := runHF()
-	if err == nil || !strings.Contains(err.Error(), "read hugging face token") {
-		t.Fatalf("runHF() = %v, want secret read error", err)
+	if err == nil || !strings.Contains(err.Error(), "hugging face auth") {
+		t.Fatalf("runHF() = %v, want secret auth error", err)
 	}
 }
 
