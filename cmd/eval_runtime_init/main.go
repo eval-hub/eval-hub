@@ -320,7 +320,10 @@ func readOptionalSecret(key string) (string, error) {
 	}
 	root, err := os.OpenRoot(scrtDir)
 	if err != nil {
-		return "", nil
+		if errors.Is(err, fs.ErrNotExist) {
+			return "", nil
+		}
+		return "", fmt.Errorf("open secret dir %q: %w", scrtDir, err)
 	}
 	defer func() { _ = root.Close() }()
 

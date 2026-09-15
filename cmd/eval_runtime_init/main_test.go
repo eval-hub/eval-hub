@@ -254,13 +254,17 @@ func TestRunMissingEnvVars(t *testing.T) {
 
 func TestRunHF_RoutesBeforeS3AndGit(t *testing.T) {
 	t.Setenv(envHFRepoID, "org/offline-dataset")
+	t.Setenv(envHFTimeout, "not-a-duration")
 	t.Setenv(envGitURL, "")
 	t.Setenv(envBucket, "")
 	t.Setenv(envKey, "")
 
 	err := run()
 	if err == nil {
-		t.Fatal("run() = nil, want HF download error")
+		t.Fatal("run() = nil, want HF validation error")
+	}
+	if !strings.Contains(err.Error(), envHFTimeout) {
+		t.Fatalf("run() error = %v, want mention of %s", err, envHFTimeout)
 	}
 	if strings.Contains(err.Error(), envBucket) || strings.Contains(err.Error(), envKey) {
 		t.Fatalf("run() routed to S3, got: %v", err)
@@ -400,5 +404,25 @@ func TestReadOptionalSecret(t *testing.T) {
 	}
 	if got != "" {
 		t.Errorf("readOptionalSecret(missing) = %q, want empty", got)
+	}
+
+	missingDir := filepath.Join(t.TempDir(), "absent")
+	scrtDir = missingDir
+	got, err = readOptionalSecret("token")
+	if err != nil {
+		t.Fatalf("readOptionalSecret(missing dir): %v", err)
+	}
+	if got != "" {
+		t.Errorf("readOptionalSecret(missing dir) = %q, want empty", got)
+	}
+
+	badDir := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(badDir, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	scrtDir = badDir
+	_, err = readOptionalSecret("token")
+	if err == nil {
+		t.Fatal("readOptionalSecret(invalid dir) = nil, want open error")
 	}
 }

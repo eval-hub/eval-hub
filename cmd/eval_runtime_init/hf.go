@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -97,7 +98,7 @@ func downloadHFRepo(ctx context.Context, repoID, revision, subPath, token string
 
 	slog.Info("resolving revision", "repo_id", repoID, "revision", revisionOrDefault(revision))
 
-	if err := repo.DownloadInfo(false); err != nil {
+	if err := downloadHFInfo(ctx, repo, false); err != nil {
 		return "", classifyHFError(repoID, err)
 	}
 	info := repo.Info()
@@ -111,7 +112,7 @@ func downloadHFRepo(ctx context.Context, repoID, revision, subPath, token string
 
 	// Pin downloads to the resolved commit SHA (same as huggingface_hub snapshot_download).
 	repo = repo.WithRevision(commitSHA)
-	if err := repo.DownloadInfo(true); err != nil {
+	if err := downloadHFInfo(ctx, repo, true); err != nil {
 		return "", classifyHFError(repoID, err)
 	}
 
@@ -172,6 +173,22 @@ func downloadHFRepo(ctx context.Context, repoID, revision, subPath, token string
 	return commitSHA, nil
 }
 
+// downloadHFInfo wraps repo.DownloadInfo with context cancellation. go-huggingface
+// v0.4.1 uses context.Background() internally for metadata downloads.
+func downloadHFInfo(ctx context.Context, repo *hub.Repo, forceDownload bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	done := make(chan error, 1)
+	go func() { done <- repo.DownloadInfo(forceDownload) }()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 func revisionOrDefault(revision string) string {
 	if revision != "" {
 		return revision
@@ -183,6 +200,12 @@ func stageHFFiles(cacheDir, commitSHA string, repoFiles []string, subPath, dst s
 	if err := clearDestDir(dst); err != nil {
 		return err
 	}
+	cacheRoot, err := os.OpenRoot(cacheDir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = cacheRoot.Close() }()
+
 	dstRoot, err := os.OpenRoot(dst)
 	if err != nil {
 		return err
@@ -190,7 +213,7 @@ func stageHFFiles(cacheDir, commitSHA string, repoFiles []string, subPath, dst s
 	defer func() { _ = dstRoot.Close() }()
 
 	for _, repoFile := range repoFiles {
-		content, err := readHFRepoFile(cacheDir, commitSHA, repoFile)
+		srcRel, err := resolveHFRepoFileRel(cacheDir, commitSHA, repoFile)
 		if err != nil {
 			return fmt.Errorf("read repository file %q: %w", repoFile, err)
 		}
@@ -203,7 +226,7 @@ func stageHFFiles(cacheDir, commitSHA string, repoFiles []string, subPath, dst s
 				return err
 			}
 		}
-		if err := dstRoot.WriteFile(destRel, content, 0o600); err != nil {
+		if err := copyHFRepoFile(cacheRoot, dstRoot, srcRel, destRel); err != nil {
 			return err
 		}
 	}
@@ -239,23 +262,23 @@ func pathWithinBase(base, target string) bool {
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
 }
 
-// readHFRepoFile reads a downloaded Hub file from cache, following symlinks that
-// point at blob objects under the same cache root.
-func readHFRepoFile(cacheDir, commitSHA, repoFile string) ([]byte, error) {
+// resolveHFRepoFileRel returns a root-confined path to a downloaded Hub file in
+// cache, following symlinks that point at blob objects under the same cache root.
+func resolveHFRepoFileRel(cacheDir, commitSHA, repoFile string) (string, error) {
 	cleaned := filepath.Clean(filepath.FromSlash(repoFile))
 	if !filepath.IsLocal(cleaned) {
-		return nil, fmt.Errorf("invalid repository file path %q", repoFile)
+		return "", fmt.Errorf("invalid repository file path %q", repoFile)
 	}
 	snapPath := filepath.Join(cacheDir, "snapshots", commitSHA, cleaned)
 	if !pathWithinBase(cacheDir, snapPath) {
-		return nil, fmt.Errorf("repository file %q escapes cache root", repoFile)
+		return "", fmt.Errorf("repository file %q escapes cache root", repoFile)
 	}
 	resolved, err := filepath.EvalSymlinks(snapPath)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	if !pathWithinBase(cacheDir, resolved) {
-		return nil, fmt.Errorf("repository file %q resolves outside cache root", repoFile)
+		return "", fmt.Errorf("repository file %q resolves outside cache root", repoFile)
 	}
 	cacheAbs := filepath.Clean(cacheDir)
 	if resolvedCache, err := filepath.EvalSymlinks(cacheDir); err == nil {
@@ -263,14 +286,26 @@ func readHFRepoFile(cacheDir, commitSHA, repoFile string) ([]byte, error) {
 	}
 	rel, err := filepath.Rel(cacheAbs, resolved)
 	if err != nil || !filepath.IsLocal(rel) {
-		return nil, fmt.Errorf("invalid cache path for %q", repoFile)
+		return "", fmt.Errorf("invalid cache path for %q", repoFile)
 	}
-	root, err := os.OpenRoot(cacheDir)
+	return rel, nil
+}
+
+func copyHFRepoFile(cacheRoot, dstRoot *os.Root, srcRel, dstRel string) error {
+	in, err := cacheRoot.Open(srcRel)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	defer func() { _ = root.Close() }()
-	return root.ReadFile(rel)
+	defer func() { _ = in.Close() }()
+	out, err := dstRoot.OpenFile(dstRel, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err = io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 func stageHFSubPath(snapshotRoot *os.Root, subPath, dst string) error {
