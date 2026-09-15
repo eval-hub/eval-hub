@@ -110,6 +110,16 @@ func NewStorage(
 		}
 		if otelMetricsEnabled {
 			otelsql.ReportDBStatsMetrics(pool, otelsql.WithAttributes(attrs...))
+			// Additive semconv db.client.connection.* metrics alongside the
+			// legacy go.sql.* instruments reported above (see OTEL.md).
+			poolName := databaseName
+			if poolName == "" {
+				poolName = sqlConfig.Driver
+			}
+			if err := registerDBClientSemconvMetrics(pool, &sqlConfig, poolName); err != nil {
+				_ = pool.Close()
+				return nil, err
+			}
 		}
 	} else {
 		pool, err = sql.Open(sqlConfig.Driver, sqlConfig.URL)

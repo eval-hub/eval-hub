@@ -170,7 +170,15 @@ When `otelsql` is active and `enable_metrics` is set:
 | `go.sql.connections_closed_max_idle_time` | Observable counter | pool stats |
 | `go.sql.connections_closed_max_lifetime` | Observable counter | pool stats |
 
-There are no semconv `db.client.*` metrics or explicit DB error counters beyond trace span status.
+In addition, `internal/eval_hub/storage/sql/otel_metrics.go` registers a small set of semconv v1.39.0 `db.client.connection.*` pool metrics from the same `sql.DB.Stats()` source, additive to (not a replacement for) the `go.sql.*` instruments above:
+
+| OTEL name | Type | Attributes |
+|-----------|------|------------|
+| `db.client.connection.count` | Observable UpDownCounter | `db.system.name`, `db.client.connection.pool.name`, `db.namespace` (if known), `db.client.connection.state` = `used` \| `idle` |
+| `db.client.connection.max` | Observable UpDownCounter | `db.system.name`, `db.client.connection.pool.name`, `db.namespace` (if known) |
+| `db.client.connection.idle.max` | Observable UpDownCounter | same as above |
+
+Only the pool-size metrics that map cleanly onto `database/sql`'s `DBStats` (or configured `max_idle_conns`) are covered; per-connection histograms (`db.client.connection.create_time`, `.use_time`, `.wait_time`), `db.client.connection.pending_requests`, `db.client.connection.timeouts`, and `db.client.operation.duration` are not implemented because `database/sql` does not expose the underlying per-event data needed to populate them without replacing the driver-level instrumentation (`otelsql`). There are no explicit DB error counters beyond trace span status.
 
 ---
 
@@ -363,6 +371,7 @@ Files: `tests/otel/pours/deployment/`, `tests/otel/casting.yaml`, `tests/otel/sc
 | `internal/eval_hub/handlers/otel.go` | Handler-level span wrapper |
 | `internal/eval_hub/handlers/evaluation_metrics.go` | Terminal-state metric helper |
 | `internal/eval_hub/storage/sql/sql.go` | `otelsql` and `ReportDBStatsMetrics` |
+| `internal/eval_hub/storage/sql/otel_metrics.go` | Semconv `db.client.connection.*` pool metrics |
 | `internal/eval_runtime_sidecar/server/server.go` | Sidecar inbound `otelhttp` |
 | `internal/eval_runtime_sidecar/proxy/http_client.go` | Sidecar outbound `otelhttp` transport |
 | `internal/otel/oteltest/` | Mock OTLP collector for export tests |
