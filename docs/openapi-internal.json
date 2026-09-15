@@ -5086,7 +5086,7 @@
               "pinned_order": {
                 "type": "integer",
                 "minimum": 0,
-                "description": "Tenant-controlled pin ordering. 0 = not pinned. Positive integers give the tenant's ordering (ascending). Settable by the collection owner  via PATCH /collections/{id}.\n"
+                "description": "Tenant-controlled pin ordering. 0 = not pinned. Positive integers give the tenant's ordering (ascending). Settable by the collection owner via PATCH /collections/{id}.\n"
               },
               "state": {
                 "$ref": "#/components/schemas/CollectionState",
@@ -5123,7 +5123,7 @@
       "CollectionCloneRequest": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Optional field overrides for the cloned collection. Any omitted field is inherited from the source collection. This schema mirrors CollectionConfig but with no required fields, since the required values are inherited from  the source.\n",
+        "description": "Optional field overrides for the cloned collection. Any omitted field is inherited from the source collection. This schema mirrors CollectionConfig but with no required fields, since the required values are inherited from the source.\n",
         "properties": {
           "name": {
             "type": "string",

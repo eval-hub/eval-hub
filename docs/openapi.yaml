@@ -3588,7 +3588,7 @@ components:
               type: integer
               minimum: 0
               description: |
-                Tenant-controlled pin ordering. 0 = not pinned. Positive integers give the tenant's ordering (ascending). Settable by the collection owner  via PATCH /collections/{id}.
+                Tenant-controlled pin ordering. 0 = not pinned. Positive integers give the tenant's ordering (ascending). Settable by the collection owner via PATCH /collections/{id}.
             state:
               $ref: '#/components/schemas/CollectionState'
               description: |
@@ -3610,7 +3610,7 @@ components:
       type: object
       additionalProperties: false
       description: |
-        Optional field overrides for the cloned collection. Any omitted field is inherited from the source collection. This schema mirrors CollectionConfig but with no required fields, since the required values are inherited from  the source.
+        Optional field overrides for the cloned collection. Any omitted field is inherited from the source collection. This schema mirrors CollectionConfig but with no required fields, since the required values are inherited from the source.
       properties:
         name:
           type: string
