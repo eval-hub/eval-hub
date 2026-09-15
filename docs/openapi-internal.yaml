@@ -2079,7 +2079,7 @@ paths:
       requestBody:
         required: false
         description: |
-          Optional field overrides for the cloned collection. Any field omitted here is inherited from the source collection.
+          Optional field overrides for the cloned collection. Any field omitted here is inherited from the source collection, except curation_order. Clone requests never accept curation_order, and the server always resets it to 0.
         content:
           application/json:
             schema:
@@ -3826,7 +3826,7 @@ components:
       type: object
       additionalProperties: false
       description: |
-        Optional field overrides for the cloned collection. Any omitted field is inherited from the source collection. This schema mirrors CollectionConfig but with no required fields, since the required values are inherited from the source.
+        Optional field overrides for the cloned collection. Any omitted field is inherited from the source collection, except curation_order. Clone requests never accept curation_order, and the server always resets it to 0 so that copies are never curated by default.
       properties:
         name:
           type: string
