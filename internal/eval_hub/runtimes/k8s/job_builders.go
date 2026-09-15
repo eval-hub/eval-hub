@@ -75,6 +75,8 @@ const (
 	envTestDataGitURLName           = "TEST_DATA_GIT_URL"
 	envTestDataGitRefName           = "TEST_DATA_GIT_REF"
 	envTestDataGitSubPathName       = "TEST_DATA_GIT_SUBPATH"
+	envOTELExporterEndpointName     = "OTEL_EXPORTER_OTLP_ENDPOINT"
+	envOTELServiceNameName          = "OTEL_SERVICE_NAME"
 	testDataGitAuthVolumeName       = "test-data-git-auth"
 	initMetadataVolumeName          = "init-metadata" // emptyDir shared between init container and sidecar only
 	initMetadataMountPath           = runtimeenv.InitMetadataDir
