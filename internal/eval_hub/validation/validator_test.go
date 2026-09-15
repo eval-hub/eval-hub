@@ -726,6 +726,31 @@ func TestTestDataRef_HFOnlyAccepted(t *testing.T) {
 	}
 }
 
+func TestHFTestDataRef_WhitespaceOnlyRepoIDRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	for _, repoID := range []string{"", " ", "\t", " \t "} {
+		ref := api.HFTestDataRef{RepoID: repoID}
+		err := validate.Struct(ref)
+		if err == nil {
+			t.Fatalf("expected validation error for repo_id %q", repoID)
+		}
+		valErr, ok := err.(validator.ValidationErrors)
+		if !ok || len(valErr) == 0 {
+			t.Fatalf("expected validator.ValidationErrors for repo_id %q, got %T: %v", repoID, err, err)
+		}
+		found := false
+		for _, e := range valErr {
+			if e.Field() == "repo_id" && e.Tag() == "notblank" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected notblank error on repo_id %q, got: %v", repoID, err)
+		}
+	}
+}
+
 func TestTestDataRef_HFAndS3Rejected(t *testing.T) {
 	validate := newTestValidator(t)
 	ref := api.TestDataRef{
