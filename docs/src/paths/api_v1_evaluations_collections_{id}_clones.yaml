@@ -19,8 +19,8 @@ post:
   requestBody:
     required: false
     description: >
-      Optional field overrides for the cloned collection. All fields are optional —
-      any field omitted here is inherited from the source collection.
+      Optional field overrides for the cloned collection. Any field omitted here
+      is inherited from the source collection.
     content:
       application/json:
         schema:

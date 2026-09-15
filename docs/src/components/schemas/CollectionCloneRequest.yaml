@@ -1,11 +1,10 @@
 type: object
 additionalProperties: false
 description: >
-  Optional field overrides for the cloned collection. All fields are optional —
-  any omitted field is inherited from the source collection.
-  This schema mirrors CollectionConfig but with no required fields, since the
-  required values are inherited from the source. The curation_order field
-  is never accepted here and is always reset to 0 (copies are never curated).
+  Optional field overrides for the cloned collection. Any omitted field is
+  inherited from the source collection. This schema mirrors CollectionConfig
+  but with no required fields, since the required values are inherited from 
+  the source.
 properties:
   name:
     type: string
@@ -53,8 +52,7 @@ properties:
     type: array
     items:
       type: string
-    description: >
-      Override evaluation targets (AI entity types). Example values: model, agent.
+    description: Override evaluation targets.
   custom:
     type: object
     additionalProperties: true

@@ -19,10 +19,8 @@ properties:
       the job was created. Absent for jobs created before this field was introduced.
 
       Limitation: this field provides weaker guarantees than a revision counter.
-      Two mutations within the same DB timestamp resolution (1 second on SQLite,
-      microseconds on Postgres) may produce identical values, making them
-      indistinguishable. For stronger guarantees, see the planned revision mechanism
-      tracked in the collection version history issue.
+      Two mutations within the same DB timestamp resolution may produce identical values,
+      making them indistinguishable.
   benchmarks:
     type: array
     items:

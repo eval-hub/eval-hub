@@ -2991,7 +2991,7 @@
         ],
         "requestBody": {
           "required": false,
-          "description": "Optional field overrides for the cloned collection. All fields are optional — any field omitted here is inherited from the source collection.\n",
+          "description": "Optional field overrides for the cloned collection. Any field omitted here is inherited from the source collection.\n",
           "content": {
             "application/json": {
               "schema": {
@@ -4218,7 +4218,7 @@
           "collection_updated_at": {
             "type": "string",
             "format": "date-time",
-            "description": "The collection's updated_at timestamp at the moment this evaluation job was created. Set by the server; not accepted from the client. Compare against the current collection's updated_at to detect post-creation changes: if the current updated_at is later, the collection definition has changed since the job was created. Absent for jobs created before this field was introduced.\nLimitation: this field provides weaker guarantees than a revision counter. Two mutations within the same DB timestamp resolution (1 second on SQLite, microseconds on Postgres) may produce identical values, making them indistinguishable. For stronger guarantees, see the planned revision mechanism tracked in the collection version history issue.\n"
+            "description": "The collection's updated_at timestamp at the moment this evaluation job was created. Set by the server; not accepted from the client. Compare against the current collection's updated_at to detect post-creation changes: if the current updated_at is later, the collection definition has changed since the job was created. Absent for jobs created before this field was introduced.\nLimitation: this field provides weaker guarantees than a revision counter. Two mutations within the same DB timestamp resolution may produce identical values, making them indistinguishable.\n"
           },
           "benchmarks": {
             "type": "array",
@@ -5086,7 +5086,7 @@
               "pinned_order": {
                 "type": "integer",
                 "minimum": 0,
-                "description": "Tenant-controlled pin ordering. 0 = not pinned. Positive integers give the tenant's personal tile ordering (ascending). Co-located with curation_order so both ordering fields are visible at the same level. Settable by the collection owner via PATCH /collections/{id}.\n"
+                "description": "Tenant-controlled pin ordering. 0 = not pinned. Positive integers give the tenant's ordering (ascending). Settable by the collection owner  via PATCH /collections/{id}.\n"
               },
               "state": {
                 "$ref": "#/components/schemas/CollectionState",
@@ -5123,7 +5123,7 @@
       "CollectionCloneRequest": {
         "type": "object",
         "additionalProperties": false,
-        "description": "Optional field overrides for the cloned collection. All fields are optional — any omitted field is inherited from the source collection. This schema mirrors CollectionConfig but with no required fields, since the required values are inherited from the source. The curation_order field is never accepted here and is always reset to 0 (copies are never curated).\n",
+        "description": "Optional field overrides for the cloned collection. Any omitted field is inherited from the source collection. This schema mirrors CollectionConfig but with no required fields, since the required values are inherited from  the source.\n",
         "properties": {
           "name": {
             "type": "string",
@@ -5188,7 +5188,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Override evaluation targets (AI entity types). Example values: model, agent.\n"
+            "description": "Override evaluation targets."
           },
           "custom": {
             "type": "object",

@@ -17,9 +17,8 @@ allOf:
         minimum: 0
         description: >
           Tenant-controlled pin ordering. 0 = not pinned. Positive integers give
-          the tenant's personal tile ordering (ascending). Co-located with
-          curation_order so both ordering fields are visible at the same level.
-          Settable by the collection owner via PATCH /collections/{id}.
+          the tenant's ordering (ascending). Settable by the collection owner 
+          via PATCH /collections/{id}.
       state:
         $ref: ./CollectionState.yaml
         description: >
