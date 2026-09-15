@@ -77,7 +77,7 @@ services:
     networks:
     - signoz-network
     ports:
-    - 3301:8080
+    - 127.0.0.1:3301:8080
     restart: unless-stopped
   signoz-telemetrykeeper-clickhousekeeper-0:
     container_name: signoz-telemetrykeeper-clickhousekeeper-0

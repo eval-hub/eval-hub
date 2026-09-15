@@ -1,2 +1,3 @@
 pours/
 !pours/deployment/compose.yaml
+.auth-mode
