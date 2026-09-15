@@ -2,5 +2,4 @@ pours/*
 !pours/deployment/
 pours/deployment/*
 !pours/deployment/compose.yaml
-!pours/deployment/.env.example
 .auth-mode
