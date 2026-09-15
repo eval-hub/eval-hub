@@ -134,8 +134,12 @@ func downloadHFRepo(ctx context.Context, repoID, revision, subPath, token string
 		return "", fmt.Errorf("no files found in repository %s", repoID)
 	}
 
-	if _, err := repo.DownloadFilesCtx(ctx, repoFiles...); err != nil {
-		return "", classifyHFError(repoID, err)
+	// Download files sequentially: go-huggingface v0.4.1 races on shared counters
+	// inside DownloadFilesCtx when multiple files are passed at once.
+	for _, fileName := range repoFiles {
+		if _, err := repo.DownloadFileCtx(ctx, fileName); err != nil {
+			return "", classifyHFError(repoID, err)
+		}
 	}
 
 	cacheDir, err := repo.CacheDir()
