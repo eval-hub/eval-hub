@@ -219,8 +219,14 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig, logger *s
 		if err != nil {
 			return nil, err
 		}
+		res, err := createResource(ctx, config, logger)
+		if err != nil {
+			return nil, err
+		}
 		tracerProvider := trace.NewTracerProvider(
 			trace.WithBatcher(traceExporter, trace.WithBatchTimeout(tracerBatchInterval)),
+			trace.WithSampler(newSampler(samplingRatio)),
+			trace.WithResource(res),
 		)
 		return tracerProvider, nil
 	default:
@@ -235,7 +241,9 @@ func createResource(ctx context.Context, config *config.OTELConfig, logger *slog
 	}
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(serviceName),
-		// semconv.ServiceVersion(config.ServiceVersion),
+	}
+	if config.ServiceVersion != "" {
+		attrs = append(attrs, semconv.ServiceVersion(config.ServiceVersion))
 	}
 
 	// Add custom attributes

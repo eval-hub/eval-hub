@@ -421,6 +421,11 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 	conf.Service.Build = build
 	conf.Service.BuildDate = buildDate
 	conf.Service.GitHash = gitHash
+
+	// propagate the build version to OTEL as service.version unless explicitly overridden
+	if conf.OTEL != nil && conf.OTEL.ServiceVersion == "" {
+		conf.OTEL.ServiceVersion = version
+	}
 	logger.Info("End reading configuration", "config", RedactedJSON(conf, redactedFields))
 	return &conf, nil
 }
