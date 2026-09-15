@@ -103,6 +103,31 @@ func TestCreateEntityFilterCondition_ArrayFields(t *testing.T) {
 	}
 }
 
+func TestCreateEntityFilterCondition_MultiValueArrayField(t *testing.T) {
+	f := NewStatementsFactory(slog.Default())
+	cond, args := f.CreateEntityFilterCondition("domains", []string{"rag", "grounding"}, 1, shared.TableCollections)
+	if cond == "" {
+		t.Error("expected non-empty condition for multi-value domains filter")
+	}
+	if len(args) != 2 {
+		t.Errorf("expected 2 args for 2 values, got %v", args)
+	}
+	if args[0] != "rag" || args[1] != "grounding" {
+		t.Errorf("expected args [rag grounding], got %v", args)
+	}
+	if !strings.Contains(cond, "AND") {
+		t.Errorf("multi-value condition should contain AND, got %q", cond)
+	}
+}
+
+func TestGetAllowedFilterColumns_Providers(t *testing.T) {
+	f := NewStatementsFactory(slog.Default())
+	cols := f.GetAllowedFilterColumns(shared.TableProviders)
+	if len(cols) == 0 {
+		t.Error("expected non-empty filter columns for providers")
+	}
+}
+
 func TestGetLogger(t *testing.T) {
 	logger := slog.Default()
 	f := NewStatementsFactory(logger)

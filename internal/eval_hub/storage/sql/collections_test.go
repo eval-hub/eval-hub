@@ -601,3 +601,63 @@ func TestCollectionPatch_PinnedOrderTopLevel(t *testing.T) {
 		t.Errorf("expected PinnedOrder=3, got %d", updated.PinnedOrder)
 	}
 }
+
+func TestCollectionFilters_MultiValueArrayField(t *testing.T) {
+	t.Parallel()
+	store, err := getTestStorage(t, "sqlite", getDBName())
+	if err != nil {
+		t.Fatalf("getTestStorage: %v", err)
+	}
+	scoped := store.WithTenant("t-mv").WithOwner("user1")
+
+	// Collection with both domains
+	multi := &api.CollectionResource{
+		Resource: api.Resource{ID: "multi-domain", Owner: "user1", Tenant: "t-mv"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "Multi Domain", Category: "test",
+			Domains:    []string{"rag", "grounding"},
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	// Collection with only one domain
+	single := &api.CollectionResource{
+		Resource: api.Resource{ID: "single-domain", Owner: "user1", Tenant: "t-mv"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "Single Domain", Category: "test",
+			Domains:    []string{"rag"},
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b2"}, ProviderID: "p1"}},
+		},
+	}
+	if err := scoped.CreateCollection(multi); err != nil {
+		t.Fatalf("CreateCollection multi: %v", err)
+	}
+	if err := scoped.CreateCollection(single); err != nil {
+		t.Fatalf("CreateCollection single: %v", err)
+	}
+
+	// Multi-value filter: must have BOTH rag AND grounding
+	filter := &abstractions.QueryFilter{
+		Limit: 50, Offset: 0,
+		Params: map[string]any{"domains": []string{"rag", "grounding"}},
+	}
+	results, err := scoped.GetCollections(filter)
+	if err != nil {
+		t.Fatalf("GetCollections multi-value: %v", err)
+	}
+
+	// Only "multi-domain" has both values
+	for _, c := range results.Items {
+		if c.Resource.ID == "single-domain" {
+			t.Error("single-domain collection (only has 'rag') should not match rag+grounding filter")
+		}
+	}
+	found := false
+	for _, c := range results.Items {
+		if c.Resource.ID == "multi-domain" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("multi-domain collection should match rag+grounding filter")
+	}
+}

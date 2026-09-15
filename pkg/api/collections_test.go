@@ -279,6 +279,41 @@ func TestApplyOverrides(t *testing.T) {
 		}
 	})
 
+	t.Run("description override applied", func(t *testing.T) {
+		t.Parallel()
+		result := base.ApplyOverrides(&api.CollectionConfig{Description: "new desc"})
+		if result.Description != "new desc" {
+			t.Errorf("expected 'new desc', got %q", result.Description)
+		}
+	})
+
+	t.Run("category override applied", func(t *testing.T) {
+		t.Parallel()
+		result := base.ApplyOverrides(&api.CollectionConfig{Category: "new-cat"})
+		if result.Category != "new-cat" {
+			t.Errorf("expected 'new-cat', got %q", result.Category)
+		}
+	})
+
+	t.Run("pass criteria override applied", func(t *testing.T) {
+		t.Parallel()
+		threshold := float32(0.9)
+		pc := &api.PassCriteria{Threshold: &threshold}
+		result := base.ApplyOverrides(&api.CollectionConfig{PassCriteria: pc})
+		if result.PassCriteria == nil || *result.PassCriteria.Threshold != 0.9 {
+			t.Errorf("expected PassCriteria.Threshold=0.9, got %+v", result.PassCriteria)
+		}
+	})
+
+	t.Run("agent override applied", func(t *testing.T) {
+		t.Parallel()
+		agent := &api.CollectionAgentMetadata{Summary: "my-agent"}
+		result := base.ApplyOverrides(&api.CollectionConfig{Agent: agent})
+		if result.Agent == nil || result.Agent.Summary != "my-agent" {
+			t.Errorf("expected Agent.Summary='my-agent', got %+v", result.Agent)
+		}
+	})
+
 	t.Run("domains/tasks/modalities/industries/evaluation_targets override applied", func(t *testing.T) {
 		t.Parallel()
 		result := base.ApplyOverrides(&api.CollectionConfig{

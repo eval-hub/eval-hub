@@ -1489,6 +1489,58 @@ func TestHandlePatchCollection_InvalidJSON(t *testing.T) {
 	}
 }
 
+func TestHandleUpdateCollection_MissingPathParam(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	validator := testhelpers.NewValidator(t)
+
+	h := handlers.New(&fakeStorage{}, validator, &fakeRuntime{}, nil, nil, nil)
+	req := &providersRequest{
+		MockRequest: createMockRequest("PUT", "/api/v1/evaluations/collections/"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user1", "tenant1")
+
+	h.HandleUpdateCollection(ctx, req, resp)
+
+	if recorder.Code != 400 {
+		t.Errorf("expected 400 for missing collection ID, got %d", recorder.Code)
+	}
+}
+
+func TestHandleListCollections_MultiValueFilter(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	validator := testhelpers.NewValidator(t)
+
+	collections := []api.CollectionResource{
+		{
+			Resource:         api.Resource{ID: "c1"},
+			CollectionConfig: api.CollectionConfig{Name: "C1", Category: "test", Domains: []string{"rag", "grounding"}, Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}}},
+		},
+	}
+	storage := &listCollectionsStorage{fakeStorage: &fakeStorage{}, collections: collections}
+	h := handlers.New(storage, validator, &fakeRuntime{}, nil, nil, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("GET", "/api/v1/evaluations/collections"),
+		queryValues: map[string][]string{"domains": {"rag", "grounding"}},
+		pathValues:  map[string]string{},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user1", "tenant1")
+
+	h.HandleListCollections(ctx, req, resp)
+
+	if recorder.Code == 400 {
+		t.Errorf("multi-value domains filter should be accepted, got 400: %s", recorder.Body.String())
+	}
+}
+
 func TestHandleCloneCollection_InvalidJSONBody(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
