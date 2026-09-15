@@ -1741,11 +1741,11 @@ func TestLocalRuntimeOTELEndpointSurvivesCloning(t *testing.T) {
 
 func TestRunEvaluationJobOTELEnvironment(t *testing.T) {
 	tests := []struct {
-		name           string
-		serviceConfig  *config.Config
-		providerOTEL   string
-		wantEndpoint   string
-		wantSvcName    string
+		name          string
+		serviceConfig *config.Config
+		providerOTEL  string
+		wantEndpoint  string
+		wantSvcName   string
 	}{
 		{
 			name: "OTEL enabled injects endpoint and service name",
