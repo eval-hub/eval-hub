@@ -288,6 +288,8 @@ make stop-signoz
 
 SigNoz UI is mapped to **3301** so it does not clash with eval-hub on `:8080`.
 
+Impersonation mode is enabled by default, so the UI loads without a login screen. If you need authentication, remove the `SIGNOZ_IDENTN_*` variables from `compose.yaml`.
+
 Point eval-hub at SigNoz (local plaintext gRPC):
 
 ```yaml
