@@ -3,7 +3,7 @@ additionalProperties: false
 description: >
   Optional field overrides for the cloned collection. Any omitted field is
   inherited from the source collection. This schema mirrors CollectionConfig
-  but with no required fields, since the required values are inherited from 
+  but with no required fields, since the required values are inherited from
   the source.
 properties:
   name:
