@@ -85,11 +85,6 @@ func withRunHFTestEnv(t *testing.T, dest, meta, secret, cache string) {
 	destDir, gitMetadataDir, scrtDir, hfCacheDir = dest, meta, secret, cache
 	t.Cleanup(func() {
 		destDir, gitMetadataDir, scrtDir, hfCacheDir = origDest, origMeta, origSecret, origCache
-		_ = os.Unsetenv(envHFRepoID)
-		_ = os.Unsetenv(envHFRevision)
-		_ = os.Unsetenv(envHFSubPath)
-		_ = os.Unsetenv(envHFTimeout)
-		_ = os.Unsetenv("HF_ENDPOINT")
 	})
 }
 
@@ -149,23 +144,23 @@ func TestFileMatchesSubPath(t *testing.T) {
 func TestClassifyHFError(t *testing.T) {
 	t.Parallel()
 
-	gated := classifyHFError("org/repo", errors.New("401 Client Error: gated repo"))
+	gated := classifyHFError("org/repo", false, errors.New("401 Client Error: gated repo"))
 	if !strings.Contains(gated.Error(), "gated") {
 		t.Fatalf("expected gated message, got %v", gated)
 	}
 
-	gatedOnly := classifyHFError("org/repo", errors.New("gated repo"))
+	gatedOnly := classifyHFError("org/repo", false, errors.New("gated repo"))
 	if !strings.Contains(gatedOnly.Error(), "gated") {
 		t.Fatalf("expected gated message, got %v", gatedOnly)
 	}
 
-	notFound := classifyHFError("org/repo", errors.New("404 Repository Not Found"))
+	notFound := classifyHFError("org/repo", false, errors.New("404 Repository Not Found"))
 	if !strings.Contains(notFound.Error(), "not found") {
 		t.Fatalf("expected not found message, got %v", notFound)
 	}
 
 	// huggingface_hub wraps missing/private repos as 401 + "Repository Not Found".
-	hfMissing := classifyHFError("SobhaCh/invalid-db", errors.New(
+	hfMissing := classifyHFError("SobhaCh/invalid-db", false, errors.New(
 		"401 Client Error. (Request ID: Root=1-abc)\n\nRepository Not Found for url: https://huggingface.co/api/datasets/SobhaCh/invalid-db.\nPlease make sure you specified the correct `repo_id` and `repo_type`.\nIf you are trying to access a private or gated repo, make sure you are authenticated.",
 	))
 	if !strings.HasPrefix(hfMissing.Error(), "repository not found:") {
@@ -176,7 +171,7 @@ func TestClassifyHFError(t *testing.T) {
 	}
 
 	// go-huggingface returns only 401 + "Invalid username or password" for missing repos.
-	goHFMissing := classifyHFError("SobhaCh/invalid-db", errors.New(
+	goHFMissing := classifyHFError("SobhaCh/invalid-db", false, errors.New(
 		`failed to download repository info: while downloading "https://huggingface.co/api/datasets/SobhaCh/invalid-db/revision/main?blobs=true": bad status code 401: Invalid username or password.`,
 	))
 	if !strings.HasPrefix(goHFMissing.Error(), "repository not found:") {
@@ -186,8 +181,18 @@ func TestClassifyHFError(t *testing.T) {
 		t.Fatalf("expected not to classify missing repo as gated, got %v", goHFMissing)
 	}
 
+	authFailed := classifyHFError("org/repo", true, errors.New(
+		`bad status code 401: Invalid username or password.`,
+	))
+	if !strings.HasPrefix(authFailed.Error(), "hugging face authentication failed:") {
+		t.Fatalf("expected auth failure prefix for authenticated 401, got %v", authFailed)
+	}
+	if strings.Contains(authFailed.Error(), "repository not found") {
+		t.Fatalf("expected not to classify authenticated 401 as not found, got %v", authFailed)
+	}
+
 	raw := errors.New("connection reset by peer")
-	if classifyHFError("org/repo", raw) != raw {
+	if classifyHFError("org/repo", false, raw) != raw {
 		t.Fatalf("expected unclassified error to pass through unchanged")
 	}
 }
@@ -517,7 +522,7 @@ func TestDownloadHFRepo_NoFilesInRepo(t *testing.T) {
 }
 
 func TestClassifyHFError_Nil(t *testing.T) {
-	if classifyHFError("org/repo", nil) != nil {
+	if classifyHFError("org/repo", false, nil) != nil {
 		t.Fatal("expected nil for nil error")
 	}
 }

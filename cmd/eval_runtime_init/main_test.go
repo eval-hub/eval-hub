@@ -265,11 +265,6 @@ func TestRun_InvokesHFSuccessfully(t *testing.T) {
 	destDir, gitMetadataDir, scrtDir, hfCacheDir = dest, meta, secret, cache
 	t.Cleanup(func() {
 		destDir, gitMetadataDir, scrtDir, hfCacheDir = origDest, origMeta, origSecret, origCache
-		_ = os.Unsetenv(envHFRepoID)
-		_ = os.Unsetenv(envGitURL)
-		_ = os.Unsetenv(envBucket)
-		_ = os.Unsetenv(envKey)
-		_ = os.Unsetenv("HF_ENDPOINT")
 	})
 	t.Setenv("HF_ENDPOINT", srv.URL)
 	t.Setenv(envHFRepoID, repoID)

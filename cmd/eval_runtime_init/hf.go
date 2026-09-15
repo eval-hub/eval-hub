@@ -98,8 +98,9 @@ func downloadHFRepo(ctx context.Context, repoID, revision, subPath, token string
 
 	slog.Info("resolving revision", "repo_id", repoID, "revision", revisionOrDefault(revision))
 
+	authenticated := token != ""
 	if err := downloadHFInfo(ctx, repo, false); err != nil {
-		return "", classifyHFError(repoID, err)
+		return "", classifyHFError(repoID, authenticated, err)
 	}
 	info := repo.Info()
 	if info == nil || strings.TrimSpace(info.CommitHash) == "" {
@@ -113,7 +114,7 @@ func downloadHFRepo(ctx context.Context, repoID, revision, subPath, token string
 	// Pin downloads to the resolved commit SHA (same as huggingface_hub snapshot_download).
 	repo = repo.WithRevision(commitSHA)
 	if err := downloadHFInfo(ctx, repo, true); err != nil {
-		return "", classifyHFError(repoID, err)
+		return "", classifyHFError(repoID, authenticated, err)
 	}
 
 	slog.Info("downloading repository", "repo_id", repoID, "revision", commitSHA)
@@ -121,7 +122,7 @@ func downloadHFRepo(ctx context.Context, repoID, revision, subPath, token string
 	var repoFiles []string
 	for fileName, iterErr := range repo.IterFileNames() {
 		if iterErr != nil {
-			return "", classifyHFError(repoID, iterErr)
+			return "", classifyHFError(repoID, authenticated, iterErr)
 		}
 		if subPath != "" && !fileMatchesSubPath(fileName, subPath) {
 			continue
@@ -139,7 +140,7 @@ func downloadHFRepo(ctx context.Context, repoID, revision, subPath, token string
 	// inside DownloadFilesCtx when multiple files are passed at once.
 	for _, fileName := range repoFiles {
 		if _, err := repo.DownloadFileCtx(ctx, fileName); err != nil {
-			return "", classifyHFError(repoID, err)
+			return "", classifyHFError(repoID, authenticated, err)
 		}
 	}
 
@@ -352,7 +353,7 @@ func fileMatchesSubPath(fileName, subPath string) bool {
 	return fileName == normalized || strings.HasPrefix(fileName, normalized+"/")
 }
 
-func classifyHFError(repoID string, err error) error {
+func classifyHFError(repoID string, authenticated bool, err error) error {
 	if err == nil {
 		return nil
 	}
@@ -369,6 +370,9 @@ func classifyHFError(repoID string, err error) error {
 		return fmt.Errorf("repository %s is gated; provide secret_ref with a Hugging Face token", repoID)
 	case strings.Contains(lower, "401"),
 		strings.Contains(lower, "invalid username or password"):
+		if authenticated {
+			return fmt.Errorf("hugging face authentication failed: %v", err)
+		}
 		return fmt.Errorf("repository not found: %v", err)
 	default:
 		return err
