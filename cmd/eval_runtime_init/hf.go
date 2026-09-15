@@ -351,7 +351,12 @@ func stageHFSubPath(snapshotRoot *os.Root, subPath, dst string) error {
 }
 
 func validateHFSubPath(subPath string) error {
-	clean := filepath.Clean(filepath.FromSlash(subPath))
+	trimmed := strings.TrimSpace(subPath)
+	normalized := filepath.FromSlash(trimmed)
+	clean := filepath.Clean(normalized)
+	if clean != normalized {
+		return fmt.Errorf("sub_path must be a canonical relative path: %q", subPath)
+	}
 	if clean == "." || !filepath.IsLocal(clean) {
 		return fmt.Errorf("sub_path escapes repository root: %q", subPath)
 	}

@@ -86,6 +86,9 @@ func withRunHFTestEnv(t *testing.T, dest, meta, secret, cache string) {
 	t.Cleanup(func() {
 		destDir, gitMetadataDir, scrtDir, hfCacheDir = origDest, origMeta, origSecret, origCache
 	})
+	t.Setenv(envHFRevision, "")
+	t.Setenv(envHFSubPath, "")
+	t.Setenv(envHFTimeout, "")
 }
 
 func TestValidateHFSubPath(t *testing.T) {
@@ -100,6 +103,8 @@ func TestValidateHFSubPath(t *testing.T) {
 		{name: "valid single file", subPath: "data/train.jsonl"},
 		{name: "traversal rejected", subPath: "../etc", wantErr: "escapes repository root"},
 		{name: "absolute rejected", subPath: "/abs", wantErr: "escapes repository root"},
+		{name: "non-canonical rejected", subPath: "data/../README.md", wantErr: "canonical relative path"},
+		{name: "dot segment rejected", subPath: "./staging", wantErr: "canonical relative path"},
 	}
 
 	for _, tt := range tests {
