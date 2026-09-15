@@ -1625,3 +1625,213 @@ func TestDeleteEvaluationJobResourcesNonExistent(t *testing.T) {
 		t.Fatalf("expected no error for non-existent directory, got %v", err)
 	}
 }
+
+func TestOtelEndpointFromConfig(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  *config.Config
+		want string
+	}{
+		{name: "nil config", cfg: nil, want: ""},
+		{name: "nil OTEL", cfg: &config.Config{}, want: ""},
+		{
+			name: "disabled",
+			cfg:  &config.Config{OTEL: &config.OTELConfig{Enabled: false, ExporterEndpoint: "collector:4317"}},
+			want: "",
+		},
+		{
+			name: "empty endpoint",
+			cfg:  &config.Config{OTEL: &config.OTELConfig{Enabled: true, ExporterEndpoint: ""}},
+			want: "",
+		},
+		{
+			name: "whitespace-only endpoint",
+			cfg:  &config.Config{OTEL: &config.OTELConfig{Enabled: true, ExporterEndpoint: "  \t "}},
+			want: "",
+		},
+		{
+			name: "insecure bare host:port",
+			cfg:  &config.Config{OTEL: &config.OTELConfig{Enabled: true, ExporterEndpoint: "collector:4317", ExporterInsecure: true}},
+			want: "http://collector:4317",
+		},
+		{
+			name: "secure bare host:port",
+			cfg:  &config.Config{OTEL: &config.OTELConfig{Enabled: true, ExporterEndpoint: "collector:4317", ExporterInsecure: false}},
+			want: "https://collector:4317",
+		},
+		{
+			name: "preserves http:// scheme",
+			cfg:  &config.Config{OTEL: &config.OTELConfig{Enabled: true, ExporterEndpoint: "http://custom:4317"}},
+			want: "http://custom:4317",
+		},
+		{
+			name: "preserves https:// scheme",
+			cfg:  &config.Config{OTEL: &config.OTELConfig{Enabled: true, ExporterEndpoint: "https://custom:4317"}},
+			want: "https://custom:4317",
+		},
+		{
+			name: "preserves mixed-case HTTP scheme",
+			cfg:  &config.Config{OTEL: &config.OTELConfig{Enabled: true, ExporterEndpoint: "HTTP://custom:4317"}},
+			want: "HTTP://custom:4317",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := otelEndpointFromConfig(tc.cfg)
+			if got != tc.want {
+				t.Fatalf("otelEndpointFromConfig() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNewLocalRuntimeOTELEndpoint(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  *config.Config
+		want string
+	}{
+		{name: "nil config", cfg: nil, want: ""},
+		{name: "OTEL disabled", cfg: &config.Config{OTEL: &config.OTELConfig{Enabled: false, ExporterEndpoint: "c:4317"}}, want: ""},
+		{
+			name: "OTEL enabled insecure",
+			cfg:  &config.Config{OTEL: &config.OTELConfig{Enabled: true, ExporterEndpoint: "collector:4317", ExporterInsecure: true}},
+			want: "http://collector:4317",
+		},
+		{
+			name: "OTEL enabled secure",
+			cfg:  &config.Config{OTEL: &config.OTELConfig{Enabled: true, ExporterEndpoint: "collector:4317", ExporterInsecure: false}},
+			want: "https://collector:4317",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rt, err := NewLocalRuntime(discardLogger(), tc.cfg)
+			if err != nil {
+				t.Fatalf("NewLocalRuntime failed: %v", err)
+			}
+			lr := rt.(*LocalRuntime)
+			if lr.otelEndpoint != tc.want {
+				t.Fatalf("otelEndpoint = %q, want %q", lr.otelEndpoint, tc.want)
+			}
+		})
+	}
+}
+
+func TestLocalRuntimeOTELEndpointSurvivesCloning(t *testing.T) {
+	rt, err := NewLocalRuntime(discardLogger(), &config.Config{
+		OTEL: &config.OTELConfig{Enabled: true, ExporterEndpoint: "collector:4317", ExporterInsecure: true},
+	})
+	if err != nil {
+		t.Fatalf("NewLocalRuntime failed: %v", err)
+	}
+	base := rt.(*LocalRuntime)
+	const want = "http://collector:4317"
+
+	loggerClone := base.WithLogger(discardLogger()).(*LocalRuntime)
+	if loggerClone.otelEndpoint != want {
+		t.Fatalf("WithLogger lost otelEndpoint: got %q, want %q", loggerClone.otelEndpoint, want)
+	}
+
+	contextClone := base.WithContext(context.Background()).(*LocalRuntime)
+	if contextClone.otelEndpoint != want {
+		t.Fatalf("WithContext lost otelEndpoint: got %q, want %q", contextClone.otelEndpoint, want)
+	}
+}
+
+func TestRunEvaluationJobOTELEnvironment(t *testing.T) {
+	tests := []struct {
+		name           string
+		serviceConfig  *config.Config
+		providerOTEL   string
+		wantEndpoint   string
+		wantSvcName    string
+	}{
+		{
+			name: "OTEL enabled injects endpoint and service name",
+			serviceConfig: &config.Config{
+				OTEL: &config.OTELConfig{Enabled: true, ExporterEndpoint: "collector:4317", ExporterInsecure: true},
+			},
+			wantEndpoint: "http://collector:4317",
+			wantSvcName:  "evalhub-adapter",
+		},
+		{
+			name:          "OTEL disabled does not inject variables",
+			serviceConfig: &config.Config{},
+			wantEndpoint:  "",
+			wantSvcName:   "",
+		},
+		{
+			name: "provider override takes precedence",
+			serviceConfig: &config.Config{
+				OTEL: &config.OTELConfig{Enabled: true, ExporterEndpoint: "server-collector:4317", ExporterInsecure: true},
+			},
+			providerOTEL: "http://provider-collector:4317",
+			wantEndpoint: "http://provider-collector:4317",
+			wantSvcName:  "evalhub-adapter",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			const providerID = "provider-1"
+			evaluation := sampleEvaluation(providerID)
+			cleanupDir(t, "job-1")
+
+			dirName := localJobDir("job-1", 0, providerID, "bench-1")
+			outputFile := filepath.Join(dirName, "otel_env.txt")
+			sentinelPath := filepath.Join(dirName, "done")
+			command := fmt.Sprintf(
+				"echo \"OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}\" > %s && "+
+					"echo \"OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME}\" >> %s && "+
+					"touch %s",
+				outputFile, outputFile, sentinelPath,
+			)
+			providers := sampleLocalProviders(providerID, command)
+			if tc.providerOTEL != "" {
+				provider := providers[providerID]
+				provider.Runtime.Local.Env = append(provider.Runtime.Local.Env, api.EnvVar{
+					Name:  "OTEL_EXPORTER_OTLP_ENDPOINT",
+					Value: tc.providerOTEL,
+				})
+				providers[providerID] = provider
+			}
+
+			rt, err := NewLocalRuntime(discardLogger(), tc.serviceConfig)
+			if err != nil {
+				t.Fatalf("NewLocalRuntime failed: %v", err)
+			}
+			rt = rt.WithContext(testContext(t))
+			storage := &fakeStorage{providerConfigs: providers}
+			benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+			if err != nil {
+				t.Fatalf("failed to resolve benchmarks: %v", err)
+			}
+			if err := rt.RunEvaluationJob(evaluation, benchmarks, storage); err != nil {
+				t.Fatalf("RunEvaluationJob failed: %v", err)
+			}
+
+			waitForFile(t, sentinelPath, 5*time.Second)
+			data, err := os.ReadFile(outputFile)
+			if err != nil {
+				t.Fatalf("failed to read environment output: %v", err)
+			}
+
+			lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+			var gotEndpoint, gotSvcName string
+			for _, line := range lines {
+				if strings.HasPrefix(line, "OTEL_EXPORTER_OTLP_ENDPOINT=") {
+					gotEndpoint = strings.TrimPrefix(line, "OTEL_EXPORTER_OTLP_ENDPOINT=")
+				}
+				if strings.HasPrefix(line, "OTEL_SERVICE_NAME=") {
+					gotSvcName = strings.TrimPrefix(line, "OTEL_SERVICE_NAME=")
+				}
+			}
+			if gotEndpoint != tc.wantEndpoint {
+				t.Fatalf("OTEL_EXPORTER_OTLP_ENDPOINT = %q, want %q", gotEndpoint, tc.wantEndpoint)
+			}
+			if gotSvcName != tc.wantSvcName {
+				t.Fatalf("OTEL_SERVICE_NAME = %q, want %q", gotSvcName, tc.wantSvcName)
+			}
+		})
+	}
+}
