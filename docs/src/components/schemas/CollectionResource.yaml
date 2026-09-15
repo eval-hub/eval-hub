@@ -6,10 +6,22 @@ allOf:
       resource:
         $ref: ./Resource.yaml
         description: Resource metadata
+      derived_from:
+        type: string
+        description: >
+          ID of the collection this was copied from. Set by the server when
+          POST /collections/{id}/clones is called; immutable thereafter.
+          Absent when the collection was not created via clone.
+      pinned_order:
+        type: integer
+        minimum: 0
+        description: >
+          Tenant-controlled pin ordering. 0 = not pinned. Positive integers give
+          the tenant's ordering (ascending). Settable by the collection owner
+          via PATCH /collections/{id}.
       state:
         $ref: ./CollectionState.yaml
         description: >
-          Server-managed runtime state for custom (tenant-scoped) collections.
-          Present only on collections with scope=tenant; absent on system
-          collections. Never user-supplied.
+          Server-managed mutable runtime state for custom (tenant-scoped) collections.
+          Present only on custom collections; absent on system collections. Never user-supplied.
   - $ref: ./CollectionConfig.yaml

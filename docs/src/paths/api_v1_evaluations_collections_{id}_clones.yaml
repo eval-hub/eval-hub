@@ -5,7 +5,7 @@ post:
   description: >
     Creates a new tenant-scoped (custom) collection as a copy of the specified source
     collection. The server copies all CollectionConfig fields from the source, assigns
-    a new ID with scope=tenant, and records the source ID in CollectionState.derived_from
+    a new ID with scope=tenant, and records the source ID in derived_from
     for provenance. The request body may include optional overrides (e.g. a new name).
   operationId: post_collections_id_clones
   parameters:
@@ -18,19 +18,21 @@ post:
       description: ID of the source collection to copy.
   requestBody:
     required: false
+    description: >
+      Optional field overrides for the cloned collection. Any field omitted here
+      is inherited from the source collection, except curation_order. Clone
+      requests never accept curation_order, and the server always resets it to 0.
     content:
       application/json:
         schema:
-          type: object
-          properties:
-            name:
-              type: string
-              description: Optional new name for the cloned collection. Defaults to the source name.
+          $ref: ../components/schemas/CollectionCloneRequest.yaml
         examples:
-          CloneWithNewName:
-            summary: Clone with a custom name
+          CopyWithNewName:
+            summary: Copy with a new name and domain override
             value:
-              name: "my-rag-evaluation"
+              name: "my-custom-rag-eval"
+              domains:
+                - grounded_document_understanding
   responses:
     '201':
       description: Cloned collection created successfully.
@@ -48,11 +50,10 @@ post:
                   created_at: "2026-08-25T10:00:00Z"
                   updated_at: "2026-08-25T10:00:00Z"
                   owner: "user@example.com"
-                  version_counter: 1
+                derived_from: "e5f6a7b8-9012-3456-cdef-0123456789ab"
+                pinned_order: 0
                 state:
-                  derived_from: "e5f6a7b8-9012-3456-cdef-0123456789ab"
                   run_count: 0
-                  pinned_order: 0
                 name: "my-rag-evaluation"
                 category: "document_understanding"
                 tasks:

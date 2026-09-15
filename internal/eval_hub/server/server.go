@@ -367,6 +367,23 @@ func (s *Server) setupCollectionRoutes(h *handlers.Handlers, router *http.ServeM
 	})
 }
 
+func (s *Server) setupCollectionClonesRoutes(h *handlers.Handlers, router *http.ServeMux) {
+	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/collections/{%s}/clones", constants.PathParameterCollectionID), func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := s.newRequestWrapper(w, r)
+		if !s.canContinueRequest(ctx, resp) {
+			return
+		}
+		switch r.Method {
+		case http.MethodPost:
+			h.HandleCloneCollection(ctx, req, resp)
+		default:
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
+		}
+	})
+}
+
 func (s *Server) setupProvidersRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, "/api/v1/evaluations/providers", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
@@ -469,6 +486,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	// Collections endpoints
 	s.setupCollectionsRoutes(h, router)
 	s.setupCollectionRoutes(h, router)
+	s.setupCollectionClonesRoutes(h, router)
 
 	// Providers endpoints
 	s.setupProvidersRoutes(h, router)

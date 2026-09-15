@@ -1,0 +1,32 @@
+type: object
+description: Structured metadata for AI agent consumption at the collection level.
+properties:
+  evaluates:
+    type: array
+    items:
+      type: string
+    description: Semantic tags describing what this collection measures.
+  recommended_when:
+    type: array
+    items:
+      type: string
+    description: Natural-language conditions under which an agent should recommend this collection.
+  summary:
+    type: string
+    maxLength: 200
+    description: Concise description optimised for agent tool listings.
+  complements:
+    type: array
+    items:
+      type: string
+    description: Collection or provider IDs that pair well with this one.
+  hints:
+    type: array
+    items:
+      type: string
+    description: Free-form operational guidance for agents constructing job requests.
+  result_interpretation:
+    type: array
+    items:
+      type: string
+    description: Guidance for interpreting evaluation results produced by this collection.

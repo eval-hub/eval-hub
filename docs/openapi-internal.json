@@ -2085,12 +2085,11 @@
               "type": "string",
               "enum": [
                 "system",
-                "curated",
                 "tenant"
               ],
               "title": "Scope of collections"
             },
-            "description": "Filters the result set by collection scope, within the collections visible to the requesting tenant. `system` returns all system-defined collections (curated and non-curated). `curated` returns only curated system collections (those with curation_order > 0). `tenant` returns only this tenant's own custom collections. When omitted, all collections visible to this tenant are returned (system + this tenant's custom collections).\n"
+            "description": "Filters the result set by collection scope, within the collections visible to the requesting tenant. `system` returns all system-defined collections (including curated ones, identified by curation_order > 0). `tenant` returns only this tenant's own custom collections. When omitted, all collections visible to this tenant are returned (system + this tenant's custom collections).\n"
           },
           {
             "name": "modalities",
@@ -2133,14 +2132,14 @@
             "description": "Filter collections by target industry (snake_case). Returns collections whose industries array contains this value. May be repeated for multiple values.\n"
           },
           {
-            "name": "ai_entities",
+            "name": "evaluation_targets",
             "in": "query",
             "required": false,
             "schema": {
               "type": "string",
-              "title": "AI entity filter"
+              "title": "Evaluation target filter"
             },
-            "description": "Filter collections by AI entity type (snake_case). Example values: model, agent. Returns collections whose AI entities array contains this value. May be repeated for multiple values.\n"
+            "description": "Filter collections by evaluation target type (snake_case). Example values: model, agent. Returns collections whose evaluation_targets array contains this value. May be repeated for multiple values.\n"
           },
           {
             "name": "sort_by",
@@ -2976,7 +2975,7 @@
           "Collections"
         ],
         "summary": "Copy Collection",
-        "description": "Creates a new tenant-scoped (custom) collection as a copy of the specified source collection. The server copies all CollectionConfig fields from the source, assigns a new ID with scope=tenant, and records the source ID in CollectionState.derived_from for provenance. The request body may include optional overrides (e.g. a new name).\n",
+        "description": "Creates a new tenant-scoped (custom) collection as a copy of the specified source collection. The server copies all CollectionConfig fields from the source, assigns a new ID with scope=tenant, and records the source ID in derived_from for provenance. The request body may include optional overrides (e.g. a new name).\n",
         "operationId": "post_collections_id_clones",
         "parameters": [
           {
@@ -2992,22 +2991,20 @@
         ],
         "requestBody": {
           "required": false,
+          "description": "Optional field overrides for the cloned collection. Any field omitted here is inherited from the source collection, except curation_order. Clone requests never accept curation_order, and the server always resets it to 0.\n",
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "description": "Optional new name for the cloned collection. Defaults to the source name."
-                  }
-                }
+                "$ref": "#/components/schemas/CollectionCloneRequest"
               },
               "examples": {
-                "CloneWithNewName": {
-                  "summary": "Clone with a custom name",
+                "CopyWithNewName": {
+                  "summary": "Copy with a new name and domain override",
                   "value": {
-                    "name": "my-rag-evaluation"
+                    "name": "my-custom-rag-eval",
+                    "domains": [
+                      "grounded_document_understanding"
+                    ]
                   }
                 }
               }
@@ -3031,13 +3028,12 @@
                         "tenant": "my-tenant",
                         "created_at": "2026-08-25T10:00:00Z",
                         "updated_at": "2026-08-25T10:00:00Z",
-                        "owner": "user@example.com",
-                        "version_counter": 1
+                        "owner": "user@example.com"
                       },
+                      "derived_from": "e5f6a7b8-9012-3456-cdef-0123456789ab",
+                      "pinned_order": 0,
                       "state": {
-                        "derived_from": "e5f6a7b8-9012-3456-cdef-0123456789ab",
-                        "run_count": 0,
-                        "pinned_order": 0
+                        "run_count": 0
                       },
                       "name": "my-rag-evaluation",
                       "category": "document_understanding",
@@ -3181,10 +3177,6 @@
           "owner": {
             "type": "string",
             "description": "Owner of the resource"
-          },
-          "version_counter": {
-            "type": "integer",
-            "description": "Server-managed mutation counter for custom (tenant-scoped) collections. Auto-incremented on every successful PUT or PATCH; starts at 1 on creation.\nSentinel values:\n  0 — pre-versioning mechanism, or resource type that does not support versioning\n      (e.g. system collections, evaluations, providers).\n >0 — valid version counter.\n"
           }
         }
       },
@@ -4223,9 +4215,10 @@
             "type": "string",
             "description": "The unique identifier of the collection.\n"
           },
-          "version_counter": {
-            "type": "integer",
-            "description": "The version_counter of the referenced collection at the moment this evaluation job was created. Set by the server; not accepted from the client.\nSentinel values:\n  0 — job predates version tracking; the collection's version at that time is\n      unknown. Reproducibility comparison against other runs is not possible.\n >0 — the collection's version_counter at job-creation time. Two evaluation jobs\n      that reference the same collection_id and version_counter used an identical\n      collection definition (R8 reproducibility).\n"
+          "collection_updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The collection's updated_at timestamp at the moment this evaluation job was created. Set by the server; not accepted from the client. Compare against the current collection's updated_at to detect post-creation changes: if the current updated_at is later, the collection definition has changed since the job was created. Absent for jobs created before this field was introduced.\nLimitation: this field provides weaker guarantees than a revision counter. Two mutations within the same DB timestamp resolution may produce identical values, making them indistinguishable.\n"
           },
           "benchmarks": {
             "type": "array",
@@ -4753,6 +4746,13 @@
               "type": "string"
             },
             "description": "Data modalities this benchmark uses (snake_case). Matches the CollectionConfig.modalities vocabulary. Used to auto-populate collection-level modalities when not explicitly set on the collection. Known values: text, vision, multimodal.\n"
+          },
+          "evaluation_targets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "AI entity types this benchmark evaluates (snake_case). Matches the CollectionConfig.evaluation_targets vocabulary. Used to auto-populate collection-level evaluation_targets when not explicitly set on the collection. Example values: model, agent.\n"
           }
         }
       },
@@ -4878,19 +4878,11 @@
       },
       "CollectionState": {
         "type": "object",
-        "description": "Server-managed runtime state for custom (tenant-scoped) collections. Never user-supplied and never written to YAML configuration. Present only on collections with scope=tenant; absent on system collections.\n",
+        "description": "Server-managed mutable runtime state for custom (tenant-scoped) collections. Never user-supplied and never written to YAML configuration. Present only on custom (tenant-scoped) collections; absent on system collections.\n",
         "properties": {
-          "derived_from": {
-            "type": "string",
-            "description": "ID of the collection this was copied from. Set by the server when POST /collections/{id}/clones is called; never user-supplied. Provides provenance (e.g. \"copied from RAG Evaluation v1\").\n"
-          },
           "run_count": {
             "type": "integer",
             "description": "Number of evaluation jobs created from this collection by its owning tenant. Per-tenant counter, incremented at job creation.\n"
-          },
-          "pinned_order": {
-            "type": "integer",
-            "description": "Tenant-controlled pin ordering. 0 = not pinned. Positive integers give the tenant's personal tile ordering (ascending). Settable by the collection owner via PATCH /collections/{id}.\n"
           }
         }
       },
@@ -4939,6 +4931,52 @@
             }
           }
         ]
+      },
+      "CollectionAgentMetadata": {
+        "type": "object",
+        "description": "Structured metadata for AI agent consumption at the collection level.",
+        "properties": {
+          "evaluates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Semantic tags describing what this collection measures."
+          },
+          "recommended_when": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Natural-language conditions under which an agent should recommend this collection."
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Concise description optimised for agent tool listings."
+          },
+          "complements": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Collection or provider IDs that pair well with this one."
+          },
+          "hints": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Free-form operational guidance for agents constructing job requests."
+          },
+          "result_interpretation": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Guidance for interpreting evaluation results produced by this collection."
+          }
+        }
       },
       "CollectionConfig": {
         "type": "object",
@@ -5012,12 +5050,16 @@
             },
             "description": "Business industries this collection is relevant for (snake_case). Collection-level field; the same benchmarks may serve different industries. Example values: health, telco, financial, government.\n"
           },
-          "ai_entities": {
+          "evaluation_targets": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "AI entity types this collection evaluates (snake_case). Example values: model, agent.\n"
+            "description": "AI entity types this collection evaluates (snake_case). If not explicitly set, the handler returns the union of evaluation_targets from the collection's benchmarks (via BenchmarkResource.evaluation_targets). Example values: model, agent.\n"
+          },
+          "agent": {
+            "$ref": "#/components/schemas/CollectionAgentMetadata",
+            "description": "Structured metadata for AI agent discoverability at the collection level."
           }
         },
         "required": [
@@ -5037,9 +5079,18 @@
                 "$ref": "#/components/schemas/Resource",
                 "description": "Resource metadata"
               },
+              "derived_from": {
+                "type": "string",
+                "description": "ID of the collection this was copied from. Set by the server when POST /collections/{id}/clones is called; immutable thereafter. Absent when the collection was not created via clone.\n"
+              },
+              "pinned_order": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Tenant-controlled pin ordering. 0 = not pinned. Positive integers give the tenant's ordering (ascending). Settable by the collection owner via PATCH /collections/{id}.\n"
+              },
               "state": {
                 "$ref": "#/components/schemas/CollectionState",
-                "description": "Server-managed runtime state for custom (tenant-scoped) collections. Present only on collections with scope=tenant; absent on system collections. Never user-supplied.\n"
+                "description": "Server-managed mutable runtime state for custom (tenant-scoped) collections. Present only on custom collections; absent on system collections. Never user-supplied.\n"
               }
             }
           },
@@ -5068,6 +5119,87 @@
             }
           }
         ]
+      },
+      "CollectionCloneRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Optional field overrides for the cloned collection. Any omitted field is inherited from the source collection, except curation_order. Clone requests never accept curation_order, and the server always resets it to 0 so that copies are never curated by default.\n",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "New name for the copy. Defaults to source name."
+          },
+          "description": {
+            "type": "string",
+            "description": "Override description."
+          },
+          "category": {
+            "type": "string",
+            "description": "Deprecated — use domains."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Override tags."
+          },
+          "pass_criteria": {
+            "$ref": "#/components/schemas/PassCriteria",
+            "description": "Override pass criteria."
+          },
+          "benchmarks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CollectionBenchmarkConfig"
+            },
+            "description": "Override benchmarks."
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Override domains."
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Override tasks."
+          },
+          "modalities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Override modalities."
+          },
+          "industries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Override industries."
+          },
+          "evaluation_targets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Override evaluation targets."
+          },
+          "custom": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Override custom key-value data."
+          },
+          "agent": {
+            "type": "object",
+            "description": "Override agent metadata for AI agent consumption.\n"
+          }
+        }
       }
     },
     "examples": {

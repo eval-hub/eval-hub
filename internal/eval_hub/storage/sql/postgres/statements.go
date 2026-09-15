@@ -95,7 +95,7 @@ func (s *postgresStatementsFactory) GetAllowedFilterColumns(tableName string) []
 	case shared.TableProviders:
 		return allColumns // "benchmarks" and "scope" are not allowed filters for providers from the database
 	case shared.TableCollections:
-		return append(allColumns, "category") // "scope" is not allowed filter for collections from the database
+		return append(allColumns, "category", "domains", "tasks", "modalities", "industries", "evaluation_targets")
 	default:
 		return nil
 	}
@@ -116,12 +116,24 @@ func (s *postgresStatementsFactory) CreateEntityFilterCondition(key string, valu
 		return fmt.Sprintf("%s = $%d", namePath, index), []any{value}
 	case "category":
 		if tableName == shared.TableCollections {
-			// collections: category at entity root
 			categoryPath := "entity->>'category'"
 			return fmt.Sprintf("%s = $%d", categoryPath, index), []any{value}
 		}
-		// should never get here as we validate the filter before calling this function
 		return "", []any{}
+	case "domains", "tasks", "modalities", "industries", "evaluation_targets":
+		// Array-contains filter: single string or []string (AND semantics for multiple values).
+		jsonPath := fmt.Sprintf("entity->'%s'", key)
+		if strs, ok := value.([]string); ok {
+			var parts []string
+			var multiArgs []any
+			for i, s := range strs {
+				parts = append(parts, fmt.Sprintf("jsonb_typeof(%s) = 'array' AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(%s) AS val WHERE val = $%d)", jsonPath, jsonPath, index+i))
+				multiArgs = append(multiArgs, s)
+			}
+			return "(" + strings.Join(parts, " AND ") + ")", multiArgs
+		}
+		fieldStr, _ := value.(string)
+		return fmt.Sprintf("jsonb_typeof(%s) = 'array' AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(%s) AS val WHERE val = $%d)", jsonPath, jsonPath, index), []any{fieldStr}
 	case "tags":
 		tagStr, _ := value.(string)
 		// evaluations: tags at config.tags; providers and collections: tags at entity root

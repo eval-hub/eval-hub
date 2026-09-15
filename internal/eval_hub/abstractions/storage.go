@@ -85,6 +85,9 @@ type Storage interface {
 	UpdateCollection(id string, collection *api.CollectionConfig) (*api.CollectionResource, error)
 	PatchCollection(id string, patches *api.Patch) (*api.CollectionResource, error)
 	DeleteCollection(id string) error
+	// UpdateCollectionState overwrites the State field on an existing collection.
+	// Used by the clone handler (to set DerivedFrom) and by job creation (to increment RunCount).
+	UpdateCollectionState(id string, state *api.CollectionState) (*api.CollectionResource, error)
 
 	// Provider operations
 	CreateProvider(provider *api.ProviderResource) error

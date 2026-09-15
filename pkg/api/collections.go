@@ -70,36 +70,91 @@ type CollectionConfig struct {
 	// Collection-level only — same benchmark may serve different industries depending on context.
 	Industries []string `mapstructure:"industries" json:"industries,omitempty"`
 
-	// AIEntities lists the AI entity types evaluated (snake_case).
+	// EvaluationTargets lists the AI entity types this collection evaluates (snake_case).
+	// If not set, the handler auto-computes the union from BenchmarkResource.EvaluationTargets entries.
 	// Example values: model, agent.
-	AIEntities []string `mapstructure:"ai_entities" json:"ai_entities,omitempty"`
+	EvaluationTargets []string `mapstructure:"evaluation_targets" json:"evaluation_targets,omitempty"`
 }
 
-// CollectionState holds server-managed runtime state for custom (tenant-scoped) collections.
+// CollectionState holds server-managed mutable runtime state for custom (tenant-scoped) collections.
 // It is never user-supplied and never written to YAML configuration.
 // Absent on system collections.
 type CollectionState struct {
-	// DerivedFrom is the ID of the collection this was copied from.
-	// Set by the server when POST /collections/{id}/clones is called; never user-supplied.
-	DerivedFrom string `json:"derived_from,omitempty"`
-
 	// RunCount is the number of EvaluationJobs created from this collection by its owning tenant.
 	// Per-tenant counter, incremented at job creation.
 	RunCount int `json:"run_count,omitempty"`
-
-	// PinnedOrder is the tenant's personal pin ordering.
-	// 0 = not pinned. Positive integers give explicit ordering (ascending).
-	PinnedOrder int `json:"pinned_order,omitempty"`
 }
 
 // CollectionResource represents collection resource
 type CollectionResource struct {
 	Resource Resource `json:"resource"`
+
+	// DerivedFrom is the ID of the collection this was copied from.
+	// Set by the server when POST /collections/{id}/clones is called; immutable thereafter.
+	// Absent when the collection was not created via clone.
+	DerivedFrom string `json:"derived_from,omitempty"`
+
+	// PinnedOrder is the tenant's personal pin ordering for this collection.
+	// 0 = not pinned. Positive integers give explicit ordering (ascending).
+	// Settable by the collection owner via PATCH /collections/{id}.
+	PinnedOrder int `json:"pinned_order,omitempty"`
+
 	CollectionConfig
 
-	// State holds server-managed runtime state. Present only on custom (tenant-scoped)
+	// State holds server-managed mutable runtime state. Present only on custom (tenant-scoped)
 	// collections; nil for system collections.
 	State *CollectionState `json:"state,omitempty"`
+}
+
+// ApplyOverrides returns a new CollectionConfig that is a copy of c with any
+// non-zero fields from overrides applied on top. CurationOrder is never copied
+// from overrides — it is always reset to 0 for caller-controlled collections.
+func (c CollectionConfig) ApplyOverrides(overrides *CollectionConfig) CollectionConfig {
+	if overrides == nil {
+		return c
+	}
+	if overrides.Name != "" {
+		c.Name = overrides.Name
+	}
+	if overrides.Description != "" {
+		c.Description = overrides.Description
+	}
+	if overrides.Category != "" {
+		c.Category = overrides.Category
+	}
+	if len(overrides.Tags) > 0 {
+		c.Tags = overrides.Tags
+	}
+	if overrides.PassCriteria != nil {
+		c.PassCriteria = overrides.PassCriteria
+	}
+	if len(overrides.Benchmarks) > 0 {
+		c.Benchmarks = overrides.Benchmarks
+	}
+	if len(overrides.Domains) > 0 {
+		c.Domains = overrides.Domains
+	}
+	if len(overrides.Tasks) > 0 {
+		c.Tasks = overrides.Tasks
+	}
+	if len(overrides.Modalities) > 0 {
+		c.Modalities = overrides.Modalities
+	}
+	if len(overrides.Industries) > 0 {
+		c.Industries = overrides.Industries
+	}
+	if len(overrides.EvaluationTargets) > 0 {
+		c.EvaluationTargets = overrides.EvaluationTargets
+	}
+	if overrides.Custom != nil {
+		c.Custom = overrides.Custom
+	}
+	if overrides.Agent != nil {
+		c.Agent = overrides.Agent
+	}
+	// CurationOrder is admin-only — never accepted from user overrides
+	c.CurationOrder = 0
+	return c
 }
 
 // CollectionResourceList represents list of collection resources with pagination

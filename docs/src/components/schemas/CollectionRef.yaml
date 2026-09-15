@@ -8,18 +8,19 @@ properties:
     type: string
     description: >
       The unique identifier of the collection.
-  version_counter:
-    type: integer
+  collection_updated_at:
+    type: string
+    format: date-time
     description: >
-      The version_counter of the referenced collection at the moment this evaluation
-      job was created. Set by the server; not accepted from the client.
+      The collection's updated_at timestamp at the moment this evaluation job was created.
+      Set by the server; not accepted from the client.
+      Compare against the current collection's updated_at to detect post-creation changes:
+      if the current updated_at is later, the collection definition has changed since
+      the job was created. Absent for jobs created before this field was introduced.
 
-      Sentinel values:
-        0 — job predates version tracking; the collection's version at that time is
-            unknown. Reproducibility comparison against other runs is not possible.
-       >0 — the collection's version_counter at job-creation time. Two evaluation jobs
-            that reference the same collection_id and version_counter used an identical
-            collection definition (R8 reproducibility).
+      Limitation: this field provides weaker guarantees than a revision counter.
+      Two mutations within the same DB timestamp resolution may produce identical values,
+      making them indistinguishable.
   benchmarks:
     type: array
     items:
