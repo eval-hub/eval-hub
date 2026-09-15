@@ -12,6 +12,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
 
 var (
@@ -62,7 +63,28 @@ func TestNewStorageOTELMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStorage with OTEL metrics: %v", err)
 	}
-	_ = s.Close()
+	defer func() { _ = s.Close() }()
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	names := map[string]bool{}
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			names[m.Name] = true
+		}
+	}
+	for _, want := range []string{
+		"db.client.connection.count",
+		"db.client.connection.max",
+		"db.client.connection.idle.max",
+	} {
+		if !names[want] {
+			t.Errorf("missing semconv db.client metric %q in collected metrics: %v", want, names)
+		}
+	}
 }
 
 func TestSQLStorage(t *testing.T) {
