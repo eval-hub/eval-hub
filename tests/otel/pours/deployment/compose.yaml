@@ -9,6 +9,8 @@ services:
     - |
       /signoz-otel-collector migrate sync check &&
       /signoz-otel-collector --config=/etc/otel-collector-config.yaml --manager-config=/etc/opamp-config.yaml --copy-path=/var/tmp/collector-config.yaml
+    deploy:
+      replicas: 1
     entrypoint:
     - /bin/sh
     environment:
@@ -53,6 +55,13 @@ services:
     - SIGNOZ_SQLSTORE_PROVIDER=postgres
     - SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN=tcp://signoz-telemetrystore-clickhouse-0-0:9000
     - SIGNOZ_TELEMETRYSTORE_PROVIDER=clickhouse
+    - SIGNOZ_USER_ROOT_ENABLED=${SIGNOZ_USER_ROOT_ENABLED:-true}
+    - SIGNOZ_USER_ROOT_EMAIL=${SIGNOZ_USER_ROOT_EMAIL:-}
+    - SIGNOZ_USER_ROOT_PASSWORD=${SIGNOZ_USER_ROOT_PASSWORD:-}
+    - SIGNOZ_USER_ROOT_ORG_NAME=${SIGNOZ_USER_ROOT_ORG_NAME:-default}
+    - SIGNOZ_IDENTN_IMPERSONATION_ENABLED=${SIGNOZ_IDENTN_IMPERSONATION_ENABLED:-true}
+    - SIGNOZ_IDENTN_TOKENIZER_ENABLED=${SIGNOZ_IDENTN_TOKENIZER_ENABLED:-false}
+    - SIGNOZ_IDENTN_APIKEY_ENABLED=${SIGNOZ_IDENTN_APIKEY_ENABLED:-false}
     healthcheck:
       interval: 30s
       retries: 3
@@ -68,7 +77,7 @@ services:
     networks:
     - signoz-network
     ports:
-    - 3301:8080
+    - 127.0.0.1:3301:8080
     restart: unless-stopped
   signoz-telemetrykeeper-clickhousekeeper-0:
     container_name: signoz-telemetrykeeper-clickhousekeeper-0
@@ -105,7 +114,7 @@ services:
         condition: service_completed_successfully
     environment:
     - CLICKHOUSE_SKIP_USER_SETUP=1
-    - CLICKHOUSE_CONFIG=/etc/clickhouse-server/config.yaml
+    - CLICKHOUSE_CONFIG=/etc/clickhouse-server/config-0-0.yaml
     healthcheck:
       interval: 30s
       retries: 3
@@ -124,7 +133,7 @@ services:
     volumes:
     - signoz-telemetrystore-0-0-data:/var/lib/clickhouse
     - signoz-telemetrystore-user-scripts:/var/lib/clickhouse/user_scripts:ro
-    - ./telemetrystore/clickhouse/config-0-0.yaml:/etc/clickhouse-server/config.yaml:ro
+    - ./telemetrystore/clickhouse/config-0-0.yaml:/etc/clickhouse-server/config-0-0.yaml:ro
     - ./telemetrystore/clickhouse/functions.yaml:/etc/clickhouse-server/functions.yaml:ro
   signoz-telemetrystore-clickhouse-user-scripts:
     command:
