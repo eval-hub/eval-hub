@@ -358,16 +358,28 @@ func classifyHFError(repoID string, err error) error {
 	}
 
 	lower := strings.ToLower(err.Error())
-	// HF often returns 401 with "Repository Not Found" for missing or inaccessible
-	// repos when unauthenticated; treat that as not-found before the gated branch.
+	// go-huggingface surfaces missing/private datasets as 401 "Invalid username or password"
+	// (no "not found" text). huggingface_hub wraps the same API response as "Repository Not Found".
 	switch {
-	case strings.Contains(lower, "404"), strings.Contains(lower, "not found"):
+	case strings.Contains(lower, "404"),
+		strings.Contains(lower, "repository not found"),
+		strings.Contains(lower, "not found for url"):
 		return fmt.Errorf("repository not found: %v", err)
-	case strings.Contains(lower, "401"), strings.Contains(lower, "gated"):
+	case isHFGatedRepoError(lower):
 		return fmt.Errorf("repository %s is gated; provide secret_ref with a Hugging Face token", repoID)
+	case strings.Contains(lower, "401"),
+		strings.Contains(lower, "invalid username or password"):
+		return fmt.Errorf("repository not found: %v", err)
 	default:
 		return err
 	}
+}
+
+func isHFGatedRepoError(lower string) bool {
+	// Avoid matching huggingface_hub help text ("private or gated repo, make sure...").
+	return strings.Contains(lower, "is gated") ||
+		strings.Contains(lower, "gated dataset") ||
+		(strings.Contains(lower, "gated") && !strings.Contains(lower, "repository not found"))
 }
 
 func clearDestDir(dir string) error {

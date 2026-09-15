@@ -164,7 +164,7 @@ func TestClassifyHFError(t *testing.T) {
 		t.Fatalf("expected not found message, got %v", notFound)
 	}
 
-	// HF returns 401 with "Repository Not Found" for missing/private repos without a token.
+	// huggingface_hub wraps missing/private repos as 401 + "Repository Not Found".
 	hfMissing := classifyHFError("SobhaCh/invalid-db", errors.New(
 		"401 Client Error. (Request ID: Root=1-abc)\n\nRepository Not Found for url: https://huggingface.co/api/datasets/SobhaCh/invalid-db.\nPlease make sure you specified the correct `repo_id` and `repo_type`.\nIf you are trying to access a private or gated repo, make sure you are authenticated.",
 	))
@@ -173,6 +173,17 @@ func TestClassifyHFError(t *testing.T) {
 	}
 	if strings.Contains(hfMissing.Error(), "provide secret_ref") {
 		t.Fatalf("expected not to classify missing repo as gated, got %v", hfMissing)
+	}
+
+	// go-huggingface returns only 401 + "Invalid username or password" for missing repos.
+	goHFMissing := classifyHFError("SobhaCh/invalid-db", errors.New(
+		`failed to download repository info: while downloading "https://huggingface.co/api/datasets/SobhaCh/invalid-db/revision/main?blobs=true": bad status code 401: Invalid username or password.`,
+	))
+	if !strings.HasPrefix(goHFMissing.Error(), "repository not found:") {
+		t.Fatalf("expected not found prefix for go-huggingface 401, got %v", goHFMissing)
+	}
+	if strings.Contains(goHFMissing.Error(), "provide secret_ref") {
+		t.Fatalf("expected not to classify missing repo as gated, got %v", goHFMissing)
 	}
 
 	raw := errors.New("connection reset by peer")
