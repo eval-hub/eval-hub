@@ -252,6 +252,39 @@ func TestRunMissingEnvVars(t *testing.T) {
 	}
 }
 
+func TestRun_InvokesHFSuccessfully(t *testing.T) {
+	repoID := "org/offline-dataset"
+	srv := newMockHFServer(t, repoID, map[string]string{"README.md": "hello"}, http.StatusOK)
+	defer srv.Close()
+
+	dest := t.TempDir()
+	meta := t.TempDir()
+	secret := filepath.Join(t.TempDir(), "missing-secret")
+	cache := filepath.Join(t.TempDir(), "hf-cache")
+	origDest, origMeta, origSecret, origCache := destDir, gitMetadataDir, scrtDir, hfCacheDir
+	destDir, gitMetadataDir, scrtDir, hfCacheDir = dest, meta, secret, cache
+	t.Cleanup(func() {
+		destDir, gitMetadataDir, scrtDir, hfCacheDir = origDest, origMeta, origSecret, origCache
+		_ = os.Unsetenv(envHFRepoID)
+		_ = os.Unsetenv(envGitURL)
+		_ = os.Unsetenv(envBucket)
+		_ = os.Unsetenv(envKey)
+		_ = os.Unsetenv("HF_ENDPOINT")
+	})
+	t.Setenv("HF_ENDPOINT", srv.URL)
+	t.Setenv(envHFRepoID, repoID)
+	t.Setenv(envGitURL, "")
+	t.Setenv(envBucket, "")
+	t.Setenv(envKey, "")
+
+	if err := run(); err != nil {
+		t.Fatalf("run() = %v, want HF success", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "README.md")); err != nil {
+		t.Fatalf("README.md missing after run(): %v", err)
+	}
+}
+
 func TestRunHF_RoutesBeforeS3AndGit(t *testing.T) {
 	t.Setenv(envHFRepoID, "org/offline-dataset")
 	t.Setenv(envHFTimeout, "not-a-duration")

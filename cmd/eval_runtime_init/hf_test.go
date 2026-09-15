@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/gomlx/go-huggingface/hub"
 )
 
 const testHFCommitSHA = "aabbccddeeff00112233445566778899aabbccdd"
@@ -23,6 +26,10 @@ type hfRepoInfoResponse struct {
 }
 
 func newMockHFServer(t *testing.T, repoID string, files map[string]string, infoStatus int) *httptest.Server {
+	return newMockHFServerWithSHA(t, repoID, testHFCommitSHA, files, infoStatus)
+}
+
+func newMockHFServerWithSHA(t *testing.T, repoID, commitSHA string, files map[string]string, infoStatus int) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/api/datasets/"+repoID+"/revision/") {
@@ -30,7 +37,7 @@ func newMockHFServer(t *testing.T, repoID string, files map[string]string, infoS
 				http.Error(w, "gated", infoStatus)
 				return
 			}
-			resp := hfRepoInfoResponse{ID: repoID, SHA: testHFCommitSHA}
+			resp := hfRepoInfoResponse{ID: repoID, SHA: commitSHA}
 			for name := range files {
 				resp.Siblings = append(resp.Siblings, struct {
 					RFilename string `json:"rfilename"`
@@ -43,7 +50,7 @@ func newMockHFServer(t *testing.T, repoID string, files map[string]string, infoS
 			return
 		}
 
-		prefix := "/datasets/" + repoID + "/resolve/" + testHFCommitSHA + "/"
+		prefix := "/datasets/" + repoID + "/resolve/" + commitSHA + "/"
 		if !strings.HasPrefix(r.URL.Path, prefix) {
 			http.NotFound(w, r)
 			return
@@ -55,7 +62,7 @@ func newMockHFServer(t *testing.T, repoID string, files map[string]string, infoS
 			return
 		}
 		etag := "etag-" + strings.ReplaceAll(rel, "/", "-")
-		w.Header().Set("X-Repo-Commit", testHFCommitSHA)
+		w.Header().Set("X-Repo-Commit", commitSHA)
 		w.Header().Set("X-Linked-Etag", `"`+etag+`"`)
 		w.Header().Set("ETag", `"`+etag+`"`)
 		switch r.Method {
@@ -490,6 +497,312 @@ func TestDownloadHFRepo_NoFilesInRepo(t *testing.T) {
 func TestClassifyHFError_Nil(t *testing.T) {
 	if classifyHFError("org/repo", nil) != nil {
 		t.Fatal("expected nil for nil error")
+	}
+}
+
+func TestDownloadHFInfo_ContextAlreadyCanceled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	repo := hub.New("org/slow").WithType(hub.RepoTypeDataset).WithCacheDir(t.TempDir())
+	err := downloadHFInfo(ctx, repo, false)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("downloadHFInfo() = %v, want context.Canceled", err)
+	}
+}
+
+func TestDownloadHFRepo_InvalidCommitSHA(t *testing.T) {
+	repoID := "org/bad-sha"
+	srv := newMockHFServerWithSHA(t, repoID, "not-a-valid-sha", map[string]string{"README.md": "x"}, http.StatusOK)
+	defer srv.Close()
+
+	t.Setenv("HF_ENDPOINT", srv.URL)
+	origCache := hfCacheDir
+	hfCacheDir = filepath.Join(t.TempDir(), "hf-cache")
+	t.Cleanup(func() { hfCacheDir = origCache })
+
+	_, err := downloadHFRepo(t.Context(), repoID, "", "", "")
+	if err == nil || !strings.Contains(err.Error(), "invalid commit SHA") {
+		t.Fatalf("downloadHFRepo() = %v, want invalid commit SHA error", err)
+	}
+}
+
+func TestDownloadHFRepo_EmptyCommitSHA(t *testing.T) {
+	repoID := "org/empty-sha"
+	srv := newMockHFServerWithSHA(t, repoID, "", map[string]string{"README.md": "x"}, http.StatusOK)
+	defer srv.Close()
+
+	t.Setenv("HF_ENDPOINT", srv.URL)
+	origCache := hfCacheDir
+	hfCacheDir = filepath.Join(t.TempDir(), "hf-cache")
+	t.Cleanup(func() { hfCacheDir = origCache })
+
+	_, err := downloadHFRepo(t.Context(), repoID, "", "", "")
+	if err == nil || !strings.Contains(err.Error(), "could not resolve commit SHA") {
+		t.Fatalf("downloadHFRepo() = %v, want missing commit SHA error", err)
+	}
+}
+
+func TestResolveHFRepoFileRel_RejectsInvalidPath(t *testing.T) {
+	_, err := resolveHFRepoFileRel(t.TempDir(), testHFCommitSHA, "../escape")
+	if err == nil || !strings.Contains(err.Error(), "invalid repository file path") {
+		t.Fatalf("resolveHFRepoFileRel() = %v, want invalid path error", err)
+	}
+}
+
+func TestResolveHFRepoFileRel_MissingFile(t *testing.T) {
+	_, err := resolveHFRepoFileRel(t.TempDir(), testHFCommitSHA, "missing.txt")
+	if err == nil {
+		t.Fatal("resolveHFRepoFileRel() = nil, want error for missing file")
+	}
+}
+
+func TestClearDestDir_RemovesFilesAndDirectories(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "nested"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "nested", "keep.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "top.txt"), []byte("y"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := clearDestDir(dir); err != nil {
+		t.Fatalf("clearDestDir: %v", err)
+	}
+	if destHasData(dir) {
+		t.Fatal("expected dest cleared")
+	}
+}
+
+func TestCopyHFRepoFile_MissingSource(t *testing.T) {
+	srcRoot, err := os.OpenRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = srcRoot.Close() }()
+	dstRoot, err := os.OpenRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = dstRoot.Close() }()
+
+	if err := copyHFRepoFile(srcRoot, dstRoot, "missing", "out.txt"); err == nil {
+		t.Fatal("copyHFRepoFile() = nil, want missing source error")
+	}
+}
+
+func TestCopyHFRepoFile_CopiesContent(t *testing.T) {
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(srcDir, "blob"), []byte("payload"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srcRoot, err := os.OpenRoot(srcDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = srcRoot.Close() }()
+	dstRoot, err := os.OpenRoot(dstDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = dstRoot.Close() }()
+
+	if err := copyHFRepoFile(srcRoot, dstRoot, "blob", "out.txt"); err != nil {
+		t.Fatalf("copyHFRepoFile: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dstDir, "out.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "payload" {
+		t.Fatalf("copied content = %q, want payload", got)
+	}
+}
+
+func TestRunHF_SecretReadFailure(t *testing.T) {
+	dest := t.TempDir()
+	meta := t.TempDir()
+	cache := filepath.Join(t.TempDir(), "hf-cache")
+	badSecret := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(badSecret, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	withRunHFTestEnv(t, dest, meta, badSecret, cache)
+	t.Setenv(envHFRepoID, "org/offline-dataset")
+
+	err := runHF()
+	if err == nil || !strings.Contains(err.Error(), "read hugging face token") {
+		t.Fatalf("runHF() = %v, want secret read error", err)
+	}
+}
+
+func TestRunHF_WriteGitMetadataFailure(t *testing.T) {
+	repoID := "org/offline-dataset"
+	files := map[string]string{"README.md": "hello"}
+	srv := newMockHFServer(t, repoID, files, http.StatusOK)
+	defer srv.Close()
+
+	dest := t.TempDir()
+	metaFile := filepath.Join(t.TempDir(), "blocked")
+	if err := os.WriteFile(metaFile, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	secret := filepath.Join(t.TempDir(), "missing-secret")
+	cache := filepath.Join(t.TempDir(), "hf-cache")
+	withRunHFTestEnv(t, dest, metaFile, secret, cache)
+	t.Setenv("HF_ENDPOINT", srv.URL)
+	t.Setenv(envHFRepoID, repoID)
+
+	err := runHF()
+	if err == nil || !strings.Contains(err.Error(), "write git metadata") {
+		t.Fatalf("runHF() = %v, want git metadata error", err)
+	}
+}
+
+func TestStageHFFiles_FromSymlinkedCache(t *testing.T) {
+	cache := t.TempDir()
+	dest := t.TempDir()
+	commit := testHFCommitSHA
+	blobDir := filepath.Join(cache, "blobs")
+	snapDir := filepath.Join(cache, "snapshots", commit)
+	if err := os.MkdirAll(blobDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(snapDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(blobDir, "etag-1"), []byte("blob-data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join("..", "..", "blobs", "etag-1"), filepath.Join(snapDir, "file.txt")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := stageHFFiles(cache, commit, []string{"file.txt"}, "", dest); err != nil {
+		t.Fatalf("stageHFFiles: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dest, "file.txt"))
+	if err != nil {
+		t.Fatalf("staged file missing: %v", err)
+	}
+	if string(got) != "blob-data" {
+		t.Fatalf("staged content = %q, want blob-data", got)
+	}
+}
+
+func TestDownloadHFRepo_FileDownloadError(t *testing.T) {
+	repoID := "org/fail-download"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/api/datasets/"+repoID+"/revision/") {
+			resp := hfRepoInfoResponse{
+				ID:  repoID,
+				SHA: testHFCommitSHA,
+				Siblings: []struct {
+					RFilename string `json:"rfilename"`
+				}{{RFilename: "README.md"}},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+			return
+		}
+		http.Error(w, "download failed", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	t.Setenv("HF_ENDPOINT", srv.URL)
+	origCache := hfCacheDir
+	hfCacheDir = filepath.Join(t.TempDir(), "hf-cache")
+	t.Cleanup(func() { hfCacheDir = origCache })
+
+	_, err := downloadHFRepo(t.Context(), repoID, "", "", "")
+	if err == nil {
+		t.Fatal("downloadHFRepo() = nil, want file download error")
+	}
+}
+
+func TestDownloadHFRepo_SecondInfoDownloadFails(t *testing.T) {
+	repoID := "org/fail-second-info"
+	infoCalls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/api/datasets/"+repoID+"/revision/") {
+			http.NotFound(w, r)
+			return
+		}
+		infoCalls++
+		if infoCalls > 1 {
+			http.Error(w, "info refresh failed", http.StatusInternalServerError)
+			return
+		}
+		resp := hfRepoInfoResponse{
+			ID:  repoID,
+			SHA: testHFCommitSHA,
+			Siblings: []struct {
+				RFilename string `json:"rfilename"`
+			}{{RFilename: "README.md"}},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	t.Setenv("HF_ENDPOINT", srv.URL)
+	origCache := hfCacheDir
+	hfCacheDir = filepath.Join(t.TempDir(), "hf-cache")
+	t.Cleanup(func() { hfCacheDir = origCache })
+
+	_, err := downloadHFRepo(t.Context(), repoID, "", "", "")
+	if err == nil {
+		t.Fatal("downloadHFRepo() = nil, want second info download error")
+	}
+}
+
+func TestResolveHFRepoFileRel_SymlinkOutsideCache(t *testing.T) {
+	cache := t.TempDir()
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "secret"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	snap := filepath.Join(cache, "snapshots", testHFCommitSHA)
+	if err := os.MkdirAll(snap, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "secret"), filepath.Join(snap, "evil.txt")); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := resolveHFRepoFileRel(cache, testHFCommitSHA, "evil.txt")
+	if err == nil || (!strings.Contains(err.Error(), "resolves outside cache root") && !strings.Contains(err.Error(), "escapes cache root")) {
+		t.Fatalf("resolveHFRepoFileRel() = %v, want cache confinement error", err)
+	}
+}
+
+func TestRunHF_NestedFilePaths(t *testing.T) {
+	repoID := "org/nested-dataset"
+	files := map[string]string{"data/nested/file.txt": "nested-content"}
+	srv := newMockHFServer(t, repoID, files, http.StatusOK)
+	defer srv.Close()
+
+	dest := t.TempDir()
+	meta := t.TempDir()
+	secret := filepath.Join(t.TempDir(), "missing-secret")
+	cache := filepath.Join(t.TempDir(), "hf-cache")
+	withRunHFTestEnv(t, dest, meta, secret, cache)
+	t.Setenv("HF_ENDPOINT", srv.URL)
+	t.Setenv(envHFRepoID, repoID)
+	t.Setenv(envHFTimeout, "30s")
+
+	if err := runHF(); err != nil {
+		t.Fatalf("runHF: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(dest, "data", "nested", "file.txt"))
+	if err != nil {
+		t.Fatalf("nested file missing: %v", err)
+	}
+	if string(got) != "nested-content" {
+		t.Fatalf("nested file = %q, want nested-content", got)
 	}
 }
 
