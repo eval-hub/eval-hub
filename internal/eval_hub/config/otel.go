@@ -30,6 +30,9 @@ type OTELConfig struct {
 	EnableJobContainerLogs bool `mapstructure:"enable_job_container_logs,omitempty" json:"enable_job_container_logs,omitempty"`
 	// ServiceName overrides the default OTEL service.name resource attribute.
 	ServiceName string `mapstructure:"service_name,omitempty" json:"service_name,omitempty"`
+	// ServiceVersion sets the OTEL service.version resource attribute. Populated
+	// automatically from the binary's build version unless overridden.
+	ServiceVersion string `mapstructure:"service_version,omitempty" json:"service_version,omitempty"`
 	// AdditionalAttributes are custom attributes to add to all traces
 	AdditionalAttributes map[string]string `mapstructure:"additional_attributes,omitempty" json:"additional_attributes,omitempty"`
 	// Used to enable ECS resource detection

@@ -1491,6 +1491,138 @@ Feature: Evaluation Jobs
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
+  # Hugging Face Hub test-data source: init container downloads into /test_data.
+  # Defaults: eval-hub-test/evalhub-offline-testdata @ main (public mirror of tests/git-testdata).
+  # Happy path: one job with arc_easy (full repo) + truthfulqa_mc1 (nested sub_path) covers
+  # branch revision, sub_path staging, and resolved_sha. Set TEST_DATA_HF_SHA_REVISION to a
+  # real hex commit SHA to exercise pinned revision download on arc_easy without a separate job.
+  # Cluster needs egress to huggingface.co (or set HF_ENDPOINT on init image for a mirror).
+  # Opt in: GODOG_TAGS="@hf".
+  @hf
+  Scenario: Evaluation job with Hugging Face test data completes successfully
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_hf.json"
+    Then the response code should be 202
+    And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
+    And the response should contain the value "pending" at path "$.status.state"
+    And the array at path "benchmarks" in the response should have length 2
+    And the response should contain the value "arc_easy" at path "$.benchmarks[0].id"
+    And the response should contain the value "lm_evaluation_harness" at path "$.benchmarks[0].provider_id"
+    And the response should contain the value "/test_data/tokenizer" at path "$.benchmarks[0].parameters.tokenizer"
+    And the response should contain the value "{{env:TEST_DATA_HF_REPO_ID|eval-hub-test/evalhub-offline-testdata}}" at path "$.benchmarks[0].test_data_ref.hf.repo_id"
+    And the response should contain the value "{{env:TEST_DATA_HF_SHA_REVISION,TEST_DATA_HF_REVISION|main}}" at path "$.benchmarks[0].test_data_ref.hf.revision"
+    And the response should contain the value "truthfulqa_mc1" at path "$.benchmarks[1].id"
+    And the response should contain the value "{{env:TEST_DATA_HF_NESTED_SUB_PATH|staging_sub_path}}" at path "$.benchmarks[1].test_data_ref.hf.sub_path"
+    And the response should not contain the value "resolved_sha" at path "$.benchmarks[0].test_data_ref"
+    And the response should not contain the value "resolved_sha" at path "$.benchmarks[1].test_data_ref"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    And the response should contain the value "completed" at path "$.status.benchmarks[?(@.id == &quot;arc_easy&quot;)].status"
+    And the response should contain the value "completed" at path "$.status.benchmarks[?(@.id == &quot;truthfulqa_mc1&quot;)].status"
+    And the response should contain the value "arc_easy" at path "$.status.benchmarks[?(@.id == &quot;arc_easy&quot;)].id"
+    And the response should contain the value "truthfulqa_mc1" at path "$.status.benchmarks[?(@.id == &quot;truthfulqa_mc1&quot;)].id"
+    And the response should contain "results"
+    And the array at path "results.benchmarks" in the response should have length 2
+    And the response should contain the value "arc_easy" at path "$.results.benchmarks[?(@.id == &quot;arc_easy&quot;)].id"
+    And the response should contain the value "truthfulqa_mc1" at path "$.results.benchmarks[?(@.id == &quot;truthfulqa_mc1&quot;)].id"
+    And the response should contain at least the value "0.2" at path "$.results.benchmarks[?(@.id == &quot;arc_easy&quot;)].metrics.acc"
+    And the response should contain at least the value "0.2" at path "$.results.benchmarks[?(@.id == &quot;arc_easy&quot;)].metrics.acc_norm"
+    And the response should contain the value "{{env:TEST_DATA_HF_REPO_ID|eval-hub-test/evalhub-offline-testdata}}" at path "$.benchmarks[0].test_data_ref.hf.repo_id"
+    And the response should contain the value "{{env:TEST_DATA_HF_SHA_REVISION,TEST_DATA_HF_REVISION|main}}" at path "$.benchmarks[0].test_data_ref.hf.revision"
+    And the response should contain the value "{{env:TEST_DATA_HF_NESTED_SUB_PATH|staging_sub_path}}" at path "$.benchmarks[1].test_data_ref.hf.sub_path"
+    And the response should match the value "[0-9a-fA-F]{7,40}" at path "$.benchmarks[0].test_data_ref.resolved_sha"
+    And the response should match the value "[0-9a-fA-F]{7,40}" at path "$.benchmarks[1].test_data_ref.resolved_sha"
+    And the response should contain the value "/test_data/tokenizer" at path "$.benchmarks[0].parameters.tokenizer"
+
+  @hf
+  @negative
+  Scenario: Cannot create evaluation job with both Hugging Face and S3 test data
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_hf_and_s3.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    And the response should contain the value "exactly one of s3, pvc, git, or hf must be set" at path "$.message"
+
+  @hf
+  @negative
+  Scenario: Cannot create evaluation job with both Hugging Face and PVC test data
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_hf_and_pvc.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    And the response should contain the value "exactly one of s3, pvc, git, or hf must be set" at path "$.message"
+
+  @hf
+  @negative
+  Scenario: Cannot create evaluation job with both Hugging Face and git test data
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_hf_and_git.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+    And the response should contain the value "exactly one of s3, pvc, git, or hf must be set" at path "$.message"
+
+  @hf
+  @negative
+  Scenario: Cannot create evaluation job with client-supplied resolved_sha for Hugging Face source
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_hf_resolved_sha_readonly.json"
+    Then the response code should be 400
+    And the response should contain the value "resolved_sha_read_only" at path "$.message_code"
+    And the response should contain the value "The field 'resolved_sha' is read-only and must not be set on create." at path "$.message"
+
+  @hf
+  @negative
+  Scenario: Cannot create evaluation job with Hugging Face missing repo_id
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_hf_missing_repo_id.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+
+  @hf
+  @negative
+  Scenario: Cannot create evaluation job with whitespace-only Hugging Face repo_id
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_hf_whitespace_repo_id.json"
+    Then the response code should be 400
+    And the response should contain the value "request_validation_failed" at path "$.message_code"
+
+  @hf
+  @negative
+  Scenario: Evaluation job with invalid Hugging Face repo_id or revision fails
+    Given the service is running
+    And I set the wait deadline to "5m"
+    And I set the wait interval to "10s"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_hf_runtime_failures.json"
+    Then the response code should be 202
+    And the response should contain the value "pending" at path "$.status.state"
+    And the array at path "benchmarks" in the response should have length 2
+    And the response should contain the value "{{env:TEST_DATA_HF_BAD_REPO_ID|eval-hub-test/invalid-db}}" at path "$.benchmarks[0].test_data_ref.hf.repo_id"
+    And the response should contain the value "{{env:TEST_DATA_HF_BAD_REVISION|this-revision-does-not-exist-evalhub-fvt}}" at path "$.benchmarks[1].test_data_ref.hf.revision"
+    And I wait for the evaluation job status to be "failed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "failed" at path "$.status.state"
+    And the response should contain the value "failed" at path "$.status.benchmarks[?(@.id == &quot;arc_easy&quot;)].status"
+    And the response should contain the value "failed" at path "$.status.benchmarks[?(@.id == &quot;truthfulqa_mc1&quot;)].status"
+
+  @hf
+  @negative
+  Scenario: Evaluation job with missing Hugging Face sub_path fails
+    Given the service is running
+    And I set the wait deadline to "5m"
+    And I set the wait interval to "10s"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_hf_bad_subpath.json"
+    Then the response code should be 202
+    And the response should contain the value "pending" at path "$.status.state"
+    And the response should contain the value "{{env:TEST_DATA_HF_BAD_SUB_PATH|this-path-does-not-exist-evalhub-fvt}}" at path "$.benchmarks[0].test_data_ref.hf.sub_path"
+    And I wait for the evaluation job status to be "failed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "failed" at path "$.status.state"
+    And the response should contain the value "failed" at path "$.status.benchmarks[0].status"
+
   @mlflow
   Scenario: Card generated for completed job with benchmarks
     Given the service is running
