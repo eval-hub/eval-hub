@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// unsetEnvForTest clears key from the process environment for the duration of the test.
 func unsetEnvForTest(t *testing.T, key string) {
 	t.Helper()
 	value, wasSet := os.LookupEnv(key)

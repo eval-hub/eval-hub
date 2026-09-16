@@ -684,6 +684,12 @@ func TestEvaluateEvaluationJobHFJsonnet(t *testing.T) {
 		jsonnetHarnessEnv: map[string]string{
 			"ENVIRONMENT_ID": "connected",
 		},
+		jsonnetHarnessEnvOmit: []string{
+			"TEST_DATA_HF_REPO_ID",
+			"TEST_DATA_HF_SHA_REVISION",
+			"TEST_DATA_HF_REVISION",
+			"TEST_DATA_HF_NESTED_SUB_PATH",
+		},
 	}
 	path, err := filepath.Abs(filepath.Join(testDataRoot(), "evaluation_job_hf.jsonnet"))
 	if err != nil {
@@ -742,6 +748,11 @@ func TestEvaluateEvaluationJobHFRuntimeFailuresJsonnet(t *testing.T) {
 	tc := &scenarioConfig{
 		values:            map[string]string{},
 		jsonnetHarnessEnv: map[string]string{},
+		jsonnetHarnessEnvOmit: []string{
+			"TEST_DATA_HF_BAD_REPO_ID",
+			"TEST_DATA_HF_BAD_REVISION",
+			"TEST_DATA_HF_NESTED_SUB_PATH",
+		},
 	}
 	path, err := filepath.Abs(filepath.Join(testDataRoot(), "evaluation_job_hf_runtime_failures.jsonnet"))
 	if err != nil {
