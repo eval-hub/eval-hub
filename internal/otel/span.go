@@ -46,6 +46,9 @@ func DetachedContext(ctx context.Context) context.Context {
 // Spans started later against the returned context behave as normal
 // children of the returned span, not additional links.
 //
+// Caller-provided opts are appended after WithNewRoot and WithLinks, so
+// they take precedence for any conflicting option.
+//
 // If ctx carries no valid span context (e.g. tracing disabled), this
 // degrades to a plain tracer.Start(ctx, spanName, opts...).
 func StartLinkedSpan(ctx context.Context, tracerName, spanName string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
