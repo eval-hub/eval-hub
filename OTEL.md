@@ -151,7 +151,7 @@ Terminal-state completions are recorded from:
 - Events API (`POST /api/v1/evaluations/jobs/{id}/events`) via `recordEvaluationJobTerminalStateAfterUpdate()`
 - Explicit cancel and synchronous runtime-start-failure paths in handlers
 
-There is no end-to-end job duration histogram and no per-tenant label on domain metrics today.
+An end-to-end job duration histogram exists (`evalhub.eval.job_duration` / `evalhub_evaluation_job_duration_seconds`, `time.Since(job.Resource.CreatedAt)`), but is currently only observed on the `recordEvaluationJobTerminalStateAfterUpdate()` path. The explicit cancel (`HandleCancelEvaluation`) and synchronous runtime-start-failure paths record the terminal-state and active/queue-depth counters but do **not** call `ObserveEvaluationJobDuration`, so cancelled and runtime-start-failed jobs are under-represented in the duration histogram. There is no per-tenant label on domain metrics today.
 
 ### Database metrics
 
@@ -170,7 +170,15 @@ When `otelsql` is active and `enable_metrics` is set:
 | `go.sql.connections_closed_max_idle_time` | Observable counter | pool stats |
 | `go.sql.connections_closed_max_lifetime` | Observable counter | pool stats |
 
-There are no semconv `db.client.*` metrics or explicit DB error counters beyond trace span status.
+In addition, `internal/eval_hub/storage/sql/otel_metrics.go` registers a small set of semconv v1.39.0 `db.client.connection.*` pool metrics from the same `sql.DB.Stats()` source, additive to (not a replacement for) the `go.sql.*` instruments above:
+
+| OTEL name | Type | Attributes |
+|-----------|------|------------|
+| `db.client.connection.count` | Observable UpDownCounter | `db.system.name`, `db.client.connection.pool.name`, `db.namespace` (if known), `db.client.connection.state` = `used` \| `idle` |
+| `db.client.connection.max` | Observable UpDownCounter | `db.system.name`, `db.client.connection.pool.name`, `db.namespace` (if known) |
+| `db.client.connection.idle.max` | Observable UpDownCounter | same as above |
+
+Only the pool-size metrics that map cleanly onto `database/sql`'s `DBStats` (or configured `max_idle_conns`) are covered; per-connection histograms (`db.client.connection.create_time`, `.use_time`, `.wait_time`), `db.client.connection.pending_requests`, `db.client.connection.timeouts`, and `db.client.operation.duration` are not implemented because `database/sql` does not expose the underlying per-event data needed to populate them without replacing the driver-level instrumentation (`otelsql`). There are no explicit DB error counters beyond trace span status.
 
 ---
 
@@ -209,6 +217,7 @@ On OpenShift, EvalHub is typically deployed via the [TrustyAI service operator](
 | `tracer_timeout` | `tracerTimeout` | Duration string, e.g. `"30s"` |
 | `tracer_batch_interval` | `tracerBatchInterval` | Duration string, e.g. `"5s"` |
 | `service_name` | `serviceName` | |
+| `service_version` | *(not exposed)* | Auto-populated from the binary's build version; overridable via `config.yaml` / env, but not yet exposed through the operator CR |
 | `additional_attributes` | `additionalAttributes` | Map of strings |
 | `enable_ecs_resource_detection` | `enableEcsResourceDetection` | |
 | `disable_redirect_otel_logs` | `disableRedirectOtelLogs` | |
@@ -238,7 +247,7 @@ On OpenShift, EvalHub is typically deployed via the [TrustyAI service operator](
 | MLflow operations | HTTP transport spans only (no business-level spans) |
 | Health / OpenAPI / docs handlers | otelhttp span only; no `withSpan` children |
 | Benchmark success / completion counters | Errors only (`evalhub.benchmark_runtime_errors`); no success counter |
-| Job duration histogram | Not implemented |
+| Job duration histogram | Implemented (`evalhub.eval.job_duration`), but not recorded on the cancel or runtime-start-failure terminal paths (see Metrics section) |
 | Metric exemplars (trace ↔ metric links) | Not implemented |
 
 ### Configuration and gating
@@ -246,14 +255,12 @@ On OpenShift, EvalHub is typically deployed via the [TrustyAI service operator](
 - **`otel.enabled` vs signal flags** — `otelhttp` and `withSpan` gate on `otel.enabled`, not separately on `enable_tracing`. With tracing disabled, spans are created against the noop tracer (small overhead, no export).
 - **`enable_logs`** — requires `exporter_type` (defaults to stdout when unset).
 - **`enable_job_container_logs`** — no effect unless `enable_logs` is true; startup logs a warning if misconfigured.
-- **Stdout trace exporter** — OTLP trace paths attach resource attributes; the stdout trace exporter path does not use the same resource setup as OTLP.
-- **`service.version`** — not set on the OTEL resource (commented out in `createResource`).
 - **Prometheus-only deployments** — without `otel.enable_metrics`, `/metrics` exposes default process/Go collectors only, not application HTTP or domain metrics.
 
 ### Sidecar
 
 - OTEL in job pods depends on eval-hub having `otel.enabled` when the job ConfigMap is built.
-- `TLSConfig` is not serialized into `sidecar_config.json`; job pods rely on `exporter_insecure` or file-based TLS settings in the JSON block.
+- **`TLSConfig` is not serialized into `sidecar_config.json` (by design)** — certificate/key material is not written into a ConfigMap; job pods rely on `exporter_insecure` or file-based TLS settings (mounted CA path) in the JSON block instead.
 - No sidecar-specific domain metrics (proxy errors, token cache, etc.).
 - No Prometheus dual-sink on the sidecar process.
 
@@ -363,6 +370,7 @@ Files: `tests/otel/pours/deployment/`, `tests/otel/casting.yaml`, `tests/otel/sc
 | `internal/eval_hub/handlers/otel.go` | Handler-level span wrapper |
 | `internal/eval_hub/handlers/evaluation_metrics.go` | Terminal-state metric helper |
 | `internal/eval_hub/storage/sql/sql.go` | `otelsql` and `ReportDBStatsMetrics` |
+| `internal/eval_hub/storage/sql/otel_metrics.go` | Semconv `db.client.connection.*` pool metrics |
 | `internal/eval_runtime_sidecar/server/server.go` | Sidecar inbound `otelhttp` |
 | `internal/eval_runtime_sidecar/proxy/http_client.go` | Sidecar outbound `otelhttp` transport |
 | `internal/otel/oteltest/` | Mock OTLP collector for export tests |
