@@ -21,6 +21,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/eval-hub/eval-hub/internal/otel"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/go-playground/validator/v10"
 )
@@ -413,8 +414,12 @@ func (h *Handlers) executeEvaluationJob(ctx *executioncontext.ExecutionContext, 
 	// goroutines inside the runtime can update job status after the
 	// request completes. This is the single transition point from
 	// request-scoped work to background runtime work, covering all
-	// runtime implementations (local, k8s, etc.).
-	jobContext := context.Background()
+	// runtime implementations (local, k8s, etc.). otel.DetachedContext
+	// carries the create-job span's context forward as a link source (see
+	// trace.LinkFromContext) rather than a parent, since the runtime's
+	// background work outlives — and is only loosely causally related to —
+	// the HTTP request span.
+	jobContext := otel.DetachedContext(ctx.Ctx)
 
 	return h.runtime.WithLogger(ctx.Logger).WithContext(jobContext).RunEvaluationJob(job, benchmarks, h.createRuntimeStorage(ctx, jobContext))
 }

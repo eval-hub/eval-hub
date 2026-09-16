@@ -232,7 +232,8 @@ On OpenShift, EvalHub is typically deployed via the [TrustyAI service operator](
 
 ### Trace continuity
 
-- **Runtime job execution** detaches from the HTTP request trace (`context.Background()` in `executeEvaluationJob`). Background K8s job creation, local subprocess work, and post-request status updates are not linked to the create-job HTTP span.
+- **Runtime job execution** intentionally detaches from the HTTP request trace's cancellation/deadline (`executeEvaluationJob` uses `otel.DetachedContext(ctx.Ctx)`, not a bare `context.Background()`, so background K8s job creation and local subprocess work outlive the request) — but the detached context still carries the create-job span's context forward as a **link** source (`trace.LinkFromContext`), not a parent, since the async work is only loosely causally related to (and outlives) the triggering request span. `K8sRuntime.RunEvaluationJob`'s background goroutine derives its per-benchmark context the same way (`otel.DetachedContext(r.ctx)`) rather than a fresh `context.Background()`, so it no longer silently drops whatever context was threaded through `WithContext`.
+- **No spans are created yet** in the K8s job-creation or local subprocess paths to consume that link — see "K8s client (`client-go`)" and "Local subprocess lifecycle" below. The link is available for any span started against the detached context (or its descendants) via `trace.WithLinks(trace.LinkFromContext(ctx))`.
 - **K8s API calls** (create/delete Job, ConfigMap, Secret) have no dedicated spans.
 - **Runtime/init binaries** are not traced.
 
@@ -242,7 +243,7 @@ On OpenShift, EvalHub is typically deployed via the [TrustyAI service operator](
 |------|--------|
 | `evalhub-mcp` | No OTEL |
 | `eval-runtime-init` | No OTEL |
-| K8s client (`client-go`) | No spans or metrics |
+| K8s client (`client-go`) | No spans or metrics (context now carries a link back to the create-job request trace — see "Trace continuity" — but nothing yet starts a span to use it) |
 | Local subprocess lifecycle | No spans or metrics |
 | MLflow operations | HTTP transport spans only (no business-level spans) |
 | Health / OpenAPI / docs handlers | otelhttp span only; no `withSpan` children |
@@ -363,7 +364,7 @@ Files: `tests/otel/pours/deployment/`, `tests/otel/casting.yaml`, `tests/otel/sc
 | Path | Role |
 |------|------|
 | `internal/otel/otel_sdk.go` | SDK bootstrap (tracer, meter, logger providers) |
-| `internal/otel/span.go` | Shared `WithSpan` helper |
+| `internal/otel/span.go` | Shared `WithSpan` helper; `DetachedContext` (request/background trace-link boundary) |
 | `internal/eval_hub/metrics/` | Application metric instruments (domain + HTTP semconv) |
 | `internal/eval_hub/server/http_metrics_middleware.go` | HTTP request count and active-request middleware |
 | `internal/eval_hub/server/server.go` | Per-route `otelhttp` registration |
