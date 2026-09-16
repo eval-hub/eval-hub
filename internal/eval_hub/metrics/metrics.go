@@ -195,11 +195,15 @@ func initEvaluationOTELMetrics() error {
 // withTenantAttr appends a "tenant" attribute to attrs when tenant is non-empty.
 // Used only for the OTEL-only instruments in this package/file, which have no
 // bridged Prometheus Vec whose fixed label set would otherwise need to grow.
+// Callers may pass a slice literal; this function never mutates the original.
 func withTenantAttr(attrs []attribute.KeyValue, tenant string) []attribute.KeyValue {
 	if tenant == "" {
 		return attrs
 	}
-	return append(attrs, attribute.String("tenant", tenant))
+	result := make([]attribute.KeyValue, len(attrs)+1)
+	copy(result, attrs)
+	result[len(attrs)] = attribute.String("tenant", tenant)
+	return result
 }
 
 // RecordEvaluationJobCreated increments the counter when a job is persisted successfully.

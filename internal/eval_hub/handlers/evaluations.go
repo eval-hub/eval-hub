@@ -742,6 +742,9 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 					pids := jobProviderIDs(nil, &job.EvaluationJobConfig)
 					recordEvaluationJobTerminalTransition(ctx.Ctx, previousState, api.OverallStateCancelled, pids, cID, job.Resource.CreatedAt, tenant)
 				} else {
+					// No job record available (fetch error or already terminal) —
+					// record the terminal-state completion counter only; the
+					// duration histogram requires CreatedAt from the job.
 					metrics.RecordEvaluationJobTerminalState(ctx.Ctx, previousState, api.OverallStateCancelled, tenant)
 				}
 			}
