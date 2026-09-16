@@ -110,6 +110,16 @@ Child spans are created when `otel.enabled` is true (they use the global TracerP
 - Produces client spans for queries when the tracer provider is configured
 - Disable query spans with `disable_database_otel_scan: true` (metrics-only mode still uses `otelsql` when `enable_metrics` is true)
 
+### K8s runtime (`client-go`)
+
+`internal/eval_hub/runtimes/k8s/k8s_otel.go` wraps the `KubernetesHelper` methods that create, delete, or patch cluster resources with spans named `k8s.<operation>` (e.g. `k8s.create_job`, `k8s.delete_configmap`, `k8s.set_secret_owner`, `k8s.patch_job_phase_label`), tagged with `k8s.namespace.name`, `k8s.resource.kind`, and `k8s.resource.name`. List/Get/Stream calls are not spanned.
+
+Because job creation and lifecycle patches run on the runtime's detached background context (see "Trace continuity" below), these spans use `otel.StartLinkedSpan` rather than a plain `tracer.Start`, so the first span against that context links back to the HTTP request that created the job instead of starting an unrelated trace.
+
+### Local runtime (subprocess lifecycle)
+
+`internal/eval_hub/runtimes/local/local_otel.go` wraps each benchmark's subprocess lifecycle (`runBenchmark` — job-spec write, process start, wait, cleanup) in a single `local.run_benchmark` span, tagged with `benchmark.id`, `provider.id`, and `benchmark.index`. Like the K8s runtime spans, it uses `otel.StartLinkedSpan` against the detached per-job context so the span links back to the originating request trace.
+
 ### eval-runtime-sidecar
 
 When `otel.enabled` in `sidecar_config.json`:
@@ -233,9 +243,10 @@ On OpenShift, EvalHub is typically deployed via the [TrustyAI service operator](
 ### Trace continuity
 
 - **Runtime job execution** intentionally detaches from the HTTP request trace's cancellation/deadline (`executeEvaluationJob` uses `otel.DetachedContext(ctx.Ctx)`, not a bare `context.Background()`, so background K8s job creation and local subprocess work outlive the request) — but the detached context still carries the create-job span's context forward as a **link** source (`trace.LinkFromContext`), not a parent, since the async work is only loosely causally related to (and outlives) the triggering request span. `K8sRuntime.RunEvaluationJob`'s background goroutine derives its per-benchmark context the same way (`otel.DetachedContext(r.ctx)`) rather than a fresh `context.Background()`, so it no longer silently drops whatever context was threaded through `WithContext`.
-- **No spans are created yet** in the K8s job-creation or local subprocess paths to consume that link — see "K8s client (`client-go`)" and "Local subprocess lifecycle" below. The link is available for any span started against the detached context (or its descendants) via `trace.WithLinks(trace.LinkFromContext(ctx))`.
-- **K8s API calls** (create/delete Job, ConfigMap, Secret) have no dedicated spans.
-- **Runtime/init binaries** are not traced.
+- **`otel.StartLinkedSpan`** (`internal/otel/span.go`) is the entry point that consumes the link carried by a detached context: it starts a new root span (`trace.WithNewRoot`) and attaches the link from `trace.LinkFromContext(ctx)`, so the first span created against a detached context is associated with the originating request trace without extending its parent-child chain across the async gap. `K8SHelper` (`internal/eval_hub/runtimes/k8s/k8s_otel.go`) and the local runtime's per-benchmark spans (`internal/eval_hub/runtimes/local/local_otel.go`) both use it.
+- **K8s API calls** (create/delete Job, ConfigMap, Secret; owner-reference and Job annotation/label patches) now have dedicated spans (`k8s.create_job`, `k8s.delete_job`, `k8s.create_configmap`, `k8s.delete_configmap`, `k8s.set_configmap_owner`, `k8s.create_secret`, `k8s.delete_secret`, `k8s.set_secret_owner`, `k8s.patch_job_status_annotation`, `k8s.patch_job_phase_label`), tagged with `k8s.namespace.name`, `k8s.resource.kind`, and `k8s.resource.name`. List/Get/Stream operations remain unspanned.
+- **Local subprocess lifecycle** now has one span per benchmark (`local.run_benchmark`, tagged `benchmark.id`, `provider.id`, `benchmark.index`) covering job-spec write, process start, wait, and cleanup in `runBenchmark`.
+- **Runtime/init binaries** (`eval-runtime-init`, `eval-runtime-sidecar`) are still not traced.
 
 ### Instrumentation coverage
 
@@ -243,8 +254,8 @@ On OpenShift, EvalHub is typically deployed via the [TrustyAI service operator](
 |------|--------|
 | `evalhub-mcp` | No OTEL |
 | `eval-runtime-init` | No OTEL |
-| K8s client (`client-go`) | No spans or metrics (context now carries a link back to the create-job request trace — see "Trace continuity" — but nothing yet starts a span to use it) |
-| Local subprocess lifecycle | No spans or metrics |
+| K8s client (`client-go`) | Spans on Create/Delete Job/ConfigMap/Secret, owner-reference updates, and Job annotation/label patches (linked back to the request trace via `otel.StartLinkedSpan` — see "Trace continuity"); List/Get/Stream calls remain unspanned; no dedicated metrics |
+| Local subprocess lifecycle | One span per benchmark (`local.run_benchmark`, linked back to the request trace); no dedicated metrics |
 | MLflow operations | HTTP transport spans only (no business-level spans) |
 | Health / OpenAPI / docs handlers | otelhttp span only; no `withSpan` children |
 | Benchmark success / completion counters | Errors only (`evalhub.benchmark_runtime_errors`); no success counter |
@@ -364,7 +375,9 @@ Files: `tests/otel/pours/deployment/`, `tests/otel/casting.yaml`, `tests/otel/sc
 | Path | Role |
 |------|------|
 | `internal/otel/otel_sdk.go` | SDK bootstrap (tracer, meter, logger providers) |
-| `internal/otel/span.go` | Shared `WithSpan` helper; `DetachedContext` (request/background trace-link boundary) |
+| `internal/otel/span.go` | Shared `WithSpan` helper; `DetachedContext` (request/background trace-link boundary); `StartLinkedSpan` (first span against a detached context) |
+| `internal/eval_hub/runtimes/k8s/k8s_otel.go` | K8s client-go span helpers (`startK8sSpan`/`endK8sSpan`) |
+| `internal/eval_hub/runtimes/local/local_otel.go` | Local runtime per-benchmark span helpers (`startBenchmarkSpan`/`endBenchmarkSpan`) |
 | `internal/eval_hub/metrics/` | Application metric instruments (domain + HTTP semconv) |
 | `internal/eval_hub/server/http_metrics_middleware.go` | HTTP request count and active-request middleware |
 | `internal/eval_hub/server/server.go` | Per-route `otelhttp` registration |

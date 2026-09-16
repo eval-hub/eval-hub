@@ -38,6 +38,23 @@ func DetachedContext(ctx context.Context) context.Context {
 	return trace.ContextWithRemoteSpanContext(context.Background(), sc)
 }
 
+// StartLinkedSpan starts a new span in a fresh trace (trace.WithNewRoot),
+// linked to — not parented by — any span context carried in ctx (typically a
+// context produced by DetachedContext). Use this for the first span created
+// against a detached context, to bridge otherwise-disjoint traces for
+// genuinely async work (see DetachedContext and OTEL.md "Trace continuity").
+// Spans started later against the returned context behave as normal
+// children of the returned span, not additional links.
+//
+// If ctx carries no valid span context (e.g. tracing disabled), this
+// degrades to a plain tracer.Start(ctx, spanName, opts...).
+func StartLinkedSpan(ctx context.Context, tracerName, spanName string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
+	if link := trace.LinkFromContext(ctx); link.SpanContext.IsValid() {
+		opts = append([]trace.SpanStartOption{trace.WithNewRoot(), trace.WithLinks(link)}, opts...)
+	}
+	return otel.Tracer(tracerName).Start(ctx, spanName, opts...)
+}
+
 func WithSpan(ctx context.Context, serviceConfig *config.Config, logger *slog.Logger, component string, operation string, attributes map[string]string, fn SpanFunction) error {
 	runtimeCtx := ctx
 	var runtimeSpan trace.Span

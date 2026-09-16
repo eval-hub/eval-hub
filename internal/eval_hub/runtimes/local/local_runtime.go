@@ -227,7 +227,10 @@ func (r *LocalRuntime) RunEvaluationJob(
 
 	for i, bench := range benchmarks {
 		go func() {
-			if err := r.runBenchmark(jobID, bench, i, evaluation, callbackURL, storage); err != nil {
+			_, span := startBenchmarkSpan(r.ctx, bench, i)
+			err := r.runBenchmark(jobID, bench, i, evaluation, callbackURL, storage)
+			endBenchmarkSpan(span, err)
+			if err != nil {
 				metrics.RecordBenchmarkRuntimeError(r.ctx, r.Name())
 				r.logger.Error(
 					"local runtime benchmark launch failed",
