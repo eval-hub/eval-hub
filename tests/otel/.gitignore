@@ -1,2 +1,5 @@
-pours/
+pours/*
+!pours/deployment/
+pours/deployment/*
 !pours/deployment/compose.yaml
+.auth-mode

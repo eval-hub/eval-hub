@@ -360,3 +360,140 @@ func envValue(env []corev1.EnvVar, name string) string {
 	}
 	return ""
 }
+
+func hasEnvVar(env []corev1.EnvVar, name string) bool {
+	for _, e := range env {
+		if e.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func TestBuildEnvVarsInjectsOTELEndpointWhenEnabled(t *testing.T) {
+	serviceConfig := &config.Config{
+		OTEL: &config.OTELConfig{
+			Enabled:          true,
+			ExporterEndpoint: "otel-collector.monitoring:4317",
+			ExporterInsecure: true,
+		},
+	}
+	jc := &jobConfig{
+		defaultEnv: []api.EnvVar{},
+	}
+	envVars := buildEnvVars(jc, serviceConfig)
+	got := envValue(envVars, envOTELExporterEndpointName)
+	want := "http://otel-collector.monitoring:4317"
+	if got != want {
+		t.Fatalf("OTEL_EXPORTER_OTLP_ENDPOINT = %q, want %q", got, want)
+	}
+	gotSvc := envValue(envVars, envOTELServiceNameName)
+	if gotSvc != "evalhub-adapter" {
+		t.Fatalf("OTEL_SERVICE_NAME = %q, want %q", gotSvc, "evalhub-adapter")
+	}
+}
+
+func TestBuildEnvVarsOTELSecureEndpoint(t *testing.T) {
+	serviceConfig := &config.Config{
+		OTEL: &config.OTELConfig{
+			Enabled:          true,
+			ExporterEndpoint: "otel-collector.monitoring:4317",
+			ExporterInsecure: false,
+		},
+	}
+	jc := &jobConfig{defaultEnv: []api.EnvVar{}}
+	envVars := buildEnvVars(jc, serviceConfig)
+	got := envValue(envVars, envOTELExporterEndpointName)
+	want := "https://otel-collector.monitoring:4317"
+	if got != want {
+		t.Fatalf("OTEL_EXPORTER_OTLP_ENDPOINT = %q, want %q", got, want)
+	}
+}
+
+func TestBuildEnvVarsOTELEndpointPreservesScheme(t *testing.T) {
+	tests := []struct {
+		name     string
+		endpoint string
+	}{
+		{"lowercase http", "http://custom-collector:4317"},
+		{"lowercase https", "https://custom-collector:4317"},
+		{"uppercase HTTP", "HTTP://custom-collector:4317"},
+		{"mixed case Http", "Http://custom-collector:4317"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			serviceConfig := &config.Config{
+				OTEL: &config.OTELConfig{
+					Enabled:          true,
+					ExporterEndpoint: tc.endpoint,
+					ExporterInsecure: false,
+				},
+			}
+			jc := &jobConfig{defaultEnv: []api.EnvVar{}}
+			envVars := buildEnvVars(jc, serviceConfig)
+			got := envValue(envVars, envOTELExporterEndpointName)
+			if got != tc.endpoint {
+				t.Fatalf("OTEL_EXPORTER_OTLP_ENDPOINT = %q, want %q preserved as-is", got, tc.endpoint)
+			}
+		})
+	}
+}
+
+func TestBuildEnvVarsNoOTELWhenDisabled(t *testing.T) {
+	serviceConfig := &config.Config{
+		OTEL: &config.OTELConfig{
+			Enabled:          false,
+			ExporterEndpoint: "otel-collector:4317",
+		},
+	}
+	jc := &jobConfig{defaultEnv: []api.EnvVar{}}
+	envVars := buildEnvVars(jc, serviceConfig)
+	if hasEnvVar(envVars, envOTELExporterEndpointName) {
+		t.Fatalf("OTEL_EXPORTER_OTLP_ENDPOINT should not be set when OTEL is disabled")
+	}
+	if hasEnvVar(envVars, envOTELServiceNameName) {
+		t.Fatalf("OTEL_SERVICE_NAME should not be set when OTEL is disabled")
+	}
+}
+
+func TestBuildEnvVarsNoOTELWhenNoEndpoint(t *testing.T) {
+	serviceConfig := &config.Config{
+		OTEL: &config.OTELConfig{
+			Enabled:          true,
+			ExporterEndpoint: "",
+		},
+	}
+	jc := &jobConfig{defaultEnv: []api.EnvVar{}}
+	envVars := buildEnvVars(jc, serviceConfig)
+	if hasEnvVar(envVars, envOTELExporterEndpointName) {
+		t.Fatalf("OTEL_EXPORTER_OTLP_ENDPOINT should not be set when endpoint is empty")
+	}
+}
+
+func TestBuildEnvVarsNoOTELWhenNilConfig(t *testing.T) {
+	jc := &jobConfig{defaultEnv: []api.EnvVar{}}
+	envVars := buildEnvVars(jc, nil)
+	if hasEnvVar(envVars, envOTELExporterEndpointName) {
+		t.Fatalf("OTEL_EXPORTER_OTLP_ENDPOINT should not be set when serviceConfig is nil")
+	}
+}
+
+func TestBuildEnvVarsProviderOTELOverrideRespected(t *testing.T) {
+	serviceConfig := &config.Config{
+		OTEL: &config.OTELConfig{
+			Enabled:          true,
+			ExporterEndpoint: "server-collector:4317",
+			ExporterInsecure: true,
+		},
+	}
+	jc := &jobConfig{
+		defaultEnv: []api.EnvVar{
+			{Name: "OTEL_EXPORTER_OTLP_ENDPOINT", Value: "provider-collector:4317"},
+		},
+	}
+	envVars := buildEnvVars(jc, serviceConfig)
+	got := envValue(envVars, envOTELExporterEndpointName)
+	if got != "provider-collector:4317" {
+		t.Fatalf("OTEL_EXPORTER_OTLP_ENDPOINT = %q, want provider override %q", got, "provider-collector:4317")
+	}
+}

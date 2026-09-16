@@ -113,7 +113,49 @@ func buildEnvVars(jc *jobConfig, serviceConfig *config.Config) []corev1.EnvVar {
 			Value: item.Value,
 		})
 	}
+
+	// Inject OTEL endpoint so the adapter SDK can send traces and logs directly
+	// to the collector. The adapter reads standard OTEL_EXPORTER_OTLP_ENDPOINT
+	// and OTEL_SERVICE_NAME env vars; without them its configure_telemetry()
+	// is a no-op and no telemetry is exported from the adapter container.
+	if otelEndpoint := otelEndpointForAdapter(serviceConfig); otelEndpoint != "" {
+		if !seen[envOTELExporterEndpointName] {
+			env = append(env, corev1.EnvVar{
+				Name:  envOTELExporterEndpointName,
+				Value: otelEndpoint,
+			})
+			seen[envOTELExporterEndpointName] = true
+		}
+		if !seen[envOTELServiceNameName] {
+			env = append(env, corev1.EnvVar{
+				Name:  envOTELServiceNameName,
+				Value: "evalhub-adapter",
+			})
+			seen[envOTELServiceNameName] = true
+		}
+	}
+
 	return env
+}
+
+// otelEndpointForAdapter returns the OTLP endpoint URL the adapter SDK should
+// use, or an empty string when OTEL is not configured. The scheme is derived
+// from ExporterInsecure so the SDK can infer gRPC channel security.
+func otelEndpointForAdapter(serviceConfig *config.Config) string {
+	if serviceConfig == nil || serviceConfig.OTEL == nil || !serviceConfig.OTEL.Enabled {
+		return ""
+	}
+	ep := strings.TrimSpace(serviceConfig.OTEL.ExporterEndpoint)
+	if ep == "" {
+		return ""
+	}
+	if strings.HasPrefix(strings.ToLower(ep), "http://") || strings.HasPrefix(strings.ToLower(ep), "https://") {
+		return ep
+	}
+	if serviceConfig.OTEL.ExporterInsecure {
+		return "http://" + ep
+	}
+	return "https://" + ep
 }
 
 func buildResources(cfg *jobConfig) (corev1.ResourceRequirements, error) {
