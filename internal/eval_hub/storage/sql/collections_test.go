@@ -249,7 +249,7 @@ func TestApplyPatches(t *testing.T) {
 	})
 }
 
-func TestCollectionState_SetAndIncrement(t *testing.T) {
+func TestCollectionStatus_SetAndIncrement(t *testing.T) {
 	for _, driver := range []string{"sqlite"} {
 		driver := driver
 		t.Run(driver, func(t *testing.T) {
@@ -275,20 +275,20 @@ func TestCollectionState_SetAndIncrement(t *testing.T) {
 
 			scoped := store.WithTenant("t1").WithOwner("user1")
 
-			// UpdateCollectionState
-			state := &api.CollectionState{RunCount: 3}
-			updated, err := scoped.UpdateCollectionState("coll-state-test", state)
+			// UpdateCollectionStatus
+			state := &api.CollectionStatus{RunCount: 3}
+			updated, err := scoped.UpdateCollectionStatus("coll-state-test", state)
 			if err != nil {
-				t.Fatalf("UpdateCollectionState: %v", err)
+				t.Fatalf("UpdateCollectionStatus: %v", err)
 			}
-			if updated.State == nil {
-				t.Fatal("expected State to be set")
+			if updated.Status == nil {
+				t.Fatal("expected Status to be set")
 			}
-			if updated.State.RunCount != 3 {
-				t.Errorf("RunCount: got %d, want 3", updated.State.RunCount)
+			if updated.Status.RunCount != 3 {
+				t.Errorf("RunCount: got %d, want 3", updated.Status.RunCount)
 			}
 
-			// UpdateCollection must preserve State
+			// UpdateCollection must preserve Status
 			config := coll.CollectionConfig
 			v1, err := scoped.UpdateCollection("coll-state-test", &config)
 			if err != nil {
@@ -305,8 +305,8 @@ func TestCollectionState_SetAndIncrement(t *testing.T) {
 				t.Errorf("updated_at should be >= after second update: v1=%v v2=%v", v1.Resource.UpdatedAt, v2.Resource.UpdatedAt)
 			}
 
-			// State should be preserved through UpdateCollection
-			if v2.State == nil || v2.State.RunCount != 3 {
+			// Status should be preserved through UpdateCollection
+			if v2.Status == nil || v2.Status.RunCount != 3 {
 				t.Error("State.RunCount should be preserved through UpdateCollection")
 			}
 		})

@@ -134,7 +134,7 @@ func scanResource[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 				DerivedFrom:      storedEntity.DerivedFrom,
 				PinnedOrder:      storedEntity.PinnedOrder,
 				CollectionConfig: storedEntity.CollectionConfig,
-				State:            storedEntity.State,
+				Status:           storedEntity.Status,
 			}
 			t := any(*resource).(T)
 			return &t, nil

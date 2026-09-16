@@ -16,11 +16,11 @@ allOf:
         type: integer
         minimum: 0
         description: >
-          Tenant-controlled pin ordering. 0 = not pinned. Positive integers give
-          the tenant's ordering (ascending). Settable by the collection owner
-          via PATCH /collections/{id}.
-      state:
-        $ref: ./CollectionState.yaml
+          Tenant-controlled ordering priority for this collection within the tenant's personal listing.
+          0 = not ordered (default). Positive integers specify relative priority — lower values
+          appear first (1 before 2). Settable by the collection owner via PATCH /collections/{id}.
+      status:
+        $ref: ./CollectionStatus.yaml
         description: >
           Server-managed mutable runtime state for custom (tenant-scoped) collections.
           Present only on custom collections; absent on system collections. Never user-supplied.

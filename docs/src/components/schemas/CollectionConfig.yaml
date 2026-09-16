@@ -33,12 +33,11 @@ properties:
   curation_order:
     type: integer
     description: >
-      Controls whether and where this collection appears on the Curated Collections
-      landing page. 0 (or absent) means not curated. Positive integers give the
-      tile position (lower value = higher on page; 1 appears before 2).
-      Set by system operators in YAML only; the server rejects writes from
-      tenant API consumers. System collections are sorted by curation_order
-      ascending, curated tiles before uncurated ones.
+      Controls the listing priority of this collection within curated collection results.
+      0 (or absent) = not featured in curated listings. Positive integers specify
+      priority — lower values appear first (1 before 2).
+      Set by system operators via YAML configuration only; the server rejects writes
+      from tenant API consumers.
   domains:
     type: array
     items:

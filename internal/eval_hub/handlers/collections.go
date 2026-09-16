@@ -657,7 +657,7 @@ func (h *Handlers) HandleCloneCollection(ctx *executioncontext.ExecutionContext,
 				},
 				DerivedFrom:      sourceID,
 				CollectionConfig: newConfig,
-				State:            &api.CollectionState{},
+				Status:           &api.CollectionStatus{},
 			}
 
 			EnrichCollectionFromProviders(scoped, newCollection)

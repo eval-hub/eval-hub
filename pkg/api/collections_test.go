@@ -139,7 +139,7 @@ func TestCollectionConfigNewFieldsAreOptional(t *testing.T) {
 	}
 }
 
-func TestCollectionStateFieldsSerialization(t *testing.T) {
+func TestCollectionStatusFieldsSerialization(t *testing.T) {
 	resource := api.CollectionResource{
 		Resource:    api.Resource{ID: "abc123"},
 		DerivedFrom: "source-collection-id",
@@ -151,7 +151,7 @@ func TestCollectionStateFieldsSerialization(t *testing.T) {
 			},
 		},
 		PinnedOrder: 2,
-		State: &api.CollectionState{
+		Status: &api.CollectionStatus{
 			RunCount: 5,
 		},
 	}
@@ -169,18 +169,18 @@ func TestCollectionStateFieldsSerialization(t *testing.T) {
 	if rt.DerivedFrom != "source-collection-id" {
 		t.Errorf("DerivedFrom: got %q, want %q", rt.DerivedFrom, "source-collection-id")
 	}
-	if rt.State == nil {
+	if rt.Status == nil {
 		t.Fatal("State should not be nil after round-trip")
 	}
-	if rt.State.RunCount != 5 {
-		t.Errorf("RunCount: got %d, want 5", rt.State.RunCount)
+	if rt.Status.RunCount != 5 {
+		t.Errorf("RunCount: got %d, want 5", rt.Status.RunCount)
 	}
 	if rt.PinnedOrder != 2 {
 		t.Errorf("PinnedOrder: got %d, want 2", rt.PinnedOrder)
 	}
 }
 
-func TestCollectionStateAbsentForSystemCollections(t *testing.T) {
+func TestCollectionStatusAbsentForSystemCollections(t *testing.T) {
 	resource := api.CollectionResource{
 		Resource: api.Resource{ID: "sys-col"},
 		CollectionConfig: api.CollectionConfig{
@@ -197,7 +197,7 @@ func TestCollectionStateAbsentForSystemCollections(t *testing.T) {
 		t.Fatalf("marshal failed: %v", err)
 	}
 
-	if strings.Contains(string(out), `"state"`) {
+	if strings.Contains(string(out), `"status"`) {
 		t.Error("state must be absent from system collection JSON when nil")
 	}
 }

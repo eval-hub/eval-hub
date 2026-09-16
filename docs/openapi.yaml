@@ -1980,7 +1980,7 @@ paths:
                       owner: user@example.com
                     derived_from: e5f6a7b8-9012-3456-cdef-0123456789ab
                     pinned_order: 0
-                    state:
+                    status:
                       run_count: 0
                     name: my-rag-evaluation
                     category: document_understanding
@@ -3417,10 +3417,10 @@ components:
       required:
         - op
         - path
-    CollectionState:
+    CollectionStatus:
       type: object
       description: |
-        Server-managed mutable runtime state for custom (tenant-scoped) collections. Never user-supplied and never written to YAML configuration. Present only on custom (tenant-scoped) collections; absent on system collections.
+        Server-managed mutable runtime status counters for custom (tenant-scoped) collections. Never user-supplied and never written to YAML configuration. Present only on custom (tenant-scoped) collections; absent on system collections.
       properties:
         run_count:
           type: integer
@@ -3533,7 +3533,7 @@ components:
         curation_order:
           type: integer
           description: |
-            Controls whether and where this collection appears on the Curated Collections landing page. 0 (or absent) means not curated. Positive integers give the tile position (lower value = higher on page; 1 appears before 2). Set by system operators in YAML only; the server rejects writes from tenant API consumers. System collections are sorted by curation_order ascending, curated tiles before uncurated ones.
+            Controls the listing priority of this collection within curated collection results. 0 (or absent) = not featured in curated listings. Positive integers specify priority — lower values appear first (1 before 2). Set by system operators via YAML configuration only; the server rejects writes from tenant API consumers.
         domains:
           type: array
           items:
@@ -3588,9 +3588,9 @@ components:
               type: integer
               minimum: 0
               description: |
-                Tenant-controlled pin ordering. 0 = not pinned. Positive integers give the tenant's ordering (ascending). Settable by the collection owner via PATCH /collections/{id}.
-            state:
-              $ref: '#/components/schemas/CollectionState'
+                Tenant-controlled ordering priority for this collection within the tenant's personal listing. 0 = not ordered (default). Positive integers specify relative priority — lower values appear first (1 before 2). Settable by the collection owner via PATCH /collections/{id}.
+            status:
+              $ref: '#/components/schemas/CollectionStatus'
               description: |
                 Server-managed mutable runtime state for custom (tenant-scoped) collections. Present only on custom collections; absent on system collections. Never user-supplied.
         - $ref: '#/components/schemas/CollectionConfig'
@@ -3664,9 +3664,8 @@ components:
           additionalProperties: true
           description: Override custom key-value data.
         agent:
-          type: object
-          description: |
-            Override agent metadata for AI agent consumption.
+          $ref: '#/components/schemas/CollectionAgentMetadata'
+          description: Override agent metadata for AI agent consumption.
   examples:
     NotFoundError:
       summary: Not found error with status code 404

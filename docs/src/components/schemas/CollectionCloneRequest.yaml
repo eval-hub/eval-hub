@@ -58,6 +58,5 @@ properties:
     additionalProperties: true
     description: Override custom key-value data.
   agent:
-    type: object
-    description: >
-      Override agent metadata for AI agent consumption.
+    $ref: ./CollectionAgentMetadata.yaml
+    description: Override agent metadata for AI agent consumption.

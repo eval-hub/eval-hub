@@ -3032,7 +3032,7 @@
                       },
                       "derived_from": "e5f6a7b8-9012-3456-cdef-0123456789ab",
                       "pinned_order": 0,
-                      "state": {
+                      "status": {
                         "run_count": 0
                       },
                       "name": "my-rag-evaluation",
@@ -4876,9 +4876,9 @@
           "path"
         ]
       },
-      "CollectionState": {
+      "CollectionStatus": {
         "type": "object",
-        "description": "Server-managed mutable runtime state for custom (tenant-scoped) collections. Never user-supplied and never written to YAML configuration. Present only on custom (tenant-scoped) collections; absent on system collections.\n",
+        "description": "Server-managed mutable runtime status counters for custom (tenant-scoped) collections. Never user-supplied and never written to YAML configuration. Present only on custom (tenant-scoped) collections; absent on system collections.\n",
         "properties": {
           "run_count": {
             "type": "integer",
@@ -5020,7 +5020,7 @@
           },
           "curation_order": {
             "type": "integer",
-            "description": "Controls whether and where this collection appears on the Curated Collections landing page. 0 (or absent) means not curated. Positive integers give the tile position (lower value = higher on page; 1 appears before 2). Set by system operators in YAML only; the server rejects writes from tenant API consumers. System collections are sorted by curation_order ascending, curated tiles before uncurated ones.\n"
+            "description": "Controls the listing priority of this collection within curated collection results. 0 (or absent) = not featured in curated listings. Positive integers specify priority — lower values appear first (1 before 2). Set by system operators via YAML configuration only; the server rejects writes from tenant API consumers.\n"
           },
           "domains": {
             "type": "array",
@@ -5086,10 +5086,10 @@
               "pinned_order": {
                 "type": "integer",
                 "minimum": 0,
-                "description": "Tenant-controlled pin ordering. 0 = not pinned. Positive integers give the tenant's ordering (ascending). Settable by the collection owner via PATCH /collections/{id}.\n"
+                "description": "Tenant-controlled ordering priority for this collection within the tenant's personal listing. 0 = not ordered (default). Positive integers specify relative priority — lower values appear first (1 before 2). Settable by the collection owner via PATCH /collections/{id}.\n"
               },
-              "state": {
-                "$ref": "#/components/schemas/CollectionState",
+              "status": {
+                "$ref": "#/components/schemas/CollectionStatus",
                 "description": "Server-managed mutable runtime state for custom (tenant-scoped) collections. Present only on custom collections; absent on system collections. Never user-supplied.\n"
               }
             }
@@ -5196,8 +5196,8 @@
             "description": "Override custom key-value data."
           },
           "agent": {
-            "type": "object",
-            "description": "Override agent metadata for AI agent consumption.\n"
+            "$ref": "#/components/schemas/CollectionAgentMetadata",
+            "description": "Override agent metadata for AI agent consumption."
           }
         }
       }

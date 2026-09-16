@@ -48,9 +48,9 @@ func (s *sqlStorage) createCollectionTxn(txn *sql.Tx, collection *api.Collection
 // Backward compatibility: old entity JSON missing these fields deserialises with zero values.
 type collectionStoredEntity struct {
 	api.CollectionConfig
-	DerivedFrom string               `json:"derived_from,omitempty"`
-	PinnedOrder int                  `json:"pinned_order,omitempty"`
-	State       *api.CollectionState `json:"state,omitempty"`
+	DerivedFrom string                `json:"derived_from,omitempty"`
+	PinnedOrder int                   `json:"pinned_order,omitempty"`
+	Status      *api.CollectionStatus `json:"status,omitempty"`
 }
 
 func (s *sqlStorage) createCollectionEntity(collection *api.CollectionResource) ([]byte, error) {
@@ -58,7 +58,7 @@ func (s *sqlStorage) createCollectionEntity(collection *api.CollectionResource) 
 		CollectionConfig: collection.CollectionConfig,
 		DerivedFrom:      collection.DerivedFrom,
 		PinnedOrder:      collection.PinnedOrder,
-		State:            collection.State,
+		Status:           collection.Status,
 	}
 	collectionJSON, err := json.Marshal(entity)
 	if err != nil {
@@ -90,7 +90,7 @@ func (s *sqlStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 		return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "collection", "ResourceId", id)
 	}
 
-	// Unmarshal the entity JSON into the stored entity (includes DerivedFrom and State)
+	// Unmarshal the entity JSON into the stored entity (includes DerivedFrom and Status)
 	var entity collectionStoredEntity
 	err = json.Unmarshal([]byte(query.EntityJSON), &entity)
 	if err != nil {
@@ -103,7 +103,7 @@ func (s *sqlStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.Co
 		DerivedFrom:      entity.DerivedFrom,
 		PinnedOrder:      entity.PinnedOrder,
 		CollectionConfig: entity.CollectionConfig,
-		State:            entity.State,
+		Status:           entity.Status,
 	}
 
 	return &collectionResource, nil
@@ -187,7 +187,7 @@ func (s *sqlStorage) DeleteCollection(id string) error {
 	})
 }
 
-func (s *sqlStorage) UpdateCollectionState(id string, state *api.CollectionState) (*api.CollectionResource, error) {
+func (s *sqlStorage) UpdateCollectionStatus(id string, state *api.CollectionStatus) (*api.CollectionResource, error) {
 	var updated *api.CollectionResource
 
 	err := s.withTransaction("update collection state", id, func(txn *sql.Tx) error {
@@ -195,7 +195,7 @@ func (s *sqlStorage) UpdateCollectionState(id string, state *api.CollectionState
 		if err != nil {
 			return err
 		}
-		coll.State = state
+		coll.Status = state
 		if err = s.updateCollectionTransactional(txn, id, coll); err != nil {
 			return err
 		}
@@ -230,7 +230,7 @@ func (s *sqlStorage) PatchCollection(id string, patches *api.Patch) (*api.Collec
 		if err != nil {
 			return err
 		}
-		// Unmarshal back into the stored entity to preserve DerivedFrom and State
+		// Unmarshal back into the stored entity to preserve DerivedFrom and Status
 		var patchedEntity collectionStoredEntity
 		err = json.Unmarshal([]byte(patchedCollectionJSON), &patchedEntity)
 		if err != nil {
@@ -244,7 +244,7 @@ func (s *sqlStorage) PatchCollection(id string, patches *api.Patch) (*api.Collec
 			DerivedFrom:      patchedEntity.DerivedFrom,
 			PinnedOrder:      patchedEntity.PinnedOrder,
 			CollectionConfig: patchedEntity.CollectionConfig,
-			State:            patchedEntity.State,
+			Status:           patchedEntity.Status,
 		}
 		err = s.updateCollectionTransactional(txn, id, &result)
 		if err != nil {

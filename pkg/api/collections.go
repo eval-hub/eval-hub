@@ -76,10 +76,10 @@ type CollectionConfig struct {
 	EvaluationTargets []string `mapstructure:"evaluation_targets" json:"evaluation_targets,omitempty"`
 }
 
-// CollectionState holds server-managed mutable runtime state for custom (tenant-scoped) collections.
+// CollectionStatus holds server-managed mutable runtime counters for custom (tenant-scoped) collections.
 // It is never user-supplied and never written to YAML configuration.
 // Absent on system collections.
-type CollectionState struct {
+type CollectionStatus struct {
 	// RunCount is the number of EvaluationJobs created from this collection by its owning tenant.
 	// Per-tenant counter, incremented at job creation.
 	RunCount int `json:"run_count,omitempty"`
@@ -94,16 +94,16 @@ type CollectionResource struct {
 	// Absent when the collection was not created via clone.
 	DerivedFrom string `json:"derived_from,omitempty"`
 
-	// PinnedOrder is the tenant's personal pin ordering for this collection.
-	// 0 = not pinned. Positive integers give explicit ordering (ascending).
-	// Settable by the collection owner via PATCH /collections/{id}.
+	// PinnedOrder controls the ordering priority of this collection within the tenant's personal
+	// collection listing. 0 = not ordered (default). Positive integers specify relative priority —
+	// lower values appear first (1 before 2). Settable by the collection owner via PATCH /collections/{id}.
 	PinnedOrder int `json:"pinned_order,omitempty"`
 
 	CollectionConfig
 
-	// State holds server-managed mutable runtime state. Present only on custom (tenant-scoped)
+	// Status holds server-managed mutable runtime counters. Present only on custom (tenant-scoped)
 	// collections; nil for system collections.
-	State *CollectionState `json:"state,omitempty"`
+	Status *CollectionStatus `json:"status,omitempty"`
 }
 
 // ApplyOverrides returns a new CollectionConfig that is a copy of c with any

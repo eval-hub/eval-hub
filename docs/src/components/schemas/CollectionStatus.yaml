@@ -1,6 +1,6 @@
 type: object
 description: >
-  Server-managed mutable runtime state for custom (tenant-scoped) collections.
+  Server-managed mutable runtime status counters for custom (tenant-scoped) collections.
   Never user-supplied and never written to YAML configuration.
   Present only on custom (tenant-scoped) collections; absent on system collections.
 properties:

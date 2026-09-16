@@ -87,7 +87,7 @@ func (f *fakeStorage) PatchCollection(_ string, _ *api.Patch) (*api.CollectionRe
 	return nil, nil
 }
 func (f *fakeStorage) DeleteCollection(_ string) error { return nil }
-func (f *fakeStorage) UpdateCollectionState(_ string, _ *api.CollectionState) (*api.CollectionResource, error) {
+func (f *fakeStorage) UpdateCollectionStatus(_ string, _ *api.CollectionStatus) (*api.CollectionResource, error) {
 	return nil, nil
 }
 func (f *fakeStorage) CreateProvider(_ *api.ProviderResource) error {

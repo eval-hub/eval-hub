@@ -52,7 +52,7 @@ post:
                   owner: "user@example.com"
                 derived_from: "e5f6a7b8-9012-3456-cdef-0123456789ab"
                 pinned_order: 0
-                state:
+                status:
                   run_count: 0
                 name: "my-rag-evaluation"
                 category: "document_understanding"

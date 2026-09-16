@@ -50,7 +50,7 @@ func (noopStorage) PatchCollection(_ string, _ *api.Patch) (*api.CollectionResou
 	return nil, nil
 }
 func (noopStorage) DeleteCollection(_ string) error { return nil }
-func (noopStorage) UpdateCollectionState(_ string, _ *api.CollectionState) (*api.CollectionResource, error) {
+func (noopStorage) UpdateCollectionStatus(_ string, _ *api.CollectionStatus) (*api.CollectionResource, error) {
 	return nil, nil
 }
 func (noopStorage) CreateProvider(_ *api.ProviderResource) error { return nil }
