@@ -159,24 +159,24 @@ func TestClassifyHFError(t *testing.T) {
 		t.Fatalf("expected gated message, got %v", gatedOnly)
 	}
 
-	wantMissingOrPrivate := "repository SobhaCh/invalid-db not found or is private; provide secret_ref with a Hugging Face token if the dataset is private or gated"
+	wantMissingOrPrivate := "repository eval-hub-test/invalid-db not found or is private; provide secret_ref with a Hugging Face token if the dataset is private or gated"
 
-	notFound := classifyHFError("SobhaCh/invalid-db", false, errors.New("404 Repository Not Found"))
+	notFound := classifyHFError("eval-hub-test/invalid-db", false, errors.New("404 Repository Not Found"))
 	if notFound.Error() != wantMissingOrPrivate {
 		t.Fatalf("expected common missing/private message for 404, got %v", notFound)
 	}
 
 	// huggingface_hub wraps missing/private repos as 401 + "Repository Not Found".
-	hfMissing := classifyHFError("SobhaCh/invalid-db", false, errors.New(
-		"401 Client Error. (Request ID: Root=1-abc)\n\nRepository Not Found for url: https://huggingface.co/api/datasets/SobhaCh/invalid-db.\nPlease make sure you specified the correct `repo_id` and `repo_type`.\nIf you are trying to access a private or gated repo, make sure you are authenticated.",
+	hfMissing := classifyHFError("eval-hub-test/invalid-db", false, errors.New(
+		"401 Client Error. (Request ID: Root=1-abc)\n\nRepository Not Found for url: https://huggingface.co/api/datasets/eval-hub-test/invalid-db.\nPlease make sure you specified the correct `repo_id` and `repo_type`.\nIf you are trying to access a private or gated repo, make sure you are authenticated.",
 	))
 	if hfMissing.Error() != wantMissingOrPrivate {
 		t.Fatalf("expected common missing/private message, got %v", hfMissing)
 	}
 
 	// go-huggingface returns only 401 + "Invalid username or password" for missing repos.
-	goHFMissing := classifyHFError("SobhaCh/invalid-db", false, errors.New(
-		`failed to download repository info: while downloading "https://huggingface.co/api/datasets/SobhaCh/invalid-db/revision/main?blobs=true": bad status code 401: Invalid username or password.`,
+	goHFMissing := classifyHFError("eval-hub-test/invalid-db", false, errors.New(
+		`failed to download repository info: while downloading "https://huggingface.co/api/datasets/eval-hub-test/invalid-db/revision/main?blobs=true": bad status code 401: Invalid username or password.`,
 	))
 	if goHFMissing.Error() != wantMissingOrPrivate {
 		t.Fatalf("expected common missing/private message for go-huggingface 401, got %v", goHFMissing)
