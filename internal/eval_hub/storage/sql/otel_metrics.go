@@ -88,13 +88,16 @@ func registerDBClientSemconvMetrics(pool *sql.DB, sqlConfig *shared.SQLDatabaseC
 	if databaseName := sqlConfig.GetDatabaseName(); databaseName != "" {
 		baseAttrs = append(baseAttrs, semconv.DBNamespace(databaseName))
 	}
+	// Snapshot at registration time; database/sql does not expose the
+	// configured max-idle as a live stat, so if SetMaxIdleConns is called
+	// after storage init this value will be stale.
 	idleMax := int64(effectiveMaxIdleConns(sqlConfig))
+
+	usedAttrs := append(append([]attribute.KeyValue{}, baseAttrs...), semconv.DBClientConnectionStateUsed)
+	idleAttrs := append(append([]attribute.KeyValue{}, baseAttrs...), semconv.DBClientConnectionStateIdle)
 
 	_, err = meter.RegisterCallback(func(_ context.Context, o metric.Observer) error {
 		stats := pool.Stats()
-
-		usedAttrs := append(append([]attribute.KeyValue{}, baseAttrs...), semconv.DBClientConnectionStateUsed)
-		idleAttrs := append(append([]attribute.KeyValue{}, baseAttrs...), semconv.DBClientConnectionStateIdle)
 
 		o.ObserveInt64(connCount, int64(stats.InUse), metric.WithAttributes(usedAttrs...))
 		o.ObserveInt64(connCount, int64(stats.Idle), metric.WithAttributes(idleAttrs...))
