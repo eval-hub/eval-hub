@@ -67,7 +67,40 @@ func TestUnmarshal_TestDataRefMutualExclusionValidationError(t *testing.T) {
 		t.Fatalf("expected ServiceError, got %T: %v", err, err)
 	}
 	got := svcErr.Error()
-	if !strings.Contains(got, "test_data_ref") {
+	if !strings.Contains(got, "test_data_ref: exactly one of s3, pvc, git, or hf must be set") {
+		t.Fatalf("error = %q", got)
+	}
+}
+
+func TestUnmarshal_TestDataRefHFMutualExclusionValidationError(t *testing.T) {
+	validate := testhelpers.NewValidator(t)
+	logger := logging.FallbackLogger()
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user", "tenant")
+
+	body := []byte(`{
+		"name":"test-job",
+		"model":{"name":"m","url":"http://example.com"},
+		"benchmarks":[{
+			"id":"bench-1",
+			"provider_id":"provider-1",
+			"test_data_ref":{
+				"hf":{"repo_id":"cais/mmlu"},
+				"s3":{"bucket":"b","key":"k","secret_ref":"s"}
+			}
+		}]
+	}`)
+	cfg := &api.EvaluationJobConfig{}
+
+	err := Unmarshal(validate, ctx, body, cfg)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	var svcErr *serviceerrors.ServiceError
+	if !errors.As(err, &svcErr) {
+		t.Fatalf("expected ServiceError, got %T: %v", err, err)
+	}
+	got := svcErr.Error()
+	if !strings.Contains(got, "test_data_ref: exactly one of s3, pvc, git, or hf must be set") {
 		t.Fatalf("error = %q", got)
 	}
 }
@@ -97,7 +130,7 @@ func TestUnmarshal_TestDataRefRequiredValidationError(t *testing.T) {
 		t.Fatalf("expected ServiceError, got %T: %v", err, err)
 	}
 	got := svcErr.Error()
-	if !strings.Contains(got, "test_data_ref") {
+	if !strings.Contains(got, "test_data_ref: one of s3, pvc, git, or hf must be set") {
 		t.Fatalf("error = %q", got)
 	}
 }
