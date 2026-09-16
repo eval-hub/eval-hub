@@ -1,8 +1,24 @@
 package features
 
 import (
+	"os"
 	"testing"
 )
+
+func unsetEnvForTest(t *testing.T, key string) {
+	t.Helper()
+	value, wasSet := os.LookupEnv(key)
+	if err := os.Unsetenv(key); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if wasSet {
+			_ = os.Setenv(key, value)
+		} else {
+			_ = os.Unsetenv(key)
+		}
+	})
+}
 
 func TestResolveEnvSubstitutionValue(t *testing.T) {
 	const shaKey = "TEST_DATA_HF_SHA_REVISION"
@@ -18,6 +34,7 @@ func TestResolveEnvSubstitutionValue(t *testing.T) {
 	})
 
 	t.Run("falls back to second env when first is unset", func(t *testing.T) {
+		unsetEnvForTest(t, shaKey)
 		t.Setenv(revKey, "develop")
 		got := resolveEnvSubstitutionValue(shaKey+","+revKey, "main", true)
 		if got != "develop" {
@@ -26,6 +43,8 @@ func TestResolveEnvSubstitutionValue(t *testing.T) {
 	})
 
 	t.Run("falls back to literal default when env chain unset", func(t *testing.T) {
+		unsetEnvForTest(t, shaKey)
+		unsetEnvForTest(t, revKey)
 		got := resolveEnvSubstitutionValue(shaKey+","+revKey, "main", true)
 		if got != "main" {
 			t.Fatalf("got %q, want main", got)

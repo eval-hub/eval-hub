@@ -1535,8 +1535,6 @@ Feature: Evaluation Jobs
     And the response should match the value "[0-9a-fA-F]{7,40}" at path "$.benchmarks[0].test_data_ref.resolved_sha"
     And the response should match the value "[0-9a-fA-F]{7,40}" at path "$.benchmarks[1].test_data_ref.resolved_sha"
     And the response should contain the value "/test_data/tokenizer" at path "$.benchmarks[0].parameters.tokenizer"
-    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
-    Then the response code should be 204
 
   @hf
   @negative
@@ -1608,8 +1606,6 @@ Feature: Evaluation Jobs
     And the response should contain the value "failed" at path "$.status.state"
     And the response should contain the value "failed" at path "$.status.benchmarks[?(@.id == &quot;arc_easy&quot;)].status"
     And the response should contain the value "failed" at path "$.status.benchmarks[?(@.id == &quot;truthfulqa_mc1&quot;)].status"
-    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
-    Then the response code should be 204
 
   @hf
   @negative
@@ -1626,8 +1622,6 @@ Feature: Evaluation Jobs
     Then the response code should be 200
     And the response should contain the value "failed" at path "$.status.state"
     And the response should contain the value "failed" at path "$.status.benchmarks[0].status"
-    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
-    Then the response code should be 204
 
   @mlflow
   Scenario: Card generated for completed job with benchmarks
