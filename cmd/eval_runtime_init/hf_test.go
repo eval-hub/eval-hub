@@ -607,6 +607,44 @@ func TestClearDestDir_RemovesFilesAndDirectories(t *testing.T) {
 	}
 }
 
+func TestClearDestDirPreservesHFCache(t *testing.T) {
+	dir := t.TempDir()
+	cache := filepath.Join(dir, hfCacheDirName)
+	if err := os.MkdirAll(filepath.Join(cache, "snapshots"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "tokenizer"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "tokenizer", "config.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := clearDestDir(dir); err != nil {
+		t.Fatalf("clearDestDir: %v", err)
+	}
+	if _, err := os.Stat(cache); err != nil {
+		t.Fatal("expected .hf-cache preserved")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "tokenizer")); err == nil {
+		t.Fatal("expected staged files removed")
+	}
+}
+
+func TestEffectiveHFCacheDir_DefaultUnderTestData(t *testing.T) {
+	origDest, origOverride := destDir, hfCacheDir
+	destDir = "/test_data"
+	hfCacheDir = ""
+	defer func() {
+		destDir, hfCacheDir = origDest, origOverride
+	}()
+
+	got := effectiveHFCacheDir()
+	want := filepath.Join("/test_data", hfCacheDirName)
+	if got != want {
+		t.Fatalf("effectiveHFCacheDir() = %q, want %q", got, want)
+	}
+}
+
 func TestCopyHFRepoFile_MissingSource(t *testing.T) {
 	srcRoot, err := os.OpenRoot(t.TempDir())
 	if err != nil {

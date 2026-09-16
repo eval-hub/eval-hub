@@ -24,6 +24,13 @@ func mergeVolumesByName(slices ...[]corev1.Volume) []corev1.Volume {
 	return out
 }
 
+func testDataEmptyDirVolumeSource() *corev1.EmptyDirVolumeSource {
+	limit := resource.MustParse(defaultTestDataEmptyDirSizeLimit)
+	return &corev1.EmptyDirVolumeSource{
+		SizeLimit: &limit,
+	}
+}
+
 func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]corev1.Volume, []corev1.VolumeMount) {
 	volumes := []corev1.Volume{
 		{
@@ -392,7 +399,7 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 		volumes = append(volumes, corev1.Volume{
 			Name: testDataVolumeName,
 			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
+				EmptyDir: testDataEmptyDirVolumeSource(),
 			},
 		})
 		volumes = append(volumes, corev1.Volume{
@@ -436,7 +443,7 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			corev1.Volume{
 				Name: testDataVolumeName,
 				VolumeSource: corev1.VolumeSource{
-					EmptyDir: &corev1.EmptyDirVolumeSource{},
+					EmptyDir: testDataEmptyDirVolumeSource(),
 				},
 			},
 			corev1.Volume{
@@ -501,7 +508,7 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			corev1.Volume{
 				Name: testDataVolumeName,
 				VolumeSource: corev1.VolumeSource{
-					EmptyDir: &corev1.EmptyDirVolumeSource{},
+					EmptyDir: testDataEmptyDirVolumeSource(),
 				},
 			},
 			corev1.Volume{

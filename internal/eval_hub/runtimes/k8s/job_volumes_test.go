@@ -6,7 +6,20 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
+
+func assertTestDataEmptyDirSizeLimit(t *testing.T, volumes []corev1.Volume) {
+	t.Helper()
+	vol := findVolume(volumes, testDataVolumeName)
+	if vol == nil || vol.EmptyDir == nil || vol.EmptyDir.SizeLimit == nil {
+		t.Fatal("expected test-data emptyDir volume with sizeLimit")
+	}
+	want := resource.MustParse(defaultTestDataEmptyDirSizeLimit)
+	if vol.EmptyDir.SizeLimit.Cmp(want) != 0 {
+		t.Fatalf("test-data sizeLimit = %s, want %s", vol.EmptyDir.SizeLimit.String(), want.String())
+	}
+}
 
 func TestBuildJobSidecarMountsMLFlowToken(t *testing.T) {
 	cfg := &jobConfig{
@@ -366,6 +379,7 @@ func TestBuildJobWithS3TestData(t *testing.T) {
 	if !foundTestDataVolume || !foundSecretVolume {
 		t.Fatalf("expected test data and secret volumes to be present")
 	}
+	assertTestDataEmptyDirSizeLimit(t, job.Spec.Template.Spec.Volumes)
 
 	var foundTestDataMount bool
 	for _, m := range job.Spec.Template.Spec.Containers[0].VolumeMounts {
@@ -659,6 +673,7 @@ func TestBuildJobWithGitTestDataPublicRepo(t *testing.T) {
 	if findVolume(job.Spec.Template.Spec.Volumes, testDataVolumeName) == nil {
 		t.Fatal("expected test-data emptyDir volume")
 	}
+	assertTestDataEmptyDirSizeLimit(t, job.Spec.Template.Spec.Volumes)
 
 	var foundTestDataMount bool
 	for _, m := range job.Spec.Template.Spec.Containers[0].VolumeMounts {
@@ -902,6 +917,7 @@ func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
 	if !foundRevision {
 		t.Fatal("expected revision env var on HF init container")
 	}
+	assertTestDataEmptyDirSizeLimit(t, job.Spec.Template.Spec.Volumes)
 
 	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
 	if sidecar == nil {

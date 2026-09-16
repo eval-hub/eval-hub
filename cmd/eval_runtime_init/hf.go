@@ -16,18 +16,19 @@ import (
 )
 
 const (
-	envHFRepoID    = "TEST_DATA_HF_REPO_ID"
-	envHFRevision  = "TEST_DATA_HF_REVISION"
-	envHFSubPath   = "TEST_DATA_HF_SUBPATH"
-	envHFTimeout   = "TEST_DATA_HF_TIMEOUT"
-	hfTokenKey     = "token"
-	defaultHFCache = "/tmp/huggingface/hub"
+	envHFRepoID   = "TEST_DATA_HF_REPO_ID"
+	envHFRevision = "TEST_DATA_HF_REVISION"
+	envHFSubPath  = "TEST_DATA_HF_SUBPATH"
+	envHFTimeout  = "TEST_DATA_HF_TIMEOUT"
+	hfTokenKey    = "token"
+	// hfCacheDirName is the Hub cache directory under the test-data emptyDir volume.
+	hfCacheDirName = ".hf-cache"
 
 	terminationMessagePath = "/dev/termination-log"
 )
 
-// hfCacheDir is a package var so unit tests can isolate HF Hub cache under t.TempDir().
-var hfCacheDir = defaultHFCache
+// hfCacheDir overrides the Hub cache location when non-empty (unit tests only).
+var hfCacheDir string
 
 const (
 	maxTerminationMessageBytes = 4096
@@ -96,10 +97,22 @@ func resolveHFToken() (string, error) {
 	return token, nil
 }
 
+func effectiveHFCacheDir() string {
+	if strings.TrimSpace(hfCacheDir) != "" {
+		return hfCacheDir
+	}
+	return filepath.Join(destDir, hfCacheDirName)
+}
+
 func downloadHFRepo(ctx context.Context, repoID, revision, subPath, token string) (string, error) {
+	cachePath := effectiveHFCacheDir()
+	if err := os.MkdirAll(cachePath, 0o750); err != nil {
+		return "", fmt.Errorf("create hf cache dir: %w", err)
+	}
+
 	repo := hub.New(repoID).
 		WithType(hub.RepoTypeDataset).
-		WithCacheDir(hfCacheDir).
+		WithCacheDir(cachePath).
 		WithProgressBar(false)
 	repo.Verbosity = 0
 
@@ -179,6 +192,10 @@ func downloadHFRepo(ctx context.Context, repoID, revision, subPath, token string
 
 	if err := stageHFFiles(cacheDir, commitSHA, repoFiles, subPath, destDir); err != nil {
 		return "", fmt.Errorf("stage repository: %w", err)
+	}
+
+	if err := cleanupHFCache(); err != nil {
+		slog.Warn("failed to remove hf cache after staging", "error", err)
 	}
 
 	if !destHasData(destDir) {
@@ -417,6 +434,14 @@ func isHFGatedRepoError(lower string) bool {
 		(strings.Contains(lower, "gated") && !strings.Contains(lower, "repository not found"))
 }
 
+func cleanupHFCache() error {
+	cache := effectiveHFCacheDir()
+	if !pathWithinBase(destDir, cache) {
+		return nil
+	}
+	return os.RemoveAll(cache)
+}
+
 func clearDestDir(dir string) error {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return err
@@ -426,6 +451,9 @@ func clearDestDir(dir string) error {
 		return err
 	}
 	for _, entry := range entries {
+		if entry.Name() == hfCacheDirName {
+			continue
+		}
 		path := filepath.Join(dir, entry.Name())
 		if entry.IsDir() {
 			if err := os.RemoveAll(path); err != nil {
@@ -442,7 +470,16 @@ func clearDestDir(dir string) error {
 
 func destHasData(root string) bool {
 	entries, err := os.ReadDir(root)
-	return err == nil && len(entries) > 0
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.Name() == hfCacheDirName {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 func failHF(err error) error {
