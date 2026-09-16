@@ -4878,7 +4878,7 @@
       },
       "CollectionStatus": {
         "type": "object",
-        "description": "Server-managed mutable runtime status counters for custom (tenant-scoped) collections. Never user-supplied and never written to YAML configuration. Present only on custom (tenant-scoped) collections; absent on system collections.\n",
+        "description": "Server-managed mutable runtime status for custom (tenant-scoped) collections. Never user-supplied and never written to YAML configuration. Present only on custom (tenant-scoped) collections; absent on system collections.\n",
         "properties": {
           "run_count": {
             "type": "integer",
@@ -5020,7 +5020,7 @@
           },
           "curation_order": {
             "type": "integer",
-            "description": "Controls the listing priority of this collection within curated collection results. 0 (or absent) = not featured in curated listings. Positive integers specify priority — lower values appear first (1 before 2). Set by system operators via YAML configuration only; the server rejects writes from tenant API consumers.\n"
+            "description": "Controls the listing priority of this collection within collection retrieval results. 0 (or absent) means not curated. Positive integers specify priority — lower values have higher priority. Set by system operators via YAML configuration only; the server rejects writes from tenant API consumers.\n"
           },
           "domains": {
             "type": "array",
@@ -5086,7 +5086,7 @@
               "pinned_order": {
                 "type": "integer",
                 "minimum": 0,
-                "description": "Tenant-controlled ordering priority for this collection within the tenant's personal listing. 0 = not ordered (default). Positive integers specify relative priority — lower values appear first (1 before 2). Settable by the collection owner via PATCH /collections/{id}.\n"
+                "description": "Tenant-controlled ordering priority for this collection within the tenant's individual listing. 0 means not ordered (default). Positive integers specify relative priority — lower values have higher priority. Settable by the collection owner via PATCH /collections/{id}.\n"
               },
               "status": {
                 "$ref": "#/components/schemas/CollectionStatus",

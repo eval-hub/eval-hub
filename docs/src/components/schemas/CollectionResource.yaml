@@ -16,9 +16,9 @@ allOf:
         type: integer
         minimum: 0
         description: >
-          Tenant-controlled ordering priority for this collection within the tenant's personal listing.
-          0 = not ordered (default). Positive integers specify relative priority — lower values
-          appear first (1 before 2). Settable by the collection owner via PATCH /collections/{id}.
+          Tenant-controlled ordering priority for this collection within the tenant's individual listing.
+          0 means not ordered (default). Positive integers specify relative priority — lower values
+          have higher priority. Settable by the collection owner via PATCH /collections/{id}.
       status:
         $ref: ./CollectionStatus.yaml
         description: >
