@@ -83,7 +83,7 @@ func (r *K8sRuntime) RunEvaluationJob(
 			// this goroutine outlives it (see OTEL.md "Trace continuity").
 			benchCtx := otel.DetachedContext(r.ctx)
 			if err := r.createBenchmarkResources(benchCtx, r.logger, evaluation, &bench, idx, storage); err != nil {
-				metrics.RecordBenchmarkRuntimeError(benchCtx, r.Name())
+				metrics.RecordBenchmarkRuntimeError(benchCtx, r.Name(), evaluation.Resource.Tenant.String())
 				r.logger.Error(
 					"kubernetes job creation failed",
 					"error", err,

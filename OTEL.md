@@ -151,17 +151,25 @@ The `/metrics` scrape endpoint itself is **not** wrapped with `otelhttp` or the 
 
 | OTEL name | When recorded | Attributes |
 |-----------|---------------|------------|
-| `evalhub.evaluation_jobs` | Job created, cancelled, or runtime start failed | `action` = `created` \| `cancelled` \| `runtime_start_failed`; `runtime` on create/fail |
-| `evalhub.evaluation_job_completions` | Job transitions into a terminal state | `state` = `completed` \| `failed` \| `cancelled` \| `partially_failed` |
-| `evalhub.benchmark_runtime_errors` | K8s or local runtime fails to schedule/start a benchmark | `runtime` = `kubernetes` \| `local` |
+| `evalhub.evaluation_jobs` | Job created, cancelled, or runtime start failed | `action` = `created` \| `cancelled` \| `runtime_start_failed`; `runtime` on create/fail; `tenant` when known |
+| `evalhub.evaluation_job_completions` | Job transitions into a terminal state | `state` = `completed` \| `failed` \| `cancelled` \| `partially_failed`; `tenant` when known |
+| `evalhub.benchmark_runtime_errors` | K8s or local runtime fails to schedule/start a benchmark | `runtime` = `kubernetes` \| `local`; `tenant` when known |
+| `evalhub.eval.job_state_transitions` | Every job state change (Prometheus-bridged `evalhub_evaluation_jobs_total`) | `provider`, `collection`, `status`, `tenant` when known |
+| `evalhub.eval.job_duration` | Job reaches a terminal state (Prometheus-bridged `evalhub_evaluation_job_duration_seconds`) | `provider`, `collection`, `tenant` when known |
+| `evalhub.eval.active_jobs` / `evalhub.eval.queue_depth` | Job enters/leaves active or queued state | `tenant` when known |
+| `evalhub.eval.errors` | Job- or benchmark-level failure | `error_type`, `provider`, `tenant` when known |
+| `evalhub.eval.benchmark_duration` | Benchmark has both `started_at` and `completed_at` timestamps (Prometheus-bridged `evalhub_benchmark_duration_seconds`) | `benchmark_name`, `provider`, `tenant` when known |
+| `evalhub.eval.benchmark_completions` | Benchmark reaches a terminal state — `completed`, `failed`, or `cancelled` (Prometheus-bridged `evalhub_benchmark_completions_total`) | `benchmark_name`, `provider`, `status`, `tenant` when known |
+| `evalhub.eval.api_request_duration` | Every API request (Prometheus-bridged `evalhub_api_request_duration_seconds`) | `endpoint`, `method`, `collection`, `provider`, `tenant` when known |
 
-Terminal-state completions are recorded from:
+`tenant` is attached only to the OTEL instruments above (via `metrics.withTenantAttr`), never to the underlying Prometheus `*Vec` label sets, to keep Prometheus cardinality bounded — high-cardinality, per-tenant breakdowns are expected to be queried through the OTEL/OTLP path (e.g. SigNoz), not `/metrics`.
 
-- Runtime callbacks (`runtimeStorage.UpdateEvaluationJob`)
-- Events API (`POST /api/v1/evaluations/jobs/{id}/events`) via `recordEvaluationJobTerminalStateAfterUpdate()`
-- Explicit cancel and synchronous runtime-start-failure paths in handlers
+Job-duration and terminal-state metrics are recorded from:
 
-An end-to-end job duration histogram exists (`evalhub.eval.job_duration` / `evalhub_evaluation_job_duration_seconds`, `time.Since(job.Resource.CreatedAt)`), but is currently only observed on the `recordEvaluationJobTerminalStateAfterUpdate()` path. The explicit cancel (`HandleCancelEvaluation`) and synchronous runtime-start-failure paths record the terminal-state and active/queue-depth counters but do **not** call `ObserveEvaluationJobDuration`, so cancelled and runtime-start-failed jobs are under-represented in the duration histogram. There is no per-tenant label on domain metrics today.
+- Runtime callbacks (`runtimeStorage.UpdateEvaluationJob`) and the events API (`POST /api/v1/evaluations/jobs/{id}/events`), via `recordEvaluationJobTerminalStateAfterUpdate()`
+- Explicit cancel and synchronous runtime-start-failure paths in handlers, via the shared `recordEvaluationJobTerminalTransition()` helper (`internal/eval_hub/handlers/evaluation_metrics.go`)
+
+Benchmark completions (`evalhub.eval.benchmark_completions`) are recorded alongside benchmark durations in `recordBenchmarkDurations()`, for every benchmark that reaches a terminal state — independent of whether `started_at`/`completed_at` are both present (duration recording requires both; the completion counter does not).
 
 ### Database metrics
 
@@ -258,8 +266,8 @@ On OpenShift, EvalHub is typically deployed via the [TrustyAI service operator](
 | Local subprocess lifecycle | One span per benchmark (`local.run_benchmark`, linked back to the request trace); no dedicated metrics |
 | MLflow operations | HTTP transport spans only (no business-level spans) |
 | Health / OpenAPI / docs handlers | otelhttp span only; no `withSpan` children |
-| Benchmark success / completion counters | Errors only (`evalhub.benchmark_runtime_errors`); no success counter |
-| Job duration histogram | Implemented (`evalhub.eval.job_duration`), but not recorded on the cancel or runtime-start-failure terminal paths (see Metrics section) |
+| Benchmark success / completion counters | Implemented (`evalhub.eval.benchmark_completions`, all terminal states — completed/failed/cancelled), in addition to runtime-level errors (`evalhub.benchmark_runtime_errors`) |
+| Job duration histogram | Implemented (`evalhub.eval.job_duration`); recorded on job-update terminal transitions, cancel, and runtime-start-failure |
 | Metric exemplars (trace ↔ metric links) | Not implemented |
 
 ### Configuration and gating
@@ -382,7 +390,7 @@ Files: `tests/otel/pours/deployment/`, `tests/otel/casting.yaml`, `tests/otel/sc
 | `internal/eval_hub/server/http_metrics_middleware.go` | HTTP request count and active-request middleware |
 | `internal/eval_hub/server/server.go` | Per-route `otelhttp` registration |
 | `internal/eval_hub/handlers/otel.go` | Handler-level span wrapper |
-| `internal/eval_hub/handlers/evaluation_metrics.go` | Terminal-state metric helper |
+| `internal/eval_hub/handlers/evaluation_metrics.go` | Terminal-state, job-duration, and benchmark-completion metric helpers |
 | `internal/eval_hub/storage/sql/sql.go` | `otelsql` and `ReportDBStatsMetrics` |
 | `internal/eval_hub/storage/sql/otel_metrics.go` | Semconv `db.client.connection.*` pool metrics |
 | `internal/eval_runtime_sidecar/server/server.go` | Sidecar inbound `otelhttp` |

@@ -331,15 +331,16 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	metrics.RecordEvaluationJobCreated(ctx.Ctx, h.runtimeName())
+	tenant := ctx.Tenant.String()
+	metrics.RecordEvaluationJobCreated(ctx.Ctx, h.runtimeName(), tenant)
 
 	collectionID := jobCollectionID(evaluation)
 	providerIDs := jobProviderIDs(benchmarks, evaluation)
 	for _, pid := range providerIDs {
-		metrics.RecordEvaluationJobStateTransition(ctx.Ctx, pid, collectionID, string(api.OverallStatePending))
+		metrics.RecordEvaluationJobStateTransition(ctx.Ctx, pid, collectionID, string(api.OverallStatePending), tenant)
 	}
-	metrics.IncActiveJobs(ctx.Ctx)
-	metrics.IncQueueDepth(ctx.Ctx)
+	metrics.IncActiveJobs(ctx.Ctx, tenant)
+	metrics.IncQueueDepth(ctx.Ctx, tenant)
 
 	_ = h.withSpan(
 		ctx,
@@ -352,19 +353,14 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 						Message:     runErr.Error(),
 						MessageCode: constants.MessageCodeEvaluationJobFailed,
 					}, api.MessageOriginServer)
-					metrics.RecordEvaluationJobRuntimeStartFailed(ctx.Ctx, h.runtimeName())
+					metrics.RecordEvaluationJobRuntimeStartFailed(ctx.Ctx, h.runtimeName(), tenant)
 					for _, pid := range providerIDs {
-						metrics.RecordEvaluationError(ctx.Ctx, "runtime_start_failed", pid)
+						metrics.RecordEvaluationError(ctx.Ctx, "runtime_start_failed", pid, tenant)
 					}
 					if err := storage.WithContext(runtimeCtx).UpdateEvaluationJobStatus(job.Resource.ID, state, message); err != nil {
 						ctx.Logger.Error("Failed to update evaluation status", "error", err, "job_id", job.Resource.ID)
 					} else {
-						metrics.RecordEvaluationJobTerminalState(ctx.Ctx, api.OverallStatePending, state)
-						for _, pid := range providerIDs {
-							metrics.RecordEvaluationJobStateTransition(ctx.Ctx, pid, collectionID, string(state))
-						}
-						metrics.DecActiveJobs(ctx.Ctx)
-						metrics.DecQueueDepth(ctx.Ctx)
+						recordEvaluationJobTerminalTransition(ctx.Ctx, api.OverallStatePending, state, providerIDs, collectionID, job.Resource.CreatedAt, tenant)
 					}
 					// return the first error encountered
 					w.Error(runErr, ctx.RequestID)
@@ -739,17 +735,14 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 					w.Error(err, ctx.RequestID)
 					return err
 				}
-				metrics.RecordEvaluationJobCancelled(ctx.Ctx)
-				metrics.RecordEvaluationJobTerminalState(ctx.Ctx, previousState, api.OverallStateCancelled)
+				tenant := ctx.Tenant.String()
+				metrics.RecordEvaluationJobCancelled(ctx.Ctx, tenant)
 				if jobErr == nil && job != nil && !previousState.IsTerminalState() {
 					cID := jobCollectionID(&job.EvaluationJobConfig)
-					for _, pid := range jobProviderIDs(nil, &job.EvaluationJobConfig) {
-						metrics.RecordEvaluationJobStateTransition(ctx.Ctx, pid, cID, string(api.OverallStateCancelled))
-					}
-					metrics.DecActiveJobs(ctx.Ctx)
-					if previousState == api.OverallStatePending {
-						metrics.DecQueueDepth(ctx.Ctx)
-					}
+					pids := jobProviderIDs(nil, &job.EvaluationJobConfig)
+					recordEvaluationJobTerminalTransition(ctx.Ctx, previousState, api.OverallStateCancelled, pids, cID, job.Resource.CreatedAt, tenant)
+				} else {
+					metrics.RecordEvaluationJobTerminalState(ctx.Ctx, previousState, api.OverallStateCancelled, tenant)
 				}
 			}
 			w.WriteJSON(nil, 204)

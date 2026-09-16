@@ -231,7 +231,7 @@ func (r *LocalRuntime) RunEvaluationJob(
 			err := r.runBenchmark(jobID, bench, i, evaluation, callbackURL, storage)
 			endBenchmarkSpan(span, err)
 			if err != nil {
-				metrics.RecordBenchmarkRuntimeError(r.ctx, r.Name())
+				metrics.RecordBenchmarkRuntimeError(r.ctx, r.Name(), evaluation.Resource.Tenant.String())
 				r.logger.Error(
 					"local runtime benchmark launch failed",
 					"error", err,
