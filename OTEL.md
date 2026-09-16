@@ -209,7 +209,7 @@ On OpenShift, EvalHub is typically deployed via the [TrustyAI service operator](
 | `tracer_timeout` | `tracerTimeout` | Duration string, e.g. `"30s"` |
 | `tracer_batch_interval` | `tracerBatchInterval` | Duration string, e.g. `"5s"` |
 | `service_name` | `serviceName` | |
-| `service_version` | *(not exposed)* | Auto-populated from the binary's build version; not overridable via the CR today |
+| `service_version` | *(not exposed)* | Auto-populated from the binary's build version; overridable via `config.yaml` / env, but not yet exposed through the operator CR |
 | `additional_attributes` | `additionalAttributes` | Map of strings |
 | `enable_ecs_resource_detection` | `enableEcsResourceDetection` | |
 | `disable_redirect_otel_logs` | `disableRedirectOtelLogs` | |
