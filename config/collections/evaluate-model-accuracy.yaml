@@ -1,0 +1,196 @@
+id: evaluate-model-accuracy
+name: evaluate-model-accuracy
+category: model-validation
+description: >
+  Evaluates model accuracy using standard industry research benchmarks
+  in inspectai. Allows customers to verify or replicate Model Validation
+  results through a common inspectai evaluation harness.
+tags:
+- accuracy
+- evaluate-model-accuracy
+- model-validation
+- pipeline
+pass_criteria:
+  threshold: 0.4
+benchmarks:
+- id: inspect/custom
+  provider_id: inspect
+  weight: 1
+  primary_score:
+    metric: accuracy
+    lower_is_better: false
+  pass_criteria:
+    threshold: 0.9
+  parameters:
+    task: inspect_evals/gsm8k
+    task_args:
+      fewshot: 0
+      presence_penalty: 1.0
+
+- id: inspect/custom
+  provider_id: inspect
+  weight: 1
+  primary_score:
+    metric: accuracy
+    lower_is_better: false
+  pass_criteria:
+    threshold: 0.9
+  parameters:
+    task: inspect_evals/gsm8k
+    task_args:
+      fewshot: 5
+      presence_penalty: 1.0
+
+
+- id: inspect/custom
+  provider_id: inspect
+  weight: 1
+  primary_score:
+    metric: accuracy
+    lower_is_better: false
+  pass_criteria:
+    threshold: 0.65
+  parameters:
+    task: inspect_evals/mmlu_pro
+    task_args:
+      fewshot: 0
+      presence_penalty: 1.0
+
+
+- id: inspect/custom
+  provider_id: inspect
+  weight: 1
+  primary_score:
+    metric: accuracy
+    lower_is_better: false
+  pass_criteria:
+    threshold: 0.65
+  parameters:
+    task: inspect_evals/mmlu_pro
+    task_args:
+      fewshot: 5
+      presence_penalty: 1.0
+
+- id: inspect/custom
+  provider_id: inspect
+  weight: 1
+  primary_score:
+    metric: accuracy
+    lower_is_better: false
+  pass_criteria:
+    threshold: 0.65
+  parameters:
+    task: inspect_evals/mmlu_5_shot
+    model_args:
+      responses_api: false
+    task_args:
+      cot: True
+      presence_penalty: 1.0
+
+
+- id: inspect/custom
+  provider_id: inspect
+  weight: 1
+  primary_score:
+    metric: accuracy
+    lower_is_better: false
+  pass_criteria:
+    threshold: 0.5
+  parameters:
+    task: inspect_evals/gpqa_diamond
+    task_args:
+      presence_penalty: 1.0
+
+- id: inspect/custom
+  provider_id: inspect
+  weight: 1
+  primary_score:
+    metric: accuracy
+    lower_is_better: false
+  pass_criteria:
+    threshold: 0.8
+  parameters:
+    task: inspect_evals/humaneval
+    model_args:
+      client_timeout: 5400
+    task_args:
+      presence_penalty: 1.0
+
+- id: inspect/custom
+  provider_id: inspect
+  weight: 1
+  primary_score:
+    metric: accuracy
+    lower_is_better: false
+  pass_criteria:
+    threshold: 0.9
+  parameters:
+    task: inspect_evals/mbpp
+    task_args:
+      presence_penalty: 1.0
+
+- id: inspect/custom
+  provider_id: inspect
+  weight: 1
+  primary_score:
+    metric: accuracy
+    lower_is_better: false
+  pass_criteria:
+    threshold: 0.6
+  parameters:
+    task: inspect_evals/ifeval
+    model_args:
+      responses_api: false
+      client_timeout: 5400
+    task_args:
+      presence_penalty: 1.0
+
+- id: inspect/custom
+  provider_id: inspect
+  weight: 1
+  primary_score:
+    metric: accuracy
+    lower_is_better: false
+  pass_criteria:
+    threshold: 0.6
+  parameters:
+    task: inspect_evals/bfcl
+    model_args:
+      responses_api: false
+      client_timeout: 5400
+    task_args:
+      categories:
+        - parallel_multiple
+        - live_irrelevance
+        - parallel
+        - simple_python
+        - exec_simple
+        - simple_java
+        - multiple
+        - irrelevance
+        - live_multiple
+        - live_parallel
+        - exec_parallel_multiple
+        - exec_parallel
+        - live_simple
+        - sql
+        - live_parallel_multiple
+        - live_relevance
+        - exec_multiple
+        - simple_javascript
+
+- id: inspect/custom
+  provider_id: inspect
+  weight: 1
+  primary_score:
+    metric: accuracy
+    lower_is_better: false
+  pass_criteria:
+    threshold: 0.5
+  parameters:
+    task: inspect_evals/niah
+    model_args:
+      responses_api: false
+    task_args:
+      fewshot: 0
+      presence_penalty: 1.0
