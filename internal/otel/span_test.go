@@ -66,7 +66,7 @@ func TestDetachedContextWithoutValidSpanReturnsBackground(t *testing.T) {
 }
 
 func TestDetachedContextHandlesNilContext(t *testing.T) {
-	detached := DetachedContext(nil) //nolint:staticcheck // intentional: exercise the nil-safety guarantee documented on DetachedContext
+	detached := DetachedContext(nil) //nolint:staticcheck // intentional: verify the explicit nil guard in DetachedContext
 
 	if sc := trace.SpanContextFromContext(detached); sc.IsValid() {
 		t.Errorf("DetachedContext(nil) span context = %v, want invalid", sc)

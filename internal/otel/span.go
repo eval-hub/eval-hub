@@ -16,17 +16,21 @@ type SpanFunction func(context.Context) error
 
 // DetachedContext returns a context.Background()-derived context that carries
 // forward ctx's span context as a remote reference, without inheriting ctx's
-// cancellation, deadline, or values. Use this at request/background
-// boundaries — e.g. before handing evaluation-job execution off to a runtime
-// goroutine that must outlive the HTTP request that triggered it — so that
-// spans started later against the returned context can still be associated
-// with the originating trace via trace.LinkFromContext(ctx) and
-// trace.WithLinks, without incorrectly extending the original span's
-// parent-child chain across the async gap (see OTEL.md "Trace continuity").
+// cancellation or deadline (nor any context values). Use this at
+// request/background boundaries — e.g. before handing evaluation-job
+// execution off to a runtime goroutine that must outlive the HTTP request
+// that triggered it — so that spans started later against the returned
+// context can still be associated with the originating trace via
+// trace.LinkFromContext(ctx) and trace.WithLinks, without incorrectly
+// extending the original span's parent-child chain across the async gap
+// (see OTEL.md "Trace continuity").
 //
-// If ctx carries no valid span context (e.g. tracing disabled, or ctx is
-// already detached), this is equivalent to context.Background().
+// If ctx is nil or carries no valid span context (e.g. tracing disabled, or
+// ctx is already detached), this is equivalent to context.Background().
 func DetachedContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
 	sc := trace.SpanContextFromContext(ctx)
 	if !sc.IsValid() {
 		return context.Background()
