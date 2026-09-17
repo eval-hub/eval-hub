@@ -389,7 +389,7 @@ func buildBenchmarkCatalog(ds EvalHubDiscovery, providerFilter string) (string, 
 		return "", err
 	}
 
-	var entries []benchmarkCatalogEntry
+	entries := make([]benchmarkCatalogEntry, 0)
 	for _, p := range providers {
 		if allowedProviders != nil {
 			if _, ok := allowedProviders[p.Resource.ID]; !ok {
@@ -445,7 +445,7 @@ func buildCollectionExamples(ds EvalHubDiscovery, providerFilter string) (string
 		return "", err
 	}
 
-	var examples []collectionExample
+	examples := make([]collectionExample, 0)
 	for _, c := range collections {
 		if c.Resource.Owner != "system" {
 			continue

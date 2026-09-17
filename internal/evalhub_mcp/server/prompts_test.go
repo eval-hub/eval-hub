@@ -637,6 +637,24 @@ func TestDesignCollectionOnlySystemCollections(t *testing.T) {
 	}
 }
 
+func TestDesignCollectionEmptyProvidersReturnsEmptyArray(t *testing.T) {
+	t.Parallel()
+	ds := &mockDataSource{}
+	ctx, cs := connectWithPromptsAndDS(t, ds)
+
+	result := getPrompt(t, ctx, cs, "design_collection", map[string]string{
+		"evaluation_goal": "safety check",
+	})
+
+	text := allMessageText(result.Messages)
+	if strings.Contains(text, "\nnull\n") || strings.Contains(text, "\nnull") {
+		t.Error("empty provider list should produce [] not null in benchmark catalog")
+	}
+	if !strings.Contains(text, "[]") {
+		t.Error("empty provider list should produce [] in benchmark catalog")
+	}
+}
+
 // --- RegisterHandlers with prompts ---
 
 func TestRegisterHandlersIncludesPromptsWithoutBackend(t *testing.T) {
