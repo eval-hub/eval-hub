@@ -888,10 +888,7 @@ func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
 
-	initContainer := findContainer(job.Spec.Template.Spec.InitContainers, initContainerName)
-	if initContainer == nil {
-		t.Fatal("expected HF init container")
-	}
+	initContainer := mustFindContainer(t, job.Spec.Template.Spec.InitContainers, initContainerName)
 	if initContainer.Image != "quay.io/evalhub/evalhub:test" {
 		t.Fatalf("unexpected init image: %s", initContainer.Image)
 	}
@@ -919,10 +916,7 @@ func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
 	}
 	assertTestDataEmptyDirSizeLimit(t, job.Spec.Template.Spec.Volumes)
 
-	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
-	if sidecar == nil {
-		t.Fatal("expected sidecar init container")
-	}
+	sidecar := mustFindContainer(t, job.Spec.Template.Spec.InitContainers, sidecarContainerName)
 	var foundMetadataMount bool
 	for _, m := range sidecar.VolumeMounts {
 		if m.Name == initMetadataVolumeName {
@@ -957,10 +951,7 @@ func TestBuildJobWithHFTestDataSubPath(t *testing.T) {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
 
-	initContainer := findContainer(job.Spec.Template.Spec.InitContainers, initContainerName)
-	if initContainer == nil {
-		t.Fatal("expected HF init container")
-	}
+	initContainer := mustFindContainer(t, job.Spec.Template.Spec.InitContainers, initContainerName)
 
 	var foundSubPath bool
 	for _, env := range initContainer.Env {
@@ -998,10 +989,7 @@ func TestBuildJobWithHFTestDataPrivateRepo(t *testing.T) {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
 
-	initContainer := findContainer(job.Spec.Template.Spec.InitContainers, initContainerName)
-	if initContainer == nil {
-		t.Fatal("expected HF init container")
-	}
+	initContainer := mustFindContainer(t, job.Spec.Template.Spec.InitContainers, initContainerName)
 
 	var foundSecretVolume, foundSecretMount bool
 	for _, v := range job.Spec.Template.Spec.Volumes {
