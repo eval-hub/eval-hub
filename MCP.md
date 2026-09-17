@@ -209,7 +209,7 @@ Use the `design_collection` prompt to generate a benchmark collection from a nat
 
 **Example — design and create a collection:**
 
-```
+```text
 # Step 1: invoke the prompt
 design_collection(evaluation_goal="enterprise deployment requiring safety, instruction following, and long-context support")
 
@@ -218,6 +218,30 @@ design_collection(evaluation_goal="enterprise deployment requiring safety, instr
 # Step 3: persist it
 create_collection(name="enterprise-safety-v1", category="safety", benchmarks=[...], pass_criteria={threshold: 0.72})
 ```
+
+**Other examples:**
+
+```text
+I need to evaluate a 7B instruction-tuned model for enterprise deployment — it must be safe, follow instructions well, and handle documents up to 64k tokens
+```
+
+```text
+I'm fine-tuning a 13B model for customer support. I need to make sure it doesn't produce toxic content, follows instructions accurately, and gives truthful answers
+```
+
+In MCP client usage, you'd invoke it like:
+
+```shell
+design_collection(evaluation_goal="enterprise deployment requiring safety, instruction following, and long-context support")
+```
+
+The prompt handler takes that free text goal, fetches the live benchmark catalog and system collection examples from the API, and returns a rich prompt with calibration guidelines, domain-signal mapping, and threshold ranges — so the AI agent can reason over all of it and propose a complete CollectionConfig.
+
+Optional parameters let you constrain the output:
+
+- provider_filter — e.g. "lm_evaluation_harness,lighteval" to restrict to specific providers
+- max_benchmarks — cap on benchmark count (default 12)
+- strictness — "lenient", "moderate" (default), or "strict" to shift all thresholds
 
 ## Testing that the MCP service is functioning
 
