@@ -25,6 +25,23 @@ else
     mkdir -p /tmp
 fi
 
+echo "Checking sidecar binary is available..."
+if ! command -v eval-runtime-sidecar >/dev/null 2>&1; then
+    echo "FAIL: eval-runtime-sidecar not found on PATH"
+    exit 1
+fi
+SIDECAR_PATH="$(command -v eval-runtime-sidecar)"
+if [[ -n "${WINDIR:-}" ]]; then
+    VENV_BIN="${VIRTUAL_ENV:-}/Scripts"
+else
+    VENV_BIN="${VIRTUAL_ENV:-}/bin"
+fi
+if [[ "$SIDECAR_PATH" != "$VENV_BIN/"* ]]; then
+    echo "FAIL: eval-runtime-sidecar not found on PATH"
+    exit 1
+fi
+echo "eval-runtime-sidecar found: ${SIDECAR_PATH}"
+
 echo "Starting: ${BINARY} -configdir ${CONFIG_DIR} -local"
 "${BINARY}" -configdir "${CONFIG_DIR}" -local > "${LOGFILE}" 2>&1 &
 SERVER_PID=$!

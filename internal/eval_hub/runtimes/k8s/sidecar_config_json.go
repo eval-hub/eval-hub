@@ -8,7 +8,7 @@ import (
 // sidecarForJobPod builds sidecar_config.json for the job ConfigMap from server
 // sidecar YAML plus per-job fields. Omits sidecar_container (image/resources); that is only for job spec.
 func sidecarForJobPod(cfg *config.Config, jc *jobConfig) (*config.SidecarConfig, error) {
-	if cfg != nil && cfg.Sidecar == nil && jc != nil && jc.evalHubURL == "" && jc.mlflowTrackingURI == "" && jc.modelTargetURL == "" {
+	if cfg != nil && cfg.Sidecar == nil && jc != nil && jc.evalHubURL == "" && jc.mlflowTrackingURI == "" && jc.modelTargetURL == "" && !hasGitTestData(jc) && !hasHFTestData(jc) {
 		return nil, nil
 	}
 
@@ -31,7 +31,7 @@ func sidecarForJobPod(cfg *config.Config, jc *jobConfig) (*config.SidecarConfig,
 				export.EvalHub.InsecureSkipVerify = false
 			}
 		}
-		if hasGitTestData(jc) {
+		if hasGitTestData(jc) || hasHFTestData(jc) {
 			export.InitContainer = &config.InitContainerConfig{IsGitJob: true}
 		}
 		if jc.mlflowTrackingURI != "" {
@@ -43,14 +43,8 @@ func sidecarForJobPod(cfg *config.Config, jc *jobConfig) (*config.SidecarConfig,
 			export.MLFlow.Workspace = jc.mlflowWorkspace
 			if cfg != nil && cfg.MLFlow != nil {
 				export.MLFlow.HTTPTimeout = cfg.MLFlow.HTTPTimeout
-				if jc.serviceCAConfigMap != "" {
-					export.MLFlow.CACertPath = serviceCAMountPath + "/" + serviceCABundleFile
-				} else {
-					export.MLFlow.CACertPath = cfg.MLFlow.CACertPath
-				}
-			} else if jc.serviceCAConfigMap != "" {
-				export.MLFlow.CACertPath = serviceCAMountPath + "/" + serviceCABundleFile
 			}
+			export.MLFlow.CACertPath = mlflowCACertPathForJob(jc, cfg)
 		}
 		if jc.modelTargetURL != "" {
 			mc := &config.SidecarModelConfig{URL: jc.modelTargetURL}
@@ -68,6 +62,24 @@ func sidecarForJobPod(cfg *config.Config, jc *jobConfig) (*config.SidecarConfig,
 	}
 
 	return export, nil
+}
+
+// mlflowCACertPathForJob returns the PEM CA path job containers should use for MLflow TLS.
+// Preference order:
+//  1. Operator-merged MLflow CA bundle mounted on the job pod
+//  2. Top-level mlflow.ca_cert_path / MLFLOW_CA_CERT_PATH from the API process
+//  3. OpenShift service-serving CA (legacy / EvalHub-only trust)
+func mlflowCACertPathForJob(jc *jobConfig, cfg *config.Config) string {
+	if jc != nil && jc.mlflowCABundleConfigMap != "" {
+		return mlflowCABundleMountPath + "/" + mlflowCABundleFile
+	}
+	if cfg != nil && cfg.MLFlow != nil && cfg.MLFlow.CACertPath != "" {
+		return cfg.MLFlow.CACertPath
+	}
+	if jc != nil && jc.serviceCAConfigMap != "" {
+		return serviceCAMountPath + "/" + serviceCABundleFile
+	}
+	return ""
 }
 
 func otelConfigForJobPod(cfg *config.Config) *config.OTELConfig {

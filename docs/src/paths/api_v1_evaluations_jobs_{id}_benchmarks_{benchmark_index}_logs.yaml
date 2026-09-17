@@ -28,11 +28,17 @@ get:
       in: query
       required: false
       schema:
-        type: integer
-        minimum: 1
-        maximum: 10000
+        oneOf:
+          - type: integer
+            const: -1
+          - type: integer
+            minimum: 1
+            maximum: 10000
         default: 1000
-        description: Maximum number of log lines to return
+        description: |
+          Maximum number of log lines to return.
+          Use `-1` to request all available log lines (no tail limit).
+          Valid values: 1–10000, or -1 for all lines.
     - name: timestamps
       in: query
       required: false
@@ -50,6 +56,14 @@ get:
   responses:
     '200':
       description: Successful Response
+      headers:
+        X-Log-Truncated:
+          description: |
+            Present and set to `true` when the response was truncated because it
+            exceeded the server's configured `max_log_response_bytes` limit.
+          schema:
+            type: string
+            enum: ['true']
       content:
         text/plain:
           schema:

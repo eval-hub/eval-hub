@@ -2,11 +2,31 @@ package config
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
 	"time"
 )
+
+// Duration wraps time.Duration with human-readable JSON unmarshalling (e.g. "5m", "2h").
+type Duration struct {
+	time.Duration
+}
+
+func (d Duration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.String())
+}
+
+func (d *Duration) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	var err error
+	d.Duration, err = time.ParseDuration(s)
+	return err
+}
 
 const (
 	DefaultSidecarPort    = 8080
@@ -15,6 +35,7 @@ const (
 
 type SidecarConfig struct {
 	LocalMode        bool                    `mapstructure:"local_mode,omitempty" json:"local_mode,omitempty"`
+	Local            *LocalConfig            `mapstructure:"local,omitempty" json:"local,omitempty"`
 	BaseURL          string                  `mapstructure:"base_url,omitempty" json:"base_url,omitempty"`
 	Port             int32                   `mapstructure:"-" json:"-"` // derived from BaseURL by ResolvePort; never serialised
 	EvalHub          *EvalHubClientConfig    `mapstructure:"eval_hub" json:"eval_hub,omitempty"`
@@ -24,6 +45,13 @@ type SidecarConfig struct {
 	InitContainer    *InitContainerConfig    `mapstructure:"init_container,omitempty" json:"init_container,omitempty"`
 	SidecarContainer *SidecarContainerConfig `mapstructure:"sidecar_container,omitempty" json:"sidecar_container,omitempty"`
 	OTEL             *OTELConfig             `mapstructure:"otel,omitempty" json:"otel,omitempty"`
+}
+
+// LocalConfig holds local-mode-only tuning knobs. Ignored when LocalMode is false.
+// All fields are optional; zero values fall back to defaults.
+type LocalConfig struct {
+	JobCacheSweepInterval Duration `mapstructure:"job_cache_sweep_interval,omitempty" json:"job_cache_sweep_interval,omitempty"`
+	JobCacheEntryTTL      Duration `mapstructure:"job_cache_entry_ttl,omitempty" json:"job_cache_entry_ttl,omitempty"`
 }
 
 // InitContainerConfig holds metadata written by eval-hub for the init container phase.
@@ -107,8 +135,10 @@ type EvalHubClientConfig struct {
 
 // SidecarMLFlowConfig holds sidecar-specific MLflow settings (e.g. token cache TTL).
 // CACertPath may also be set under sidecar.mlflow in YAML; when writing sidecar_config.json
-// for job pods, that field is overwritten from top-level mlflow config. TLS verification
-// is always enabled for MLflow; use CACertPath for custom CAs.
+// for job pods, that field is overwritten from the operator-merged MLflow CA bundle
+// ({instance}-mlflow-ca-bundle), falling back to top-level mlflow.ca_cert_path /
+// MLFLOW_CA_CERT_PATH, then the service-serving CA. TLS verification is always enabled
+// for MLflow; use CACertPath for custom CAs.
 type SidecarMLFlowConfig struct {
 	TrackingURI       string        `mapstructure:"tracking_uri,omitempty" json:"tracking_uri,omitempty"`
 	TokenPath         string        `mapstructure:"token_path,omitempty" json:"token_path,omitempty"`

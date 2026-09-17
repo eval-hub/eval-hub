@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp start-service stop-service start-sidecar stop-sidecar lint golangci-lint validate-configs test test-fuzz test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint validate-configs test test-fuzz test-fvt-server test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build
 
 GOPATH := $(shell go env GOPATH)
 GOBIN := $(shell go env GOPATH)/bin
@@ -174,7 +174,7 @@ vet: ## Run go vet
 # Prefer Nx so CI finishes deterministically; seed corpora also run under plain go test.
 FUZZTIME ?= 10000x
 # Packages that define Fuzz* tests. Keep in sync when adding new fuzz targets.
-FUZZ_PACKAGES ?= ./pkg/ociclient ./pkg/mlflowclient ./internal/eval_hub/handlers ./internal/eval_hub/storage/sql/shared ./internal/eval_runtime_sidecar/handlers
+FUZZ_PACKAGES ?= ./pkg/ociclient ./pkg/mlflowclient ./pkg/api ./internal/eval_hub/handlers ./internal/eval_hub/storage/sql/shared ./internal/eval_hub/config ./internal/eval_runtime_sidecar/handlers ./internal/eval_runtime_sidecar/proxy ./internal/evalhub_mcp/server ./internal/safefile ./cmd/eval_runtime_init
 
 test: ## Run unit tests (including fuzz seed corpora and a short fuzzing pass)
 	@echo "Running unit tests..."
@@ -221,7 +221,7 @@ SERVER_URL ?= http://localhost:8080
 
 FVT_TESTS ?= ./tests/features/...
 FVT_OUTPUT ?= --godog.format=junit:${PWD}/$(BIN_DIR)/junit-fvt-report.xml,pretty
-FVT_TAGS ?= --godog.tags=~@ignore && ~@mlflow && ~@cluster && ~@local_runtime
+FVT_TAGS ?= --godog.tags=~@ignore && ~@mlflow && ~@cluster && ~@local_runtime && ~@benchmark_providers
 FVT_CONCURRENCY ?= 1
 
 .PHONY: test-setup
@@ -277,9 +277,11 @@ install-deps: ## Install dependencies
 	@go mod tidy
 	@echo "Dependencies installed"
 
+GO_VERSION = $(shell awk '/^go /{print $$2}' go.mod)
+
 update-deps: ## Update all dependencies to latest versions
 	@echo "Updating dependencies to latest versions..."
-	@go get -t -u ./...
+	GOTOOLCHAIN=go${GO_VERSION} go get -t -u ./...
 	@go mod tidy
 	@echo "Dependencies updated"
 
@@ -337,6 +339,23 @@ build-mcp-platform-%:
 build-all-platforms-mcp: ## Build MCP for all supported platforms (parallel: make -j5 build-all-platforms-mcp)
 	@$(MAKE) -j5 $(addprefix build-mcp-platform-,$(SUPPORTED_PLATFORMS))
 
+# Sidecar cross-compilation
+SIDECAR_CROSS_OUTPUT = bin/eval-runtime-sidecar-$(CROSS_GOOS)-$(CROSS_GOARCH)$(if $(filter windows,$(CROSS_GOOS)),.exe,)
+
+.PHONY: cross-compile-sidecar
+cross-compile-sidecar: ## Build sidecar for specific platform: make cross-compile-sidecar CROSS_GOOS=linux CROSS_GOARCH=amd64
+	@echo "Cross-compiling sidecar for $(CROSS_GOOS)/$(CROSS_GOARCH)..."
+	@mkdir -p $(BIN_DIR)
+	GOOS=$(CROSS_GOOS) GOARCH=$(CROSS_GOARCH) CGO_ENABLED=0 go build -o $(SIDECAR_CROSS_OUTPUT) -ldflags="-s -w ${LDFLAGS_X}" $(SIDECAR_CMD_PATH)
+	@echo "Built: $(SIDECAR_CROSS_OUTPUT)"
+
+build-sidecar-platform-%:
+	@$(MAKE) cross-compile-sidecar CROSS_GOOS=$(word 1,$(subst -, ,$*)) CROSS_GOARCH=$(word 2,$(subst -, ,$*))
+
+.PHONY: build-all-platforms-sidecar
+build-all-platforms-sidecar: ## Build sidecar for all supported platforms (parallel: make -j5 build-all-platforms-sidecar)
+	@$(MAKE) -j5 $(addprefix build-sidecar-platform-,$(SUPPORTED_PLATFORMS))
+
 # Python virtual environment - expects uv venv
 VENV_DIR = .venv
 VENV_PYTHON = $(VENV_DIR)/bin/python
@@ -363,6 +382,7 @@ install-wheel-tools: venv ## Install Python wheel build tools using uv
 WHEEL_BUILD_DIR = python-server/build-$(CROSS_GOOS)-$(CROSS_GOARCH)
 
 WHEEL_BINARY_NAME = eval-hub$(if $(filter windows,$(CROSS_GOOS)),.exe,)
+SIDECAR_WHEEL_BINARY_NAME = eval-runtime-sidecar$(if $(filter windows,$(CROSS_GOOS)),.exe,)
 
 .PHONY: clean-wheels
 clean-wheels: ## Clean Python wheel build artifacts
@@ -389,6 +409,10 @@ build-wheel: ## Build Python wheel: make build-wheel WHEEL_PLATFORM=manylinux_2_
 	@echo "Staging binary $(CROSS_OUTPUT) as $(WHEEL_BINARY_NAME)"
 	@cp $(CROSS_OUTPUT) $(WHEEL_BUILD_DIR)/binaries/$(WHEEL_BINARY_NAME)
 	@chmod +x $(WHEEL_BUILD_DIR)/binaries/$(WHEEL_BINARY_NAME)
+	@test -f $(SIDECAR_CROSS_OUTPUT) || $(MAKE) cross-compile-sidecar
+	@echo "Staging sidecar binary $(SIDECAR_CROSS_OUTPUT) as $(SIDECAR_WHEEL_BINARY_NAME)"
+	@cp $(SIDECAR_CROSS_OUTPUT) $(WHEEL_BUILD_DIR)/binaries/$(SIDECAR_WHEEL_BINARY_NAME)
+	@chmod +x $(WHEEL_BUILD_DIR)/binaries/$(SIDECAR_WHEEL_BINARY_NAME)
 	@echo "Building wheel for $(WHEEL_PLATFORM)..."
 	WHEEL_PLATFORM=$(WHEEL_PLATFORM) uv build --wheel $(WHEEL_BUILD_DIR) --out-dir python-server/dist
 	@rm -rf $(WHEEL_BUILD_DIR)

@@ -17,6 +17,58 @@ runtime:
     memory_limit: 2Gi
   local:
     command: python tests/features/test_data/runtime/main.py
+
+parameters:
+  - name: metrics
+    type: array
+    default: null
+    description: List of RAGAS metric names to evaluate; defaults to the benchmark's metric list.
+  - name: embedding_model
+    type: string
+    default: null
+    description: Embedding model name; defaults to the evaluated model.
+  - name: embedding_url
+    type: string
+    default: null
+    description: OpenAI-compatible embedding endpoint; defaults to the evaluated model URL.
+  - name: judge_model
+    type: string
+    default: null
+    description: >
+      Model used for LLM-based RAGAS metrics; defaults to the evaluated model.
+      Use a capable structured-output model for smaller evaluated models.
+  - name: judge_url
+    type: string
+    default: null
+    description: >
+      OpenAI-compatible judge endpoint; defaults to the evaluated model URL.
+  - name: judge_api_key
+    type: string
+    default: null
+    description: >
+      Optional judge API key. Prefer injecting OPENAI_API_KEY from a Secret or
+      runtime environment rather than putting a key in a JobSpec.
+  - name: max_tokens
+    type: integer
+    default: null
+    description: Maximum tokens for judge LLM completions.
+  - name: temperature
+    type: number
+    default: null
+    description: Sampling temperature for judge LLM completions.
+  - name: column_map
+    type: object
+    default: null
+    description: Mapping from dataset column names to RAGAS expected names.
+  - name: max_workers
+    type: integer
+    default: 1
+    description: Maximum parallel workers for RAGAS evaluation (1–10).
+  - name: data_path
+    type: string
+    default: null
+    description: Explicit path to the dataset file.
+
 benchmarks:
   - id: ragas_rag_default
     name: RAG Default Suite

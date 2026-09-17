@@ -33,8 +33,8 @@ func (r *violationRecorder) RunEvaluationJob(_ *api.EvaluationJobResource, _ []a
 func (r *violationRecorder) DeleteEvaluationJobResources(_ *api.EvaluationJobResource) error {
 	return nil
 }
-func (r *violationRecorder) GetEvaluationLogs(_ *api.EvaluationJobResource, _ []api.EvaluationBenchmarkConfig, _ *int, _ api.EvaluationLogOptions) (string, error) {
-	return "", nil
+func (r *violationRecorder) StreamEvaluationLogs(_ *api.EvaluationJobResource, _ []api.EvaluationBenchmarkConfig, _ *int, _ api.EvaluationLogOptions, _ io.Writer) error {
+	return nil
 }
 func (r *violationRecorder) ValidateHardwareProfiles(_ []api.EvaluationBenchmarkConfig) error {
 	return nil

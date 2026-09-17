@@ -130,6 +130,41 @@ local harness = std.parseJson(std.extVar('harness'));
       num_fewshot: 0,
     } + parameters, gitOverrides),
 
+  // Hugging Face Hub test data reference (init container downloads into /test_data).
+  // Defaults use eval-hub-test/evalhub-offline-testdata (public mirror of tests/git-testdata on HF).
+  hfTestDataRef(overrides={})::
+    {
+      hf: {
+        repo_id: $.env('TEST_DATA_HF_REPO_ID', 'eval-hub-test/evalhub-offline-testdata'),
+        revision: $.env('TEST_DATA_HF_REVISION', 'main'),
+      } + overrides,
+    },
+
+  // Benchmark that always downloads offline data from Hugging Face Hub (tokenizer under /test_data).
+  hfBenchmark(id, providerId, parameters, hfOverrides={})::
+    {
+      id: id,
+      provider_id: providerId,
+      parameters: {
+        tokenizer: '/test_data/tokenizer',
+      } + parameters,
+      test_data_ref: $.hfTestDataRef(hfOverrides),
+    } + $.hardwareConfigQueue(),
+
+  // arc_easy with HF offline test data (full repo layout: tokenizer + allenai--ai2_arc--ARC-Easy).
+  hfArcEasyBenchmark(parameters={}, hfOverrides={})::
+    $.hfBenchmark('arc_easy', 'lm_evaluation_harness', {
+      num_examples: 10,
+      num_fewshot: 3,
+    } + parameters, hfOverrides),
+
+  // truthfulqa_mc1 with HF offline test data (staging_sub_path/ in the HF dataset).
+  hfTruthfulqaMc1Benchmark(parameters={}, hfOverrides={})::
+    $.hfBenchmark('truthfulqa_mc1', 'lm_evaluation_harness', {
+      num_examples: 10,
+      num_fewshot: 0,
+    } + parameters, hfOverrides),
+
   // Default benchmark for evaluation_job.jsonnet (disconnected vs connected FVT).
   defaultBenchmark():: $.arcEasyBenchmark({}),
 

@@ -90,9 +90,10 @@ type scenarioConfig struct {
 
 	reqHeaders map[string]string
 
-	lastURL    string
-	lastMethod string
-	lastId     string
+	lastURL        string
+	lastMethod     string
+	lastId         string
+	lastK8sJobName string
 
 	// MCP-specific fields
 	mcpToolResult    *mcp.CallToolResult
@@ -135,6 +136,8 @@ type scenarioConfig struct {
 
 	// Shared HTTP client for OCI operations
 	ociHTTPClient *http.Client
+	// Cached Bearer tokens keyed by repository (avoids redundant token exchanges)
+	ociBearerTokens map[string]string
 }
 
 func getLogger() *log.Logger {
@@ -387,6 +390,31 @@ func (tc *scenarioConfig) getFile(fileName string) (string, error) {
 	return string(contents), nil
 }
 
+// resolveEnvSubstitutionValue resolves {{env:NAME|default}} tokens. When NAME contains
+// commas, each segment is tried in order (first set process env wins), matching nested
+// test.env() fallbacks in jsonnet fixtures.
+func resolveEnvSubstitutionValue(envNamesPart, fallback string, hasFallback bool) string {
+	for envName := range strings.SplitSeq(envNamesPart, ",") {
+		envName = strings.TrimSpace(envName)
+		if envName == "" {
+			continue
+		}
+		if v, found := gpuTestSuiteSubstValue(envName); found {
+			return v
+		}
+		if envName == "FVT_BENCHMARK_TOKENIZER" {
+			return fvtBenchmarkTokenizer()
+		}
+		if envValue, envOk := os.LookupEnv(envName); envOk {
+			return envValue
+		}
+	}
+	if hasFallback {
+		return fallback
+	}
+	return ""
+}
+
 func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 	re := regexp.MustCompile(`\{\{([^}]*)\}\}`)
 	for strings.Contains(body, "{{") {
@@ -406,19 +434,8 @@ func (tc *scenarioConfig) substituteValues(body string) (string, error) {
 				tc.logDebug("Substituting value '%s' with '%s'\n", match[1], experimentName)
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), experimentName)
 			} else if raw, ok := strings.CutPrefix(match[1], envPrefix); ok {
-				envName, fallback, hasFallback := strings.Cut(raw, "|")
-				var value string
-				if v, found := gpuTestSuiteSubstValue(envName); found {
-					value = v
-				} else if envName == "FVT_BENCHMARK_TOKENIZER" {
-					value = fvtBenchmarkTokenizer()
-				} else if envValue, envOk := os.LookupEnv(envName); envOk {
-					value = envValue
-				} else if hasFallback {
-					value = fallback
-				} else {
-					value = ""
-				}
+				envNamesPart, fallback, hasFallback := strings.Cut(raw, "|")
+				value := resolveEnvSubstitutionValue(envNamesPart, fallback, hasFallback)
 				tc.logDebug("Substituting value '%s' with '%s'\n", match[1], value)
 				body = strings.ReplaceAll(body, fmt.Sprintf("{{%s}}", match[1]), value)
 			} else if after1, ok := strings.CutPrefix(match[1], valuePrefix); ok {

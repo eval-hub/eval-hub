@@ -8,6 +8,29 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 )
 
+func TestMLFlowConfigEffectiveTrackingURI(t *testing.T) {
+	tests := []struct {
+		name   string
+		config *config.MLFlowConfig
+		want   string
+	}{
+		{name: "nil config", config: nil},
+		{name: "blank URI", config: &config.MLFlowConfig{TrackingURI: " \t\n"}},
+		{
+			name:   "trimmed URI",
+			config: &config.MLFlowConfig{TrackingURI: "  http://mlflow.example:5000  "},
+			want:   "http://mlflow.example:5000",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.config.EffectiveTrackingURI(); got != tc.want {
+				t.Fatalf("EffectiveTrackingURI() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestIsOTELEnabled(t *testing.T) {
 	t.Run("nil config returns false", func(t *testing.T) {
 		var c *config.Config
@@ -285,6 +308,33 @@ func TestServiceConfig_HTTP(t *testing.T) {
 			t.Errorf("explicit: got %d", got)
 		}
 	})
+	t.Run("EffectiveMaxLogResponseBytes", func(t *testing.T) {
+		var c *config.ServiceConfig
+		if got := c.EffectiveMaxLogResponseBytes(); got != config.DefaultMaxLogResponseBytes {
+			t.Errorf("nil: got %d", got)
+		}
+		if got := (&config.ServiceConfig{}).EffectiveMaxLogResponseBytes(); got != config.DefaultMaxLogResponseBytes {
+			t.Errorf("zero: got %d", got)
+		}
+		if got := (&config.ServiceConfig{MaxLogResponseBytes: -1}).EffectiveMaxLogResponseBytes(); got != -1 {
+			t.Errorf("unlimited: got %d", got)
+		}
+		if got := (&config.ServiceConfig{MaxLogResponseBytes: 1024}).EffectiveMaxLogResponseBytes(); got != 1024 {
+			t.Errorf("explicit: got %d", got)
+		}
+	})
+	t.Run("EffectiveLogStreamTimeout", func(t *testing.T) {
+		var c *config.ServiceConfig
+		if got := c.EffectiveLogStreamTimeout(); got != config.DefaultLogStreamTimeout {
+			t.Errorf("nil: got %v", got)
+		}
+		if got := (&config.ServiceConfig{}).EffectiveLogStreamTimeout(); got != config.DefaultLogStreamTimeout {
+			t.Errorf("zero: got %v", got)
+		}
+		if got := (&config.ServiceConfig{LogStreamTimeout: 10 * time.Minute}).EffectiveLogStreamTimeout(); got != 10*time.Minute {
+			t.Errorf("explicit: got %v", got)
+		}
+	})
 	t.Run("ValidateHTTPConfig", func(t *testing.T) {
 		if err := (&config.ServiceConfig{}).ValidateHTTPConfig(); err != nil {
 			t.Errorf("empty: %v", err)
@@ -306,6 +356,15 @@ func TestServiceConfig_HTTP(t *testing.T) {
 		}
 		if err := (&config.ServiceConfig{MaxRequestBodyBytes: -2}).ValidateHTTPConfig(); err == nil {
 			t.Error("max body < -1: want error")
+		}
+		if err := (&config.ServiceConfig{MaxLogResponseBytes: -2}).ValidateHTTPConfig(); err == nil {
+			t.Error("max log response < -1: want error")
+		}
+		if err := (&config.ServiceConfig{MaxLogResponseBytes: -1}).ValidateHTTPConfig(); err != nil {
+			t.Errorf("max log response -1 should be valid: %v", err)
+		}
+		if err := (&config.ServiceConfig{LogStreamTimeout: -1}).ValidateHTTPConfig(); err == nil {
+			t.Error("negative log_stream_timeout: want error")
 		}
 	})
 }

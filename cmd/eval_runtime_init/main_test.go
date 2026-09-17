@@ -238,6 +238,8 @@ func TestDownloadObjectS3Error(t *testing.T) {
 // ListObjects (no real S3) — enough to reach and execute the TM construction line.
 func TestRunMissingEnvVars(t *testing.T) {
 	// Not parallel — modifies process env vars
+	t.Setenv(envHFRepoID, "")
+	t.Setenv(envGitURL, "")
 	t.Setenv(envBucket, "")
 	t.Setenv(envKey, "")
 
@@ -247,6 +249,75 @@ func TestRunMissingEnvVars(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), envBucket) && !strings.Contains(err.Error(), envKey) {
 		t.Fatalf("run() error = %v, want mention of missing env vars", err)
+	}
+}
+
+func TestRun_InvokesHFSuccessfully(t *testing.T) {
+	repoID := "org/offline-dataset"
+	srv := newMockHFServer(t, repoID, map[string]string{"README.md": "hello"}, http.StatusOK)
+	defer srv.Close()
+
+	dest := t.TempDir()
+	meta := t.TempDir()
+	secret := filepath.Join(t.TempDir(), "missing-secret")
+	cache := filepath.Join(t.TempDir(), "hf-cache")
+	origDest, origMeta, origSecret, origCache := destDir, gitMetadataDir, scrtDir, hfCacheDir
+	destDir, gitMetadataDir, scrtDir, hfCacheDir = dest, meta, secret, cache
+	t.Cleanup(func() {
+		destDir, gitMetadataDir, scrtDir, hfCacheDir = origDest, origMeta, origSecret, origCache
+	})
+	t.Setenv("HF_ENDPOINT", srv.URL)
+	t.Setenv(envHFRepoID, repoID)
+	t.Setenv(envHFRevision, "")
+	t.Setenv(envHFSubPath, "")
+	t.Setenv(envHFTimeout, "")
+	t.Setenv(envGitURL, "")
+	t.Setenv(envBucket, "")
+	t.Setenv(envKey, "")
+
+	if err := run(); err != nil {
+		t.Fatalf("run() = %v, want HF success", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "README.md")); err != nil {
+		t.Fatalf("README.md missing after run(): %v", err)
+	}
+}
+
+func TestRunHF_RoutesBeforeS3AndGit(t *testing.T) {
+	t.Setenv(envHFRepoID, "org/offline-dataset")
+	t.Setenv(envHFTimeout, "not-a-duration")
+	t.Setenv(envGitURL, "")
+	t.Setenv(envBucket, "")
+	t.Setenv(envKey, "")
+
+	err := run()
+	if err == nil {
+		t.Fatal("run() = nil, want HF validation error")
+	}
+	if !strings.Contains(err.Error(), envHFTimeout) {
+		t.Fatalf("run() error = %v, want mention of %s", err, envHFTimeout)
+	}
+	if strings.Contains(err.Error(), envBucket) || strings.Contains(err.Error(), envKey) {
+		t.Fatalf("run() routed to S3, got: %v", err)
+	}
+	if strings.Contains(err.Error(), envGitURL) {
+		t.Fatalf("run() routed to git, got: %v", err)
+	}
+}
+
+func TestRunHF_RejectsNonPositiveTimeout(t *testing.T) {
+	t.Setenv(envHFRepoID, "org/offline-dataset")
+	for _, raw := range []string{"0s", "-1s", "0"} {
+		t.Run(raw, func(t *testing.T) {
+			t.Setenv(envHFTimeout, raw)
+			err := runHF()
+			if err == nil {
+				t.Fatal("runHF() = nil, want error for non-positive timeout")
+			}
+			if !strings.Contains(err.Error(), envHFTimeout) {
+				t.Fatalf("runHF() error = %v, want mention of %s", err, envHFTimeout)
+			}
+		})
 	}
 }
 
@@ -338,5 +409,51 @@ func TestDownloadObjectWritesNestedFile(t *testing.T) {
 	}
 	if string(got) != "hello" {
 		t.Fatalf("file contents = %q, want %q", got, "hello")
+	}
+}
+
+func TestReadOptionalSecret(t *testing.T) {
+	secret := t.TempDir()
+	if err := os.WriteFile(filepath.Join(secret, "token"), []byte("hf_abc\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	orig := scrtDir
+	scrtDir = secret
+	t.Cleanup(func() { scrtDir = orig })
+
+	got, err := readOptionalSecret("token")
+	if err != nil {
+		t.Fatalf("readOptionalSecret: %v", err)
+	}
+	if got != "hf_abc" {
+		t.Errorf("readOptionalSecret = %q, want hf_abc", got)
+	}
+
+	got, err = readOptionalSecret("missing")
+	if err != nil {
+		t.Fatalf("readOptionalSecret(missing): %v", err)
+	}
+	if got != "" {
+		t.Errorf("readOptionalSecret(missing) = %q, want empty", got)
+	}
+
+	missingDir := filepath.Join(t.TempDir(), "absent")
+	scrtDir = missingDir
+	got, err = readOptionalSecret("token")
+	if err != nil {
+		t.Fatalf("readOptionalSecret(missing dir): %v", err)
+	}
+	if got != "" {
+		t.Errorf("readOptionalSecret(missing dir) = %q, want empty", got)
+	}
+
+	badDir := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(badDir, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	scrtDir = badDir
+	_, err = readOptionalSecret("token")
+	if err == nil {
+		t.Fatal("readOptionalSecret(invalid dir) = nil, want open error")
 	}
 }

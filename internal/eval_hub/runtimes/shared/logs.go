@@ -94,3 +94,18 @@ func countLogLines(data []byte) int {
 	}
 	return len(lines)
 }
+
+// StreamFileAll streams the entire contents of a file to w.
+// A missing file writes nothing and returns nil.
+func StreamFileAll(path string, w io.Writer) error {
+	f, err := safefile.Open(filepath.Dir(path), filepath.Base(path))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	_, err = io.Copy(w, f)
+	return err
+}

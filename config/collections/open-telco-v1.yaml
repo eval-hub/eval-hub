@@ -18,60 +18,62 @@ tags:
   - reasoning
   - inspect
   - vllm
+agent:
+  result_interpretation:
+    - "Collection pass threshold is the equal-weight average of the four Open-Telco benchmarks: (0.50 + 0.70 + 0.25 + 0.45) / 4 = 0.475"
+    - "HIGHER is better -- all four benchmarks report accuracy"
+    - "telemath: GSMA leaderboard median ≈ 0.42; GPT-5 ≈ 0.79"
+    - "teleqna: GSMA leaderboard median ≈ 0.75; GPT-5 ≈ 0.84"
+    - "telelogs: GSMA leaderboard median ≈ 0.23; GPT-5 ≈ 0.78"
+    - "3gpp-tsg: GSMA leaderboard median ≈ 0.43; GPT-5 ≈ 0.58"
 pass_criteria:
-  # Equal-weight average across four Open-Telco benchmarks:
-  # (0.50 + 0.70 + 0.25 + 0.45) / 4 = 0.475
   threshold: 0.475
 benchmarks:
-  - id: inspect/telemath
+  - id: telemath
     provider_id: inspect
     weight: 1
     primary_score:
       metric: telemath_scorer/accuracy
       lower_is_better: false
     pass_criteria:
-      # GSMA leaderboard median ≈ 0.42; GPT-5 ≈ 0.79.
       threshold: 0.50
     parameters:
       full: true
       num_examples: 50
 
-  - id: inspect/teleqna
+  - id: teleqna
     provider_id: inspect
     weight: 1
     primary_score:
       metric: choice/accuracy
       lower_is_better: false
     pass_criteria:
-      # GSMA leaderboard median ≈ 0.75; GPT-5 ≈ 0.84.
       threshold: 0.70
     parameters:
       full: true
       subject: full
       num_examples: 50
 
-  - id: inspect/telelogs
+  - id: telelogs
     provider_id: inspect
     weight: 1
     primary_score:
       metric: telelogs_scorer/accuracy
       lower_is_better: false
     pass_criteria:
-      # GSMA leaderboard median ≈ 0.23; GPT-5 ≈ 0.78.
       threshold: 0.25
     parameters:
       full: true
       eval_type: soft
       num_examples: 50
 
-  - id: inspect/3gpp-tsg
+  - id: 3gpp-tsg
     provider_id: inspect
     weight: 1
     primary_score:
       metric: pattern/accuracy
       lower_is_better: false
     pass_criteria:
-      # GSMA leaderboard median ≈ 0.43; GPT-5 ≈ 0.58.
       threshold: 0.45
     parameters:
       full: true

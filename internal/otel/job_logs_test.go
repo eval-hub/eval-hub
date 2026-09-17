@@ -2,6 +2,7 @@ package otel
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"sync"
 	"testing"
@@ -129,9 +130,12 @@ func (r *stubLogsRuntime) RunEvaluationJob(_ *api.EvaluationJobResource, _ []api
 func (r *stubLogsRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResource) error {
 	return nil
 }
-func (r *stubLogsRuntime) GetEvaluationLogs(_ *api.EvaluationJobResource, _ []api.EvaluationBenchmarkConfig, _ *int, _ api.EvaluationLogOptions) (string, error) {
+func (r *stubLogsRuntime) StreamEvaluationLogs(_ *api.EvaluationJobResource, _ []api.EvaluationBenchmarkConfig, _ *int, _ api.EvaluationLogOptions, w io.Writer) error {
+	if r.logs != "" {
+		_, _ = io.WriteString(w, r.logs)
+	}
 	close(r.exported)
-	return r.logs, nil
+	return nil
 }
 func (r *stubLogsRuntime) ValidateHardwareProfiles(_ []api.EvaluationBenchmarkConfig) error {
 	return nil

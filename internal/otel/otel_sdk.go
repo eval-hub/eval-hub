@@ -154,6 +154,7 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig, logger *s
 		samplingRatio = *config.SamplingRatio
 	}
 
+	var traceExporter trace.SpanExporter
 	switch config.ExporterType {
 	case ExporterTypeOTLPGRPC:
 		if config.ExporterEndpoint == "" {
@@ -171,20 +172,11 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig, logger *s
 		} else {
 			return nil, fmt.Errorf("No TLS config provided for secure OTEL %s exporter", config.ExporterType)
 		}
-		traceExporter, err := otlptracegrpc.New(ctx, opts...)
+		exporter, err := otlptracegrpc.New(ctx, opts...)
 		if err != nil {
 			return nil, err
 		}
-		res, err := createResource(ctx, config, logger)
-		if err != nil {
-			return nil, err
-		}
-		tracerProvider := trace.NewTracerProvider(
-			trace.WithBatcher(traceExporter, trace.WithBatchTimeout(tracerBatchInterval)),
-			trace.WithSampler(newSampler(samplingRatio)),
-			trace.WithResource(res),
-		)
-		return tracerProvider, nil
+		traceExporter = exporter
 	case ExporterTypeOTLPHTTP:
 		if config.ExporterEndpoint == "" {
 			return nil, fmt.Errorf("Exporter endpoint is required for OTEL %s exporter", config.ExporterType)
@@ -200,32 +192,32 @@ func newTracerProvider(ctx context.Context, config *config.OTELConfig, logger *s
 		} else {
 			return nil, fmt.Errorf("No TLS config provided for secure OTEL %s exporter", config.ExporterType)
 		}
-		traceExporter, err := otlptracehttp.New(ctx, opts...)
+		exporter, err := otlptracehttp.New(ctx, opts...)
 		if err != nil {
 			return nil, err
 		}
-		res, err := createResource(ctx, config, logger)
-		if err != nil {
-			return nil, err
-		}
-		tracerProvider := trace.NewTracerProvider(
-			trace.WithBatcher(traceExporter, trace.WithBatchTimeout(tracerBatchInterval)),
-			trace.WithSampler(newSampler(samplingRatio)),
-			trace.WithResource(res),
-		)
-		return tracerProvider, nil
+		traceExporter = exporter
 	case ExporterTypeStdout:
-		traceExporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+		exporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
 		if err != nil {
 			return nil, err
 		}
-		tracerProvider := trace.NewTracerProvider(
-			trace.WithBatcher(traceExporter, trace.WithBatchTimeout(tracerBatchInterval)),
-		)
-		return tracerProvider, nil
+		traceExporter = exporter
 	default:
 		return nil, fmt.Errorf("Invalid OTEL exporter type: %s", config.ExporterType)
 	}
+
+	// All exporter branches above share the same resource/sampler wiring, so
+	// build it once here rather than duplicating the error handling per branch.
+	res, err := createResource(ctx, config, logger)
+	if err != nil {
+		return nil, err
+	}
+	return trace.NewTracerProvider(
+		trace.WithBatcher(traceExporter, trace.WithBatchTimeout(tracerBatchInterval)),
+		trace.WithSampler(newSampler(samplingRatio)),
+		trace.WithResource(res),
+	), nil
 }
 
 func createResource(ctx context.Context, config *config.OTELConfig, logger *slog.Logger) (*resource.Resource, error) {
@@ -235,7 +227,9 @@ func createResource(ctx context.Context, config *config.OTELConfig, logger *slog
 	}
 	attrs := []attribute.KeyValue{
 		semconv.ServiceName(serviceName),
-		// semconv.ServiceVersion(config.ServiceVersion),
+	}
+	if config.ServiceVersion != "" {
+		attrs = append(attrs, semconv.ServiceVersion(config.ServiceVersion))
 	}
 
 	// Add custom attributes

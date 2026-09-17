@@ -139,7 +139,7 @@ func TestBuildJobSpecJSONHappyPath(t *testing.T) {
 	eval := baseEvaluation()
 	callbackURL := "http://callback.example/status"
 
-	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, &callbackURL)
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, &callbackURL, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -182,7 +182,7 @@ func TestBuildJobSpecJSONHappyPath(t *testing.T) {
 
 func TestBuildJobSpec_ModelNotAliasedToEvaluation(t *testing.T) {
 	eval := baseEvaluation()
-	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -199,7 +199,7 @@ func TestBuildJobSpec_NilModel(t *testing.T) {
 	eval := baseEvaluation()
 	eval.Model = nil
 
-	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -211,7 +211,7 @@ func TestBuildJobSpec_NilModel(t *testing.T) {
 func TestBuildJobSpec_ModelAuthNotAliased(t *testing.T) {
 	eval := baseEvaluation()
 	eval.Model.Auth = &api.ModelAuth{SecretRef: "model-token"}
-	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -227,7 +227,7 @@ func TestBuildJobSpec_ModelAuthNotAliased(t *testing.T) {
 func TestBuildJobSpec_ModelParametersNotAliased(t *testing.T) {
 	eval := baseEvaluation()
 	eval.Model.Parameters = map[string]any{"temperature": 0.7}
-	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -244,7 +244,7 @@ func TestBuildJobSpec_ModelParametersNotAliased(t *testing.T) {
 func TestBuildJobSpecJSONNilCallbackURL(t *testing.T) {
 	eval := baseEvaluation()
 
-	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -258,7 +258,7 @@ func TestBuildJobSpecJSONNilExperiment(t *testing.T) {
 	eval := baseEvaluation()
 	eval.Experiment = nil
 
-	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -274,7 +274,7 @@ func TestBuildJobSpecJSONNilExperiment(t *testing.T) {
 func TestBuildJobSpecJSONNoNumExamples(t *testing.T) {
 	eval := baseEvaluation()
 	// Use bench-2 which has no num_examples
-	spec, err := shared.BuildJobSpec(eval, "provider-2", &eval.Benchmarks[1], 0, nil)
+	spec, err := shared.BuildJobSpec(eval, "provider-2", &eval.Benchmarks[1], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -286,7 +286,7 @@ func TestBuildJobSpecJSONNoNumExamples(t *testing.T) {
 
 func TestBuildJobSpecJSONBenchmarkNotProvided(t *testing.T) {
 	eval := baseEvaluation()
-	_, err := shared.BuildJobSpec(eval, "provider-1", nil, 0, nil)
+	_, err := shared.BuildJobSpec(eval, "provider-1", nil, 0, nil, nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -299,7 +299,7 @@ func TestBuildJobSpecJSONDoesNotMutateOriginalParams(t *testing.T) {
 	eval := baseEvaluation()
 	originalParams := eval.Benchmarks[0].Parameters
 
-	_, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil)
+	_, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -342,6 +342,7 @@ func TestJobSpecSerialization(t *testing.T) {
 		&evaluation.Benchmarks[0],
 		0, // benchmark_index
 		&callbackURL,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("Error building JobSpec: %v\n", err)
@@ -364,8 +365,125 @@ func TestJobSpecSerialization(t *testing.T) {
 	}
 
 	if _, ok := parsed["benchmark_index"]; ok {
-		// fmt.Printf("\n✅ SUCCESS: benchmark_index field is present with value: %v\n", benchmarkIndex)
+		// benchmark_index field is present
 	} else {
 		t.Fatal("❌ FAILURE: benchmark_index field is MISSING from serialized JSON")
+	}
+}
+
+func TestBuildJobSpec_PrimaryScoreFromBenchmarkConfig(t *testing.T) {
+	t.Parallel()
+	eval := baseEvaluation()
+	eval.Benchmarks[0].PrimaryScore = &api.PrimaryScore{
+		Metric:        "output_tokens_per_second",
+		LowerIsBetter: false,
+	}
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil, nil)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if spec.PrimaryScore == nil {
+		t.Fatal("expected PrimaryScore to be set from benchmark config")
+	}
+	if spec.PrimaryScore.Metric != "output_tokens_per_second" {
+		t.Fatalf("expected Metric %q, got %q", "output_tokens_per_second", spec.PrimaryScore.Metric)
+	}
+}
+
+func TestBuildJobSpec_PrimaryScoreFromProvider(t *testing.T) {
+	t.Parallel()
+	eval := baseEvaluation()
+	provider := &api.ProviderResource{
+		ProviderConfig: api.ProviderConfig{
+			Benchmarks: []api.BenchmarkResource{
+				{
+					ID: "bench-1",
+					PrimaryScore: &api.PrimaryScore{
+						Metric:        "output_tokens_per_second",
+						LowerIsBetter: false,
+					},
+				},
+			},
+		},
+	}
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil, provider)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if spec.PrimaryScore == nil {
+		t.Fatal("expected PrimaryScore to be resolved from provider")
+	}
+	if spec.PrimaryScore.Metric != "output_tokens_per_second" {
+		t.Fatalf("expected Metric %q, got %q", "output_tokens_per_second", spec.PrimaryScore.Metric)
+	}
+}
+
+func TestBuildJobSpec_PrimaryScoreBenchmarkOverridesProvider(t *testing.T) {
+	t.Parallel()
+	eval := baseEvaluation()
+	eval.Benchmarks[0].PrimaryScore = &api.PrimaryScore{
+		Metric:        "requests_per_second",
+		LowerIsBetter: false,
+	}
+	provider := &api.ProviderResource{
+		ProviderConfig: api.ProviderConfig{
+			Benchmarks: []api.BenchmarkResource{
+				{
+					ID: "bench-1",
+					PrimaryScore: &api.PrimaryScore{
+						Metric:        "output_tokens_per_second",
+						LowerIsBetter: false,
+					},
+				},
+			},
+		},
+	}
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil, provider)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if spec.PrimaryScore == nil {
+		t.Fatal("expected PrimaryScore to be set")
+	}
+	if spec.PrimaryScore.Metric != "requests_per_second" {
+		t.Fatalf("expected benchmark-level Metric %q to take precedence, got %q", "requests_per_second", spec.PrimaryScore.Metric)
+	}
+}
+
+func TestBuildJobSpec_NoPrimaryScoreWhenNeitherSet(t *testing.T) {
+	t.Parallel()
+	eval := baseEvaluation()
+	provider := &api.ProviderResource{
+		ProviderConfig: api.ProviderConfig{
+			Benchmarks: []api.BenchmarkResource{
+				{ID: "other-bench"},
+			},
+		},
+	}
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil, provider)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if spec.PrimaryScore != nil {
+		t.Fatalf("expected nil PrimaryScore when neither benchmark nor provider define it, got %+v", spec.PrimaryScore)
+	}
+}
+
+func TestBuildJobSpec_NoPrimaryScoreWhenProviderBenchmarkMatchesButNil(t *testing.T) {
+	t.Parallel()
+	eval := baseEvaluation()
+	provider := &api.ProviderResource{
+		ProviderConfig: api.ProviderConfig{
+			Benchmarks: []api.BenchmarkResource{
+				{ID: "bench-1"},
+			},
+		},
+	}
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil, provider)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if spec.PrimaryScore != nil {
+		t.Fatalf("expected nil PrimaryScore when provider benchmark has none, got %+v", spec.PrimaryScore)
 	}
 }

@@ -1,6 +1,7 @@
 package otel
 
 import (
+	"bytes"
 	"context"
 	"log/slog"
 	"strings"
@@ -41,11 +42,13 @@ func ExportJobContainerLogsAsync(
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(parentCtx), jobContainerLogExportTimeout)
 		defer cancel()
 
-		logs, err := runtime.WithContext(ctx).GetEvaluationLogs(
+		var buf bytes.Buffer
+		err := runtime.WithContext(ctx).StreamEvaluationLogs(
 			job,
 			benchmarks,
 			nil,
 			api.EvaluationLogOptions{TailLines: api.DefaultLogTailLines},
+			&buf,
 		)
 		if err != nil {
 			logger.WarnContext(ctx, "failed to fetch container logs for OTEL export",
@@ -54,6 +57,7 @@ func ExportJobContainerLogsAsync(
 			)
 			return
 		}
+		logs := buf.String()
 		if strings.TrimSpace(logs) == "" {
 			return
 		}

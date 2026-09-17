@@ -9,6 +9,8 @@
 [![Signed release](https://github.com/eval-hub/eval-hub/actions/workflows/signed-release.yml/badge.svg)](https://github.com/eval-hub/eval-hub/actions/workflows/signed-release.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/eval-hub/eval-hub/badge)](https://scorecard.dev/viewer/?uri=github.com/eval-hub/eval-hub)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13751/badge)](https://www.bestpractices.dev/projects/13751)
+[![SDK PyPI Version](https://img.shields.io/pypi/v/eval-hub-sdk?label=SDK%20PyPI%20Version)](https://pypi.org/project/eval-hub-sdk/)
+[![SDK Version](https://img.shields.io/github/v/release/eval-hub/eval-hub-sdk?label=SDK)](https://github.com/eval-hub/eval-hub-sdk/releases/latest)
 
 A lightweight REST API service for orchestrating LLM evaluations across multiple backends. Written in Go, it routes evaluation requests to frameworks like lm-evaluation-harness, RAGAS, Garak, and GuideLLM orchestrated via a [complementary SDK](https://github.com/eval-hub/eval-hub-sdk), tracks experiments via MLflow, and runs natively on OpenShift.
 
@@ -206,6 +208,23 @@ Configuration is loaded from `config/config.yaml`, overridden by environment var
 
 Provider configurations live in `config/providers/` as YAML files. The default set includes lm-evaluation-harness (167 benchmarks), RAGAS, Garak, GuideLLM, LightEval, and MTEB.
 
+### Syncing providers and collections to the TrustyAI operator
+
+Provider and collection definitions are maintained here and mirrored as ConfigMaps in the [TrustyAI Service Operator](https://github.com/trustyai-explainability/trustyai-service-operator):
+
+- Providers: `config/providers/` → `config/configmaps/evalhub/provider-*.yaml`
+- Collections: `config/collections/` → `config/configmaps/evalhub/collection-*.yaml`
+
+When adding or changing a provider or collection, update the source YAML in this repository and the corresponding embedded ConfigMap in the operator repository. Add new ConfigMaps to the operator's `config/configmaps/evalhub/kustomization.yaml`. Keep the two repositories' changes coordinated so the operator can deploy the same definitions.
+
+The sync check compares the embedded ConfigMap YAML with the source files. Run it locally with:
+
+```bash
+python scripts/check_configmap_sync.py
+```
+
+The same check runs in CI through the [TrustyAI Operator ConfigMap Sync workflow](.github/workflows/check-trustyai-service-operator-configmap-sync.yml).
+
 ## API overview
 
 All endpoints are versioned under `/api/v1`. Full specification at [eval-hub.github.io/eval-hub](https://eval-hub.github.io/eval-hub/).
@@ -271,6 +290,12 @@ eval-hub/
 ## Local mode
 
 EvalHub can run evaluations locally without a Kubernetes cluster. See the [local mode guide](https://eval-hub.github.io/guides/local-mode/) for configuration, architecture details, and troubleshooting, and the [local mode tutorial](https://eval-hub.github.io/guides/local-mode-tutorial/) for a step-by-step walkthrough. A self-contained [LightEval example](examples/local-lighteval/) is included in this repository.
+
+When local mode has `mlflow.tracking_uri` configured, each local evaluation subprocess automatically receives that direct URI as `MLFLOW_TRACKING_URI`. Local subprocess environment variables are applied in this order, with later values replacing matching earlier values:
+
+1. Inherited process environment
+2. EvalHub and service configuration values
+3. Provider `runtime.local.env` values
 
 ## Further reading
 

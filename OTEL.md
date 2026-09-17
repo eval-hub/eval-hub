@@ -110,6 +110,16 @@ Child spans are created when `otel.enabled` is true (they use the global TracerP
 - Produces client spans for queries when the tracer provider is configured
 - Disable query spans with `disable_database_otel_scan: true` (metrics-only mode still uses `otelsql` when `enable_metrics` is true)
 
+### K8s runtime (`client-go`)
+
+`internal/eval_hub/runtimes/k8s/k8s_otel.go` wraps the `KubernetesHelper` methods that create, delete, or patch cluster resources with spans named `k8s.<operation>` (e.g. `k8s.create_job`, `k8s.delete_configmap`, `k8s.set_secret_owner`, `k8s.patch_job_phase_label`), tagged with `k8s.namespace.name`, `k8s.resource.kind`, and `k8s.resource.name`. List/Get/Stream calls are not spanned.
+
+Because job creation and lifecycle patches run on the runtime's detached background context (see "Trace continuity" below), these spans use `otel.StartLinkedSpan` rather than a plain `tracer.Start`, so the first span against that context links back to the HTTP request that created the job instead of starting an unrelated trace.
+
+### Local runtime (subprocess lifecycle)
+
+`internal/eval_hub/runtimes/local/local_otel.go` wraps each benchmark's subprocess lifecycle (`runBenchmark` — job-spec write, process start, wait, cleanup) in a single `local.run_benchmark` span, tagged with `benchmark.id`, `provider.id`, and `benchmark.index`. Like the K8s runtime spans, it uses `otel.StartLinkedSpan` against the detached per-job context so the span links back to the originating request trace.
+
 ### eval-runtime-sidecar
 
 When `otel.enabled` in `sidecar_config.json`:
@@ -141,17 +151,25 @@ The `/metrics` scrape endpoint itself is **not** wrapped with `otelhttp` or the 
 
 | OTEL name | When recorded | Attributes |
 |-----------|---------------|------------|
-| `evalhub.evaluation_jobs` | Job created, cancelled, or runtime start failed | `action` = `created` \| `cancelled` \| `runtime_start_failed`; `runtime` on create/fail |
-| `evalhub.evaluation_job_completions` | Job transitions into a terminal state | `state` = `completed` \| `failed` \| `cancelled` \| `partially_failed` |
-| `evalhub.benchmark_runtime_errors` | K8s or local runtime fails to schedule/start a benchmark | `runtime` = `kubernetes` \| `local` |
+| `evalhub.evaluation_jobs` | Job created, cancelled, or runtime start failed | `action` = `created` \| `cancelled` \| `runtime_start_failed`; `runtime` on create/fail; `tenant` when known |
+| `evalhub.evaluation_job_completions` | Job transitions into a terminal state | `state` = `completed` \| `failed` \| `cancelled` \| `partially_failed`; `tenant` when known |
+| `evalhub.benchmark_runtime_errors` | K8s or local runtime fails to schedule/start a benchmark | `runtime` = `kubernetes` \| `local`; `tenant` when known |
+| `evalhub.eval.job_state_transitions` | Every job state change (Prometheus-bridged `evalhub_evaluation_jobs_total`) | `provider`, `collection`, `status`, `tenant` when known |
+| `evalhub.eval.job_duration` | Job reaches a terminal state (Prometheus-bridged `evalhub_evaluation_job_duration_seconds`) | `provider`, `collection`, `tenant` when known |
+| `evalhub.eval.active_jobs` / `evalhub.eval.queue_depth` | Job enters/leaves active or queued state | `tenant` when known |
+| `evalhub.eval.errors` | Job- or benchmark-level failure | `error_type`, `provider`, `tenant` when known |
+| `evalhub.eval.benchmark_duration` | Benchmark has both `started_at` and `completed_at` timestamps (Prometheus-bridged `evalhub_benchmark_duration_seconds`) | `benchmark_name`, `provider`, `tenant` when known |
+| `evalhub.eval.benchmark_completions` | Benchmark reaches a terminal state — `completed`, `failed`, or `cancelled` (Prometheus-bridged `evalhub_benchmark_completions_total`) | `benchmark_name`, `provider`, `status`, `tenant` when known |
+| `evalhub.eval.api_request_duration` | Every API request (Prometheus-bridged `evalhub_api_request_duration_seconds`) | `endpoint`, `method`, `collection`, `provider`, `tenant` when known |
 
-Terminal-state completions are recorded from:
+`tenant` is attached only to the OTEL instruments above (via `metrics.withTenantAttr`), never to the underlying Prometheus `*Vec` label sets, to keep Prometheus cardinality bounded — high-cardinality, per-tenant breakdowns are expected to be queried through the OTEL/OTLP path (e.g. SigNoz), not `/metrics`.
 
-- Runtime callbacks (`runtimeStorage.UpdateEvaluationJob`)
-- Events API (`POST /api/v1/evaluations/jobs/{id}/events`) via `recordEvaluationJobTerminalStateAfterUpdate()`
-- Explicit cancel and synchronous runtime-start-failure paths in handlers
+Job-duration and terminal-state metrics are recorded from:
 
-There is no end-to-end job duration histogram and no per-tenant label on domain metrics today.
+- Runtime callbacks (`runtimeStorage.UpdateEvaluationJob`) and the events API (`POST /api/v1/evaluations/jobs/{id}/events`), via `recordEvaluationJobTerminalStateAfterUpdate()`
+- Explicit cancel and synchronous runtime-start-failure paths in handlers, via the shared `recordEvaluationJobTerminalTransition()` helper (`internal/eval_hub/handlers/evaluation_metrics.go`)
+
+Benchmark completions (`evalhub.eval.benchmark_completions`) are recorded alongside benchmark durations in `recordBenchmarkDurations()`, for every benchmark that reaches a terminal state — independent of whether `started_at`/`completed_at` are both present (duration recording requires both; the completion counter does not).
 
 ### Database metrics
 
@@ -170,7 +188,15 @@ When `otelsql` is active and `enable_metrics` is set:
 | `go.sql.connections_closed_max_idle_time` | Observable counter | pool stats |
 | `go.sql.connections_closed_max_lifetime` | Observable counter | pool stats |
 
-There are no semconv `db.client.*` metrics or explicit DB error counters beyond trace span status.
+In addition, `internal/eval_hub/storage/sql/otel_metrics.go` registers a small set of semconv v1.39.0 `db.client.connection.*` pool metrics from the same `sql.DB.Stats()` source, additive to (not a replacement for) the `go.sql.*` instruments above:
+
+| OTEL name | Type | Attributes |
+|-----------|------|------------|
+| `db.client.connection.count` | Observable UpDownCounter | `db.system.name`, `db.client.connection.pool.name`, `db.namespace` (if known), `db.client.connection.state` = `used` \| `idle` |
+| `db.client.connection.max` | Observable UpDownCounter | `db.system.name`, `db.client.connection.pool.name`, `db.namespace` (if known) |
+| `db.client.connection.idle.max` | Observable UpDownCounter | same as above |
+
+Only the pool-size metrics that map cleanly onto `database/sql`'s `DBStats` (or configured `max_idle_conns`) are covered; per-connection histograms (`db.client.connection.create_time`, `.use_time`, `.wait_time`), `db.client.connection.pending_requests`, `db.client.connection.timeouts`, and `db.client.operation.duration` are not implemented because `database/sql` does not expose the underlying per-event data needed to populate them without replacing the driver-level instrumentation (`otelsql`). There are no explicit DB error counters beyond trace span status.
 
 ---
 
@@ -183,7 +209,7 @@ When `otel.enable_logs` is true:
 
 When `otel.enable_job_container_logs` is also true (eval-hub API only):
 
-- On transition to a terminal job state (`completed`, `failed`, `partially_failed`, `cancelled`), eval-hub asynchronously calls `Runtime.GetEvaluationLogs` (tail capped at `DefaultLogTailLines`, 1000) and emits each log line as an OTEL log record with attributes such as `evalhub.job.id`, `evalhub.benchmark.id`, and `evalhub.log.source=container`.
+- On transition to a terminal job state (`completed`, `failed`, `partially_failed`, `cancelled`), eval-hub asynchronously calls `Runtime.StreamEvaluationLogs` (tail capped at `DefaultLogTailLines`, 1000) and emits each log line as an OTEL log record with attributes such as `evalhub.job.id`, `evalhub.benchmark.id`, and `evalhub.log.source=container`.
 - Hook points: `POST /api/v1/evaluations/jobs/{id}/events` and runtime-initiated status updates (`runtimeStorage.UpdateEvaluationJob`).
 - Export runs in a background goroutine (30s timeout) so workload callbacks are not blocked.
 - **Limitations:** cancelled jobs may delete runtime resources before logs are fetched; log export is not triggered on per-benchmark events (only overall job terminal transition).
@@ -209,6 +235,7 @@ On OpenShift, EvalHub is typically deployed via the [TrustyAI service operator](
 | `tracer_timeout` | `tracerTimeout` | Duration string, e.g. `"30s"` |
 | `tracer_batch_interval` | `tracerBatchInterval` | Duration string, e.g. `"5s"` |
 | `service_name` | `serviceName` | |
+| `service_version` | *(not exposed)* | Auto-populated from the binary's build version; overridable via `config.yaml` / env, but not yet exposed through the operator CR |
 | `additional_attributes` | `additionalAttributes` | Map of strings |
 | `enable_ecs_resource_detection` | `enableEcsResourceDetection` | |
 | `disable_redirect_otel_logs` | `disableRedirectOtelLogs` | |
@@ -223,9 +250,11 @@ On OpenShift, EvalHub is typically deployed via the [TrustyAI service operator](
 
 ### Trace continuity
 
-- **Runtime job execution** detaches from the HTTP request trace (`context.Background()` in `executeEvaluationJob`). Background K8s job creation, local subprocess work, and post-request status updates are not linked to the create-job HTTP span.
-- **K8s API calls** (create/delete Job, ConfigMap, Secret) have no dedicated spans.
-- **Runtime/init binaries** are not traced.
+- **Runtime job execution** intentionally detaches from the HTTP request trace's cancellation/deadline (`executeEvaluationJob` uses `otel.DetachedContext(ctx.Ctx)`, not a bare `context.Background()`, so background K8s job creation and local subprocess work outlive the request) — but the detached context still carries the create-job span's context forward as a **link** source (`trace.LinkFromContext`), not a parent, since the async work is only loosely causally related to (and outlives) the triggering request span. `K8sRuntime.RunEvaluationJob`'s background goroutine derives its per-benchmark context the same way (`otel.DetachedContext(r.ctx)`) rather than a fresh `context.Background()`, so it no longer silently drops whatever context was threaded through `WithContext`.
+- **`otel.StartLinkedSpan`** (`internal/otel/span.go`) is the entry point that consumes the link carried by a detached context: it starts a new root span (`trace.WithNewRoot`) and attaches the link from `trace.LinkFromContext(ctx)`, so the first span created against a detached context is associated with the originating request trace without extending its parent-child chain across the async gap. `K8SHelper` (`internal/eval_hub/runtimes/k8s/k8s_otel.go`) and the local runtime's per-benchmark spans (`internal/eval_hub/runtimes/local/local_otel.go`) both use it.
+- **K8s API calls** (create/delete Job, ConfigMap, Secret; owner-reference and Job annotation/label patches) now have dedicated spans (`k8s.create_job`, `k8s.delete_job`, `k8s.create_configmap`, `k8s.delete_configmap`, `k8s.set_configmap_owner`, `k8s.create_secret`, `k8s.delete_secret`, `k8s.set_secret_owner`, `k8s.patch_job_status_annotation`, `k8s.patch_job_phase_label`), tagged with `k8s.namespace.name`, `k8s.resource.kind`, and `k8s.resource.name`. List/Get/Stream operations remain unspanned.
+- **Local subprocess lifecycle** now has one span per benchmark (`local.run_benchmark`, tagged `benchmark.id`, `provider.id`, `benchmark.index`) covering job-spec write, process start, wait, and cleanup in `runBenchmark`.
+- **Runtime/init binaries** (`eval-runtime-init`, `eval-runtime-sidecar`) are still not traced.
 
 ### Instrumentation coverage
 
@@ -233,12 +262,12 @@ On OpenShift, EvalHub is typically deployed via the [TrustyAI service operator](
 |------|--------|
 | `evalhub-mcp` | No OTEL |
 | `eval-runtime-init` | No OTEL |
-| K8s client (`client-go`) | No spans or metrics |
-| Local subprocess lifecycle | No spans or metrics |
+| K8s client (`client-go`) | Spans on Create/Delete Job/ConfigMap/Secret, owner-reference updates, and Job annotation/label patches (linked back to the request trace via `otel.StartLinkedSpan` — see "Trace continuity"); List/Get/Stream calls remain unspanned; no dedicated metrics |
+| Local subprocess lifecycle | One span per benchmark (`local.run_benchmark`, linked back to the request trace); no dedicated metrics |
 | MLflow operations | HTTP transport spans only (no business-level spans) |
 | Health / OpenAPI / docs handlers | otelhttp span only; no `withSpan` children |
-| Benchmark success / completion counters | Errors only (`evalhub.benchmark_runtime_errors`); no success counter |
-| Job duration histogram | Not implemented |
+| Benchmark success / completion counters | Implemented (`evalhub.eval.benchmark_completions`, all terminal states — completed/failed/cancelled), in addition to runtime-level errors (`evalhub.benchmark_runtime_errors`) |
+| Job duration histogram | Implemented (`evalhub.eval.job_duration`); recorded on job-update terminal transitions, cancel, and runtime-start-failure |
 | Metric exemplars (trace ↔ metric links) | Not implemented |
 
 ### Configuration and gating
@@ -246,14 +275,12 @@ On OpenShift, EvalHub is typically deployed via the [TrustyAI service operator](
 - **`otel.enabled` vs signal flags** — `otelhttp` and `withSpan` gate on `otel.enabled`, not separately on `enable_tracing`. With tracing disabled, spans are created against the noop tracer (small overhead, no export).
 - **`enable_logs`** — requires `exporter_type` (defaults to stdout when unset).
 - **`enable_job_container_logs`** — no effect unless `enable_logs` is true; startup logs a warning if misconfigured.
-- **Stdout trace exporter** — OTLP trace paths attach resource attributes; the stdout trace exporter path does not use the same resource setup as OTLP.
-- **`service.version`** — not set on the OTEL resource (commented out in `createResource`).
 - **Prometheus-only deployments** — without `otel.enable_metrics`, `/metrics` exposes default process/Go collectors only, not application HTTP or domain metrics.
 
 ### Sidecar
 
 - OTEL in job pods depends on eval-hub having `otel.enabled` when the job ConfigMap is built.
-- `TLSConfig` is not serialized into `sidecar_config.json`; job pods rely on `exporter_insecure` or file-based TLS settings in the JSON block.
+- **`TLSConfig` is not serialized into `sidecar_config.json` (by design)** — certificate/key material is not written into a ConfigMap; job pods rely on `exporter_insecure` or file-based TLS settings (mounted CA path) in the JSON block instead.
 - No sidecar-specific domain metrics (proxy errors, token cache, etc.).
 - No Prometheus dual-sink on the sidecar process.
 
@@ -287,6 +314,36 @@ make stop-signoz
 | OTLP HTTP | `localhost:4318` |
 
 SigNoz UI is mapped to **3301** so it does not clash with eval-hub on `:8080`.
+
+**Impersonation mode** is enabled by default — the UI loads without a login screen, which is convenient for local development. **Login mode** uses standard SigNoz authentication with a login screen.
+
+Both modes require root-user credentials via environment variables when running `bootstrap-pours.sh`. SigNoz seeds a root user on startup; the credentials must satisfy:
+
+- **`SIGNOZ_USER_ROOT_EMAIL`** — a valid email address
+- **`SIGNOZ_USER_ROOT_PASSWORD`** — at least 8 characters, containing uppercase, lowercase, and a digit
+
+Impersonation mode (default):
+
+```bash
+cd tests/otel
+SIGNOZ_USER_ROOT_EMAIL=<email> \
+  SIGNOZ_USER_ROOT_PASSWORD=<password> \
+  ./scripts/bootstrap-pours.sh
+make start-signoz
+```
+
+Login mode:
+
+```bash
+cd tests/otel
+SIGNOZ_AUTH_MODE=login \
+  SIGNOZ_USER_ROOT_EMAIL=<email> \
+  SIGNOZ_USER_ROOT_PASSWORD=<password> \
+  ./scripts/bootstrap-pours.sh
+make start-signoz
+```
+
+The credentials are written into the generated `.env` file at `tests/otel/pours/deployment/.env` (git-ignored). Re-running `bootstrap-pours.sh` preserves existing credentials from the `.env` unless explicitly overridden via environment variables.
 
 Point eval-hub at SigNoz (local plaintext gRPC):
 
@@ -326,13 +383,16 @@ Files: `tests/otel/pours/deployment/`, `tests/otel/casting.yaml`, `tests/otel/sc
 | Path | Role |
 |------|------|
 | `internal/otel/otel_sdk.go` | SDK bootstrap (tracer, meter, logger providers) |
-| `internal/otel/span.go` | Shared `WithSpan` helper |
+| `internal/otel/span.go` | Shared `WithSpan` helper; `DetachedContext` (request/background trace-link boundary); `StartLinkedSpan` (first span against a detached context) |
+| `internal/eval_hub/runtimes/k8s/k8s_otel.go` | K8s client-go span helpers (`startK8sSpan`/`endK8sSpan`) |
+| `internal/eval_hub/runtimes/local/local_otel.go` | Local runtime per-benchmark span helpers (`startBenchmarkSpan`/`endBenchmarkSpan`) |
 | `internal/eval_hub/metrics/` | Application metric instruments (domain + HTTP semconv) |
 | `internal/eval_hub/server/http_metrics_middleware.go` | HTTP request count and active-request middleware |
 | `internal/eval_hub/server/server.go` | Per-route `otelhttp` registration |
 | `internal/eval_hub/handlers/otel.go` | Handler-level span wrapper |
-| `internal/eval_hub/handlers/evaluation_metrics.go` | Terminal-state metric helper |
+| `internal/eval_hub/handlers/evaluation_metrics.go` | Terminal-state, job-duration, and benchmark-completion metric helpers |
 | `internal/eval_hub/storage/sql/sql.go` | `otelsql` and `ReportDBStatsMetrics` |
+| `internal/eval_hub/storage/sql/otel_metrics.go` | Semconv `db.client.connection.*` pool metrics |
 | `internal/eval_runtime_sidecar/server/server.go` | Sidecar inbound `otelhttp` |
 | `internal/eval_runtime_sidecar/proxy/http_client.go` | Sidecar outbound `otelhttp` transport |
 | `internal/otel/oteltest/` | Mock OTLP collector for export tests |

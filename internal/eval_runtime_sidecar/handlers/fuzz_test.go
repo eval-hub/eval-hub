@@ -68,3 +68,43 @@ func FuzzRequestPathForRouting(f *testing.F) {
 		}
 	})
 }
+
+func FuzzIsEventsPath(f *testing.F) {
+	f.Add("/api/v1/evaluations/jobs/abc-123/events")
+	f.Add("/api/v1/evaluations/jobs/abc-123/events?foo=bar")
+	f.Add("/api/v1/evaluations/jobs//events")
+	f.Add("/api/v1/evaluations/jobs/abc-123/events/extra")
+	f.Add("/api/v1/evaluations/jobs/abc/events/")
+	f.Add("")
+	f.Add("/other/path")
+	f.Add("/api/v1/evaluations/jobs/id/other")
+
+	f.Fuzz(func(t *testing.T, uri string) {
+		got := isEventsPath(uri)
+		// Query/fragment must not change the routing decision.
+		if i := strings.IndexAny(uri, "?#"); i >= 0 {
+			baseGot := isEventsPath(uri[:i])
+			if got != baseGot {
+				t.Fatalf("isEventsPath(%q) = %v but without query/fragment = %v", uri, got, baseGot)
+			}
+		}
+	})
+}
+
+func FuzzSplitPathSegments(f *testing.F) {
+	f.Add("/v2/org/repo/manifests/latest")
+	f.Add("org/repo")
+	f.Add("")
+	f.Add("///multiple///slashes///")
+	f.Add("single")
+	f.Add("/")
+
+	f.Fuzz(func(t *testing.T, p string) {
+		segments := splitPathSegments(p)
+		for _, s := range segments {
+			if s == "" {
+				t.Fatalf("splitPathSegments(%q) produced empty segment", p)
+			}
+		}
+	})
+}

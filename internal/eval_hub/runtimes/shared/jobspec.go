@@ -19,6 +19,7 @@ type JobSpec struct {
 	Tags           []api.ExperimentTag `json:"tags,omitempty"`
 	CallbackURL    *string             `json:"callback_url"`
 	Exports        *JobSpecExports     `json:"exports,omitempty"`
+	PrimaryScore   *api.PrimaryScore   `json:"primary_score,omitempty"`
 }
 
 // JobSpecExports is the subset of EvaluationExports serialized into the job spec (excludes k8s connection config).
@@ -38,6 +39,7 @@ func BuildJobSpec(
 	benchmarkConfig *api.EvaluationBenchmarkConfig,
 	benchmarkIndex int,
 	callbackURL *string,
+	provider *api.ProviderResource,
 ) (*JobSpec, error) {
 	if benchmarkConfig == nil {
 		return nil, fmt.Errorf("benchmark is required")
@@ -55,6 +57,7 @@ func BuildJobSpec(
 		NumExamples:    numExamples,
 		Parameters:     benchmarkParams,
 		CallbackURL:    callbackURL,
+		PrimaryScore:   resolvePrimaryScore(benchmarkConfig, provider),
 	}
 	if evaluation.Experiment != nil {
 		spec.ExperimentName = evaluation.Experiment.Name
@@ -99,6 +102,27 @@ func CopyParams(source map[string]any) map[string]any {
 		clone[key] = value
 	}
 	return clone
+}
+
+// resolvePrimaryScore returns the primary score config for a benchmark,
+// falling back to the provider's benchmark definition when the job-level
+// config does not specify one.
+func resolvePrimaryScore(bench *api.EvaluationBenchmarkConfig, provider *api.ProviderResource) *api.PrimaryScore {
+	if bench.PrimaryScore != nil && bench.PrimaryScore.Metric != "" {
+		return bench.PrimaryScore
+	}
+	if provider != nil {
+		for i := range provider.Benchmarks {
+			if provider.Benchmarks[i].ID == bench.ID {
+				ps := provider.Benchmarks[i].PrimaryScore
+				if ps != nil && ps.Metric != "" {
+					return ps
+				}
+				return nil
+			}
+		}
+	}
+	return nil
 }
 
 // NumExamplesFromParameters extracts num_examples from a parameters map.

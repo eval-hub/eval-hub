@@ -103,15 +103,21 @@ func (tc *scenarioConfig) waitForKubernetesEvaluationJob(state *hardwareProfileS
 		select {
 		case <-ctx.Done():
 			return tc.logError(fmt.Errorf("timeout waiting for Kubernetes Job for evaluation job %s in namespace %s", tc.lastId, namespace))
+		default:
+		}
+		jobs, err := state.k8s.listJobs(ctx, namespace, labelSelector)
+		if err != nil {
+			return tc.logError(fmt.Errorf("list jobs for evaluation job %s: %w", tc.lastId, err))
+		}
+		if len(jobs) >= 1 {
+			tc.lastK8sJobName = jobs[0].Name
+			logDebug("Kubernetes Job created for evaluation job %s: %s\n", tc.lastId, tc.lastK8sJobName)
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return tc.logError(fmt.Errorf("timeout waiting for Kubernetes Job for evaluation job %s in namespace %s", tc.lastId, namespace))
 		case <-ticker.C:
-			jobs, err := state.k8s.listJobs(ctx, namespace, labelSelector)
-			if err != nil {
-				return tc.logError(fmt.Errorf("list jobs for evaluation job %s: %w", tc.lastId, err))
-			}
-			if len(jobs) >= 1 {
-				logDebug("Kubernetes Job created for evaluation job %s: %s\n", tc.lastId, jobs[0].Name)
-				return nil
-			}
 		}
 	}
 }

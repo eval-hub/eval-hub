@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Eval Hub
   description: API REST server for evaluation backend orchestration
-  version: 1.0.1
+  version: 1.0.2
   contact:
     name: API Support
   license:
@@ -54,3 +54,5 @@ paths:
     $ref: paths/api_v1_evaluations_collections.yaml
   /api/v1/evaluations/collections/{id}:
     $ref: paths/api_v1_evaluations_collections_{id}.yaml
+  /api/v1/evaluations/collections/{id}/clones:
+    $ref: paths/api_v1_evaluations_collections_{id}_clones.yaml

@@ -59,7 +59,7 @@ func (r *stubRuntime) RunEvaluationJob(
 		return fmt.Errorf("provider %q not found", bench.ProviderID)
 	}
 
-	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, &bench, 0, nil)
+	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, &bench, 0, nil, &provider)
 	if err != nil {
 		return fmt.Errorf("build job spec: %w", err)
 	}
@@ -88,13 +88,14 @@ func (r *stubRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResource)
 	return nil
 }
 
-func (r *stubRuntime) GetEvaluationLogs(
+func (r *stubRuntime) StreamEvaluationLogs(
 	_ *api.EvaluationJobResource,
 	_ []api.EvaluationBenchmarkConfig,
 	_ *int,
 	_ api.EvaluationLogOptions,
-) (string, error) {
-	return "", nil
+	_ io.Writer,
+) error {
+	return nil
 }
 func (r *stubRuntime) NotifyJobPhaseTransition(_ context.Context, _ *api.EvaluationJobResource, _ int, _ api.State) {
 }

@@ -55,7 +55,7 @@ func RewriteModelURLForLocalSidecar(sidecarBaseURL, jobID, modelURL string) (str
 	if sidecar.Host == "" {
 		return "", fmt.Errorf("invalid sidecar base URL %q: missing host", sidecarBaseURL)
 	}
-	model, err := url.Parse(strings.TrimSuffix(modelURL, "/"))
+	model, err := url.Parse(modelURL)
 	if err != nil {
 		return "", fmt.Errorf("invalid model URL %q: %w", modelURL, err)
 	}

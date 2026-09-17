@@ -27,6 +27,6 @@ properties:
     description: |
       Optional path within the PVC to mount at `/test_data` instead of the PVC root.
       Useful when a single PVC contains data for multiple benchmarks in separate directories.
-example:
-  claim_name: eval-datasets-pvc
-  sub_path: benchmark-a/v1
+examples:
+  - claim_name: eval-datasets-pvc
+    sub_path: benchmark-a/v1

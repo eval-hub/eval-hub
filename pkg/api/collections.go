@@ -37,20 +37,124 @@ type CollectionAgentMetadata struct {
 
 // CollectionConfig represents request to create a collection
 type CollectionConfig struct {
-	Name         string                      `mapstructure:"name" json:"name" validate:"required"`
-	Description  string                      `mapstructure:"description" json:"description,omitempty" validate:"omitempty,max=1024,min=1"`
+	Name        string `mapstructure:"name" json:"name" validate:"required"`
+	Description string `mapstructure:"description" json:"description,omitempty" validate:"omitempty,max=1024,min=1"`
+	// Category is deprecated. Use Domains instead. Retained for backwards compatibility.
+	// Will be made optional and eventually removed in a future version.
 	Category     string                      `mapstructure:"category" json:"category" validate:"required,max=128,min=1"`
 	Tags         []string                    `mapstructure:"tags" json:"tags,omitempty" validate:"omitempty,dive,tagname"`
 	Custom       *map[string]any             `mapstructure:"custom" json:"custom,omitempty"`
 	PassCriteria *PassCriteria               `mapstructure:"pass_criteria" json:"pass_criteria,omitempty"`
 	Benchmarks   []CollectionBenchmarkConfig `mapstructure:"benchmarks" json:"benchmarks" validate:"required,min=1,dive"`
 	Agent        *CollectionAgentMetadata    `mapstructure:"agent" json:"agent,omitempty"`
+
+	// CurationOrder enables to sort curated collections for display.
+	// 0 (or absent) means not curated. Positive integers give display position:
+	// lower value = higher on the display (1 appears before 2). Admin-only via YAML;
+	// the server rejects writes from tenant API consumers.
+	CurationOrder int `mapstructure:"curation_order" json:"curation_order,omitempty" validate:"omitempty,min=0"`
+
+	// Domains lists the high-level evaluation domains (snake_case). Supersedes Category.
+	// If not set, the handler auto-computes the union from BenchmarkResource.Domains entries.
+	Domains []string `mapstructure:"domains" json:"domains,omitempty"`
+
+	// Tasks lists the ML tasks evaluated (snake_case).
+	// If not set, the handler auto-computes the union from BenchmarkResource.Tasks entries.
+	Tasks []string `mapstructure:"tasks" json:"tasks,omitempty"`
+
+	// Modalities lists the data modalities (snake_case).
+	// If not set, the handler auto-computes the union from BenchmarkResource.Modalities entries.
+	Modalities []string `mapstructure:"modalities" json:"modalities,omitempty"`
+
+	// Industries lists the target business industries (snake_case).
+	// Collection-level only — same benchmark may serve different industries depending on context.
+	Industries []string `mapstructure:"industries" json:"industries,omitempty"`
+
+	// EvaluationTargets lists the AI entity types this collection evaluates (snake_case).
+	// If not set, the handler auto-computes the union from BenchmarkResource.EvaluationTargets entries.
+	// Example values: model, agent.
+	EvaluationTargets []string `mapstructure:"evaluation_targets" json:"evaluation_targets,omitempty"`
+}
+
+// CollectionStatus holds server-managed mutable runtime counters for custom (tenant-scoped) collections.
+// It is never user-supplied and never written to YAML configuration.
+// Absent on system collections.
+type CollectionStatus struct {
+	// RunCount is the number of EvaluationJobs created from this collection by its owning tenant.
+	// Per-tenant counter, incremented at job creation.
+	RunCount int `json:"run_count,omitempty"`
 }
 
 // CollectionResource represents collection resource
 type CollectionResource struct {
 	Resource Resource `json:"resource"`
+
+	// DerivedFrom is the ID of the collection this was copied from.
+	// Set by the server when POST /collections/{id}/clones is called; immutable thereafter.
+	// Absent when the collection was not created via clone.
+	DerivedFrom string `json:"derived_from,omitempty"`
+
+	// PinnedOrder controls the ordering priority of this collection within the tenant's personal
+	// collection listing. 0 = not ordered (default). Positive integers specify relative priority —
+	// lower values appear first (1 before 2). Settable by the collection owner via PATCH /collections/{id}.
+	PinnedOrder int `json:"pinned_order,omitempty"`
+
 	CollectionConfig
+
+	// Status holds server-managed mutable runtime counters. Present only on custom (tenant-scoped)
+	// collections; nil for system collections.
+	Status *CollectionStatus `json:"status,omitempty"`
+}
+
+// ApplyOverrides returns a new CollectionConfig that is a copy of c with any
+// non-zero fields from overrides applied on top. CurationOrder is never copied
+// from overrides — it is always reset to 0 for caller-controlled collections.
+func (c CollectionConfig) ApplyOverrides(overrides *CollectionConfig) CollectionConfig {
+	if overrides == nil {
+		return c
+	}
+	if overrides.Name != "" {
+		c.Name = overrides.Name
+	}
+	if overrides.Description != "" {
+		c.Description = overrides.Description
+	}
+	if overrides.Category != "" {
+		c.Category = overrides.Category
+	}
+	if len(overrides.Tags) > 0 {
+		c.Tags = overrides.Tags
+	}
+	if overrides.PassCriteria != nil {
+		c.PassCriteria = overrides.PassCriteria
+	}
+	if len(overrides.Benchmarks) > 0 {
+		c.Benchmarks = overrides.Benchmarks
+	}
+	if len(overrides.Domains) > 0 {
+		c.Domains = overrides.Domains
+	}
+	if len(overrides.Tasks) > 0 {
+		c.Tasks = overrides.Tasks
+	}
+	if len(overrides.Modalities) > 0 {
+		c.Modalities = overrides.Modalities
+	}
+	if len(overrides.Industries) > 0 {
+		c.Industries = overrides.Industries
+	}
+	if len(overrides.EvaluationTargets) > 0 {
+		c.EvaluationTargets = overrides.EvaluationTargets
+	}
+	if overrides.Custom != nil {
+		c.Custom = overrides.Custom
+	}
+	if overrides.Agent != nil {
+		c.Agent = overrides.Agent
+	}
+	// CurationOrder is admin-only — never accepted from user overrides
+	c.CurationOrder = 0
+	return c
 }
 
 // CollectionResourceList represents list of collection resources with pagination

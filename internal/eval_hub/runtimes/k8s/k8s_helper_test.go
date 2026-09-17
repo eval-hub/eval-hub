@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"io"
 	"strings"
 	"testing"
 
@@ -34,6 +35,33 @@ func TestCreateConfigMapRequiresNamespaceAndName(t *testing.T) {
 	if _, err := helper.CreateConfigMap(context.Background(), "default", "", map[string]string{}, nil); err == nil {
 		t.Fatalf("expected error for missing name")
 	}
+}
+
+func TestGetConfigMap(t *testing.T) {
+	t.Run("requires namespace and name", func(t *testing.T) {
+		helper := &KubernetesHelper{clientset: fake.NewSimpleClientset()}
+		if _, err := helper.GetConfigMap(context.Background(), "", "name"); err == nil {
+			t.Fatal("expected error for missing namespace")
+		}
+		if _, err := helper.GetConfigMap(context.Background(), "default", ""); err == nil {
+			t.Fatal("expected error for missing name")
+		}
+	})
+
+	t.Run("returns existing ConfigMap", func(t *testing.T) {
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "my-evalhub-mlflow-ca-bundle", Namespace: "team-a"},
+			Data:       map[string]string{"ca-bundle.crt": "PEM"},
+		}
+		helper := &KubernetesHelper{clientset: fake.NewSimpleClientset(cm)}
+		got, err := helper.GetConfigMap(context.Background(), "team-a", "my-evalhub-mlflow-ca-bundle")
+		if err != nil {
+			t.Fatalf("GetConfigMap: %v", err)
+		}
+		if got.Data["ca-bundle.crt"] != "PEM" {
+			t.Fatalf("unexpected data: %#v", got.Data)
+		}
+	})
 }
 
 func TestCreateJobRequiresNamespaceAndName(t *testing.T) {
@@ -104,26 +132,27 @@ func TestListPodsRequiresNamespace(t *testing.T) {
 	}
 }
 
-func TestGetPodLogsRequiresNamespaceAndPodName(t *testing.T) {
+func TestStreamPodLogsRequiresNamespaceAndPodName(t *testing.T) {
 	helper := &KubernetesHelper{}
-	if _, err := helper.GetPodLogs(context.Background(), "", "pod-1", nil); err == nil {
+	if err := helper.StreamPodLogs(context.Background(), "", "pod-1", nil, io.Discard); err == nil {
 		t.Fatal("expected error for missing namespace")
 	}
-	if _, err := helper.GetPodLogs(context.Background(), "default", "", nil); err == nil {
+	if err := helper.StreamPodLogs(context.Background(), "default", "", nil, io.Discard); err == nil {
 		t.Fatal("expected error for missing pod name")
 	}
 }
 
-func TestGetPodLogsReturnsStreamContent(t *testing.T) {
+func TestStreamPodLogsReturnsStreamContent(t *testing.T) {
 	clientset := fake.NewClientset(&corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "pod-1", Namespace: "default"},
 	})
 	helper := &KubernetesHelper{clientset: clientset}
-	got, err := helper.GetPodLogs(context.Background(), "default", "pod-1", nil)
+	var buf strings.Builder
+	err := helper.StreamPodLogs(context.Background(), "default", "pod-1", nil, &buf)
 	if err != nil {
-		t.Fatalf("GetPodLogs: %v", err)
+		t.Fatalf("StreamPodLogs: %v", err)
 	}
-	if got != "fake logs" {
+	if got := buf.String(); got != "fake logs" {
 		t.Fatalf("got %q, want fake logs", got)
 	}
 }

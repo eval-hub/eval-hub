@@ -1,0 +1,26 @@
+id: tool-use-v1
+name: Tool Use & Function Calling v1
+category: tool_use
+description: >
+  Evaluates LLM ability to correctly invoke APIs and tools. BFCL (Berkeley Function Calling
+  Leaderboard) tests simple, parallel, multiple, and executable API invocations.
+  Part of the Curated Collections taxonomy (#916).
+tags:
+  - tool-use
+  - function-calling
+  - api
+  - inspect-evals
+  - curated
+domains:
+  - tool_use_and_function_calling
+pass_criteria:
+  threshold: 0.60
+benchmarks:
+  - id: inspect/bfcl
+    provider_id: inspect
+    weight: 1
+    primary_score:
+      metric: accuracy/accuracy
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.60

@@ -2,6 +2,8 @@ package proxy
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
@@ -84,6 +86,51 @@ func SetAuthHeader(req *http.Request, token string) {
 	req.Header.Set("Authorization", token)
 }
 
+// proxyModifyResponse returns a ModifyResponse callback that logs the upstream response.
+func proxyModifyResponse(logger *slog.Logger, msg string) func(*http.Response) error {
+	return func(resp *http.Response) error {
+		if resp.Request != nil {
+			l := loggerForRequest(logger, resp.Request)
+			attrs := []any{"method", resp.Request.Method, "url", resp.Request.URL.String(), "status", resp.StatusCode}
+			switch {
+			case resp.StatusCode >= 500:
+				l.Error(msg, attrs...)
+			case resp.StatusCode >= 400:
+				l.Warn(msg, attrs...)
+			default:
+				l.Info(msg, attrs...)
+			}
+		}
+		return nil
+	}
+}
+
+// proxyErrorHandler returns an ErrorHandler callback that logs and returns 502 Bad Gateway.
+func proxyErrorHandler(logger *slog.Logger, msg string) func(http.ResponseWriter, *http.Request, error) {
+	return func(w http.ResponseWriter, req *http.Request, err error) {
+		loggerForRequest(logger, req).Error(msg,
+			"method", req.Method, "url", req.URL.String(), "error", err)
+		http.Error(w, err.Error(), http.StatusBadGateway)
+	}
+}
+
+// newSyntheticResponse builds an *http.Response locally without forwarding to any upstream.
+// The response includes the request ID from X-Global-Transaction-Id (or a new UUID).
+func newSyntheticResponse(req *http.Request, statusCode int, body io.Reader) *http.Response {
+	header := make(http.Header)
+	header.Set(globalTransactionIDHeader, getOrCreateRequestID(req))
+	return &http.Response{
+		StatusCode: statusCode,
+		Status:     fmt.Sprintf("%d %s", statusCode, http.StatusText(statusCode)),
+		Body:       io.NopCloser(body),
+		Header:     header,
+		Request:    req,
+		Proto:      "HTTP/1.1",
+		ProtoMajor: 1,
+		ProtoMinor: 1,
+	}
+}
+
 // NewReverseProxy returns an httputil.ReverseProxy that forwards to target using client.
 // Per-request auth is read from the request context (ContextWithAuthInput). Logger is used for request/response logging.
 // If modifyResponse is non-nil, it runs before the built-in response log (same contract as httputil.ReverseProxy.ModifyResponse).
@@ -109,22 +156,17 @@ func NewReverseProxy(target *url.URL, client *http.Client, logger *slog.Logger, 
 		reqLog.Info("Proxying request", "method", pr.Out.Method, "url", pr.Out.URL.String())
 	}
 
+	baseModify := proxyModifyResponse(logger, "Response from proxy")
 	proxy.ModifyResponse = func(resp *http.Response) error {
 		if modifyResponse != nil {
 			if err := modifyResponse(resp); err != nil {
 				return err
 			}
 		}
-		if resp.Request != nil {
-			loggerForRequest(logger, resp.Request).Info("Response from proxy", "method", resp.Request.Method, "url", resp.Request.URL.String(), "status", resp.StatusCode)
-		}
-		return nil
+		return baseModify(resp)
 	}
 
-	proxy.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {
-		loggerForRequest(logger, req).Error("Error proxying request", "method", req.Method, "url", req.URL.String(), "error", err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
-	}
+	proxy.ErrorHandler = proxyErrorHandler(logger, "Error proxying request")
 
 	return proxy
 }

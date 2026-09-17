@@ -1,0 +1,72 @@
+type: object
+description: |
+  Hugging Face Hub repository test data. Only applies when Eval Hub runs the benchmark as a
+  **Kubernetes Job** (cluster execution). It does not apply to local-only evaluation runs.
+
+  The repository is downloaded at **`revision`** (or the default branch when omitted) into
+  **`/test_data`** before the adapter runs. If **`sub_path`** is provided, only that path
+  within the repository is exposed.
+
+  The resolved commit SHA is recorded as **`resolved_sha`** on the parent
+  **`test_data_ref`** object on the evaluation job response, providing revision-level
+  reproducibility.
+
+  **Public repositories** — omit `secret_ref`; the repository may be downloaded without
+  credentials.
+
+  **Gated repositories** — supply a **`secret_ref`** pointing to a Kubernetes Secret of type
+  `Opaque` in the same namespace as the evaluation job:
+
+  ```yaml
+  apiVersion: v1
+  kind: Secret
+  metadata:
+    name: my-hf-credentials
+  type: Opaque
+  stringData:
+    token: hf_xxxxxxxxxxxx
+  ```
+
+  Do not put credentials in the Eval Hub API request body; only reference an existing
+  Secret via **`secret_ref`**.
+required:
+  - repo_id
+properties:
+  repo_id:
+    type: string
+    description: |
+      Hugging Face Hub repository ID (for example `cais/mmlu` or `my-org/my-dataset`).
+    examples:
+      - cais/mmlu
+  revision:
+    type: string
+    description: |
+      Revision to download — a branch name, tag name, or commit SHA. When omitted, the
+      repository default branch is used.
+
+      - **Branch**: `main`, `feat/my-branch`
+      - **Tag**: `v1.0.0`
+      - **Commit SHA**: `a3f9c12e8b...` (full or abbreviated hex)
+    examples:
+      - main
+  sub_path:
+    type: string
+    description: |
+      Optional path within the repository to mount at `/test_data` instead of the
+      repository root. Useful when the repository contains data for multiple benchmarks
+      in separate directories.
+    examples:
+      - data/train
+  secret_ref:
+    type: string
+    description: |
+      Name of a Kubernetes **`Secret`** of type `Opaque` containing a **`token`** key in the
+      evaluation job namespace, mounted read-only into the test-data init container.
+      Omit for public repositories.
+    examples:
+      - my-hf-credentials
+examples:
+  - repo_id: cais/mmlu
+    revision: main
+    sub_path: data/train
+    secret_ref: my-hf-credentials

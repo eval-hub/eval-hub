@@ -26,7 +26,7 @@ func TestBuildJobUsesJobConfigSidecarPort(t *testing.T) {
 		sidecarConfig:  sc,
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestBuildJobRejectsOutOfRangeSidecarPort(t *testing.T) {
 				Port: port,
 			},
 		}
-		_, err := buildJob(cfg)
+		_, err := buildJob(cfg, nil)
 		if err == nil {
 			t.Fatalf("expected error for sidecar port %d", port)
 		}
@@ -69,6 +69,15 @@ func findContainer(containers []corev1.Container, name string) *corev1.Container
 		}
 	}
 	return nil
+}
+
+func mustFindContainer(t *testing.T, containers []corev1.Container, name string) *corev1.Container {
+	t.Helper()
+	c := findContainer(containers, name)
+	if c == nil {
+		t.Fatalf("expected container %q", name)
+	}
+	return c
 }
 
 func findVolume(volumes []corev1.Volume, name string) *corev1.Volume {
@@ -171,7 +180,7 @@ func TestBuildJobHasEvaluationPhasePendingLabel(t *testing.T) {
 		benchmarkID:    "bench-1",
 		adapterImage:   "adapter:latest",
 	}
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -190,7 +199,7 @@ func TestBuildJobRequiresAdapterImage(t *testing.T) {
 		benchmarkID:    "bench-1",
 	}
 
-	_, err := buildJob(cfg)
+	_, err := buildJob(cfg, nil)
 	if err == nil {
 		t.Fatalf("expected error for missing adapter image")
 	}
@@ -208,7 +217,7 @@ func TestBuildJobAnnotations(t *testing.T) {
 		defaultEnv:     []api.EnvVar{},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}

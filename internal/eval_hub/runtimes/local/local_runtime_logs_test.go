@@ -1,6 +1,7 @@
 package local
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -11,7 +12,7 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
-func TestGetEvaluationLogsSingleBenchmark(t *testing.T) {
+func TestStreamEvaluationLogsSingleBenchmark(t *testing.T) {
 	providerID := "provider-1"
 	jobID := "job-logs-1"
 	evaluation := sampleEvaluation(providerID)
@@ -33,17 +34,18 @@ func TestGetEvaluationLogsSingleBenchmark(t *testing.T) {
 		t.Fatalf("GetJobBenchmarks: %v", err)
 	}
 
+	var buf bytes.Buffer
 	idx := 0
-	got, err := rt.GetEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10})
+	err = rt.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10}, &buf)
 	if err != nil {
-		t.Fatalf("GetEvaluationLogs: %v", err)
+		t.Fatalf("StreamEvaluationLogs: %v", err)
 	}
-	if got != "line1\nline2" {
+	if got := buf.String(); got != "line1\nline2" {
 		t.Fatalf("got %q, want %q", got, "line1\nline2")
 	}
 }
 
-func TestGetEvaluationLogsAllBenchmarks(t *testing.T) {
+func TestStreamEvaluationLogsAllBenchmarks(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
@@ -74,16 +76,18 @@ func TestGetEvaluationLogsAllBenchmarks(t *testing.T) {
 		t.Fatalf("GetJobBenchmarks: %v", err)
 	}
 
-	got, err := rt.GetEvaluationLogs(evaluation, benchmarks, nil, api.EvaluationLogOptions{TailLines: 10})
+	var buf bytes.Buffer
+	err = rt.StreamEvaluationLogs(evaluation, benchmarks, nil, api.EvaluationLogOptions{TailLines: 10}, &buf)
 	if err != nil {
-		t.Fatalf("GetEvaluationLogs: %v", err)
+		t.Fatalf("StreamEvaluationLogs: %v", err)
 	}
-	if want := "=== pod=job-logs-2-0 container=local benchmark_id=bench-1 ===\nlog-0\n=== pod=job-logs-2-1 container=local benchmark_id=bench-2 ===\nlog-1"; got != want {
+	want := "=== pod=job-logs-2-0 container=local benchmark_id=bench-1 ===\nlog-0\n=== pod=job-logs-2-1 container=local benchmark_id=bench-2 ===\nlog-1"
+	if got := buf.String(); got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
 
-func TestGetEvaluationLogsInvalidBenchmarkIndex(t *testing.T) {
+func TestStreamEvaluationLogsInvalidBenchmarkIndex(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 	rt := &LocalRuntime{logger: discardLogger(), ctx: context.Background()}
@@ -92,34 +96,87 @@ func TestGetEvaluationLogsInvalidBenchmarkIndex(t *testing.T) {
 		t.Fatalf("GetJobBenchmarks: %v", err)
 	}
 
+	var buf bytes.Buffer
 	idx := 3
-	_, err = rt.GetEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10})
+	err = rt.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10}, &buf)
 	if err == nil {
 		t.Fatal("expected error for out-of-range benchmark index")
 	}
 }
 
-func TestGetEvaluationLogsRequiresContext(t *testing.T) {
+func TestStreamEvaluationLogsRequiresContext(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 	rt := &LocalRuntime{logger: discardLogger()}
-	_, err := rt.GetEvaluationLogs(evaluation, evaluation.Benchmarks, nil, api.EvaluationLogOptions{TailLines: 10})
+	var buf bytes.Buffer
+	err := rt.StreamEvaluationLogs(evaluation, evaluation.Benchmarks, nil, api.EvaluationLogOptions{TailLines: 10}, &buf)
 	if err == nil {
 		t.Fatal("expected error for nil context")
 	}
 }
 
-func TestGetEvaluationLogsRejectsEmptyBenchmarks(t *testing.T) {
+func TestStreamEvaluationLogsRejectsEmptyBenchmarks(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
 	rt := &LocalRuntime{logger: discardLogger(), ctx: context.Background()}
-	_, err := rt.GetEvaluationLogs(evaluation, nil, nil, api.EvaluationLogOptions{TailLines: 10})
+	var buf bytes.Buffer
+	err := rt.StreamEvaluationLogs(evaluation, nil, nil, api.EvaluationLogOptions{TailLines: 10}, &buf)
 	if err == nil {
 		t.Fatal("expected error for empty benchmarks")
 	}
 }
 
-func TestGetEvaluationLogsHeaderOnlyWhenLogMissing(t *testing.T) {
+func TestStreamEvaluationLogsTailLinesAllLines(t *testing.T) {
+	providerID := "provider-1"
+	jobID := "job-logs-alllines"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Resource.ID = jobID
+	dirName := localJobDir(jobID, 0, providerID, "bench-1")
+	cleanupDir(t, jobID)
+
+	if err := os.MkdirAll(dirName, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	logPath := filepath.Join(dirName, "jobrun.log")
+	if err := os.WriteFile(logPath, []byte("line1\nline2\nline3\n"), 0644); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+
+	rt := &LocalRuntime{logger: discardLogger(), ctx: context.Background()}
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("GetJobBenchmarks: %v", err)
+	}
+
+	var buf bytes.Buffer
+	idx := 0
+	err = rt.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: api.AllLogLines}, &buf)
+	if err != nil {
+		t.Fatalf("StreamEvaluationLogs: %v", err)
+	}
+	if got := buf.String(); got != "line1\nline2\nline3\n" {
+		t.Fatalf("got %q, want %q", got, "line1\nline2\nline3\n")
+	}
+}
+
+func TestStreamEvaluationLogsNegativeBenchmarkIndex(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	rt := &LocalRuntime{logger: discardLogger(), ctx: context.Background()}
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("GetJobBenchmarks: %v", err)
+	}
+
+	var buf bytes.Buffer
+	idx := -1
+	err = rt.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10}, &buf)
+	if err == nil {
+		t.Fatal("expected error for negative benchmark index")
+	}
+}
+
+func TestStreamEvaluationLogsHeaderOnlyWhenLogMissing(t *testing.T) {
 	providerID := "provider-1"
 	jobID := "job-logs-missing-file"
 	evaluation := sampleEvaluation(providerID)
@@ -132,12 +189,78 @@ func TestGetEvaluationLogsHeaderOnlyWhenLogMissing(t *testing.T) {
 		t.Fatalf("GetJobBenchmarks: %v", err)
 	}
 
-	got, err := rt.GetEvaluationLogs(evaluation, benchmarks, nil, api.EvaluationLogOptions{TailLines: 10})
+	var buf bytes.Buffer
+	err = rt.StreamEvaluationLogs(evaluation, benchmarks, nil, api.EvaluationLogOptions{TailLines: 10}, &buf)
 	if err != nil {
-		t.Fatalf("GetEvaluationLogs: %v", err)
+		t.Fatalf("StreamEvaluationLogs: %v", err)
 	}
-	want := "=== pod=job-logs-missing-file-0 container=local benchmark_id=bench-1 ==="
-	if got != want {
+	want := "=== pod=job-logs-missing-file-0 container=local benchmark_id=bench-1 ===\n"
+	if got := buf.String(); got != want {
 		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestStreamEvaluationLogsAllLines(t *testing.T) {
+	providerID := "provider-1"
+	jobID := "job-logs-all"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Resource.ID = jobID
+	dirName := localJobDir(jobID, 0, providerID, "bench-1")
+	cleanupDir(t, jobID)
+
+	if err := os.MkdirAll(dirName, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	content := "line1\nline2\nline3\n"
+	if err := os.WriteFile(filepath.Join(dirName, "jobrun.log"), []byte(content), 0644); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+
+	rt := &LocalRuntime{logger: discardLogger(), ctx: context.Background()}
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("GetJobBenchmarks: %v", err)
+	}
+
+	var buf bytes.Buffer
+	idx := 0
+	err = rt.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: api.AllLogLines}, &buf)
+	if err != nil {
+		t.Fatalf("StreamEvaluationLogs: %v", err)
+	}
+	if got := buf.String(); got != content {
+		t.Fatalf("got %q, want %q", got, content)
+	}
+}
+
+func TestStreamEvaluationLogsSingleBenchmarkNoHeader(t *testing.T) {
+	providerID := "provider-1"
+	jobID := "job-logs-no-header"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Resource.ID = jobID
+	dirName := localJobDir(jobID, 0, providerID, "bench-1")
+	cleanupDir(t, jobID)
+
+	if err := os.MkdirAll(dirName, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dirName, "jobrun.log"), []byte("data\n"), 0644); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+
+	rt := &LocalRuntime{logger: discardLogger(), ctx: context.Background()}
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("GetJobBenchmarks: %v", err)
+	}
+
+	var buf bytes.Buffer
+	idx := 0
+	err = rt.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10}, &buf)
+	if err != nil {
+		t.Fatalf("StreamEvaluationLogs: %v", err)
+	}
+	if got := buf.String(); got != "data" {
+		t.Fatalf("got %q, want %q (no header for single benchmark)", got, "data")
 	}
 }

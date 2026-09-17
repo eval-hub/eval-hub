@@ -1,0 +1,78 @@
+post:
+  tags:
+    - Collections
+  summary: Copy Collection
+  description: >
+    Creates a new tenant-scoped (custom) collection as a copy of the specified source
+    collection. The server copies all CollectionConfig fields from the source, assigns
+    a new ID with scope=tenant, and records the source ID in derived_from
+    for provenance. The request body may include optional overrides (e.g. a new name).
+  operationId: post_collections_id_clones
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        title: Collection Id
+      description: ID of the source collection to copy.
+  requestBody:
+    required: false
+    description: >
+      Optional field overrides for the cloned collection. Any field omitted here
+      is inherited from the source collection, except curation_order. Clone
+      requests never accept curation_order, and the server always resets it to 0.
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/CollectionCloneRequest.yaml
+        examples:
+          CopyWithNewName:
+            summary: Copy with a new name and domain override
+            value:
+              name: "my-custom-rag-eval"
+              domains:
+                - grounded_document_understanding
+  responses:
+    '201':
+      description: Cloned collection created successfully.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/CollectionResource.yaml
+          examples:
+            response:
+              summary: Newly cloned custom collection
+              value:
+                resource:
+                  id: "b2c3d4e5-6789-0abc-def1-23456789abcd"
+                  tenant: "my-tenant"
+                  created_at: "2026-08-25T10:00:00Z"
+                  updated_at: "2026-08-25T10:00:00Z"
+                  owner: "user@example.com"
+                derived_from: "e5f6a7b8-9012-3456-cdef-0123456789ab"
+                pinned_order: 0
+                status:
+                  run_count: 0
+                name: "my-rag-evaluation"
+                category: "document_understanding"
+                tasks:
+                  - rag
+                  - grounding_discipline
+                modalities:
+                  - text
+                benchmarks:
+                  - id: "crag"
+                    provider_id: "ragas"
+                    weight: 1.0
+                    primary_score:
+                      metric: "answer_correctness"
+                      lower_is_better: false
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml

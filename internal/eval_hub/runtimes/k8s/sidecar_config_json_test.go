@@ -33,6 +33,76 @@ func TestSidecarForJobPodSetsMLFlowTokenPath(t *testing.T) {
 	}
 }
 
+func TestSidecarForJobPodSetsMLFlowCACertPath(t *testing.T) {
+	cfg := &config.Config{
+		Sidecar: &config.SidecarConfig{BaseURL: config.DefaultSidecarBaseURL},
+		MLFlow:  &config.MLFlowConfig{CACertPath: "/custom/mlflow-ca.pem"},
+	}
+
+	t.Run("prefers operator-merged MLflow CA bundle", func(t *testing.T) {
+		jc := &jobConfig{
+			mlflowTrackingURI:       "https://mlflow.example:443",
+			mlflowCABundleConfigMap: "evalhub-mlflow-ca-bundle",
+			serviceCAConfigMap:      "evalhub-service-ca",
+		}
+		export, err := sidecarForJobPod(cfg, jc)
+		if err != nil {
+			t.Fatalf("sidecarForJobPod: %v", err)
+		}
+		want := mlflowCABundleMountPath + "/" + mlflowCABundleFile
+		if export.MLFlow.CACertPath != want {
+			t.Fatalf("CACertPath = %q, want %q", export.MLFlow.CACertPath, want)
+		}
+	})
+
+	t.Run("falls back to MLFLOW_CA_CERT_PATH when bundle unset", func(t *testing.T) {
+		jc := &jobConfig{mlflowTrackingURI: "https://mlflow.example:443"}
+		export, err := sidecarForJobPod(cfg, jc)
+		if err != nil {
+			t.Fatalf("sidecarForJobPod: %v", err)
+		}
+		if export.MLFlow.CACertPath != "/custom/mlflow-ca.pem" {
+			t.Fatalf("CACertPath = %q, want custom path", export.MLFlow.CACertPath)
+		}
+	})
+
+	t.Run("falls back to service CA when no bundle or custom path", func(t *testing.T) {
+		jc := &jobConfig{
+			mlflowTrackingURI:  "https://mlflow.example:443",
+			serviceCAConfigMap: "evalhub-service-ca",
+		}
+		export, err := sidecarForJobPod(&config.Config{Sidecar: &config.SidecarConfig{}}, jc)
+		if err != nil {
+			t.Fatalf("sidecarForJobPod: %v", err)
+		}
+		want := serviceCAMountPath + "/" + serviceCABundleFile
+		if export.MLFlow.CACertPath != want {
+			t.Fatalf("CACertPath = %q, want %q", export.MLFlow.CACertPath, want)
+		}
+	})
+
+	t.Run("keeps EvalHub API TLS on service CA", func(t *testing.T) {
+		jc := &jobConfig{
+			evalHubURL:              "https://evalhub.svc:8443",
+			mlflowTrackingURI:       "https://mlflow.example:443",
+			mlflowCABundleConfigMap: "evalhub-mlflow-ca-bundle",
+			serviceCAConfigMap:      "evalhub-service-ca",
+		}
+		export, err := sidecarForJobPod(cfg, jc)
+		if err != nil {
+			t.Fatalf("sidecarForJobPod: %v", err)
+		}
+		wantEvalHub := serviceCAMountPath + "/" + serviceCABundleFile
+		if export.EvalHub.CACertPath != wantEvalHub {
+			t.Fatalf("EvalHub.CACertPath = %q, want %q", export.EvalHub.CACertPath, wantEvalHub)
+		}
+		wantMLFlow := mlflowCABundleMountPath + "/" + mlflowCABundleFile
+		if export.MLFlow.CACertPath != wantMLFlow {
+			t.Fatalf("MLFlow.CACertPath = %q, want %q", export.MLFlow.CACertPath, wantMLFlow)
+		}
+	})
+}
+
 func TestOtelConfigForJobPod(t *testing.T) {
 	t.Run("nil when OTEL disabled", func(t *testing.T) {
 		cfg := &config.Config{OTEL: &config.OTELConfig{Enabled: false}}
@@ -84,6 +154,68 @@ func TestSidecarForJobPodSetsIsGitJob(t *testing.T) {
 	if export.InitContainer == nil || !export.InitContainer.IsGitJob {
 		t.Fatal("expected InitContainer.IsGitJob=true in sidecar config for git source job")
 	}
+}
+
+func TestSidecarForJobPodSetsIsGitJobForHFSource(t *testing.T) {
+	cfg := &config.Config{
+		Sidecar: &config.SidecarConfig{BaseURL: config.DefaultSidecarBaseURL},
+	}
+	jc := &jobConfig{
+		jobID:      "hf-job-id",
+		evalHubURL: "http://eval-hub:8080",
+		testDataHF: hfTestDataConfig{
+			repoID: "cais/mmlu",
+		},
+	}
+
+	export, err := sidecarForJobPod(cfg, jc)
+	if err != nil {
+		t.Fatalf("sidecarForJobPod: %v", err)
+	}
+	if export.InitContainer == nil || !export.InitContainer.IsGitJob {
+		t.Fatal("expected InitContainer.IsGitJob=true in sidecar config for HF source job")
+	}
+}
+
+func TestSidecarForJobPodSetsIsGitJobWithoutEvalHubURL(t *testing.T) {
+	cfg := &config.Config{}
+
+	t.Run("git source", func(t *testing.T) {
+		jc := &jobConfig{
+			testDataGit: gitTestDataConfig{
+				url: "https://github.com/org/repo.git",
+				ref: "main",
+			},
+		}
+		export, err := sidecarForJobPod(cfg, jc)
+		if err != nil {
+			t.Fatalf("sidecarForJobPod: %v", err)
+		}
+		if export == nil {
+			t.Fatal("expected sidecar config, got nil")
+		}
+		if export.InitContainer == nil || !export.InitContainer.IsGitJob {
+			t.Fatal("expected InitContainer.IsGitJob=true for git source without eval hub URL")
+		}
+	})
+
+	t.Run("HF source", func(t *testing.T) {
+		jc := &jobConfig{
+			testDataHF: hfTestDataConfig{
+				repoID: "cais/mmlu",
+			},
+		}
+		export, err := sidecarForJobPod(cfg, jc)
+		if err != nil {
+			t.Fatalf("sidecarForJobPod: %v", err)
+		}
+		if export == nil {
+			t.Fatal("expected sidecar config, got nil")
+		}
+		if export.InitContainer == nil || !export.InitContainer.IsGitJob {
+			t.Fatal("expected InitContainer.IsGitJob=true for HF source without eval hub URL")
+		}
+	})
 }
 
 func TestSidecarForJobPodIsGitJobFalseForNonGitJob(t *testing.T) {

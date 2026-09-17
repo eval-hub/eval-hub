@@ -15,6 +15,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
+	"github.com/eval-hub/eval-hub/internal/otel"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -75,9 +76,14 @@ func (r *K8sRuntime) RunEvaluationJob(
 
 	go func() {
 		for idx, bench := range benchmarks {
-			benchCtx := context.Background()
+			// otel.DetachedContext (rather than a bare context.Background())
+			// preserves r.ctx's span context as a link source, so spans
+			// created while creating this benchmark's K8s resources can be
+			// associated back to the triggering request trace even though
+			// this goroutine outlives it (see OTEL.md "Trace continuity").
+			benchCtx := otel.DetachedContext(r.ctx)
 			if err := r.createBenchmarkResources(benchCtx, r.logger, evaluation, &bench, idx, storage); err != nil {
-				metrics.RecordBenchmarkRuntimeError(benchCtx, r.Name())
+				metrics.RecordBenchmarkRuntimeError(benchCtx, r.Name(), evaluation.Resource.Tenant.String())
 				r.logger.Error(
 					"kubernetes job creation failed",
 					"error", err,
@@ -228,42 +234,38 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		return fmt.Errorf("service config is required")
 	}
 	jobConfig.testDataInitImage = r.serviceConfig.Service.EvalInitImage
+	jobConfig.mlflowCABundleConfigMap = r.resolveMLFlowCABundleConfigMap(ctx, jobConfig, logger)
 	logger.Info(
 		"kubernetes job config",
 		"job_id", evaluation.Resource.ID,
 		"benchmark_id", benchmarkID,
 		"service_account", jobConfig.serviceAccountName,
 		"service_ca_configmap", jobConfig.serviceCAConfigMap,
+		"mlflow_ca_bundle_configmap", jobConfig.mlflowCABundleConfigMap,
 		"eval_hub_url", jobConfig.evalHubURL,
 	)
-	// The sidecar model proxy is always active for all jobs. When model.auth is set,
-	// the secret is inspected to determine if credential injection (ref-token resolution)
-	// is needed. Proxy-injectable keys (api-key, *_api-key, *_url) cause an ephemeral
-	// internalModelRef secret to be created; the adapter sends ref tokens that the sidecar
-	// resolves to real credentials.
-	// Always redirect the adapter through the sidecar model proxy so all model traffic
-	// (open and authenticated) flows through the sidecar. This gives a single forwarding
-	// path and allows SA token injection for models that need it.
-	// Redirect the adapter to the sidecar, preserving the full path from the user's model URL.
-	// The sidecar Rewrite function swaps only scheme+host from its configured target, so
-	// whatever path the adapter sends is forwarded verbatim to the real upstream model host.
-	rewrittenModelURL, err := rewriteModelURLForSidecar(jobConfig.sidecarBaseURL, jobConfig.modelTargetURL)
-	if err != nil {
-		return fmt.Errorf("job %s benchmark %s: rewriting model URL for sidecar: %w", evaluation.Resource.ID, benchmarkID, err)
-	}
-	jobConfig.jobSpec.Model.URL = rewrittenModelURL
-
+	// When a model URL is present, redirect the adapter through the sidecar model proxy so
+	// all model traffic (open and authenticated) flows through the sidecar. For pre-recorded-data
+	// jobs the model URL is empty and the entire model proxy / auth pipeline is skipped.
 	var secretInfo modelSecretInfo
-	if jobConfig.modelAuthSecretRef != "" {
-		secretInfo, err = inspectModelSecret(ctx, jobConfig.namespace, jobConfig.modelAuthSecretRef, r.helper)
+	if jobConfig.modelTargetURL != "" {
+		rewrittenModelURL, err := rewriteModelURLForSidecar(jobConfig.sidecarBaseURL, jobConfig.modelTargetURL)
 		if err != nil {
-			logger.Error("kubernetes model secret inspect error", "benchmark_id", benchmarkID, "error", err)
-			return fmt.Errorf("job %s benchmark %s: reading model auth secret: %w", evaluation.Resource.ID, benchmarkID, err)
+			return fmt.Errorf("job %s benchmark %s: rewriting model URL for sidecar: %w", evaluation.Resource.ID, benchmarkID, err)
 		}
-		if secretInfo.hasCredentialKeys {
-			jobConfig.modelInternalRefSecretName = buildK8sName(jobConfig.jobID, jobConfig.resourceGUID, "-model-ref")
-		} else {
-			logger.Info("model credential secret has no proxy-injectable keys; sidecar proxy active for SA token")
+		jobConfig.jobSpec.Model.URL = rewrittenModelURL
+
+		if jobConfig.modelAuthSecretRef != "" {
+			secretInfo, err = inspectModelSecret(ctx, jobConfig.namespace, jobConfig.modelAuthSecretRef, r.helper)
+			if err != nil {
+				logger.Error("kubernetes model secret inspect error", "benchmark_id", benchmarkID, "error", err)
+				return fmt.Errorf("job %s benchmark %s: reading model auth secret: %w", evaluation.Resource.ID, benchmarkID, err)
+			}
+			if secretInfo.hasCredentialKeys {
+				jobConfig.modelInternalRefSecretName = buildK8sName(jobConfig.jobID, jobConfig.resourceGUID, "-model-ref")
+			} else {
+				logger.Info("model credential secret has no proxy-injectable keys; sidecar proxy active for SA token")
+			}
 		}
 	}
 	// Build sidecar config after inspecting the model secret so modelInternalRefSecretName is set.
@@ -278,7 +280,7 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		logger.Error("kubernetes configmap build error", "benchmark_id", benchmarkID, "error", err)
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
 	}
-	job, err := buildJob(jobConfig)
+	job, err := buildJob(jobConfig, r.serviceConfig)
 	if err != nil {
 		logger.Error("kubernetes job build error", "benchmark_id", benchmarkID, "error", err)
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
@@ -484,4 +486,42 @@ func rewriteModelURLForSidecar(sidecarBaseURL, modelURL string) (string, error) 
 		Fragment: model.Fragment,
 	}
 	return out.String(), nil
+}
+
+// resolveMLFlowCABundleConfigMap enables mounting {instance}-mlflow-ca-bundle only when
+// that ConfigMap already exists in the job namespace with a non-empty ca-bundle.crt entry.
+// The job-pod mount path is independent of the EvalHub API's MLFLOW_CA_CERT_PATH.
+func (r *K8sRuntime) resolveMLFlowCABundleConfigMap(ctx context.Context, cfg *jobConfig, logger *slog.Logger) string {
+	if cfg == nil || cfg.evalHubInstanceName == "" || cfg.mlflowTrackingURI == "" {
+		return ""
+	}
+	cmName := mlflowCABundleConfigMapName(cfg.evalHubInstanceName)
+	cm, err := r.helper.GetConfigMap(ctx, cfg.namespace, cmName)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Info(
+				"MLflow CA bundle ConfigMap not found; falling back to service CA / configured CA path",
+				"configmap", cmName,
+				"namespace", cfg.namespace,
+			)
+			return ""
+		}
+		logger.Warn(
+			"failed to check MLflow CA bundle ConfigMap; falling back to service CA / configured CA path",
+			"configmap", cmName,
+			"namespace", cfg.namespace,
+			"error", err,
+		)
+		return ""
+	}
+	if strings.TrimSpace(cm.Data[mlflowCABundleFile]) == "" {
+		logger.Info(
+			"MLflow CA bundle ConfigMap missing or empty ca-bundle.crt; falling back to service CA / configured CA path",
+			"configmap", cmName,
+			"namespace", cfg.namespace,
+			"key", mlflowCABundleFile,
+		)
+		return ""
+	}
+	return cmName
 }

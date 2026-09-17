@@ -87,7 +87,7 @@ func (s *sqliteStatementsFactory) GetAllowedFilterColumns(tableName string) []st
 	case shared.TableProviders:
 		return allColumns // "benchmarks" and "scope" are not allowed filters for providers from the database
 	case shared.TableCollections:
-		return append(allColumns, "category") // "scope" is not allowed filter for collections from the database
+		return append(allColumns, "category", "domains", "tasks", "modalities", "industries", "evaluation_targets")
 	default:
 		return nil
 	}
@@ -120,12 +120,24 @@ func (s *sqliteStatementsFactory) CreateEntityFilterCondition(key string, value 
 		return fmt.Sprintf("json_extract(entity, '%s') = ?", namePath), []any{value}
 	case "category":
 		if tableName == shared.TableCollections {
-			// collections: category at entity root
-			categoryPath := "$.category"
-			return fmt.Sprintf("json_extract(entity, '%s') = ?", categoryPath), []any{value}
+			return "json_extract(entity, '$.category') = ?", []any{value}
 		}
-		// should never get here as we validate the filter before calling this function
 		return "", []any{}
+	case "domains", "tasks", "modalities", "industries", "evaluation_targets":
+		// Array-contains filter: single string or []string (AND semantics for multiple values).
+		jsonPath := fmt.Sprintf("$.%s", key)
+		memberCond := fmt.Sprintf("json_type(json_extract(entity, '%s')) = 'array' AND EXISTS (SELECT 1 FROM json_each(json_extract(entity, '%s')) WHERE value = ?)", jsonPath, jsonPath)
+		if strs, ok := value.([]string); ok {
+			var parts []string
+			var multiArgs []any
+			for _, s := range strs {
+				parts = append(parts, memberCond)
+				multiArgs = append(multiArgs, s)
+			}
+			return "(" + strings.Join(parts, " AND ") + ")", multiArgs
+		}
+		fieldStr, _ := value.(string)
+		return memberCond, []any{fieldStr}
 	case "tags":
 		tagStr, _ := value.(string)
 		// evaluations: tags at config.tags; providers and collections: tags at entity root

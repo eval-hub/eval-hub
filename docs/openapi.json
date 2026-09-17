@@ -3,7 +3,7 @@
   "info": {
     "title": "Eval Hub",
     "description": "API REST server for evaluation backend orchestration",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "contact": {
       "name": "API Support"
     },
@@ -402,6 +402,16 @@
               "title": "Tags"
             },
             "description": "Tags to search for"
+          },
+          {
+            "name": "collection_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            },
+            "description": "Filter by the ID of the collection the job was created from. Maps to the collection.id field on the job record. Returns all jobs for the collection, ordered by date.\n"
           }
         ],
         "responses": {
@@ -741,11 +751,19 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 10000,
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "const": -1
+                },
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10000
+                }
+              ],
               "default": 1000,
-              "description": "Maximum number of log lines to return per benchmark. The response\nconcatenates one section per benchmark; each section is capped\nindependently, not as a total across the full response.\n"
+              "description": "Maximum number of log lines to return per benchmark. The response\nconcatenates one section per benchmark; each section is capped\nindependently, not as a total across the full response.\nUse `-1` to request all available log lines (no tail limit).\nValid values: 1–10000, or -1 for all lines.\n"
             }
           },
           {
@@ -772,6 +790,17 @@
         "responses": {
           "200": {
             "description": "Successful Response",
+            "headers": {
+              "X-Log-Truncated": {
+                "description": "Present and set to `true` when the response was truncated because it\nexceeded the server's configured `max_log_response_bytes` limit.\n",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
             "content": {
               "text/plain": {
                 "schema": {
@@ -834,11 +863,19 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 10000,
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "const": -1
+                },
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10000
+                }
+              ],
               "default": 1000,
-              "description": "Maximum number of log lines to return"
+              "description": "Maximum number of log lines to return.\nUse `-1` to request all available log lines (no tail limit).\nValid values: 1–10000, or -1 for all lines.\n"
             }
           },
           {
@@ -865,6 +902,17 @@
         "responses": {
           "200": {
             "description": "Successful Response",
+            "headers": {
+              "X-Log-Truncated": {
+                "description": "Present and set to `true` when the response was truncated because it\nexceeded the server's configured `max_log_response_bytes` limit.\n",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
             "content": {
               "text/plain": {
                 "schema": {
@@ -1847,7 +1895,73 @@
               ],
               "title": "Scope of collections"
             },
-            "description": "Set to `system` to get only system defined collections, or `tenant` to get only user defined collections. If `scope` is not provided, both system and user defined collections will be returned.\n"
+            "description": "Filters the result set by collection scope, within the collections visible to the requesting tenant. `system` returns all system-defined collections (including curated ones, identified by curation_order > 0). `tenant` returns only this tenant's own custom collections. When omitted, all collections visible to this tenant are returned (system + this tenant's custom collections).\n"
+          },
+          {
+            "name": "modalities",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Modality filter"
+            },
+            "description": "Filter collections by modality (snake_case). Returns collections whose modalities array contains this value. May be repeated for multiple values.\n"
+          },
+          {
+            "name": "tasks",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Task filter"
+            },
+            "description": "Filter collections by task type (snake_case). Returns collections whose tasks array contains this value. May be repeated for multiple values.\n"
+          },
+          {
+            "name": "domains",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Domain filter"
+            },
+            "description": "Filter collections by evaluation domain (snake_case). Returns collections whose domains array contains this value. May be repeated for multiple values.\n"
+          },
+          {
+            "name": "industries",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Industry filter"
+            },
+            "description": "Filter collections by target industry (snake_case). Returns collections whose industries array contains this value. May be repeated for multiple values.\n"
+          },
+          {
+            "name": "evaluation_targets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "title": "Evaluation target filter"
+            },
+            "description": "Filter collections by evaluation target type (snake_case). Example values: model, agent. Returns collections whose evaluation_targets array contains this value. May be repeated for multiple values.\n"
+          },
+          {
+            "name": "sort_by",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "created_at",
+                "curation_order"
+              ],
+              "default": "created_at",
+              "title": "Sort order"
+            },
+            "description": "Sort field for the result set. Applied server-side across all matching collections before pagination. curation_order sorts featured tiles ascending (0 last). Default: created_at descending.\n"
           }
         ],
         "responses": {
@@ -2660,6 +2774,113 @@
           }
         }
       }
+    },
+    "/api/v1/evaluations/collections/{id}/clones": {
+      "post": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Copy Collection",
+        "description": "Creates a new tenant-scoped (custom) collection as a copy of the specified source collection. The server copies all CollectionConfig fields from the source, assigns a new ID with scope=tenant, and records the source ID in derived_from for provenance. The request body may include optional overrides (e.g. a new name).\n",
+        "operationId": "post_collections_id_clones",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Collection Id"
+            },
+            "description": "ID of the source collection to copy."
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Optional field overrides for the cloned collection. Any field omitted here is inherited from the source collection, except curation_order. Clone requests never accept curation_order, and the server always resets it to 0.\n",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionCloneRequest"
+              },
+              "examples": {
+                "CopyWithNewName": {
+                  "summary": "Copy with a new name and domain override",
+                  "value": {
+                    "name": "my-custom-rag-eval",
+                    "domains": [
+                      "grounded_document_understanding"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Cloned collection created successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionResource"
+                },
+                "examples": {
+                  "response": {
+                    "summary": "Newly cloned custom collection",
+                    "value": {
+                      "resource": {
+                        "id": "b2c3d4e5-6789-0abc-def1-23456789abcd",
+                        "tenant": "my-tenant",
+                        "created_at": "2026-08-25T10:00:00Z",
+                        "updated_at": "2026-08-25T10:00:00Z",
+                        "owner": "user@example.com"
+                      },
+                      "derived_from": "e5f6a7b8-9012-3456-cdef-0123456789ab",
+                      "pinned_order": 0,
+                      "status": {
+                        "run_count": 0
+                      },
+                      "name": "my-rag-evaluation",
+                      "category": "document_understanding",
+                      "tasks": [
+                        "rag",
+                        "grounding_discipline"
+                      ],
+                      "modalities": [
+                        "text"
+                      ],
+                      "benchmarks": [
+                        {
+                          "id": "crag",
+                          "provider_id": "ragas",
+                          "weight": 1,
+                          "primary_score": {
+                            "metric": "answer_correctness",
+                            "lower_is_better": false
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2934,7 +3155,9 @@
           "name": {
             "type": "string",
             "description": "Metric name that also appears as a key in the metrics map.",
-            "example": "acc"
+            "examples": [
+              "acc"
+            ]
           },
           "type": {
             "type": "string",
@@ -2946,7 +3169,9 @@
               "time_series"
             ],
             "description": "Result type for this metric. One of numeric, categorical, array_ordered, array_unordered, or time_series.\n",
-            "example": "numeric"
+            "examples": [
+              "numeric"
+            ]
           }
         }
       },
@@ -2990,28 +3215,32 @@
             "type": "object",
             "additionalProperties": true,
             "description": "Metrics produced by evaluating the model on this benchmark, keyed by metric name. Each value may be a scalar, list, or object.\n",
-            "example": {
-              "acc": 0.691,
-              "acc_norm": 0.637,
-              "acc_stderr": 0.009
-            }
+            "examples": [
+              {
+                "acc": 0.691,
+                "acc_norm": 0.637,
+                "acc_stderr": 0.009
+              }
+            ]
           },
           "metrics_schema": {
             "type": "array",
             "description": "Metadata describing how each metric in metrics should be interpreted. Each entry names a metric key and its result type. Metrics without an entry default to numeric.\n",
-            "example": [
-              {
-                "name": "acc",
-                "type": "numeric"
-              },
-              {
-                "name": "acc_norm",
-                "type": "numeric"
-              },
-              {
-                "name": "acc_stderr",
-                "type": "numeric"
-              }
+            "examples": [
+              [
+                {
+                  "name": "acc",
+                  "type": "numeric"
+                },
+                {
+                  "name": "acc_norm",
+                  "type": "numeric"
+                },
+                {
+                  "name": "acc_stderr",
+                  "type": "numeric"
+                }
+              ]
             ],
             "items": {
               "$ref": "#/components/schemas/MetricSchema"
@@ -3312,17 +3541,21 @@
             "description": "Name of a Kubernetes **`Secret`** in the evaluation job namespace, mounted\nread-only into the test-data init container.\n"
           }
         },
-        "example": {
-          "bucket": "my-eval-bucket",
-          "key": "datasets/benchmark-a/v1",
-          "secret_ref": "my-s3-connection-secret"
-        }
+        "examples": [
+          {
+            "bucket": "my-eval-bucket",
+            "key": "datasets/benchmark-a/v1",
+            "secret_ref": "my-s3-connection-secret"
+          }
+        ]
       },
       "TestDataRefResolvedSHA": {
         "type": "string",
         "readOnly": true,
-        "description": "Resolved content identity for the test data source (e.g. git commit SHA).\nServer-populated after the evaluation run for reproducibility of the exact data\nstate used. Not set on job submission.\n",
-        "example": "a3f9c12e8b4d6f1c2e9a7b3d5f0e8c4a2b6d9e1f"
+        "description": "Resolved content identity for the test data source (e.g. git or Hugging Face commit SHA).\nServer-populated after the evaluation run for reproducibility of the exact data\nstate used. Not set on job submission.\n",
+        "examples": [
+          "a3f9c12e8b4d6f1c2e9a7b3d5f0e8c4a2b6d9e1f"
+        ]
       },
       "TestDataRefType": {
         "type": "string",
@@ -3351,10 +3584,12 @@
             "description": "Optional path within the PVC to mount at `/test_data` instead of the PVC root.\nUseful when a single PVC contains data for multiple benchmarks in separate directories.\n"
           }
         },
-        "example": {
-          "claim_name": "eval-datasets-pvc",
-          "sub_path": "benchmark-a/v1"
-        }
+        "examples": [
+          {
+            "claim_name": "eval-datasets-pvc",
+            "sub_path": "benchmark-a/v1"
+          }
+        ]
       },
       "TestDataRefGit": {
         "type": "object",
@@ -3367,34 +3602,89 @@
           "url": {
             "type": "string",
             "description": "HTTP(S) URL of the git repository to clone. SSH URLs are not supported.\nPlain `http://` is allowed only for unauthenticated clones; when **`secret_ref`**\nis set the URL must use **`https://`**.\n",
-            "example": "https://github.com/my-org/my-eval-datasets.git"
+            "examples": [
+              "https://github.com/my-org/my-eval-datasets.git"
+            ]
           },
           "ref": {
             "type": "string",
             "description": "Git ref to check out — a branch name, tag name, or full commit SHA.\nThe init container resolves whichever type is provided; no `type` field is needed.\n\n- **Branch**: `main`, `feat/my-branch`\n- **Tag**: `v1.2.0`, `release-3.6`\n- **Commit SHA**: `a3f9c12e8b...` (7–40 hex characters)\n",
-            "example": "main"
+            "examples": [
+              "main"
+            ]
           },
           "sub_path": {
             "type": "string",
             "description": "Optional path within the cloned repository to mount at `/test_data` instead of\nthe repository root. Useful when the repository contains data for multiple\nbenchmarks in separate directories.\n",
-            "example": "datasets/lm-eval"
+            "examples": [
+              "datasets/lm-eval"
+            ]
           },
           "secret_ref": {
             "type": "string",
             "description": "Name of a Kubernetes **`Secret`** of type `kubernetes.io/basic-auth` in the\nevaluation job namespace, mounted read-only into the git-clone init container.\nOmit for public repositories.\n",
-            "example": "my-git-credentials"
+            "examples": [
+              "my-git-credentials"
+            ]
           }
         },
-        "example": {
-          "url": "https://github.com/my-org/my-eval-datasets.git",
-          "ref": "main",
-          "sub_path": "datasets/lm-eval",
-          "secret_ref": "my-git-credentials"
-        }
+        "examples": [
+          {
+            "url": "https://github.com/my-org/my-eval-datasets.git",
+            "ref": "main",
+            "sub_path": "datasets/lm-eval",
+            "secret_ref": "my-git-credentials"
+          }
+        ]
+      },
+      "TestDataRefHF": {
+        "type": "object",
+        "description": "Hugging Face Hub repository test data. Only applies when Eval Hub runs the benchmark as a\n**Kubernetes Job** (cluster execution). It does not apply to local-only evaluation runs.\n\nThe repository is downloaded at **`revision`** (or the default branch when omitted) into\n**`/test_data`** before the adapter runs. If **`sub_path`** is provided, only that path\nwithin the repository is exposed.\n\nThe resolved commit SHA is recorded as **`resolved_sha`** on the parent\n**`test_data_ref`** object on the evaluation job response, providing revision-level\nreproducibility.\n\n**Public repositories** — omit `secret_ref`; the repository may be downloaded without\ncredentials.\n\n**Gated repositories** — supply a **`secret_ref`** pointing to a Kubernetes Secret of type\n`Opaque` in the same namespace as the evaluation job:\n\n```yaml\napiVersion: v1\nkind: Secret\nmetadata:\n  name: my-hf-credentials\ntype: Opaque\nstringData:\n  token: hf_xxxxxxxxxxxx\n```\n\nDo not put credentials in the Eval Hub API request body; only reference an existing\nSecret via **`secret_ref`**.\n",
+        "required": [
+          "repo_id"
+        ],
+        "properties": {
+          "repo_id": {
+            "type": "string",
+            "description": "Hugging Face Hub repository ID (for example `cais/mmlu` or `my-org/my-dataset`).\n",
+            "examples": [
+              "cais/mmlu"
+            ]
+          },
+          "revision": {
+            "type": "string",
+            "description": "Revision to download — a branch name, tag name, or commit SHA. When omitted, the\nrepository default branch is used.\n\n- **Branch**: `main`, `feat/my-branch`\n- **Tag**: `v1.0.0`\n- **Commit SHA**: `a3f9c12e8b...` (full or abbreviated hex)\n",
+            "examples": [
+              "main"
+            ]
+          },
+          "sub_path": {
+            "type": "string",
+            "description": "Optional path within the repository to mount at `/test_data` instead of the\nrepository root. Useful when the repository contains data for multiple benchmarks\nin separate directories.\n",
+            "examples": [
+              "data/train"
+            ]
+          },
+          "secret_ref": {
+            "type": "string",
+            "description": "Name of a Kubernetes **`Secret`** of type `Opaque` containing a **`token`** key in the\nevaluation job namespace, mounted read-only into the test-data init container.\nOmit for public repositories.\n",
+            "examples": [
+              "my-hf-credentials"
+            ]
+          }
+        },
+        "examples": [
+          {
+            "repo_id": "cais/mmlu",
+            "revision": "main",
+            "sub_path": "data/train",
+            "secret_ref": "my-hf-credentials"
+          }
+        ]
       },
       "TestDataRef": {
         "type": "object",
-        "description": "Reference to external test data for a benchmark. Exactly one of `s3`, `pvc`, or `git` must be set.\n\n**`s3`** — When the evaluation runs as a **Kubernetes Job**, Eval Hub schedules an\n**init container** on the evaluation job pod before the adapter runs. That init container:\n\n- Reads **`bucket`**, **`key`**, and **`secret_ref`** from the job spec (same JSON\n  mounted into the pod).\n- Uses credentials from the Kubernetes **Secret** named by **`secret_ref`**\n  (read-only mount; typical sources include an ODH/RHOAI S3 connection Secret).\n- Lists and downloads all objects under the **`key`** prefix into a shared\n  **`emptyDir`** volume at **`/test_data`**, preserving relative paths.\n- Exits; the **adapter container** mounts `/test_data` and reads the files.\n\n**`pvc`** — The PersistentVolumeClaim is mounted **read-only** directly into the evaluation\ncontainer at **`/test_data`**. No init container is used; the PVC must already contain the\ndata and must exist in the same namespace as the evaluation job.\n\n**`git`** — The specified repository is cloned and checked out at the given ref into\n**`/test_data`** before the adapter runs. The resolved commit SHA is recorded as\n**`resolved_sha`** on this object on the evaluation job for reproducibility.\n\nDo not put credentials in the Eval Hub API request body; only reference an existing\nSecret via **`secret_ref`** (for S3 or git).\n",
+        "description": "Reference to external test data for a benchmark. Exactly one of `s3`, `pvc`, `git`, or `hf` must be set.\n\n**`s3`** — When the evaluation runs as a **Kubernetes Job**, Eval Hub schedules an\n**init container** on the evaluation job pod before the adapter runs. That init container:\n\n- Reads **`bucket`**, **`key`**, and **`secret_ref`** from the job spec (same JSON\n  mounted into the pod).\n- Uses credentials from the Kubernetes **Secret** named by **`secret_ref`**\n  (read-only mount; typical sources include an ODH/RHOAI S3 connection Secret).\n- Lists and downloads all objects under the **`key`** prefix into a shared\n  **`emptyDir`** volume at **`/test_data`**, preserving relative paths.\n- Exits; the **adapter container** mounts `/test_data` and reads the files.\n\n**`pvc`** — The PersistentVolumeClaim is mounted **read-only** directly into the evaluation\ncontainer at **`/test_data`**. No init container is used; the PVC must already contain the\ndata and must exist in the same namespace as the evaluation job.\n\n**`git`** — The specified repository is cloned and checked out at the given ref into\n**`/test_data`** before the adapter runs. The resolved commit SHA is recorded as\n**`resolved_sha`** on this object on the evaluation job for reproducibility.\n\n**`hf`** — The specified Hugging Face Hub repository is downloaded at the given revision\ninto **`/test_data`** before the adapter runs. The resolved commit SHA is recorded as\n**`resolved_sha`** on this object on the evaluation job for reproducibility.\n\nDo not put credentials in the Eval Hub API request body; only reference an existing\nSecret via **`secret_ref`** (for S3, git, or hf).\n",
         "oneOf": [
           {
             "type": "object",
@@ -3452,6 +3742,25 @@
               "git"
             ],
             "title": "Git"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "hf": {
+                "$ref": "#/components/schemas/TestDataRefHF"
+              },
+              "resolved_sha": {
+                "$ref": "#/components/schemas/TestDataRefResolvedSHA"
+              },
+              "type": {
+                "$ref": "#/components/schemas/TestDataRefType"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "hf"
+            ],
+            "title": "HuggingFace"
           }
         ]
       },
@@ -3495,7 +3804,7 @@
               },
               "test_data_ref": {
                 "$ref": "#/components/schemas/TestDataRef",
-                "description": "Optional external test data mounted at **`/test_data`** for **Kubernetes Job** runs.\nSet **`s3`** to download objects via a pre-run init container, **`pvc`** to mount\nan existing PersistentVolumeClaim read-only with no init container, or **`git`**\nto clone a repository via a pre-run init container. Omit if the benchmark does\nnot need mounted files.\n"
+                "description": "Optional external test data mounted at **`/test_data`** for **Kubernetes Job** runs.\nSet **`s3`** to download objects via a pre-run init container, **`pvc`** to mount\nan existing PersistentVolumeClaim read-only with no init container, **`git`**\nto clone a repository via a pre-run init container, or **`hf`** to download content\nfrom a Hugging Face Hub repository via a pre-run init container. Omit if the benchmark does\nnot need mounted files.\n"
               }
             }
           }
@@ -3711,6 +4020,11 @@
           "id": {
             "type": "string",
             "description": "The unique identifier of the collection.\n"
+          },
+          "collection_updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The collection's updated_at timestamp at the moment this evaluation job was created. Set by the server; not accepted from the client. Compare against the current collection's updated_at to detect post-creation changes: if the current updated_at is later, the collection definition has changed since the job was created. Absent for jobs created before this field was introduced.\nLimitation: this field provides weaker guarantees than a revision counter. Two mutations within the same DB timestamp resolution may produce identical values, making them indistinguishable.\n"
           },
           "benchmarks": {
             "type": "array",
@@ -4098,6 +4412,34 @@
           "agent": {
             "$ref": "#/components/schemas/BenchmarkAgentMetadata",
             "description": "Agent discoverability metadata for this benchmark"
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "High-level eval domains this benchmark addresses (snake_case). Matches the CollectionConfig.domains vocabulary. Used to auto-populate collection-level domains when not explicitly set on the collection. Example values: knowledge_and_reasoning, grounded_document_understanding, instruction_and_output_reliability, tool_use_and_function_calling, software, trustworthiness, multilingual, multimodal.\n"
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "ML tasks this benchmark evaluates (snake_case). Matches the CollectionConfig.tasks vocabulary. Used to auto-populate collection-level tasks when not explicitly set on the collection. Example values: reasoning, rag, code_generation, safety, translation.\n"
+          },
+          "modalities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Data modalities this benchmark uses (snake_case). Matches the CollectionConfig.modalities vocabulary. Used to auto-populate collection-level modalities when not explicitly set on the collection. Known values: text, vision, multimodal.\n"
+          },
+          "evaluation_targets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "AI entity types this benchmark evaluates (snake_case). Matches the CollectionConfig.evaluation_targets vocabulary. Used to auto-populate collection-level evaluation_targets when not explicitly set on the collection. Example values: model, agent.\n"
           }
         }
       },
@@ -4221,6 +4563,16 @@
           "path"
         ]
       },
+      "CollectionStatus": {
+        "type": "object",
+        "description": "Server-managed mutable runtime status for custom (tenant-scoped) collections. Never user-supplied and never written to YAML configuration. Present only on custom (tenant-scoped) collections; absent on system collections.\n",
+        "properties": {
+          "run_count": {
+            "type": "integer",
+            "description": "Number of evaluation jobs created from this collection by its owning tenant. Per-tenant counter, incremented at job creation.\n"
+          }
+        }
+      },
       "CollectionBenchmarkConfig": {
         "type": "object",
         "description": "Reference to a benchmark in a collection (create, update, list, or get collection).\nThe **url** field is set by the server from the provider definition when a collection is created (POST), fully replaced (PUT), or when a whole benchmark array element is added or replaced via PATCH (paths `/benchmarks/<index>` or `/benchmarks/-`), then stored and returned on list/get; omitted when unknown. Field-level benchmark patches (e.g. `/benchmarks/0/id`) do not trigger this. It is not used on evaluation jobs.\n",
@@ -4261,11 +4613,57 @@
               },
               "test_data_ref": {
                 "$ref": "#/components/schemas/TestDataRef",
-                "description": "Optional external test data mounted at **`/test_data`** for **Kubernetes Job** runs.\nSet **`s3`** to download objects via a pre-run init container, **`pvc`** to mount\nan existing PersistentVolumeClaim read-only with no init container, or **`git`**\nto clone a repository via a pre-run init container. Omit if the benchmark does\nnot need mounted files.\n"
+                "description": "Optional external test data mounted at **`/test_data`** for **Kubernetes Job** runs.\nSet **`s3`** to download objects via a pre-run init container, **`pvc`** to mount\nan existing PersistentVolumeClaim read-only with no init container, **`git`**\nto clone a repository via a pre-run init container, or **`hf`** to download content\nfrom a Hugging Face Hub repository via a pre-run init container. Omit if the benchmark does\nnot need mounted files.\n"
               }
             }
           }
         ]
+      },
+      "CollectionAgentMetadata": {
+        "type": "object",
+        "description": "Structured metadata for AI agent consumption at the collection level.",
+        "properties": {
+          "evaluates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Semantic tags describing what this collection measures."
+          },
+          "recommended_when": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Natural-language conditions under which an agent should recommend this collection."
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Concise description optimised for agent tool listings."
+          },
+          "complements": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Collection or provider IDs that pair well with this one."
+          },
+          "hints": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Free-form operational guidance for agents constructing job requests."
+          },
+          "result_interpretation": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Guidance for interpreting evaluation results produced by this collection."
+          }
+        }
       },
       "CollectionConfig": {
         "type": "object",
@@ -4276,8 +4674,9 @@
             "description": "Collection name."
           },
           "category": {
+            "deprecated": true,
             "type": "string",
-            "description": "Collection category."
+            "description": "DEPRECATED — use `domains` instead. Retained for backwards compatibility; will be made optional and eventually removed in a future version.\n"
           },
           "description": {
             "type": "string",
@@ -4305,6 +4704,49 @@
               "$ref": "#/components/schemas/CollectionBenchmarkConfig"
             },
             "description": "Benchmarks in the collection."
+          },
+          "curation_order": {
+            "type": "integer",
+            "description": "Controls the listing priority of this collection within collection retrieval results. 0 (or absent) means not curated. Positive integers specify priority — lower values have higher priority. Set by system operators via YAML configuration only; the server rejects writes from tenant API consumers.\n"
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "High-level evaluation domains this collection addresses (snake_case). If not explicitly set, the handler returns the union of domains from the collection's benchmarks (via BenchmarkResource.domains). Canonical values: knowledge_and_reasoning, grounded_document_understanding, instruction_and_output_reliability, tool_use_and_function_calling, software, trustworthiness, multilingual, multimodal.\n"
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "ML tasks this collection evaluates (snake_case). If not explicitly set, the handler returns the union of tasks from the collection's benchmarks (via BenchmarkResource.tasks). Known values: reasoning, data_analysis, extraction, summarization, full_document_qa, long_context_understanding, rag, citation_attribution, grounding_discipline, instruction_following, structured_output, constraint_following, call_generation, code_generation, code_understanding, code_repair, safety, calibration, abstention, adversarial_injection, translation, document_chart_vqa, general_visual_reasoning.\n"
+          },
+          "modalities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Data modalities this collection covers (snake_case). If not explicitly set, the handler returns the union of modalities from the collection's benchmarks (via BenchmarkResource.modalities). Known values: text, vision, multimodal.\n"
+          },
+          "industries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Business industries this collection is relevant for (snake_case). Collection-level field; the same benchmarks may serve different industries. Example values: health, telco, financial, government.\n"
+          },
+          "evaluation_targets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "AI entity types this collection evaluates (snake_case). If not explicitly set, the handler returns the union of evaluation_targets from the collection's benchmarks (via BenchmarkResource.evaluation_targets). Example values: model, agent.\n"
+          },
+          "agent": {
+            "$ref": "#/components/schemas/CollectionAgentMetadata",
+            "description": "Structured metadata for AI agent discoverability at the collection level."
           }
         },
         "required": [
@@ -4323,6 +4765,19 @@
               "resource": {
                 "$ref": "#/components/schemas/Resource",
                 "description": "Resource metadata"
+              },
+              "derived_from": {
+                "type": "string",
+                "description": "ID of the collection this was copied from. Set by the server when POST /collections/{id}/clones is called; immutable thereafter. Absent when the collection was not created via clone.\n"
+              },
+              "pinned_order": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Tenant-controlled ordering priority for this collection within the tenant's individual listing. 0 means not ordered (default). Positive integers specify relative priority — lower values have higher priority. Settable by the collection owner via PATCH /collections/{id}.\n"
+              },
+              "status": {
+                "$ref": "#/components/schemas/CollectionStatus",
+                "description": "Server-managed mutable runtime state for custom (tenant-scoped) collections. Present only on custom collections; absent on system collections. Never user-supplied.\n"
               }
             }
           },
@@ -4351,6 +4806,87 @@
             }
           }
         ]
+      },
+      "CollectionCloneRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Optional field overrides for the cloned collection. Any omitted field is inherited from the source collection, except curation_order. Clone requests never accept curation_order, and the server always resets it to 0 so that copies are never curated by default.\n",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "New name for the copy. Defaults to source name."
+          },
+          "description": {
+            "type": "string",
+            "description": "Override description."
+          },
+          "category": {
+            "type": "string",
+            "description": "Deprecated — use domains."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Override tags."
+          },
+          "pass_criteria": {
+            "$ref": "#/components/schemas/PassCriteria",
+            "description": "Override pass criteria."
+          },
+          "benchmarks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CollectionBenchmarkConfig"
+            },
+            "description": "Override benchmarks."
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Override domains."
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Override tasks."
+          },
+          "modalities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Override modalities."
+          },
+          "industries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Override industries."
+          },
+          "evaluation_targets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Override evaluation targets."
+          },
+          "custom": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Override custom key-value data."
+          },
+          "agent": {
+            "$ref": "#/components/schemas/CollectionAgentMetadata",
+            "description": "Override agent metadata for AI agent consumption."
+          }
+        }
       }
     },
     "examples": {

@@ -21,6 +21,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/eval-hub/eval-hub/internal/otel"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/go-playground/validator/v10"
 )
@@ -220,6 +221,9 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				if err := validation.ValidateCollectionOverrides(evaluation.Collection.Benchmarks, collection.Benchmarks); err != nil {
 					return err
 				}
+				// Capture the collection's updated_at for change-detection metadata on the job.
+				t := collection.Resource.UpdatedAt
+				evaluation.Collection.CollectionUpdatedAt = &t
 			}
 			jobForResolve := &api.EvaluationJobResource{EvaluationJobConfig: *evaluation}
 			benchmarks, err = GetJobBenchmarks(jobForResolve, collection)
@@ -330,7 +334,16 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	metrics.RecordEvaluationJobCreated(ctx.Ctx, h.runtimeName())
+	tenant := ctx.Tenant.String()
+	metrics.RecordEvaluationJobCreated(ctx.Ctx, h.runtimeName(), tenant)
+
+	collectionID := jobCollectionID(evaluation)
+	providerIDs := jobProviderIDs(benchmarks, evaluation)
+	for _, pid := range providerIDs {
+		metrics.RecordEvaluationJobStateTransition(ctx.Ctx, pid, collectionID, string(api.OverallStatePending), tenant)
+	}
+	metrics.IncActiveJobs(ctx.Ctx, tenant)
+	metrics.IncQueueDepth(ctx.Ctx, tenant)
 
 	_ = h.withSpan(
 		ctx,
@@ -343,10 +356,14 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 						Message:     runErr.Error(),
 						MessageCode: constants.MessageCodeEvaluationJobFailed,
 					}, api.MessageOriginServer)
-					metrics.RecordEvaluationJobRuntimeStartFailed(ctx.Ctx, h.runtimeName())
-					metrics.RecordEvaluationJobTerminalState(ctx.Ctx, api.OverallStatePending, state)
+					metrics.RecordEvaluationJobRuntimeStartFailed(ctx.Ctx, h.runtimeName(), tenant)
+					for _, pid := range providerIDs {
+						metrics.RecordEvaluationError(ctx.Ctx, "runtime_start_failed", pid, tenant)
+					}
 					if err := storage.WithContext(runtimeCtx).UpdateEvaluationJobStatus(job.Resource.ID, state, message); err != nil {
 						ctx.Logger.Error("Failed to update evaluation status", "error", err, "job_id", job.Resource.ID)
+					} else {
+						recordEvaluationJobTerminalTransition(ctx.Ctx, api.OverallStatePending, state, providerIDs, collectionID, job.Resource.CreatedAt, tenant)
 					}
 					// return the first error encountered
 					w.Error(runErr, ctx.RequestID)
@@ -396,8 +413,12 @@ func (h *Handlers) executeEvaluationJob(ctx *executioncontext.ExecutionContext, 
 	// goroutines inside the runtime can update job status after the
 	// request completes. This is the single transition point from
 	// request-scoped work to background runtime work, covering all
-	// runtime implementations (local, k8s, etc.).
-	jobContext := context.Background()
+	// runtime implementations (local, k8s, etc.). otel.DetachedContext
+	// carries the create-job span's context forward as a link source (see
+	// trace.LinkFromContext) rather than a parent, since the runtime's
+	// background work outlives — and is only loosely causally related to —
+	// the HTTP request span.
+	jobContext := otel.DetachedContext(ctx.Ctx)
 
 	return h.runtime.WithLogger(ctx.Logger).WithContext(jobContext).RunEvaluationJob(job, benchmarks, h.createRuntimeStorage(ctx, jobContext))
 }
@@ -717,8 +738,18 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 					w.Error(err, ctx.RequestID)
 					return err
 				}
-				metrics.RecordEvaluationJobCancelled(ctx.Ctx)
-				metrics.RecordEvaluationJobTerminalState(ctx.Ctx, previousState, api.OverallStateCancelled)
+				tenant := ctx.Tenant.String()
+				metrics.RecordEvaluationJobCancelled(ctx.Ctx, tenant)
+				if jobErr == nil && job != nil && !previousState.IsTerminalState() {
+					cID := jobCollectionID(&job.EvaluationJobConfig)
+					pids := jobProviderIDs(nil, &job.EvaluationJobConfig)
+					recordEvaluationJobTerminalTransition(ctx.Ctx, previousState, api.OverallStateCancelled, pids, cID, job.Resource.CreatedAt, tenant)
+				} else {
+					// No job record available (fetch error or already terminal) —
+					// record the terminal-state completion counter only; the
+					// duration histogram requires CreatedAt from the job.
+					metrics.RecordEvaluationJobTerminalState(ctx.Ctx, previousState, api.OverallStateCancelled, tenant)
+				}
 			}
 			w.WriteJSON(nil, 204)
 			return nil
@@ -727,4 +758,33 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 		operation,
 		"job.id", evaluationJobID,
 	)
+}
+
+// jobCollectionID returns the collection ID from the job config, or empty string.
+func jobCollectionID(cfg *api.EvaluationJobConfig) string {
+	if cfg != nil && cfg.Collection != nil {
+		return cfg.Collection.ID
+	}
+	return ""
+}
+
+// jobProviderIDs returns deduplicated provider IDs from benchmarks, the job
+// config's inline benchmarks, or the collection override list (for
+// collection-backed jobs where cfg.Benchmarks is empty).
+func jobProviderIDs(benchmarks []api.EvaluationBenchmarkConfig, cfg *api.EvaluationJobConfig) []string {
+	if len(benchmarks) == 0 && cfg != nil {
+		benchmarks = cfg.Benchmarks
+	}
+	if len(benchmarks) == 0 && cfg != nil && cfg.Collection != nil {
+		benchmarks = cfg.Collection.Benchmarks
+	}
+	seen := make(map[string]struct{}, len(benchmarks))
+	var ids []string
+	for _, b := range benchmarks {
+		if _, ok := seen[b.ProviderID]; !ok {
+			seen[b.ProviderID] = struct{}{}
+			ids = append(ids, b.ProviderID)
+		}
+	}
+	return ids
 }

@@ -16,6 +16,7 @@ Feature: Kubernetes Lifecycle Signals
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
+    And I wait for the Kubernetes evaluation Job to be created
     And I wait for the evaluation job status to be "completed"
     Then I observe a Kubernetes Event with reason "EvaluationRunning" for the evaluation job within "60s"
     And I observe a Kubernetes Event with reason "EvaluationCompleted" for the evaluation job within "60s"
@@ -39,8 +40,9 @@ Feature: Kubernetes Lifecycle Signals
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evalcard_invalid_model.json"
     Then the response code should be 202
-    And I wait for the evaluation job status to match "completed|failed"
-    Then I observe a Kubernetes Event with reason "EvaluationFailed" for the evaluation job within "60s"
+    And I wait for the Kubernetes evaluation Job to be created
+    Then I observe a Kubernetes Event with reason "EvaluationFailed" for the evaluation job within "5m"
+    And I wait for the evaluation job status to match "failed|partially_failed"
     And the evaluation Job should have label "trustyai.opendatahub.io/evaluation-phase" equal to "Failed"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204

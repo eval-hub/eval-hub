@@ -57,8 +57,71 @@ get:
           - tenant
         title: Scope of collections
       description: >
-        Set to `system` to get only system defined collections, or `tenant` to get only user defined collections.
-        If `scope` is not provided, both system and user defined collections will be returned.
+        Filters the result set by collection scope, within the collections visible to the requesting tenant.
+        `system` returns all system-defined collections (including curated ones, identified by curation_order > 0).
+        `tenant` returns only this tenant's own custom collections.
+        When omitted, all collections visible to this tenant are returned (system + this tenant's custom collections).
+    - name: modalities
+      in: query
+      required: false
+      schema:
+        type: string
+        title: Modality filter
+      description: >
+        Filter collections by modality (snake_case). Returns collections whose modalities array contains
+        this value. May be repeated for multiple values.
+    - name: tasks
+      in: query
+      required: false
+      schema:
+        type: string
+        title: Task filter
+      description: >
+        Filter collections by task type (snake_case). Returns collections whose tasks array
+        contains this value. May be repeated for multiple values.
+    - name: domains
+      in: query
+      required: false
+      schema:
+        type: string
+        title: Domain filter
+      description: >
+        Filter collections by evaluation domain (snake_case). Returns collections whose
+        domains array contains this value. May be repeated for multiple values.
+    - name: industries
+      in: query
+      required: false
+      schema:
+        type: string
+        title: Industry filter
+      description: >
+        Filter collections by target industry (snake_case). Returns collections whose
+        industries array contains this value. May be repeated for multiple values.
+    - name: evaluation_targets
+      in: query
+      required: false
+      schema:
+        type: string
+        title: Evaluation target filter
+      description: >
+        Filter collections by evaluation target type (snake_case). Example values: model, agent.
+        Returns collections whose evaluation_targets array contains this value.
+        May be repeated for multiple values.
+    - name: sort_by
+      in: query
+      required: false
+      schema:
+        type: string
+        enum:
+          - name
+          - created_at
+          - curation_order
+        default: created_at
+        title: Sort order
+      description: >
+        Sort field for the result set. Applied server-side across all matching collections
+        before pagination. curation_order sorts featured tiles ascending (0 last).
+        Default: created_at descending.
   responses:
     '200':
       description: Successful Response

@@ -266,6 +266,77 @@ sidecar:
 		}
 	})
 
+	t.Run("OTEL ServiceVersion propagation", func(t *testing.T) {
+		tests := []struct {
+			name        string
+			yaml        string
+			wantVersion string
+		}{
+			{
+				name: "populated from build version when otel section present but service_version absent",
+				yaml: `
+service:
+  port: 8080
+  termination_file: "/tmp/termination-log"
+database:
+  driver: sqlite
+  url: "file::memory:?mode=memory&cache=shared"
+otel:
+  enabled: false
+`,
+				wantVersion: version,
+			},
+			{
+				name: "populated from build version when service_version is empty string",
+				yaml: `
+service:
+  port: 8080
+  termination_file: "/tmp/termination-log"
+database:
+  driver: sqlite
+  url: "file::memory:?mode=memory&cache=shared"
+otel:
+  enabled: false
+  service_version: ""
+`,
+				wantVersion: version,
+			},
+			{
+				name: "explicit non-empty service_version is preserved",
+				yaml: `
+service:
+  port: 8080
+  termination_file: "/tmp/termination-log"
+database:
+  driver: sqlite
+  url: "file::memory:?mode=memory&cache=shared"
+otel:
+  enabled: false
+  service_version: "custom-v42"
+`,
+				wantVersion: "custom-v42",
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				dir := t.TempDir()
+				if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(tt.yaml), 0600); err != nil {
+					t.Fatal(err)
+				}
+				cfg, err := config.LoadConfig(logger, version, "local", time.Now().Format(time.RFC3339), "", dir)
+				if err != nil {
+					t.Fatalf("LoadConfig: %v", err)
+				}
+				if cfg.OTEL == nil {
+					t.Fatal("expected OTEL config to be non-nil")
+				}
+				if cfg.OTEL.ServiceVersion != tt.wantVersion {
+					t.Errorf("OTEL.ServiceVersion = %q, want %q", cfg.OTEL.ServiceVersion, tt.wantVersion)
+				}
+			})
+		}
+	})
+
 	t.Run("loads providers from config dir", func(t *testing.T) {
 		_, err := config.LoadProviderConfigs(logger, testhelpers.NewValidator(t))
 		if err != nil {

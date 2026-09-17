@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -13,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_runtime_sidecar/proxy"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -47,7 +49,7 @@ func TestNew(t *testing.T) {
 				},
 			},
 		}
-		_, err := New(cfg, logger)
+		_, err := New(context.Background(), cfg, logger)
 		if err == nil {
 			t.Fatal("expected error when eval_hub.base_url is not set")
 		}
@@ -66,7 +68,7 @@ func TestNew(t *testing.T) {
 			},
 			MLFlow: &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
 		}
-		h, err := New(cfg, logger)
+		h, err := New(context.Background(), cfg, logger)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -96,6 +98,136 @@ func TestHandlers_HandleHealth(t *testing.T) {
 	}
 }
 
+func TestNew_LocalMode(t *testing.T) {
+	logger := slog.Default()
+	cfg := &config.Config{
+		Sidecar: &config.SidecarConfig{
+			BaseURL:   "http://localhost:8082",
+			LocalMode: true,
+			EvalHub: &config.EvalHubClientConfig{
+				BaseURL: "http://localhost:8080",
+			},
+		},
+	}
+	h, err := New(context.Background(), cfg, logger)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !h.serviceConfig.Sidecar.LocalMode {
+		t.Error("expected LocalMode true")
+	}
+	if h.mlflowProxy != nil {
+		t.Error("expected mlflowProxy nil in local mode")
+	}
+	if h.ociProxy != nil {
+		t.Error("expected ociProxy nil in local mode")
+	}
+	if h.modelProxy == nil {
+		t.Error("expected modelProxy non-nil in local mode")
+	}
+}
+
+func TestHandleProxyCall_LocalMode_ModelRouting(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	var receivedPath, receivedAuth string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPath = r.URL.Path
+		receivedAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	jobsDir := t.TempDir()
+	authDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(authDir, "api-key"), []byte("sk-test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	jobID := "test-job-42"
+	jobDir := filepath.Join(jobsDir, jobID)
+	if err := os.MkdirAll(jobDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	jobInfo := `{"model": {"url": "` + upstream.URL + `", "auth_secret_mount_path": "file://` + authDir + `"}}`
+	if err := os.WriteFile(filepath.Join(jobDir, "sidecar-job-info.json"), []byte(jobInfo), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.Config{
+		Sidecar: &config.SidecarConfig{
+			BaseURL:   "http://localhost:8082",
+			LocalMode: true,
+			EvalHub: &config.EvalHubClientConfig{
+				BaseURL: "http://localhost:8080",
+			},
+		},
+	}
+	h, err := New(context.Background(), cfg, logger)
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+
+	// Override the local model proxy to point at our temp dir.
+	cache := proxy.NewJobInfoCache(jobsDir, proxy.DefaultJobCacheTTL, logger)
+	h.modelProxy = proxy.NewLocalModelReverseProxy(cache, logger)
+
+	t.Run("routes /model/<job-id>/path to upstream with prefix stripped", func(t *testing.T) {
+		receivedPath = ""
+		req := httptest.NewRequest(http.MethodPost, "/model/"+jobID+"/v1/chat/completions", nil)
+		rw := httptest.NewRecorder()
+		h.HandleProxyCall(rw, req)
+
+		if rw.Code != http.StatusOK {
+			t.Errorf("status = %d, want 200; body = %s", rw.Code, rw.Body.String())
+		}
+		if receivedPath != "/v1/chat/completions" {
+			t.Errorf("upstream path = %q, want /v1/chat/completions", receivedPath)
+		}
+	})
+
+	t.Run("forwards request without injecting auth when adapter sends none", func(t *testing.T) {
+		receivedAuth = ""
+		req := httptest.NewRequest(http.MethodGet, "/model/"+jobID+"/v1/models", nil)
+		rw := httptest.NewRecorder()
+		h.HandleProxyCall(rw, req)
+
+		if receivedAuth != "" {
+			t.Errorf("upstream auth = %q, want empty (sidecar must not inject credentials in local mode)", receivedAuth)
+		}
+	})
+
+	t.Run("unknown job returns 404", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/model/nonexistent/v1/models", nil)
+		rw := httptest.NewRecorder()
+		h.HandleProxyCall(rw, req)
+
+		if rw.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want 404", rw.Code)
+		}
+	})
+
+	t.Run("non-model path in local mode returns 400", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/some/random/path", nil)
+		rw := httptest.NewRecorder()
+		h.HandleProxyCall(rw, req)
+
+		if rw.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want 400", rw.Code)
+		}
+	})
+
+	t.Run("eval-hub path still routes correctly in local mode", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/jobs", nil)
+		rw := httptest.NewRecorder()
+		h.HandleProxyCall(rw, req)
+		// Should route to eval-hub proxy (will get connection error, not 400)
+		if rw.Code == http.StatusBadRequest && strings.Contains(rw.Body.String(), "unknown proxy call") {
+			t.Error("eval-hub path should not be treated as unknown proxy call in local mode")
+		}
+	})
+}
+
 func TestHandlers_HandleProxyCall(t *testing.T) {
 	logger := slog.Default()
 	cfg := &config.Config{
@@ -107,7 +239,7 @@ func TestHandlers_HandleProxyCall(t *testing.T) {
 		},
 		MLFlow: &config.MLFlowConfig{TrackingURI: "http://localhost:5000"},
 	}
-	h, err := New(cfg, logger)
+	h, err := New(context.Background(), cfg, logger)
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
@@ -210,7 +342,7 @@ func TestHandlers_HandleProxyCall(t *testing.T) {
 				},
 			},
 		}
-		hNoMLFlow, err := New(cfgNoMLFlow, logger)
+		hNoMLFlow, err := New(context.Background(), cfgNoMLFlow, logger)
 		if err != nil {
 			t.Fatalf("New() error: %v", err)
 		}
@@ -538,7 +670,7 @@ func TestHandleProxyCall_GitSHAInjectedOnEventsPost(t *testing.T) {
 			InitContainer: &config.InitContainerConfig{IsGitJob: true},
 		},
 	}
-	h, err := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	h, err := New(context.Background(), cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}

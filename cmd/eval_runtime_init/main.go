@@ -60,6 +60,9 @@ func main() {
 }
 
 func run() error {
+	if strings.TrimSpace(os.Getenv(envHFRepoID)) != "" {
+		return runHF()
+	}
 	if strings.TrimSpace(os.Getenv(envGitURL)) != "" {
 		return runGit()
 	}
@@ -307,4 +310,29 @@ func readSecret(key string) (string, error) {
 		return "", fmt.Errorf("secret key %q is present but empty", key)
 	}
 	return val, nil
+}
+
+// readOptionalSecret reads a key from the mounted secret dir when present.
+// Missing secret dir or key returns ("", nil) for optional credentials (e.g. HF token).
+func readOptionalSecret(key string) (string, error) {
+	if key == "" || key == "." || key == "/" || !filepath.IsLocal(key) || filepath.Base(key) != key {
+		return "", fmt.Errorf("secret key %q contains path separators and is not allowed", key)
+	}
+	root, err := os.OpenRoot(scrtDir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return "", nil
+		}
+		return "", fmt.Errorf("open secret dir %q: %w", scrtDir, err)
+	}
+	defer func() { _ = root.Close() }()
+
+	content, err := root.ReadFile(key)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return "", nil
+		}
+		return "", err
+	}
+	return strings.TrimSpace(string(content)), nil
 }

@@ -1,10 +1,12 @@
 package k8s
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,7 +18,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-func TestGetEvaluationLogsReturnsAdapterLogs(t *testing.T) {
+func TestStreamEvaluationLogsReturnsAdapterLogs(t *testing.T) {
 	evaluation := sampleEvaluation("provider-1")
 	jobID := evaluation.Resource.ID
 	namespace := "default"
@@ -56,17 +58,18 @@ func TestGetEvaluationLogsReturnsAdapterLogs(t *testing.T) {
 		t.Fatalf("GetJobBenchmarks: %v", err)
 	}
 
+	var buf bytes.Buffer
 	idx := 0
-	got, err := runtime.GetEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10})
+	err = runtime.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10}, &buf)
 	if err != nil {
-		t.Fatalf("GetEvaluationLogs: %v", err)
+		t.Fatalf("StreamEvaluationLogs: %v", err)
 	}
-	if got != "fake logs" {
+	if got := buf.String(); got != "fake logs" {
 		t.Fatalf("got %q, want %q", got, "fake logs")
 	}
 }
 
-func TestGetEvaluationLogsAllBenchmarkSections(t *testing.T) {
+func TestStreamEvaluationLogsAllBenchmarkSections(t *testing.T) {
 	evaluation := sampleEvaluation("provider-1")
 	namespace := "default"
 	jobName := "eval-job-logs-0"
@@ -96,17 +99,18 @@ func TestGetEvaluationLogsAllBenchmarkSections(t *testing.T) {
 		t.Fatalf("GetJobBenchmarks: %v", err)
 	}
 
-	got, err := runtime.GetEvaluationLogs(evaluation, benchmarks, nil, api.EvaluationLogOptions{TailLines: 10})
+	var buf bytes.Buffer
+	err = runtime.StreamEvaluationLogs(evaluation, benchmarks, nil, api.EvaluationLogOptions{TailLines: 10}, &buf)
 	if err != nil {
-		t.Fatalf("GetEvaluationLogs: %v", err)
+		t.Fatalf("StreamEvaluationLogs: %v", err)
 	}
 	want := fmt.Sprintf("=== pod=%s container=%s benchmark_id=bench-1 ===", jobName, adapterContainerName)
-	if got != want {
+	if got := buf.String(); got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
 
-func TestGetEvaluationLogsSectionWithPodLogContent(t *testing.T) {
+func TestStreamEvaluationLogsSectionWithPodLogContent(t *testing.T) {
 	evaluation := sampleEvaluation("provider-1")
 	namespace := "default"
 	jobName := "eval-job-logs-full"
@@ -147,21 +151,22 @@ func TestGetEvaluationLogsSectionWithPodLogContent(t *testing.T) {
 		t.Fatalf("GetJobBenchmarks: %v", err)
 	}
 
-	got, err := runtime.GetEvaluationLogs(evaluation, benchmarks, nil, api.EvaluationLogOptions{
+	var buf bytes.Buffer
+	err = runtime.StreamEvaluationLogs(evaluation, benchmarks, nil, api.EvaluationLogOptions{
 		TailLines:    25,
 		Timestamps:   true,
 		SinceSeconds: &since,
-	})
+	}, &buf)
 	if err != nil {
-		t.Fatalf("GetEvaluationLogs: %v", err)
+		t.Fatalf("StreamEvaluationLogs: %v", err)
 	}
 	want := fmt.Sprintf("=== pod=%s container=%s benchmark_id=bench-1 ===\nfake logs", podName, adapterContainerName)
-	if got != want {
+	if got := buf.String(); got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
 
-func TestGetEvaluationLogsSingleBenchmarkNoJob(t *testing.T) {
+func TestStreamEvaluationLogsSingleBenchmarkNoJob(t *testing.T) {
 	evaluation := sampleEvaluation("provider-1")
 	runtime := &K8sRuntime{
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -174,30 +179,72 @@ func TestGetEvaluationLogsSingleBenchmarkNoJob(t *testing.T) {
 		t.Fatalf("GetJobBenchmarks: %v", err)
 	}
 
+	var buf bytes.Buffer
 	idx := 0
-	got, err := runtime.GetEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10})
+	err = runtime.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10}, &buf)
 	if err != nil {
-		t.Fatalf("GetEvaluationLogs: %v", err)
+		t.Fatalf("StreamEvaluationLogs: %v", err)
 	}
-	if got != "" {
+	if got := buf.String(); got != "" {
 		t.Fatalf("got %q, want empty", got)
 	}
 }
 
-func TestGetEvaluationLogsRequiresContext(t *testing.T) {
+func TestStreamEvaluationLogsSingleBenchmarkNoPod(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	jobID := evaluation.Resource.ID
+	namespace := "default"
+
+	clientset := fake.NewClientset(
+		&batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "job-no-pod",
+				Namespace: namespace,
+				Labels: map[string]string{
+					labelJobIDKey:          sanitizeLabelValue(jobID),
+					labelBenchmarkIndexKey: "0",
+				},
+			},
+		},
+	)
+
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
+	}
+
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("GetJobBenchmarks: %v", err)
+	}
+
+	var buf bytes.Buffer
+	idx := 0
+	err = runtime.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10}, &buf)
+	if err != nil {
+		t.Fatalf("StreamEvaluationLogs: %v", err)
+	}
+	if got := buf.String(); got != "" {
+		t.Fatalf("got %q, want empty (no pod found, single benchmark = no header)", got)
+	}
+}
+
+func TestStreamEvaluationLogsRequiresContext(t *testing.T) {
 	evaluation := sampleEvaluation("provider-1")
 	runtime := &K8sRuntime{
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper: &KubernetesHelper{clientset: fake.NewClientset()},
 	}
 
-	_, err := runtime.GetEvaluationLogs(evaluation, evaluation.Benchmarks, nil, api.EvaluationLogOptions{TailLines: 10})
+	var buf bytes.Buffer
+	err := runtime.StreamEvaluationLogs(evaluation, evaluation.Benchmarks, nil, api.EvaluationLogOptions{TailLines: 10}, &buf)
 	if err == nil {
 		t.Fatal("expected error for nil context")
 	}
 }
 
-func TestGetEvaluationLogsRejectsEmptyBenchmarks(t *testing.T) {
+func TestStreamEvaluationLogsRejectsEmptyBenchmarks(t *testing.T) {
 	evaluation := sampleEvaluation("provider-1")
 	runtime := &K8sRuntime{
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -205,13 +252,14 @@ func TestGetEvaluationLogsRejectsEmptyBenchmarks(t *testing.T) {
 		ctx:    context.Background(),
 	}
 
-	_, err := runtime.GetEvaluationLogs(evaluation, nil, nil, api.EvaluationLogOptions{TailLines: 10})
+	var buf bytes.Buffer
+	err := runtime.StreamEvaluationLogs(evaluation, nil, nil, api.EvaluationLogOptions{TailLines: 10}, &buf)
 	if err == nil {
 		t.Fatal("expected error for empty benchmarks")
 	}
 }
 
-func TestGetEvaluationLogsRejectsNegativeBenchmarkIndex(t *testing.T) {
+func TestStreamEvaluationLogsRejectsNegativeBenchmarkIndex(t *testing.T) {
 	evaluation := sampleEvaluation("provider-1")
 	runtime := &K8sRuntime{
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -224,10 +272,299 @@ func TestGetEvaluationLogsRejectsNegativeBenchmarkIndex(t *testing.T) {
 		t.Fatalf("GetJobBenchmarks: %v", err)
 	}
 
+	var buf bytes.Buffer
 	idx := -1
-	_, err = runtime.GetEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10})
+	err = runtime.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10}, &buf)
 	if err == nil {
 		t.Fatal("expected error for negative benchmark index")
+	}
+}
+
+func TestStreamEvaluationLogsAllBenchmarkNoJobHeader(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: fake.NewClientset()},
+		ctx:    context.Background(),
+	}
+
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("GetJobBenchmarks: %v", err)
+	}
+
+	var buf bytes.Buffer
+	err = runtime.StreamEvaluationLogs(evaluation, benchmarks, nil, api.EvaluationLogOptions{TailLines: 10}, &buf)
+	if err != nil {
+		t.Fatalf("StreamEvaluationLogs: %v", err)
+	}
+	want := fmt.Sprintf("=== pod=unknown container=%s benchmark_id=bench-1 ===", adapterContainerName)
+	if got := buf.String(); got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestStreamEvaluationLogsJobWithNoPodHeader(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	namespace := "default"
+	jobName := "eval-job-nopod"
+
+	clientset := fake.NewClientset(
+		&batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      jobName,
+				Namespace: namespace,
+				Labels: map[string]string{
+					labelJobIDKey:          sanitizeLabelValue(evaluation.Resource.ID),
+					labelBenchmarkIndexKey: "0",
+				},
+			},
+		},
+	)
+
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
+	}
+
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("GetJobBenchmarks: %v", err)
+	}
+
+	var buf bytes.Buffer
+	err = runtime.StreamEvaluationLogs(evaluation, benchmarks, nil, api.EvaluationLogOptions{TailLines: 10}, &buf)
+	if err != nil {
+		t.Fatalf("StreamEvaluationLogs: %v", err)
+	}
+	want := fmt.Sprintf("=== pod=%s container=%s benchmark_id=bench-1 ===", jobName, adapterContainerName)
+	if got := buf.String(); got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestStreamEvaluationLogsMultiBenchmarkSeparator(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-multi"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}, ProviderID: "provider-1"},
+				{Ref: api.Ref{ID: "bench-2"}, ProviderID: "provider-1"},
+			},
+		},
+	}
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: fake.NewClientset()},
+		ctx:    context.Background(),
+	}
+
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("GetJobBenchmarks: %v", err)
+	}
+
+	var buf bytes.Buffer
+	err = runtime.StreamEvaluationLogs(evaluation, benchmarks, nil, api.EvaluationLogOptions{TailLines: 10}, &buf)
+	if err != nil {
+		t.Fatalf("StreamEvaluationLogs: %v", err)
+	}
+	got := buf.String()
+	header0 := fmt.Sprintf("=== pod=unknown container=%s benchmark_id=bench-1 ===", adapterContainerName)
+	header1 := fmt.Sprintf("=== pod=unknown container=%s benchmark_id=bench-2 ===", adapterContainerName)
+	want := header0 + "\n" + header1
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestStreamEvaluationLogsMultiBenchmarkWithJobs(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "multi-bench-job", Tenant: "default"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "bench-1"}, ProviderID: "provider-1"},
+				{Ref: api.Ref{ID: "bench-2"}, ProviderID: "provider-1"},
+			},
+		},
+	}
+	namespace := "default"
+
+	clientset := fake.NewClientset(
+		&batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "job-0",
+				Namespace: namespace,
+				Labels: map[string]string{
+					labelJobIDKey:          sanitizeLabelValue(evaluation.Resource.ID),
+					labelBenchmarkIndexKey: "0",
+				},
+			},
+		},
+		&batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "job-1",
+				Namespace: namespace,
+				Labels: map[string]string{
+					labelJobIDKey:          sanitizeLabelValue(evaluation.Resource.ID),
+					labelBenchmarkIndexKey: "1",
+				},
+			},
+		},
+	)
+
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
+	}
+
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("GetJobBenchmarks: %v", err)
+	}
+
+	var buf bytes.Buffer
+	err = runtime.StreamEvaluationLogs(evaluation, benchmarks, nil, api.EvaluationLogOptions{TailLines: 10}, &buf)
+	if err != nil {
+		t.Fatalf("StreamEvaluationLogs: %v", err)
+	}
+	got := buf.String()
+	if !strings.Contains(got, "benchmark_id=bench-1") || !strings.Contains(got, "benchmark_id=bench-2") {
+		t.Fatalf("expected both benchmark headers, got %q", got)
+	}
+	parts := strings.Split(got, "\n")
+	if len(parts) < 2 {
+		t.Fatalf("expected newline separator between benchmarks, got %q", got)
+	}
+}
+
+func TestStreamEvaluationLogsOutOfRangeIndex(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: fake.NewClientset()},
+		ctx:    context.Background(),
+	}
+
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("GetJobBenchmarks: %v", err)
+	}
+
+	var buf bytes.Buffer
+	idx := 5
+	err = runtime.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: 10}, &buf)
+	if err == nil {
+		t.Fatal("expected error for out-of-range benchmark index")
+	}
+}
+
+func TestStreamEvaluationLogsTailLinesAllLines(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	jobID := evaluation.Resource.ID
+	namespace := "default"
+	jobName := "eval-job-alllines"
+	podName := "eval-pod-alllines"
+
+	clientset := fake.NewClientset(
+		&batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      jobName,
+				Namespace: namespace,
+				Labels: map[string]string{
+					labelJobIDKey:          sanitizeLabelValue(jobID),
+					labelBenchmarkIndexKey: "0",
+				},
+			},
+		},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      podName,
+				Namespace: namespace,
+				Labels:    map[string]string{"job-name": jobName},
+			},
+		},
+	)
+
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
+	}
+
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("GetJobBenchmarks: %v", err)
+	}
+
+	var buf bytes.Buffer
+	idx := 0
+	err = runtime.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{TailLines: api.AllLogLines}, &buf)
+	if err != nil {
+		t.Fatalf("StreamEvaluationLogs: %v", err)
+	}
+	if got := buf.String(); got != "fake logs" {
+		t.Fatalf("got %q, want %q", got, "fake logs")
+	}
+}
+
+func TestStreamEvaluationLogsWithSinceSeconds(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	jobID := evaluation.Resource.ID
+	namespace := "default"
+	jobName := "eval-job-since"
+	podName := "eval-pod-since"
+
+	clientset := fake.NewClientset(
+		&batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      jobName,
+				Namespace: namespace,
+				Labels: map[string]string{
+					labelJobIDKey:          sanitizeLabelValue(jobID),
+					labelBenchmarkIndexKey: "0",
+				},
+			},
+		},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      podName,
+				Namespace: namespace,
+				Labels:    map[string]string{"job-name": jobName},
+			},
+		},
+	)
+
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
+	}
+
+	benchmarks, err := handlers.GetJobBenchmarks(evaluation, nil)
+	if err != nil {
+		t.Fatalf("GetJobBenchmarks: %v", err)
+	}
+
+	sinceSeconds := 60
+	var buf bytes.Buffer
+	idx := 0
+	err = runtime.StreamEvaluationLogs(evaluation, benchmarks, &idx, api.EvaluationLogOptions{
+		TailLines:    10,
+		SinceSeconds: &sinceSeconds,
+		Timestamps:   true,
+	}, &buf)
+	if err != nil {
+		t.Fatalf("StreamEvaluationLogs: %v", err)
+	}
+	if got := buf.String(); got != "fake logs" {
+		t.Fatalf("got %q, want %q", got, "fake logs")
 	}
 }
 

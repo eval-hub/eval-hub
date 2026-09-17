@@ -57,6 +57,10 @@ description: >-
 
 This repository commonly uses `|` for structured multi-paragraph schema docs and `>` / `>-` for flowing prose on paths and fields.
 
+## Schema examples
+
+Use `examples` which is an array of examples and do **NOT** use the deprecated `example` tag.
+
 ## Generating the public (and internal) docs
 
 From the **repository root**:

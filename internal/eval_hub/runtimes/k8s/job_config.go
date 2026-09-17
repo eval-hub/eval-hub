@@ -30,37 +30,43 @@ const (
 	inClusterNamespaceFile      = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 	serviceAccountNameSuffix    = "-job"
 	serviceCAConfigMapSuffix    = "-service-ca"
+	mlflowCABundleCMSuffix      = "-mlflow-ca-bundle"
 	defaultTestDataInitCmd      = "/app/eval-runtime-init"
 	defaultEvalHubPort          = "8443"
 )
 
 type jobConfig struct {
-	jobID               string
-	resourceGUID        string
-	namespace           string
-	providerID          string
-	benchmarkID         string
-	benchmarkIndex      int
-	adapterImage        string
-	adapterPullPolicy   corev1.PullPolicy
-	sidecarImage        string
-	entrypoint          []string
-	defaultEnv          []api.EnvVar
-	cpuRequest          string
-	memoryRequest       string
-	cpuLimit            string
-	memoryLimit         string
-	gpuResource         string            // Kubernetes extended resource name (e.g. "nvidia.com/gpu")
-	gpuCount            int               // number of GPU units to request (0 = CPU-only)
-	nodeSelector        map[string]string // pod nodeSelector; nil when a queue is set (HardwareProfile or hardware_config.queue)
-	tolerations         []corev1.Toleration
-	priorityClassName   string // pod PriorityClassName and/or Kueue priority-class label
-	jobSpec             shared.JobSpec
-	serviceAccountName  string
-	serviceCAConfigMap  string
-	evalHubURL          string // in-cluster URL for sidecar to call eval-hub
-	sidecarBaseURL      string // base URL for adapter/runtime to call sidecar's proxy (config.Sidecar.BaseURL)
-	evalHubInstanceName string
+	jobID              string
+	resourceGUID       string
+	namespace          string
+	providerID         string
+	benchmarkID        string
+	benchmarkIndex     int
+	adapterImage       string
+	adapterPullPolicy  corev1.PullPolicy
+	sidecarImage       string
+	entrypoint         []string
+	defaultEnv         []api.EnvVar
+	cpuRequest         string
+	memoryRequest      string
+	cpuLimit           string
+	memoryLimit        string
+	gpuResource        string            // Kubernetes extended resource name (e.g. "nvidia.com/gpu")
+	gpuCount           int               // number of GPU units to request (0 = CPU-only)
+	nodeSelector       map[string]string // pod nodeSelector; nil when a queue is set (HardwareProfile or hardware_config.queue)
+	tolerations        []corev1.Toleration
+	priorityClassName  string // pod PriorityClassName and/or Kueue priority-class label
+	jobSpec            shared.JobSpec
+	serviceAccountName string
+	serviceCAConfigMap string
+	// mlflowCABundleConfigMap is the operator-managed merged CA bundle
+	// ({instance}-mlflow-ca-bundle) in the job namespace. Set only after a
+	// Get confirms the ConfigMap exists; otherwise jobs fall back to service CA
+	// / configured CA path and do not mount a missing ConfigMap.
+	mlflowCABundleConfigMap string
+	evalHubURL              string // in-cluster URL for sidecar to call eval-hub
+	sidecarBaseURL          string // base URL for adapter/runtime to call sidecar's proxy (config.Sidecar.BaseURL)
+	evalHubInstanceName     string
 	// evalHubCRNamespace is the namespace of the EvalHub CR (control plane); used for Job labels.
 	evalHubCRNamespace         string
 	mlflowTrackingURI          string
@@ -68,11 +74,12 @@ type jobConfig struct {
 	ociCredentialsSecret       string
 	modelAuthSecretRef         string // user's real credentials secret mounted only in sidecar
 	modelInternalRefSecretName string // ephemeral internalModelRef secret mounted in adapter; empty when credential injection is not active
-	modelTargetURL             string // real model URL forwarded by the sidecar model proxy; always set for all jobs
+	modelTargetURL             string // real model URL forwarded by the sidecar model proxy; empty for pre-recorded-data jobs
 	sidecarResources           corev1.ResourceRequirements
 	testDataS3                 s3TestDataConfig
 	testDataPVC                pvcTestDataConfig
 	testDataGit                gitTestDataConfig
+	testDataHF                 hfTestDataConfig
 	testDataInitImage          string
 	sidecarConfig              *config.SidecarConfig
 	// queueKind and queueName come from a queue-backed HardwareProfile when set,
@@ -100,6 +107,13 @@ type gitTestDataConfig struct {
 	secretRef string
 }
 
+type hfTestDataConfig struct {
+	repoID    string
+	revision  string
+	subPath   string
+	secretRef string
+}
+
 func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkConfig *api.EvaluationBenchmarkConfig, benchmarkIndex int, serviceConfig *config.Config, hardwareProfile *hardwareProfileResources) (*jobConfig, error) {
 	runtime := provider.Runtime
 	if runtime == nil || runtime.K8s == nil {
@@ -114,8 +128,10 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	if runtime.K8s.Image == "" {
 		return nil, fmt.Errorf("runtime adapter image is required")
 	}
-	if evaluation.Model.URL == "" || evaluation.Model.Name == "" {
-		return nil, fmt.Errorf("model url and name are required")
+	// evaluation.Model.URL is optional (for pre-recorded datasets) and will have
+	// been checked by the API layer but evaluation.Model.Name is required
+	if evaluation.Model.Name == "" {
+		return nil, fmt.Errorf("model name is required")
 	}
 
 	sidecarBaseURL := config.DefaultSidecarBaseURL
@@ -123,11 +139,10 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		sidecarBaseURL = serviceConfig.Sidecar.EffectiveBaseURL()
 	}
 	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
-	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, benchmarkConfig, benchmarkIndex, &sidecarBaseURL)
+	spec, err := shared.BuildJobSpec(evaluation, provider.Resource.ID, benchmarkConfig, benchmarkIndex, &sidecarBaseURL, provider)
 	if err != nil {
 		return nil, err
 	}
-
 	// Get EvalHub instance name from environment (set by operator in deployment)
 	evalHubInstanceName := strings.TrimSpace(os.Getenv(evalHubInstanceNameEnv))
 
@@ -156,6 +171,8 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		evalHubCRNamespace = saNamespace
 		serviceAccountName = evalHubInstanceName + "-" + saNamespace + serviceAccountNameSuffix
 		serviceCAConfigMap = evalHubInstanceName + serviceCAConfigMapSuffix
+		// mlflowCABundleConfigMap is resolved later once we confirm
+		// {instance}-mlflow-ca-bundle exists in the job namespace.
 		// EvalHub URL points to the kube-rbac-proxy HTTPS endpoint in the instance namespace.
 		// Use saNamespace (which falls back to namespace when not in-cluster) to avoid a malformed host
 		// when instanceNamespace is empty.
@@ -171,19 +188,19 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		ociCredentialsSecret = evaluation.Exports.OCI.K8s.Connection
 	}
 
+	// modelTargetURL is set when the user supplies a model URL; it remains empty for
+	// pre-recorded-data jobs where no live model endpoint is needed.
+	modelTargetURL := strings.TrimSpace(evaluation.Model.URL)
+
+	// Model auth is only relevant when there is a model URL to authenticate with.
 	modelAuthSecretRef := ""
-	if evaluation.Model.Auth != nil {
+	if modelTargetURL != "" && evaluation.Model.Auth != nil {
 		modelAuthSecretRef = strings.TrimSpace(evaluation.Model.Auth.SecretRef)
 	}
 
 	// modelInternalRefSecretName is set in createBenchmarkResources after inspectModelSecret
-	// confirms proxy-injectable keys. modelTargetURL is always set so the sidecar model proxy
-	// is active for all jobs — open and authenticated alike.
+	// confirms proxy-injectable keys.
 	modelInternalRefSecretName := ""
-	modelTargetURL := strings.TrimSpace(evaluation.Model.URL)
-	if modelTargetURL == "" {
-		return nil, fmt.Errorf("model URL must not be empty")
-	}
 
 	sidecarImage, sidecarResources, err := sidecarImageAndResources(serviceConfig)
 	if err != nil {
@@ -209,6 +226,14 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		testDataGitRef = strings.TrimSpace(benchmarkConfig.TestDataRef.Git.Ref)
 		testDataGitSubPath = strings.TrimSpace(benchmarkConfig.TestDataRef.Git.SubPath)
 		testDataGitSecretRef = strings.TrimSpace(benchmarkConfig.TestDataRef.Git.SecretRef)
+	}
+
+	var testDataHFRepoID, testDataHFRevision, testDataHFSubPath, testDataHFSecretRef string
+	if benchmarkConfig.TestDataRef != nil && benchmarkConfig.TestDataRef.HF != nil {
+		testDataHFRepoID = strings.TrimSpace(benchmarkConfig.TestDataRef.HF.RepoID)
+		testDataHFRevision = strings.TrimSpace(benchmarkConfig.TestDataRef.HF.Revision)
+		testDataHFSubPath = strings.TrimSpace(benchmarkConfig.TestDataRef.HF.SubPath)
+		testDataHFSecretRef = strings.TrimSpace(benchmarkConfig.TestDataRef.HF.SecretRef)
 	}
 
 	// GPU resource requests/limits are always propagated to the pod spec so that Kueue can
@@ -269,6 +294,12 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 			ref:       testDataGitRef,
 			subPath:   testDataGitSubPath,
 			secretRef: testDataGitSecretRef,
+		},
+		testDataHF: hfTestDataConfig{
+			repoID:    testDataHFRepoID,
+			revision:  testDataHFRevision,
+			subPath:   testDataHFSubPath,
+			secretRef: testDataHFSecretRef,
 		},
 	}
 	applyHardwareProfileResources(out, hardwareProfile)
@@ -469,6 +500,10 @@ func defaultIfEmpty(value string, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func mlflowCABundleConfigMapName(instanceName string) string {
+	return instanceName + mlflowCABundleCMSuffix
 }
 
 func resolveNamespace(configured string) string {

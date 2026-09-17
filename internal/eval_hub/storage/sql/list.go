@@ -126,12 +126,15 @@ func scanResource[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 			return &t, nil
 		}
 	case shared.TableCollections:
-		storedEntity := api.CollectionConfig{}
+		storedEntity := collectionStoredEntity{}
 		err = json.Unmarshal([]byte(query.EntityJSON), &storedEntity)
 		if err == nil {
 			resource := &api.CollectionResource{
 				Resource:         query.Resource,
-				CollectionConfig: storedEntity,
+				DerivedFrom:      storedEntity.DerivedFrom,
+				PinnedOrder:      storedEntity.PinnedOrder,
+				CollectionConfig: storedEntity.CollectionConfig,
+				Status:           storedEntity.Status,
 			}
 			t := any(*resource).(T)
 			return &t, nil

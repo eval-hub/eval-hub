@@ -7,6 +7,62 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+func TestNewEvaluationCardPropagatesMetricsSchema(t *testing.T) {
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{
+			Resource: api.Resource{ID: "job-metrics-schema"},
+		},
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Model: &api.ModelRef{URL: "https://vllm.example.com/v1", Name: "model"},
+			Benchmarks: []api.EvaluationBenchmarkConfig{
+				{Ref: api.Ref{ID: "arc_easy"}, ProviderID: "lm_evaluation_harness"},
+			},
+		},
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{
+				State: api.OverallStateCompleted,
+				Message: &api.MessageInfo{
+					Message:     "Evaluation job is completed",
+					MessageCode: "evaluation.job.updated",
+				},
+			},
+			Benchmarks: []api.BenchmarkStatus{
+				{
+					ID:             "arc_easy",
+					ProviderID:     "lm_evaluation_harness",
+					BenchmarkIndex: 0,
+					Status:         api.StateCompleted,
+				},
+			},
+		},
+		Results: &api.EvaluationJobResults{
+			Benchmarks: []api.BenchmarkResult{
+				{
+					ID:             "arc_easy",
+					ProviderID:     "lm_evaluation_harness",
+					BenchmarkIndex: 0,
+					Metrics:        map[string]any{"acc": 0.9},
+					MetricsSchema: []api.MetricSchema{
+						{Name: "acc", Type: api.ResultTypeNumeric},
+					},
+				},
+			},
+		},
+	}
+
+	card := NewEvaluationCard(job)
+	if card == nil || card.Results == nil || len(card.Results.Benchmarks) != 1 {
+		t.Fatalf("card results = %#v", card)
+	}
+	got := card.Results.Benchmarks[0]
+	if len(got.MetricsSchema) != 1 {
+		t.Fatalf("metrics_schema len = %d, want 1", len(got.MetricsSchema))
+	}
+	if got.MetricsSchema[0].Name != "acc" || got.MetricsSchema[0].Type != api.ResultTypeNumeric {
+		t.Fatalf("metrics_schema = %#v", got.MetricsSchema)
+	}
+}
+
 func TestNewEvaluationCardFromDirectBenchmarkJob(t *testing.T) {
 	threshold := float32(0.3)
 	job := &api.EvaluationJobResource{

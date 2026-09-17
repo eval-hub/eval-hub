@@ -36,6 +36,23 @@ type BenchmarkResource struct {
 	PrimaryScore *PrimaryScore           `mapstructure:"primary_score" yaml:"primary_score" json:"primary_score,omitempty"`
 	PassCriteria *PassCriteria           `mapstructure:"pass_criteria" yaml:"pass_criteria" json:"pass_criteria,omitempty" validate:"omitempty"`
 	Agent        *BenchmarkAgentMetadata `mapstructure:"agent" yaml:"agent" json:"agent,omitempty"`
+
+	// Domains lists the high-level evaluation domains this benchmark addresses (snake_case).
+	// Used to auto-populate CollectionConfig.Domains when the collection does not set it explicitly.
+	Domains []string `mapstructure:"domains" yaml:"domains" json:"domains,omitempty"`
+
+	// Tasks lists the ML tasks this benchmark evaluates (snake_case).
+	// Used to auto-populate CollectionConfig.Tasks when the collection does not set it explicitly.
+	Tasks []string `mapstructure:"tasks" yaml:"tasks" json:"tasks,omitempty"`
+
+	// Modalities lists the data modalities this benchmark uses (snake_case).
+	// Used to auto-populate CollectionConfig.Modalities when the collection does not set it explicitly.
+	Modalities []string `mapstructure:"modalities" yaml:"modalities" json:"modalities,omitempty"`
+
+	// EvaluationTargets lists the AI entity types this benchmark evaluates (snake_case).
+	// Used to auto-populate CollectionConfig.EvaluationTargets when the collection does not set it explicitly.
+	// Example values: model, agent.
+	EvaluationTargets []string `mapstructure:"evaluation_targets" yaml:"evaluation_targets" json:"evaluation_targets,omitempty"`
 }
 
 type ProviderConfig struct {

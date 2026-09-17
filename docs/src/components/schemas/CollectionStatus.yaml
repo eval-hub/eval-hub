@@ -1,0 +1,11 @@
+type: object
+description: >
+  Server-managed mutable runtime status for custom (tenant-scoped) collections.
+  Never user-supplied and never written to YAML configuration.
+  Present only on custom (tenant-scoped) collections; absent on system collections.
+properties:
+  run_count:
+    type: integer
+    description: >
+      Number of evaluation jobs created from this collection by its owning tenant.
+      Per-tenant counter, incremented at job creation.

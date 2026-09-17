@@ -1,0 +1,41 @@
+id: knowledge-reasoning-v1
+name: Knowledge & Reasoning v1
+category: knowledge_reasoning
+description: >
+  Evaluates broad academic knowledge and expert-level reasoning. GPQA-Diamond tests
+  graduate-level science questions that resist internet lookup. HLE (Humanity's Last Exam)
+  is a 2,500-question frontier benchmark across dozens of subjects, designed to remain
+  unsaturated by current models.
+  Part of the Curated Collections taxonomy (#916).
+tags:
+  - knowledge
+  - reasoning
+  - science
+  - inspect-evals
+  - curated
+domains:
+  - knowledge_and_reasoning
+pass_criteria:
+  threshold: 0.235
+benchmarks:
+  - id: gpqa:diamond
+    provider_id: lighteval
+    weight: 1
+    primary_score:
+      metric: gpqa_pass@1
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.35
+
+  - id: inspect/hle
+    provider_id: inspect
+    weight: 1
+    primary_score:
+      metric: accuracy/accuracy
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.12
+    parameters:
+      task_args:
+        include_multi_modal: false
+        graders: [grader]

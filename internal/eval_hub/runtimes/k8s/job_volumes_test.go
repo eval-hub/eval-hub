@@ -5,7 +5,21 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
+
+func assertTestDataEmptyDirSizeLimit(t *testing.T, volumes []corev1.Volume) {
+	t.Helper()
+	vol := findVolume(volumes, testDataVolumeName)
+	if vol == nil || vol.EmptyDir == nil || vol.EmptyDir.SizeLimit == nil {
+		t.Fatal("expected test-data emptyDir volume with sizeLimit")
+	}
+	want := resource.MustParse(defaultTestDataEmptyDirSizeLimit)
+	if vol.EmptyDir.SizeLimit.Cmp(want) != 0 {
+		t.Fatalf("test-data sizeLimit = %s, want %s", vol.EmptyDir.SizeLimit.String(), want.String())
+	}
+}
 
 func TestBuildJobSidecarMountsMLFlowToken(t *testing.T) {
 	cfg := &jobConfig{
@@ -19,7 +33,7 @@ func TestBuildJobSidecarMountsMLFlowToken(t *testing.T) {
 		defaultEnv:        []api.EnvVar{},
 		mlflowTrackingURI: "http://mlflow:5000",
 	}
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -43,6 +57,98 @@ func TestBuildJobSidecarMountsMLFlowToken(t *testing.T) {
 	}
 }
 
+func TestBuildJobMountsMLFlowCABundle(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:                   "job-mlflow-ca",
+		resourceGUID:            "guid-mlflow-ca",
+		benchmarkIndex:          0,
+		namespace:               "default",
+		providerID:              "provider-1",
+		benchmarkID:             "bench-1",
+		adapterImage:            "adapter:latest",
+		defaultEnv:              []api.EnvVar{},
+		mlflowTrackingURI:       "https://mlflow.example:443",
+		mlflowCABundleConfigMap: "my-evalhub-mlflow-ca-bundle",
+		serviceCAConfigMap:      "my-evalhub-service-ca",
+	}
+	job, err := buildJob(cfg, nil)
+	if err != nil {
+		t.Fatalf("buildJob: %v", err)
+	}
+
+	foundVol := findVolume(job.Spec.Template.Spec.Volumes, mlflowCABundleVolumeName)
+	if foundVol == nil {
+		t.Fatalf("expected volume %q", mlflowCABundleVolumeName)
+	}
+	if foundVol.ConfigMap == nil || foundVol.ConfigMap.Name != "my-evalhub-mlflow-ca-bundle" {
+		t.Fatalf("unexpected ConfigMap volume source: %+v", foundVol.ConfigMap)
+	}
+
+	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
+	if sidecar == nil {
+		t.Fatal("expected sidecar init container")
+	}
+	sidecarMount := findVolumeMount(sidecar.VolumeMounts, mlflowCABundleVolumeName)
+	if sidecarMount == nil {
+		t.Fatalf("expected sidecar mount %q", mlflowCABundleVolumeName)
+	}
+	if sidecarMount.MountPath != mlflowCABundleMountPath {
+		t.Fatalf("sidecar MountPath = %q, want %q", sidecarMount.MountPath, mlflowCABundleMountPath)
+	}
+
+	adapter := findContainer(job.Spec.Template.Spec.Containers, adapterContainerName)
+	if adapter == nil {
+		t.Fatal("expected adapter container")
+	}
+	adapterMount := findVolumeMount(adapter.VolumeMounts, mlflowCABundleVolumeName)
+	if adapterMount == nil {
+		t.Fatalf("expected adapter mount %q", mlflowCABundleVolumeName)
+	}
+
+	var certEnv *corev1.EnvVar
+	for i := range adapter.Env {
+		if adapter.Env[i].Name == envMLFlowCertPathName {
+			certEnv = &adapter.Env[i]
+			break
+		}
+	}
+	if certEnv == nil {
+		t.Fatalf("expected adapter env %q", envMLFlowCertPathName)
+	}
+	wantCert := mlflowCABundleMountPath + "/" + mlflowCABundleFile
+	if certEnv.Value != wantCert {
+		t.Fatalf("%s = %q, want %q", envMLFlowCertPathName, certEnv.Value, wantCert)
+	}
+}
+
+func TestEnsureMLFlowCABundleVolumeAndMountIdempotent(t *testing.T) {
+	const cmName = "evalhub-mlflow-ca-bundle"
+
+	vols := ensureMLFlowCABundleVolume(nil, cmName)
+	if len(vols) != 1 {
+		t.Fatalf("first ensure volume len = %d, want 1", len(vols))
+	}
+	volsAgain := ensureMLFlowCABundleVolume(vols, cmName)
+	if len(volsAgain) != 1 {
+		t.Fatalf("second ensure volume len = %d, want 1 (no duplicate)", len(volsAgain))
+	}
+	if volsAgain[0].ConfigMap == nil || volsAgain[0].ConfigMap.Name != cmName {
+		t.Fatalf("ConfigMap name = %v, want %q", volsAgain[0].ConfigMap, cmName)
+	}
+
+	mounts := ensureMLFlowCABundleMount(nil)
+	if len(mounts) != 1 {
+		t.Fatalf("first ensure mount len = %d, want 1", len(mounts))
+	}
+	mountsAgain := ensureMLFlowCABundleMount(mounts)
+	if len(mountsAgain) != 1 {
+		t.Fatalf("second ensure mount len = %d, want 1 (no duplicate)", len(mountsAgain))
+	}
+	if mountsAgain[0].MountPath != mlflowCABundleMountPath {
+		t.Fatalf("MountPath = %q, want %q", mountsAgain[0].MountPath, mlflowCABundleMountPath)
+	}
+}
+
 func TestBuildJobWithOCICredentials(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:                "job-oci",
@@ -56,7 +162,7 @@ func TestBuildJobWithOCICredentials(t *testing.T) {
 		ociCredentialsSecret: "my-pull-secret",
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -115,7 +221,7 @@ func TestBuildJobTerminationFileVolume(t *testing.T) {
 		adapterImage:   "adapter:latest",
 		defaultEnv:     []api.EnvVar{},
 	}
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -152,7 +258,7 @@ func TestBuildJobSidecarDoesNotUseEvalhubConfigVolume(t *testing.T) {
 		adapterImage:   "adapter:latest",
 		defaultEnv:     []api.EnvVar{},
 	}
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -187,7 +293,7 @@ func TestBuildJobWithoutOCICredentials(t *testing.T) {
 		defaultEnv:     []api.EnvVar{},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -223,7 +329,7 @@ func TestBuildJobWithS3TestData(t *testing.T) {
 		},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -273,6 +379,7 @@ func TestBuildJobWithS3TestData(t *testing.T) {
 	if !foundTestDataVolume || !foundSecretVolume {
 		t.Fatalf("expected test data and secret volumes to be present")
 	}
+	assertTestDataEmptyDirSizeLimit(t, job.Spec.Template.Spec.Volumes)
 
 	var foundTestDataMount bool
 	for _, m := range job.Spec.Template.Spec.Containers[0].VolumeMounts {
@@ -302,7 +409,7 @@ func TestBuildJobWithS3TestDataSkipsEmptyNormalizedKey(t *testing.T) {
 		},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -335,7 +442,7 @@ func TestBuildJobWithModelAuthSecret(t *testing.T) {
 		modelAuthSecretRef: "model-auth-secret",
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -389,7 +496,7 @@ func TestBuildJobWithoutModelAuthSecret(t *testing.T) {
 		defaultEnv:     []api.EnvVar{},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -423,7 +530,7 @@ func TestBuildJobSATokenSidecarOnly(t *testing.T) {
 		adapterImage:   "adapter:latest",
 		defaultEnv:     []api.EnvVar{},
 	}
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob: %v", err)
 	}
@@ -523,7 +630,7 @@ func TestBuildJobWithGitTestDataPublicRepo(t *testing.T) {
 		},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -566,6 +673,7 @@ func TestBuildJobWithGitTestDataPublicRepo(t *testing.T) {
 	if findVolume(job.Spec.Template.Spec.Volumes, testDataVolumeName) == nil {
 		t.Fatal("expected test-data emptyDir volume")
 	}
+	assertTestDataEmptyDirSizeLimit(t, job.Spec.Template.Spec.Volumes)
 
 	var foundTestDataMount bool
 	for _, m := range job.Spec.Template.Spec.Containers[0].VolumeMounts {
@@ -612,7 +720,7 @@ func TestBuildJobWithGitTestDataPrivateRepo(t *testing.T) {
 		},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -683,7 +791,7 @@ func TestBuildJobSidecarMountsTestDataVolumeForGitSource(t *testing.T) {
 		},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -718,7 +826,7 @@ func TestBuildJobSidecarDoesNotMountTestDataVolumeForNonGitSource(t *testing.T) 
 		sidecarConfig:  &config.SidecarConfig{BaseURL: config.DefaultSidecarBaseURL},
 	}
 
-	job, err := buildJob(cfg)
+	job, err := buildJob(cfg, nil)
 	if err != nil {
 		t.Fatalf("buildJob returned error: %v", err)
 	}
@@ -752,8 +860,182 @@ func TestBuildJobWithGitTestDataMissingInitImage(t *testing.T) {
 		},
 	}
 
-	_, err := buildJob(cfg)
+	_, err := buildJob(cfg, nil)
 	if err == nil {
 		t.Fatal("expected error when git test data is set but init image is missing")
+	}
+}
+
+func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:             "job-hf-public",
+		resourceGUID:      "guid-hf-public",
+		benchmarkIndex:    0,
+		namespace:         "default",
+		providerID:        "provider-1",
+		benchmarkID:       "bench-1",
+		adapterImage:      "adapter:latest",
+		defaultEnv:        []api.EnvVar{},
+		testDataInitImage: "quay.io/evalhub/evalhub:test",
+		testDataHF: hfTestDataConfig{
+			repoID:   "cais/mmlu",
+			revision: "main",
+		},
+	}
+
+	job, err := buildJob(cfg, nil)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	initContainer := mustFindContainer(t, job.Spec.Template.Spec.InitContainers, initContainerName)
+	if initContainer.Image != "quay.io/evalhub/evalhub:test" {
+		t.Fatalf("unexpected init image: %s", initContainer.Image)
+	}
+	if len(initContainer.Command) != 1 || initContainer.Command[0] != defaultTestDataInitCmd {
+		t.Fatalf("expected init command [%q], got %v", defaultTestDataInitCmd, initContainer.Command)
+	}
+
+	var foundRepoID, foundRevision bool
+	for _, env := range initContainer.Env {
+		switch env.Name {
+		case envTestDataHFRepoIDName:
+			foundRepoID = env.Value == "cais/mmlu"
+		case envTestDataHFRevisionName:
+			if env.Value != "main" {
+				t.Fatalf("expected revision main, got %q", env.Value)
+			}
+			foundRevision = true
+		}
+	}
+	if !foundRepoID {
+		t.Fatal("expected repo_id env var on HF init container")
+	}
+	if !foundRevision {
+		t.Fatal("expected revision env var on HF init container")
+	}
+	assertTestDataEmptyDirSizeLimit(t, job.Spec.Template.Spec.Volumes)
+
+	sidecar := mustFindContainer(t, job.Spec.Template.Spec.InitContainers, sidecarContainerName)
+	var foundMetadataMount bool
+	for _, m := range sidecar.VolumeMounts {
+		if m.Name == initMetadataVolumeName {
+			foundMetadataMount = true
+		}
+	}
+	if !foundMetadataMount {
+		t.Fatal("expected sidecar to mount init-metadata volume for HF source")
+	}
+}
+
+func TestBuildJobWithHFTestDataSubPath(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:             "job-hf-subpath",
+		resourceGUID:      "guid-hf-subpath",
+		benchmarkIndex:    0,
+		namespace:         "default",
+		providerID:        "provider-1",
+		benchmarkID:       "bench-1",
+		adapterImage:      "adapter:latest",
+		defaultEnv:        []api.EnvVar{},
+		testDataInitImage: "quay.io/evalhub/evalhub:test",
+		testDataHF: hfTestDataConfig{
+			repoID:   "org/offline-dataset",
+			revision: "main",
+			subPath:  "staging_sub_path",
+		},
+	}
+
+	job, err := buildJob(cfg, nil)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	initContainer := mustFindContainer(t, job.Spec.Template.Spec.InitContainers, initContainerName)
+
+	var foundSubPath bool
+	for _, env := range initContainer.Env {
+		if env.Name == envTestDataHFSubPathName {
+			foundSubPath = true
+			if env.Value != "staging_sub_path" {
+				t.Fatalf("expected sub_path env %q, got %q", "staging_sub_path", env.Value)
+			}
+		}
+	}
+	if !foundSubPath {
+		t.Fatal("expected sub_path env var on HF init container")
+	}
+}
+
+func TestBuildJobWithHFTestDataPrivateRepo(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:             "job-hf-private",
+		resourceGUID:      "guid-hf-private",
+		benchmarkIndex:    0,
+		namespace:         "default",
+		providerID:        "provider-1",
+		benchmarkID:       "bench-1",
+		adapterImage:      "adapter:latest",
+		defaultEnv:        []api.EnvVar{},
+		testDataInitImage: "quay.io/evalhub/evalhub:test",
+		testDataHF: hfTestDataConfig{
+			repoID:    "org/gated-dataset",
+			secretRef: "my-hf-secret",
+		},
+	}
+
+	job, err := buildJob(cfg, nil)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	initContainer := mustFindContainer(t, job.Spec.Template.Spec.InitContainers, initContainerName)
+
+	var foundSecretVolume, foundSecretMount bool
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == testDataHFAuthVolumeName {
+			foundSecretVolume = true
+			if v.Secret == nil || v.Secret.SecretName != "my-hf-secret" {
+				t.Fatalf("expected secret volume with secret %q", "my-hf-secret")
+			}
+		}
+	}
+	for _, m := range initContainer.VolumeMounts {
+		if m.Name == testDataHFAuthVolumeName && m.MountPath == testDataInitMountPath && m.ReadOnly {
+			foundSecretMount = true
+		}
+	}
+	if !foundSecretVolume {
+		t.Fatal("expected HF secret volume for gated repo")
+	}
+	if !foundSecretMount {
+		t.Fatal("expected HF secret mount in init container for gated repo")
+	}
+
+	for _, m := range job.Spec.Template.Spec.Containers[0].VolumeMounts {
+		if m.Name == testDataHFAuthVolumeName {
+			t.Fatalf("adapter must not mount HF secret volume")
+		}
+	}
+}
+
+func TestBuildJobWithHFTestDataMissingInitImage(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "job-hf-no-image",
+		resourceGUID:   "guid-hf-no-image",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+		defaultEnv:     []api.EnvVar{},
+		testDataHF: hfTestDataConfig{
+			repoID: "cais/mmlu",
+		},
+	}
+
+	_, err := buildJob(cfg, nil)
+	if err == nil {
+		t.Fatal("expected error when HF test data is set but init image is missing")
 	}
 }

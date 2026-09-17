@@ -1,0 +1,62 @@
+type: object
+additionalProperties: false
+description: >
+  Optional field overrides for the cloned collection. Any omitted field is
+  inherited from the source collection, except curation_order. Clone requests
+  never accept curation_order, and the server always resets it to 0 so that
+  copies are never curated by default.
+properties:
+  name:
+    type: string
+    description: New name for the copy. Defaults to source name.
+  description:
+    type: string
+    description: Override description.
+  category:
+    type: string
+    description: Deprecated — use domains.
+  tags:
+    type: array
+    items:
+      type: string
+    description: Override tags.
+  pass_criteria:
+    $ref: ./PassCriteria.yaml
+    description: Override pass criteria.
+  benchmarks:
+    type: array
+    items:
+      $ref: ./CollectionBenchmarkConfig.yaml
+    description: Override benchmarks.
+  domains:
+    type: array
+    items:
+      type: string
+    description: Override domains.
+  tasks:
+    type: array
+    items:
+      type: string
+    description: Override tasks.
+  modalities:
+    type: array
+    items:
+      type: string
+    description: Override modalities.
+  industries:
+    type: array
+    items:
+      type: string
+    description: Override industries.
+  evaluation_targets:
+    type: array
+    items:
+      type: string
+    description: Override evaluation targets.
+  custom:
+    type: object
+    additionalProperties: true
+    description: Override custom key-value data.
+  agent:
+    $ref: ./CollectionAgentMetadata.yaml
+    description: Override agent metadata for AI agent consumption.

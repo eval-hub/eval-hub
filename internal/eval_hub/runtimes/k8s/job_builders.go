@@ -43,12 +43,17 @@ const (
 	mlflowTokenVolumeName             = "mlflow-token"
 	mlflowAuthMountPath               = "/var/run/secrets/mlflow"
 	mlflowTokenFile                   = "token"
-	ociCredentialsVolumeName          = "oci-credentials"
-	ociAuthMountPath                  = "/etc/evalhub/.docker/config.json"
-	ociDockerConfigSubPath            = ".dockerconfigjson"
-	envOCIAuthConfigPathName          = "OCI_AUTH_CONFIG_PATH"
-	modelAuthVolumeName               = "model-auth" // credentials secret; mounted in sidecar only
-	modelAuthMountPath                = "/var/run/secrets/model"
+	// MLflow CA bundle: operator-merged trust store mounted into job pods from
+	// {instance}-mlflow-ca-bundle.
+	mlflowCABundleVolumeName = "mlflow-ca-bundle"
+	mlflowCABundleMountPath  = "/etc/evalhub/mlflow-ca"
+	mlflowCABundleFile       = "ca-bundle.crt"
+	ociCredentialsVolumeName = "oci-credentials"
+	ociAuthMountPath         = "/etc/evalhub/.docker/config.json"
+	ociDockerConfigSubPath   = ".dockerconfigjson"
+	envOCIAuthConfigPathName = "OCI_AUTH_CONFIG_PATH"
+	modelAuthVolumeName      = "model-auth" // credentials secret; mounted in sidecar only
+	modelAuthMountPath       = "/var/run/secrets/model"
 	// Standard Kubernetes SA mount path; used by both the sidecar SA token volume and the
 	// adapter DownwardAPI namespace volume so the SDK finds files at the expected locations.
 	k8sSAMountPath = "/var/run/secrets/kubernetes.io/serviceaccount"
@@ -57,27 +62,34 @@ const (
 	evalhubSATokenFile  = "token"
 	// pod namespace projected into adapter via DownwardAPI so the SDK can set X-Tenant on sidecar requests.
 	// The SA token auto-mount is disabled so the standard namespace file is absent; we expose it explicitly.
-	adapterNamespaceVolumeName      = "pod-namespace"
-	adapterNamespaceFile            = "namespace"
-	modelInternalAuthVolumeName     = "model-auth-internal" // internalModelRef projected volume; mounted in adapter during credential injection
-	testDataSecretVolumeName        = "test-data-secret"
-	testDataInitMountPath           = "/var/run/secrets/test-data"
-	serviceCABundleFile             = "service-ca.crt"
-	envMLFlowCertPathName           = "MLFLOW_TRACKING_SERVER_CERT_PATH"
-	envEvalHubModeName              = "EVALHUB_MODE"
-	envTestDataS3BucketName         = "TEST_DATA_S3_BUCKET"
-	envTestDataS3KeyName            = "TEST_DATA_S3_KEY"
-	envTestDataGitURLName           = "TEST_DATA_GIT_URL"
-	envTestDataGitRefName           = "TEST_DATA_GIT_REF"
-	envTestDataGitSubPathName       = "TEST_DATA_GIT_SUBPATH"
-	testDataGitAuthVolumeName       = "test-data-git-auth"
-	initMetadataVolumeName          = "init-metadata" // emptyDir shared between init container and sidecar only
-	initMetadataMountPath           = runtimeenv.InitMetadataDir
-	defaultInitCPURequest           = "100m"
-	defaultInitCPULimit             = "500m"
-	defaultInitMemoryRequest        = "128Mi"
-	defaultInitMemoryLimit          = "512Mi"
-	defaultAllowPrivilegeEscalation = false
+	adapterNamespaceVolumeName       = "pod-namespace"
+	adapterNamespaceFile             = "namespace"
+	modelInternalAuthVolumeName      = "model-auth-internal" // internalModelRef projected volume; mounted in adapter during credential injection
+	testDataSecretVolumeName         = "test-data-secret"
+	testDataInitMountPath            = "/var/run/secrets/test-data"
+	serviceCABundleFile              = "service-ca.crt"
+	envMLFlowCertPathName            = "MLFLOW_TRACKING_SERVER_CERT_PATH"
+	envEvalHubModeName               = "EVALHUB_MODE"
+	envTestDataS3BucketName          = "TEST_DATA_S3_BUCKET"
+	envTestDataS3KeyName             = "TEST_DATA_S3_KEY"
+	envTestDataGitURLName            = "TEST_DATA_GIT_URL"
+	envTestDataGitRefName            = "TEST_DATA_GIT_REF"
+	envTestDataGitSubPathName        = "TEST_DATA_GIT_SUBPATH"
+	envTestDataHFRepoIDName          = "TEST_DATA_HF_REPO_ID"
+	envTestDataHFRevisionName        = "TEST_DATA_HF_REVISION"
+	envTestDataHFSubPathName         = "TEST_DATA_HF_SUBPATH"
+	envOTELExporterEndpointName      = "OTEL_EXPORTER_OTLP_ENDPOINT"
+	envOTELServiceNameName           = "OTEL_SERVICE_NAME"
+	testDataGitAuthVolumeName        = "test-data-git-auth"
+	testDataHFAuthVolumeName         = "test-data-hf-auth"
+	initMetadataVolumeName           = "init-metadata" // emptyDir shared between init container and sidecar only
+	initMetadataMountPath            = runtimeenv.InitMetadataDir
+	defaultInitCPURequest            = "100m"
+	defaultInitCPULimit              = "500m"
+	defaultInitMemoryRequest         = "128Mi"
+	defaultInitMemoryLimit           = "512Mi"
+	defaultTestDataEmptyDirSizeLimit = "5Gi"
+	defaultAllowPrivilegeEscalation  = false
 	//defaultRunAsUser                = int64(1000)
 	//defaultRunAsGroup               = int64(1000)
 	labelAppKey       = "app"
@@ -138,7 +150,7 @@ func buildConfigMap(cfg *jobConfig) (*corev1.ConfigMap, error) {
 	}, nil
 }
 
-func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
+func buildJob(cfg *jobConfig, serviceConfig *config.Config) (*batchv1.Job, error) {
 	if cfg.adapterImage == "" {
 		return nil, fmt.Errorf("adapter image is required")
 	}
@@ -150,7 +162,7 @@ func buildJob(cfg *jobConfig) (*batchv1.Job, error) {
 	ttl := defaultJobTTLSeconds
 	backoff := defaultJobBackoffLimit
 
-	adapterEnvVars := buildEnvVars(cfg)
+	adapterEnvVars := buildEnvVars(cfg, serviceConfig)
 	resources, err := buildResources(cfg)
 	if err != nil {
 		return nil, err

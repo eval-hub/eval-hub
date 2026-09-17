@@ -9,6 +9,12 @@ import (
 // DefaultMaxRequestBodyBytes is applied when service.max_request_body_bytes is omitted or zero.
 const DefaultMaxRequestBodyBytes int64 = 10 << 20 // 10 MiB
 
+// DefaultMaxLogResponseBytes is applied when service.max_log_response_bytes is omitted or zero.
+const DefaultMaxLogResponseBytes int64 = 50 << 20 // 50 MiB
+
+// DefaultLogStreamTimeout is applied when service.log_stream_timeout is omitted or zero.
+const DefaultLogStreamTimeout = 5 * time.Minute
+
 type ServiceConfig struct {
 	Version         string `mapstructure:"version,omitempty"`
 	Build           string `mapstructure:"build,omitempty"`
@@ -36,6 +42,13 @@ type ServiceConfig struct {
 	// MaxRequestBodyBytes limits incoming request bodies via http.MaxBytesReader.
 	// Zero or unset uses DefaultMaxRequestBodyBytes. -1 disables the limit.
 	MaxRequestBodyBytes int64 `mapstructure:"max_request_body_bytes,omitempty"`
+	// MaxLogResponseBytes limits the size of streamed log responses.
+	// Zero or unset uses DefaultMaxLogResponseBytes (50 MiB). -1 disables the limit.
+	MaxLogResponseBytes int64 `mapstructure:"max_log_response_bytes,omitempty"`
+	// LogStreamTimeout is the maximum duration for streaming log responses.
+	// Zero or unset uses DefaultLogStreamTimeout (5 minutes). This is independent of the
+	// server WriteTimeout and allows log streams to run longer than normal responses.
+	LogStreamTimeout time.Duration `mapstructure:"log_stream_timeout,omitempty"`
 }
 
 // TLSEnabled returns true when both TLS cert and key paths are configured.
@@ -115,6 +128,29 @@ func (c *ServiceConfig) EffectiveMaxRequestBodyBytes() int64 {
 	return c.MaxRequestBodyBytes
 }
 
+// EffectiveMaxLogResponseBytes returns the byte limit for streamed log responses; -1 means no limit.
+func (c *ServiceConfig) EffectiveMaxLogResponseBytes() int64 {
+	if c == nil {
+		return DefaultMaxLogResponseBytes
+	}
+	if c.MaxLogResponseBytes == -1 {
+		return -1
+	}
+	if c.MaxLogResponseBytes == 0 {
+		return DefaultMaxLogResponseBytes
+	}
+	return c.MaxLogResponseBytes
+}
+
+// EffectiveLogStreamTimeout returns the deadline for log streaming operations.
+// Zero or unset returns DefaultLogStreamTimeout (5 minutes).
+func (c *ServiceConfig) EffectiveLogStreamTimeout() time.Duration {
+	if c == nil || c.LogStreamTimeout <= 0 {
+		return DefaultLogStreamTimeout
+	}
+	return c.LogStreamTimeout
+}
+
 // ValidateHTTPConfig returns an error when HTTP-related settings are invalid.
 func (c *ServiceConfig) ValidateHTTPConfig() error {
 	if c == nil {
@@ -137,6 +173,12 @@ func (c *ServiceConfig) ValidateHTTPConfig() error {
 	}
 	if c.MaxRequestBodyBytes < -1 {
 		return fmt.Errorf("service.max_request_body_bytes must be -1 (unlimited) or >= 0")
+	}
+	if c.MaxLogResponseBytes < -1 {
+		return fmt.Errorf("service.max_log_response_bytes must be -1 (unlimited) or >= 0")
+	}
+	if c.LogStreamTimeout < 0 {
+		return fmt.Errorf("service.log_stream_timeout must not be negative")
 	}
 	return nil
 }

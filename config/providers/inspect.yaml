@@ -21,6 +21,8 @@ runtime:
     memory_limit: 4Gi
   local:
     # used for local mode tests (FVT)
+    # To run real benchmarks locally, override with the actual adapter path:
+    #   command: python /path/to/eval-hub-contrib/adapters/inspect/main.py
     command: python tests/features/test_data/runtime/main.py
 
 benchmarks:
@@ -453,6 +455,20 @@ benchmarks:
     metrics: [accuracy/accuracy]
     tags: [cybersecurity, inspect-evals]
 
+  - id: inspect/cyberseceval-2-pi
+    name: CyberSecEval 2 — Prompt Injection
+    description: >
+      Prompt injection subset of Meta's CyberSecEval 2 suite. Measures the percentage
+      of successful injection attacks against the model.
+    category: cybersecurity
+    metrics: [injection_successful_percentage]
+    primary_score:
+      metric: injection_successful_percentage
+      lower_is_better: true
+    pass_criteria:
+      threshold: 0.35
+    tags: [cybersecurity, prompt-injection, safety, inspect-evals]
+
   # Coding
   - id: inspect/humaneval
     name: HumanEval
@@ -512,7 +528,7 @@ benchmarks:
     tags: [reasoning, math, inspect-evals]
 
   # Telecom (GSMA Open-Telco)
-  - id: inspect/telemath
+  - id: telemath
     name: TeleMath
     description: >
       Telecom-domain mathematical problem solving — 500 numerical Q&A pairs covering
@@ -527,11 +543,12 @@ benchmarks:
       metric: telemath_scorer/accuracy
       lower_is_better: false
     pass_criteria:
-      # GSMA leaderboard (Mar 2026): median ≈ 0.42, GPT-5 ≈ 0.79, top ≈ 0.87.
       threshold: 0.50
     tags: [telecom, math, reasoning, open-telco, inspect-ai]
+    agent:
+      result_interpretation: "Accuracy on telecom-domain numerical math; HIGHER is better. GSMA leaderboard (Mar 2026): median ≈ 0.42, GPT-5 ≈ 0.79, top ≈ 0.87."
 
-  - id: inspect/teleqna
+  - id: teleqna
     name: TeleQnA
     description: >
       Telecom domain knowledge — multiple-choice questions on standards, research,
@@ -546,11 +563,12 @@ benchmarks:
       metric: choice/accuracy
       lower_is_better: false
     pass_criteria:
-      # GSMA leaderboard (Mar 2026): median ≈ 0.75, GPT-5 ≈ 0.84, top ≈ 0.91.
       threshold: 0.70
     tags: [telecom, knowledge, qa, open-telco, inspect-ai]
+    agent:
+      result_interpretation: "Accuracy on telecom domain MCQ; HIGHER is better. GSMA leaderboard (Mar 2026): median ≈ 0.75, GPT-5 ≈ 0.84, top ≈ 0.91."
 
-  - id: inspect/telelogs
+  - id: telelogs
     name: TeleLogs
     description: >
       Root-cause analysis on 5G network data — models identify which of several
@@ -566,11 +584,12 @@ benchmarks:
       metric: telelogs_scorer/accuracy
       lower_is_better: false
     pass_criteria:
-      # GSMA leaderboard (Mar 2026): median ≈ 0.23, GPT-5 ≈ 0.78, top ≈ 0.96.
       threshold: 0.25
     tags: [telecom, operations, rca, troubleshooting, open-telco, inspect-ai]
+    agent:
+      result_interpretation: "Accuracy on 5G root-cause analysis; HIGHER is better. GSMA leaderboard (Mar 2026): median ≈ 0.23, GPT-5 ≈ 0.78, top ≈ 0.96."
 
-  - id: inspect/3gpp-tsg
+  - id: 3gpp-tsg
     name: 3GPP-TSG
     description: >
       3GPP technical specification group classification — models identify the
@@ -585,9 +604,10 @@ benchmarks:
       metric: pattern/accuracy
       lower_is_better: false
     pass_criteria:
-      # GSMA leaderboard (Mar 2026): median ≈ 0.43, GPT-5 ≈ 0.58, top ≈ 0.81.
       threshold: 0.45
     tags: [telecom, standards, 3gpp, knowledge, open-telco, inspect-ai]
+    agent:
+      result_interpretation: "Accuracy on 3GPP working-group classification; HIGHER is better. GSMA leaderboard (Mar 2026): median ≈ 0.43, GPT-5 ≈ 0.58, top ≈ 0.81."
 
   # Knowledge & reasoning
   - id: inspect/mmlu
@@ -653,6 +673,28 @@ benchmarks:
     metrics: [accuracy/accuracy]
     tags: [knowledge, factuality, inspect-evals]
 
+  # HLE requires a grader model for scoring. Pass model_roles.grader
+  # at run time via collection override, e.g.:
+  #   "parameters": { "model_roles": { "grader": "openai/gpt-4o-mini" } }
+  - id: inspect/hle
+    name: "Humanity's Last Exam"
+    description: >
+      Multi-modal benchmark of 2,500 frontier-difficulty questions across dozens of academic
+      subjects. ~14% of questions require image understanding. Designed to measure capabilities
+      beyond existing saturated benchmarks.
+    category: knowledge
+    metrics: [accuracy/accuracy]
+    primary_score:
+      metric: accuracy/accuracy
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.12
+    parameters:
+      task_args:
+        include_multi_modal: false
+        graders: [grader]
+    tags: [knowledge, reasoning, multimodal, inspect-evals]
+
   # Agent capabilities
   - id: inspect/gaia
     name: GAIA
@@ -674,6 +716,34 @@ benchmarks:
     category: agent
     metrics: [accuracy/accuracy]
     tags: [agent, inspect-evals]
+
+  - id: inspect/bfcl
+    name: Berkeley Function Calling Leaderboard
+    description: >
+      Tests LLM function-calling accuracy across simple, parallel, multiple,
+      and executable API invocations. V4 includes agentic-heavy weighting.
+    category: agent
+    metrics: [accuracy/accuracy]
+    primary_score:
+      metric: accuracy/accuracy
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.60
+    tags: [agent, tool-use, function-calling, inspect-evals]
+
+  - id: inspect/docvqa
+    name: DocVQA
+    description: >
+      Document Visual Question Answering — requires reading and reasoning over
+      scanned document images to answer questions. Multimodal (vision) input required.
+    category: multimodal
+    metrics: [anls]
+    primary_score:
+      metric: anls
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.50
+    tags: [multimodal, document-understanding, vision, inspect-evals]
 
   # Custom
   - id: inspect/custom

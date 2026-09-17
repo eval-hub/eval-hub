@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"fmt"
-	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -18,6 +17,13 @@ import (
 // modelRefSuffix is the value suffix that signals credential injection.
 // A Bearer token "api-key:ref" means: look up "api-key" in the secret cache.
 const modelRefSuffix = ":ref"
+
+// modelExplicitTokenPrefix signals an adapter-provided hardcoded secret.
+// "Bearer token:<secret>" is forwarded as "Bearer <secret>" (prefix stripped).
+// Adapters that must satisfy OpenAI SDK requirements (e.g. OPENAI_API_KEY="local")
+// should not rely on placeholder Bearer values — the sidecar injects the SA token
+// for all non-ref, non-token: requests.
+const modelExplicitTokenPrefix = "token:"
 
 // Key-naming conventions for multi-service secrets.
 //
@@ -69,11 +75,15 @@ func loggerForRequest(logger *slog.Logger, req *http.Request) *slog.Logger {
 //     falls back to defaultTarget when absent.
 //  2. If resolution fails (key not in cache, path traversal, empty _api-key) the proxy
 //     returns HTTP 400 to the eval container — the request is never forwarded.
-//  3. If no Authorization header is present, the SA token from saTokenPath is injected as
-//     a Bearer token. This covers SA-token-authenticated models: the adapter has no access
-//     to the SA token (pod-level auto-mount is disabled), so the sidecar injects it on
-//     its behalf.
-//  4. Non-ref, non-empty tokens are forwarded unchanged to defaultTarget.
+//  3. If the Authorization header carries an explicit hardcoded token ("Bearer token:<secret>"),
+//     the "token:" prefix is stripped and the remainder is forwarded as the Bearer token.
+//  4. Otherwise the SA token from saTokenPath is always injected, replacing any adapter-sent
+//     placeholder (e.g. "Bearer local" from OPENAI_API_KEY workarounds) or absent/empty auth.
+//     The adapter cannot read the SA token (pod-level auto-mount is disabled); the sidecar
+//     injects it on its behalf.
+//  5. Resolved credentials are forwarded on both HTTP and HTTPS upstreams. In-cluster model
+//     endpoints are often plain HTTP but still require SA or secret-backed auth; stripping
+//     Authorization on HTTP caused 401s for those services.
 func NewModelReverseProxy(defaultTarget *url.URL, client *http.Client, logger *slog.Logger, secretMountPath, saTokenPath string) *httputil.ReverseProxy {
 	secretCache := loadSecretCache(secretMountPath, logger)
 
@@ -93,7 +103,9 @@ func NewModelReverseProxy(defaultTarget *url.URL, client *http.Client, logger *s
 		target := defaultTarget
 
 		authHeader := pr.In.Header.Get("Authorization")
-		if isModelRefToken(authHeader) {
+		var credential string
+		switch {
+		case isModelRefToken(authHeader):
 			resolvedTarget, realToken, err := resolveModelCredential(reqLog, authHeader, secretCache, defaultTarget, saTokenPath)
 			if err != nil {
 				// Signal the RoundTripper to return 400 without forwarding.
@@ -105,19 +117,34 @@ func NewModelReverseProxy(defaultTarget *url.URL, client *http.Client, logger *s
 				return
 			}
 			target = resolvedTarget
-			SetAuthHeader(pr.Out, realToken)
-		} else if isBearerEmpty(authHeader) {
-			// No usable Authorization from adapter (absent or empty Bearer value). The adapter
-			// cannot read the SA token because pod-level auto-mount is disabled. Inject it here
-			// so SA-token-authenticated model endpoints receive a valid Bearer token.
+			credential = realToken
+		case isExplicitHardcodedToken(authHeader):
+			if tok := extractExplicitHardcodedToken(authHeader); tok != "" {
+				credential = tok
+			} else {
+				pr.Out.Header.Del("Authorization")
+				reqLog.Warn("Explicit token: prefix with empty value; SA token not injected")
+			}
+		default:
+			// Always inject SA token for non-ref requests, including placeholder values such as
+			// "Bearer local" sent when OPENAI_API_KEY is set to satisfy the OpenAI SDK.
 			if tok := resolveEvalHubOrMLflowToken(reqLog, AuthTokenInput{
 				TargetEndpoint: "model-sa",
 				AuthTokenPath:  saTokenPath,
 			}); tok != "" {
-				SetAuthHeader(pr.Out, tok)
-				reqLog.Info("Injected SA token for model request (no Authorization from adapter)")
+				credential = tok
 			} else {
 				reqLog.Warn("SA token injection skipped: token unavailable", "path", saTokenPath)
+			}
+		}
+
+		if credential != "" {
+			SetAuthHeader(pr.Out, credential)
+			switch {
+			case isExplicitHardcodedToken(authHeader):
+				reqLog.Info("Using adapter hardcoded token (token: prefix)")
+			case !isModelRefToken(authHeader):
+				reqLog.Info("Injected SA token for model request")
 			}
 		}
 
@@ -133,17 +160,9 @@ func NewModelReverseProxy(defaultTarget *url.URL, client *http.Client, logger *s
 		reqLog.Info("Proxying model request", "method", pr.Out.Method, "url", pr.Out.URL.String())
 	}
 
-	rp.ModifyResponse = func(resp *http.Response) error {
-		if resp.Request != nil {
-			loggerForRequest(logger, resp.Request).Info("Response from model proxy", "method", resp.Request.Method, "url", resp.Request.URL.String(), "status", resp.StatusCode)
-		}
-		return nil
-	}
+	rp.ModifyResponse = proxyModifyResponse(logger, "Response from model proxy")
 
-	rp.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {
-		loggerForRequest(logger, req).Error("Error proxying model request", "method", req.Method, "url", req.URL.String(), "error", err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
-	}
+	rp.ErrorHandler = proxyErrorHandler(logger, "Error proxying model request")
 
 	return rp
 }
@@ -158,20 +177,9 @@ type modelRoundTripper struct {
 func (t *modelRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	if errMsg := req.Header.Get(xModelAuthError); errMsg != "" {
 		req.Header.Del(xModelAuthError)
-		reqID := getOrCreateRequestID(req)
-		t.logger.Error("model credential resolution failed, returning 400", "request_id", reqID, "error", errMsg)
-		respHeader := make(http.Header)
-		respHeader.Set(globalTransactionIDHeader, reqID)
-		return &http.Response{
-			StatusCode: http.StatusBadRequest,
-			Status:     "400 Bad Request",
-			Body:       io.NopCloser(strings.NewReader(errMsg + "\n")),
-			Header:     respHeader,
-			Request:    req,
-			Proto:      "HTTP/1.1",
-			ProtoMajor: 1,
-			ProtoMinor: 1,
-		}, nil
+		t.logger.Error("model credential resolution failed, returning 400",
+			"request_id", getOrCreateRequestID(req), "error", errMsg)
+		return newSyntheticResponse(req, http.StatusBadRequest, strings.NewReader(errMsg+"\n")), nil
 	}
 	return t.inner.RoundTrip(req)
 }
@@ -184,19 +192,20 @@ func isModelRefToken(authHeader string) bool {
 	return strings.HasSuffix(strings.TrimPrefix(authHeader, "Bearer "), modelRefSuffix)
 }
 
-// isBearerEmpty reports whether authHeader carries no usable token.
-//
-// Returns true when the header is absent, is exactly "Bearer" (Go's HTTP parser
-// strips the trailing space from "Bearer " sent by Python's requests library when
-// OPENAI_API_KEY=""), or is "Bearer " with a whitespace-only value.
-func isBearerEmpty(authHeader string) bool {
-	if authHeader == "" || authHeader == "Bearer" {
-		return true
+// isExplicitHardcodedToken reports whether authHeader uses the adapter hardcoded-token prefix.
+func isExplicitHardcodedToken(authHeader string) bool {
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return false
 	}
-	if strings.HasPrefix(authHeader, "Bearer ") {
-		return strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer ")) == ""
+	return strings.HasPrefix(strings.TrimPrefix(authHeader, "Bearer "), modelExplicitTokenPrefix)
+}
+
+// extractExplicitHardcodedToken returns the credential after the "token:" prefix.
+func extractExplicitHardcodedToken(authHeader string) string {
+	if !isExplicitHardcodedToken(authHeader) {
+		return ""
 	}
-	return false
+	return strings.TrimPrefix(strings.TrimPrefix(authHeader, "Bearer "), modelExplicitTokenPrefix)
 }
 
 // loadSecretCache reads all files in mountPath into a map at proxy startup.

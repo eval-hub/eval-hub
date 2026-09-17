@@ -200,6 +200,7 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+.cursor/
 
 # Marimo
 marimo/_static/
@@ -255,6 +256,7 @@ mlflow.log
 !.claude/skills/release-notes/
 .claude/skills/release-notes/*
 !.claude/skills/release-notes/SKILL.md
+!.claude/skills/golang-version-update/fetch-go-toolset-tags.sh
 !.claude/skills/release-notes/template.md
 
 .agentready/
@@ -262,3 +264,6 @@ mlflow.log
 tests/mcp/vscode/test-scripts/reports/
 
 internal/eval_runtime_sidecar/handlers/testdata/fuzz/
+
+# Inspect AI evaluation logs (local smoke tests)
+logs/

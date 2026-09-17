@@ -1,11 +1,13 @@
 package server_test
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	sidecarServer "github.com/eval-hub/eval-hub/internal/eval_runtime_sidecar/server"
@@ -131,6 +133,87 @@ func TestSidecarServer_HealthEndpoint(t *testing.T) {
 	handler.ServeHTTP(rw, req)
 	if rw.Code != http.StatusOK {
 		t.Errorf("GET /health status = %d, want 200", rw.Code)
+	}
+}
+
+func TestSidecarServer_ShutdownBeforeStart(t *testing.T) {
+	logger := slog.Default()
+	cfg := &config.Config{
+		Sidecar: &config.SidecarConfig{
+			BaseURL: "http://localhost:8082",
+			EvalHub: &config.EvalHubClientConfig{
+				BaseURL:            "http://localhost:8080",
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+	srv, err := sidecarServer.NewSidecarServer(logger, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	t.Run("shutdown before start does not panic", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		err := srv.Shutdown(ctx)
+		if err != nil {
+			t.Fatalf("Shutdown before Start returned error: %v", err)
+		}
+	})
+
+	t.Run("start after pending shutdown returns without blocking", func(t *testing.T) {
+		done := make(chan error, 1)
+		go func() {
+			done <- srv.Start()
+		}()
+		select {
+		case err := <-done:
+			if !errors.Is(err, &sidecarServer.ServerClosedError{}) {
+				t.Fatalf("Start after Shutdown = %v, want ServerClosedError", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("Start blocked despite a pending shutdown")
+		}
+	})
+}
+
+func TestSidecarServer_ConcurrentShutdownAndStart(t *testing.T) {
+	logger := slog.Default()
+	cfg := &config.Config{
+		Sidecar: &config.SidecarConfig{
+			BaseURL: "http://localhost:8083",
+			EvalHub: &config.EvalHubClientConfig{
+				BaseURL:            "http://localhost:8080",
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+	srv, err := sidecarServer.NewSidecarServer(logger, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	startDone := make(chan error, 1)
+	go func() {
+		startDone <- srv.Start()
+	}()
+
+	// Give Start a moment to begin, then race Shutdown against it.
+	time.Sleep(50 * time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		t.Fatalf("Shutdown returned error: %v", err)
+	}
+
+	select {
+	case err := <-startDone:
+		if err != nil && !errors.Is(err, &sidecarServer.ServerClosedError{}) {
+			t.Fatalf("Start returned unexpected error: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Start did not return after Shutdown")
 	}
 }
 

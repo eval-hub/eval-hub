@@ -2,6 +2,7 @@ package abstractions
 
 import (
 	"context"
+	"io"
 	"log/slog"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -26,14 +27,16 @@ type Runtime interface {
 	Name() string
 	RunEvaluationJob(evaluation *api.EvaluationJobResource, benchmarks []api.EvaluationBenchmarkConfig, storage RuntimeStorage) error
 	DeleteEvaluationJobResources(evaluation *api.EvaluationJobResource) error
-	// GetEvaluationLogs returns plain-text workload logs. When benchmarkIndex is nil, logs
-	// for all benchmarks are concatenated with section headers; otherwise only that benchmark.
-	GetEvaluationLogs(
+	// StreamEvaluationLogs streams plain-text workload logs directly to w.
+	// When benchmarkIndex is nil, logs for all benchmarks are concatenated with section
+	// headers; otherwise only that benchmark is streamed.
+	StreamEvaluationLogs(
 		evaluation *api.EvaluationJobResource,
 		benchmarks []api.EvaluationBenchmarkConfig,
 		benchmarkIndex *int,
 		opts api.EvaluationLogOptions,
-	) (string, error)
+		w io.Writer,
+	) error
 	// ValidateHardwareProfiles validates HardwareProfile refs on create (exist, enabled,
 	// namespace configured). No-op for runtimes that do not use cluster HardwareProfiles.
 	ValidateHardwareProfiles(benchmarks []api.EvaluationBenchmarkConfig) error

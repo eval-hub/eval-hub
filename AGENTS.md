@@ -58,6 +58,8 @@ make vet                # Run go vet (same as lint)
 
 If a `.pre-commit-config.yaml` file exists, run `pre-commit install && pre-commit install --hook-type commit-msg` before making any commits. This automatically enforces formatting, linting, and commit message conventions on every commit.
 
+**Do not use `#nosec` or `//gosec:disable` annotations in Go files.** CI rejects any PR that contains either inline suppression form. Fix the underlying code instead (e.g. use `os.OpenInRoot` for path-traversal-safe file access). If a gosec finding cannot be structurally fixed, add a path-scoped `--exclude-rules` entry in the Gosec Security Scanner step of `.github/workflows/ci.yml`.
+
 ### Go Version
 
 The version in `go.mod` is the source of truth for local development. If your local Go toolchain is older than the version in `go.mod` but at least Go 1.21, use `GOTOOLCHAIN=auto` to let Go automatically download the required version. Never downgrade `go.mod` to match a locally installed toolchain.
@@ -120,6 +122,7 @@ When a change is assisted by AI, add one of these lines, as appropriate, to the 
 Assisted-by: Cursor
 Made-with: Cursor
 Generated with: Claude Code
+Assisted-by: Codex
 ```
 
 For DCO sign-off, use `git commit -s` (or `git commit --signoff`). Do **not** include a `Signed-off-by` line in the commit message body; `-s` appends it from the author's configured `user.name` and `user.email`.
@@ -220,6 +223,7 @@ When running locally:
 - **No `evalhub-config` ConfigMap** on job pods; proxy targets and TLS live in JSON (`eval_hub.base_url`, `mlflow.tracking_uri`, `mlflow.token_path`, CA paths, optional `eval_hub.token`).
 - Termination message path is **fixed in the sidecar binary** (`/data/termination-log`).
 - Local dev: `config/sidecar_runtime_local.json` or `make start-sidecar`.
+- Local mode (since v0.0.2): `make start-sidecar SIDECAR_CONFIG_FILE=config/sidecar_local_mode.json` — starts the sidecar with `local_mode: true` on port 8082, skipping OCI/MLflow proxy initialization and SA token auth.
 
 #### Request identity (kube-rbac-proxy)
 

@@ -16,7 +16,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
       with:
         egress-policy: audit
 
@@ -32,7 +32,7 @@ jobs:
         cache: true
 
     - name: Install uv
-      uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
       with:
         # uv tool/package cache only (keys derived from uv lockfiles); Go uses setup-go above.
         enable-cache: true
@@ -50,6 +50,16 @@ jobs:
         make fmt
         git diff --exit-code -- '*.go' || (echo "Code is not formatted. Run 'make fmt' locally." && exit 1)
 
+    - name: Reject inline gosec suppressions
+      run: |
+        if grep -rn -E '#nosec|//gosec:disable' --include='*.go' .; then
+          echo "Found inline gosec suppression annotations (#nosec or //gosec:disable) in Go files."
+          echo "Remove them and fix the underlying code."
+          echo "If a finding cannot be structurally fixed, add a path-scoped --exclude-rules entry"
+          echo "in the Gosec Security Scanner step of this workflow instead."
+          exit 1
+        fi
+
     - name: Run linter
       run: make lint
 
@@ -64,7 +74,7 @@ jobs:
       # Only upload from the canonical repo, not forks
       if: github.repository == 'eval-hub/eval-hub'
       continue-on-error: ${{ github.actor == 'dependabot[bot]' }}  # Don't fail CI on Dependabot PRs since they can't access secrets
-      uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+      uses: codecov/codecov-action@0b35c9ecc4f0529d0eb674914510c22f85b196b4 # v7.1.0
       with:
         files: ./bin/coverage.out,./bin/coverage-fvt.out,./bin/coverage-init.out
         disable_search: true
@@ -86,7 +96,7 @@ jobs:
       actions: read
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
       with:
         egress-policy: audit
 
@@ -106,16 +116,27 @@ jobs:
       # https://github.com/securego/gosec#integrating-with-code-scanning
       # The problem is that this can hide some errors (such as golang version mismatch)
       # that are not caught by the following steps.
+      #
+      # --exclude-rules: G204 is suppressed only for local_runtime.go because
+      # the local runtime intentionally executes provider-configured shell
+      # commands (exec.Command("sh", "-c", …)); there is no structural
+      # alternative.  Inline #nosec annotations are banned by the "Reject
+      # inline gosec suppressions" CI step; all exclusions must be managed
+      # here via --exclude-rules with a path-scoped regex.
       env:
         # make sure that we use the golang version required by the project
-        GOSECGOVERSION: go1.26.5
-        GOTOOLCHAIN: go1.26.5
-      uses: securego/gosec@9e75c0576c9878035d4221392108d458abe10fc3 # v2.28.0
+        GOSECGOVERSION: go1.26.7
+        GOTOOLCHAIN: go1.26.7
+      uses: securego/gosec@deb54465fea23d19a77f037e11e6589021f8501d # v2.29.0
       with:
-        args: '-fmt sarif -out gosec-results.sarif -stdout -verbose=text -exclude-dir=tests ./...'
+        args: >-
+          -fmt sarif -out gosec-results.sarif -stdout -verbose=text
+          -exclude-dir=tests
+          --exclude-rules=internal/eval_hub/runtimes/local/local_runtime\.go:G204
+          ./...
 
     - name: Upload SARIF file to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+      uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
       if: always()
       with:
         sarif_file: gosec-results.sarif
@@ -135,7 +156,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
       with:
         egress-policy: audit
 
@@ -144,7 +165,7 @@ jobs:
         persist-credentials: false
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
     - name: Build Docker image
       uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -169,7 +190,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
       with:
         egress-policy: audit
 
@@ -178,10 +199,10 @@ jobs:
         persist-credentials: false
 
     - name: Set up QEMU
-      uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+      uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
     - name: Log in to Quay.io
       uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
