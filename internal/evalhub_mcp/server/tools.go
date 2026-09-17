@@ -122,31 +122,84 @@ type DiscoverProvidersOutput struct {
 
 // --- registration ---
 
-func registerTools(srv *mcp.Server, client EvalHubToolClient, logger *slog.Logger) {
+func registerTools(srv *mcp.Server, client EvalHubToolClient, logger *slog.Logger) error {
+	submitIn, err := mcpToolSchema[SubmitEvaluationInput]()
+	if err != nil {
+		return fmt.Errorf("submit_evaluation input schema: %w", err)
+	}
+	submitOut, err := mcpToolSchema[SubmitEvaluationOutput]()
+	if err != nil {
+		return fmt.Errorf("submit_evaluation output schema: %w", err)
+	}
+	cancelIn, err := mcpToolSchema[CancelJobInput]()
+	if err != nil {
+		return fmt.Errorf("cancel_job input schema: %w", err)
+	}
+	cancelOut, err := mcpToolSchema[CancelJobOutput]()
+	if err != nil {
+		return fmt.Errorf("cancel_job output schema: %w", err)
+	}
+	statusIn, err := mcpToolSchema[GetJobStatusInput]()
+	if err != nil {
+		return fmt.Errorf("get_job_status input schema: %w", err)
+	}
+	statusOut, err := mcpToolSchema[GetJobStatusOutput]()
+	if err != nil {
+		return fmt.Errorf("get_job_status output schema: %w", err)
+	}
+	discoverIn, err := mcpToolSchema[DiscoverProvidersInput]()
+	if err != nil {
+		return fmt.Errorf("discover_providers input schema: %w", err)
+	}
+	discoverOut, err := mcpToolSchema[DiscoverProvidersOutput]()
+	if err != nil {
+		return fmt.Errorf("discover_providers output schema: %w", err)
+	}
+	collectionIn, err := mcpToolSchema[CreateCollectionInput]()
+	if err != nil {
+		return fmt.Errorf("create_collection input schema: %w", err)
+	}
+	collectionOut, err := mcpToolSchema[CreateCollectionOutput]()
+	if err != nil {
+		return fmt.Errorf("create_collection output schema: %w", err)
+	}
+
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "submit_evaluation",
-		Description: "Submit a new model evaluation job. Specify benchmarks (a list of benchmark IDs with their provider) OR a collection (a pre-defined set of benchmarks), plus the model endpoint to evaluate. Returns the job ID and initial state for tracking.",
+		Name:         "submit_evaluation",
+		Description:  "Submit a new model evaluation job. Specify benchmarks (a list of benchmark IDs with their provider) OR a collection (a pre-defined set of benchmarks), plus the model endpoint to evaluate. Returns the job ID and initial state for tracking.",
+		InputSchema:  submitIn,
+		OutputSchema: submitOut,
 	}, submitEvaluationHandler(client, logger))
 
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "cancel_job",
-		Description: "Cancel a running or pending evaluation job. The job will be stopped and its benchmarks marked as cancelled. Use get_job_status to verify the final state.",
+		Name:         "cancel_job",
+		Description:  "Cancel a running or pending evaluation job. The job will be stopped and its benchmarks marked as cancelled. Use get_job_status to verify the final state.",
+		InputSchema:  cancelIn,
+		OutputSchema: cancelOut,
 	}, cancelJobHandler(client, logger))
 
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "get_job_status",
-		Description: "Get the current status of an evaluation job including overall state, progress percentage, and per-benchmark status with timestamps. Designed for polling: call repeatedly to monitor a running evaluation.",
+		Name:         "get_job_status",
+		Description:  "Get the current status of an evaluation job including overall state, progress percentage, and per-benchmark status with timestamps. Designed for polling: call repeatedly to monitor a running evaluation.",
+		InputSchema:  statusIn,
+		OutputSchema: statusOut,
 	}, getJobStatusHandler(client, logger))
 
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "discover_providers",
-		Description: "Discover evaluation providers. Filter by target_type (model, agent, inference_server) and/or evaluates (e.g. safety, robustness) to find the right provider for your use case. Each result includes a summary, usage hints, result interpretation guidance, and complementary provider suggestions.",
+		Name:         "discover_providers",
+		Description:  "Discover evaluation providers. Filter by target_type (model, agent, inference_server) and/or evaluates (e.g. safety, robustness) to find the right provider for your use case. Each result includes a summary, usage hints, result interpretation guidance, and complementary provider suggestions.",
+		InputSchema:  discoverIn,
+		OutputSchema: discoverOut,
 	}, discoverProvidersHandler(client, logger))
 
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "create_collection",
-		Description: "Create a new benchmark collection. Use after designing a collection (via the design_collection prompt or manually) to persist it in eval-hub. The collection can then be used with submit_evaluation to run evaluations.",
+		Name:         "create_collection",
+		Description:  "Create a new benchmark collection. Use after designing a collection (via the design_collection prompt or manually) to persist it in eval-hub. The collection can then be used with submit_evaluation to run evaluations.",
+		InputSchema:  collectionIn,
+		OutputSchema: collectionOut,
 	}, createCollectionHandler(client, logger))
+
+	return nil
 }
 
 // --- handlers ---

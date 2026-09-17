@@ -115,7 +115,9 @@ func RegisterHandlers(srv *mcp.Server, client *evalhubclient.Client, info *Serve
 			return err
 		}
 		registerResources(srv, client, logger, listPageLimit)
-		registerTools(srv, client, logger)
+		if err := registerTools(srv, client, logger); err != nil {
+			return err
+		}
 	}
 	return nil
 }

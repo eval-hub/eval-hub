@@ -105,7 +105,9 @@ func connectWithTools(t *testing.T, client EvalHubToolClient) (context.Context, 
 	t.Helper()
 
 	srv := New(&ServerInfo{Build: "test"}, discardLogger, nil)
-	registerTools(srv, client, discardLogger)
+	if err := registerTools(srv, client, discardLogger); err != nil {
+		t.Fatalf("registerTools: %v", err)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	t.Cleanup(cancel)
