@@ -26,10 +26,10 @@ func (s *sqlStorage) CreateEvaluationJob(evaluation *api.EvaluationJobResource) 
 	})
 }
 
-// CreateEvaluationJobWithCollectionRunCount atomically persists an evaluation job and,
-// for a custom collection, increments the RunCount stored with that collection.
-func (s *sqlStorage) CreateEvaluationJobWithCollectionRunCount(evaluation *api.EvaluationJobResource, collectionID string) error {
-	return s.withTransaction("create evaluation job with collection run count", evaluation.Resource.ID, func(txn *sql.Tx) error {
+// CreateEvaluationJobAndUpdateCollection atomically persists an evaluation job and
+// applies server-managed updates to its collection.
+func (s *sqlStorage) CreateEvaluationJobAndUpdateCollection(evaluation *api.EvaluationJobResource, collectionID string) error {
+	return s.withTransaction("create evaluation job and update collection", evaluation.Resource.ID, func(txn *sql.Tx) error {
 		collection, err := s.getCollectionTransactionalForUpdate(txn, collectionID)
 		if err != nil {
 			return se.WithRollback(err)

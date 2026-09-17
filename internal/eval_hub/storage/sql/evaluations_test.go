@@ -45,8 +45,8 @@ func TestEvaluationsStorage(t *testing.T) {
 	testEvaluationsStorage(t, drivers[0], getDBName())
 }
 
-func TestCreateEvaluationJobWithCollectionRunCount(t *testing.T) {
-	testCreateEvaluationJobWithCollectionRunCount(t, drivers[0], getDBName())
+func TestCreateEvaluationJobAndUpdateCollection(t *testing.T) {
+	testCreateEvaluationJobAndUpdateCollection(t, drivers[0], getDBName())
 }
 
 func TestGetEvaluationJobs_Postgres(t *testing.T) {
@@ -69,13 +69,13 @@ func TestGetEvaluationJobs_Postgres(t *testing.T) {
 	testUpdateEvaluationJob_PreservesProviderID(t, drivers[1], databaseName)
 	testUpdateEvaluationJob_PersistsPhase(t, drivers[1], databaseName)
 	testUpdateEvaluationJob_PersistsAdditionalInfo(t, drivers[1], databaseName)
-	testCreateEvaluationJobWithCollectionRunCount(t, drivers[1], databaseName)
+	testCreateEvaluationJobAndUpdateCollection(t, drivers[1], databaseName)
 	testEvaluationsStorage(t, drivers[1], databaseName)
 	testUpdateBenchmarkStatus_RejectsTerminalDowngrade(t, drivers[1], databaseName)
 	testUpdateEvaluationJob_ConcurrentBenchmarkCompletions(t, drivers[1], databaseName)
 }
 
-func testCreateEvaluationJobWithCollectionRunCount(t *testing.T, driver string, databaseName string) {
+func testCreateEvaluationJobAndUpdateCollection(t *testing.T, driver string, databaseName string) {
 	store, err := getTestStorage(t, driver, databaseName)
 	if err != nil {
 		t.Fatalf("getTestStorage: %v", err)
@@ -114,8 +114,8 @@ func testCreateEvaluationJobWithCollectionRunCount(t *testing.T, driver string, 
 	}
 
 	first := newJob(common.GUID(), collection.Resource.ID)
-	if err := scoped.CreateEvaluationJobWithCollectionRunCount(first, collection.Resource.ID); err != nil {
-		t.Fatalf("CreateEvaluationJobWithCollectionRunCount: %v", err)
+	if err := scoped.CreateEvaluationJobAndUpdateCollection(first, collection.Resource.ID); err != nil {
+		t.Fatalf("CreateEvaluationJobAndUpdateCollection: %v", err)
 	}
 	assertRunCount := func(want int) {
 		t.Helper()
@@ -130,14 +130,14 @@ func testCreateEvaluationJobWithCollectionRunCount(t *testing.T, driver string, 
 	assertRunCount(1)
 
 	missingCollectionJob := newJob(common.GUID(), "missing-collection")
-	if err := scoped.CreateEvaluationJobWithCollectionRunCount(missingCollectionJob, "missing-collection"); err == nil {
+	if err := scoped.CreateEvaluationJobAndUpdateCollection(missingCollectionJob, "missing-collection"); err == nil {
 		t.Fatal("expected missing collection job creation to fail")
 	}
 	if _, err := scoped.GetEvaluationJob(missingCollectionJob.Resource.ID); err == nil {
 		t.Fatal("job for missing collection was persisted")
 	}
 
-	if err := scoped.CreateEvaluationJobWithCollectionRunCount(first, collection.Resource.ID); err == nil {
+	if err := scoped.CreateEvaluationJobAndUpdateCollection(first, collection.Resource.ID); err == nil {
 		t.Fatal("expected duplicate job creation to fail")
 	}
 	assertRunCount(1)
@@ -146,12 +146,12 @@ func testCreateEvaluationJobWithCollectionRunCount(t *testing.T, driver string, 
 	errs := make(chan error, concurrentJobs)
 	for range concurrentJobs {
 		go func() {
-			errs <- scoped.CreateEvaluationJobWithCollectionRunCount(newJob(common.GUID(), collection.Resource.ID), collection.Resource.ID)
+			errs <- scoped.CreateEvaluationJobAndUpdateCollection(newJob(common.GUID(), collection.Resource.ID), collection.Resource.ID)
 		}()
 	}
 	for range concurrentJobs {
 		if err := <-errs; err != nil {
-			t.Fatalf("concurrent CreateEvaluationJobWithCollectionRunCount: %v", err)
+			t.Fatalf("concurrent CreateEvaluationJobAndUpdateCollection: %v", err)
 		}
 	}
 	assertRunCount(1 + concurrentJobs)
@@ -166,8 +166,8 @@ func testCreateEvaluationJobWithCollectionRunCount(t *testing.T, driver string, 
 	if err := scoped.CreateCollection(noStatusCollection); err != nil {
 		t.Fatalf("CreateCollection without status: %v", err)
 	}
-	if err := scoped.CreateEvaluationJobWithCollectionRunCount(newJob(common.GUID(), noStatusCollection.Resource.ID), noStatusCollection.Resource.ID); err != nil {
-		t.Fatalf("CreateEvaluationJobWithCollectionRunCount without status: %v", err)
+	if err := scoped.CreateEvaluationJobAndUpdateCollection(newJob(common.GUID(), noStatusCollection.Resource.ID), noStatusCollection.Resource.ID); err != nil {
+		t.Fatalf("CreateEvaluationJobAndUpdateCollection without status: %v", err)
 	}
 	storedNoStatus, err := scoped.GetCollection(noStatusCollection.Resource.ID)
 	if err != nil {

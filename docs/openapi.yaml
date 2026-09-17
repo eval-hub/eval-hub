@@ -295,7 +295,7 @@ paths:
             type: string
             title: Collection Id
           description: |
-            Filter by the ID of the collection the job was created from. Maps to the collection.id field on the job record. Returns all jobs for the collection, newest first by creation date.
+            Filter by the ID of the collection the job was created from. Maps to the collection.id field on the job record. Returns all jobs for the collection.
       responses:
         '200':
           description: Successful Response

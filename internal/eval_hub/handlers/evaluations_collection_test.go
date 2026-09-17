@@ -48,7 +48,7 @@ func (s *collectionRunCountStorage) CreateEvaluationJob(job *api.EvaluationJobRe
 	return nil
 }
 
-func (s *collectionRunCountStorage) CreateEvaluationJobWithCollectionRunCount(job *api.EvaluationJobResource, collectionID string) error {
+func (s *collectionRunCountStorage) CreateEvaluationJobAndUpdateCollection(job *api.EvaluationJobResource, collectionID string) error {
 	s.atomicCalls++
 	if s.atomicErr != nil {
 		return s.atomicErr

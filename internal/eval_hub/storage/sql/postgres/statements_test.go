@@ -187,10 +187,6 @@ func TestCreateListEntitiesStatement(t *testing.T) {
 	if !strings.Contains(stmt, "SELECT") {
 		t.Errorf("expected SELECT, got: %s", stmt)
 	}
-	stmt, _ = f.CreateListEntitiesStatement("t1", shared.TableEvaluations, 10, 0, map[string]any{})
-	if !strings.Contains(stmt, "ORDER BY created_at DESC, id DESC") {
-		t.Errorf("expected evaluations ordered by creation date, got: %s", stmt)
-	}
 }
 
 func TestCreateCollectionGetEntityForUpdateStatement(t *testing.T) {

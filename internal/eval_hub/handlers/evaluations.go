@@ -321,7 +321,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				EvaluationJobConfig: *evaluation,
 			}
 			if collection != nil {
-				return storage.WithContext(runtimeCtx).CreateEvaluationJobWithCollectionRunCount(job, collection.Resource.ID)
+				return storage.WithContext(runtimeCtx).CreateEvaluationJobAndUpdateCollection(job, collection.Resource.ID)
 			}
 			return storage.WithContext(runtimeCtx).CreateEvaluationJob(job)
 		},

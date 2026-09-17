@@ -54,7 +54,7 @@ func (f *fakeStorage) Ping(_ time.Duration) error { return nil }
 func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobResource) error {
 	return nil
 }
-func (f *fakeStorage) CreateEvaluationJobWithCollectionRunCount(_ *api.EvaluationJobResource, _ string) error {
+func (f *fakeStorage) CreateEvaluationJobAndUpdateCollection(_ *api.EvaluationJobResource, _ string) error {
 	return nil
 }
 func (f *fakeStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
