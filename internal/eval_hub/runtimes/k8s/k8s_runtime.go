@@ -15,6 +15,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
+	"github.com/eval-hub/eval-hub/internal/otel"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -75,9 +76,14 @@ func (r *K8sRuntime) RunEvaluationJob(
 
 	go func() {
 		for idx, bench := range benchmarks {
-			benchCtx := context.Background()
+			// otel.DetachedContext (rather than a bare context.Background())
+			// preserves r.ctx's span context as a link source, so spans
+			// created while creating this benchmark's K8s resources can be
+			// associated back to the triggering request trace even though
+			// this goroutine outlives it (see OTEL.md "Trace continuity").
+			benchCtx := otel.DetachedContext(r.ctx)
 			if err := r.createBenchmarkResources(benchCtx, r.logger, evaluation, &bench, idx, storage); err != nil {
-				metrics.RecordBenchmarkRuntimeError(benchCtx, r.Name())
+				metrics.RecordBenchmarkRuntimeError(benchCtx, r.Name(), evaluation.Resource.Tenant.String())
 				r.logger.Error(
 					"kubernetes job creation failed",
 					"error", err,

@@ -72,13 +72,13 @@ func attributesMatch(set attribute.Set, want []attribute.KeyValue) bool {
 func TestRecordEvaluationJobTerminalStateNoOps(t *testing.T) {
 	reader, ctx := setupMetricsTest(t)
 
-	metrics.RecordEvaluationJobTerminalState(ctx, api.OverallStateRunning, api.OverallStateCompleted)
+	metrics.RecordEvaluationJobTerminalState(ctx, api.OverallStateRunning, api.OverallStateCompleted, "tenant-a")
 	if got := collectIntSumValue(t, reader, ctx, "evalhub.evaluation_job_completions"); got != 1 {
 		t.Fatalf("completions = %d, want 1", got)
 	}
 
-	metrics.RecordEvaluationJobTerminalState(ctx, api.OverallStateRunning, api.OverallStatePending)
-	metrics.RecordEvaluationJobTerminalState(ctx, api.OverallStateCompleted, api.OverallStateCompleted)
+	metrics.RecordEvaluationJobTerminalState(ctx, api.OverallStateRunning, api.OverallStatePending, "tenant-a")
+	metrics.RecordEvaluationJobTerminalState(ctx, api.OverallStateCompleted, api.OverallStateCompleted, "tenant-a")
 
 	if got := collectIntSumValue(t, reader, ctx, "evalhub.evaluation_job_completions"); got != 1 {
 		t.Fatalf("completions after no-ops = %d, want 1", got)
@@ -97,6 +97,44 @@ func TestRecordHTTPServerRequestEmptyRoute(t *testing.T) {
 	)
 	if got != 1 {
 		t.Fatalf("request count = %d, want 1", got)
+	}
+}
+
+func TestRecordEvaluationJobCreatedTenantAttribute(t *testing.T) {
+	reader, ctx := setupMetricsTest(t)
+
+	metrics.RecordEvaluationJobCreated(ctx, "kubernetes", "tenant-a")
+	metrics.RecordEvaluationJobCreated(ctx, "kubernetes", "")
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(ctx, &rm); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	var withTenantAttrCount, withoutTenantAttrCount int
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			if m.Name != "evalhub.evaluation_job_actions" {
+				continue
+			}
+			sum, ok := m.Data.(metricdata.Sum[int64])
+			if !ok {
+				t.Fatalf("metric %q is not an int64 sum", m.Name)
+			}
+			for _, dp := range sum.DataPoints {
+				if _, hasTenant := dp.Attributes.Value("tenant"); hasTenant {
+					withTenantAttrCount += int(dp.Value)
+				} else {
+					withoutTenantAttrCount += int(dp.Value)
+				}
+			}
+		}
+	}
+	if withTenantAttrCount != 1 {
+		t.Errorf("data points with tenant attribute = %d, want 1", withTenantAttrCount)
+	}
+	if withoutTenantAttrCount != 1 {
+		t.Errorf("data points without tenant attribute = %d, want 1", withoutTenantAttrCount)
 	}
 }
 

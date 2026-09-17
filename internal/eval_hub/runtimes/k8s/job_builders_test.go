@@ -71,6 +71,15 @@ func findContainer(containers []corev1.Container, name string) *corev1.Container
 	return nil
 }
 
+func mustFindContainer(t *testing.T, containers []corev1.Container, name string) *corev1.Container {
+	t.Helper()
+	c := findContainer(containers, name)
+	if c == nil {
+		t.Fatalf("expected container %q", name)
+	}
+	return c
+}
+
 func findVolume(volumes []corev1.Volume, name string) *corev1.Volume {
 	for i := range volumes {
 		if volumes[i].Name == name {

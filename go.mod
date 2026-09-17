@@ -6,9 +6,9 @@ require (
 	github.com/Jeffail/gabs/v2 v2.7.0
 	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/aws/aws-sdk-go-v2 v1.47.0
-	github.com/aws/aws-sdk-go-v2/config v1.33.4
-	github.com/aws/aws-sdk-go-v2/credentials v1.20.4
-	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.4.6
+	github.com/aws/aws-sdk-go-v2/config v1.33.5
+	github.com/aws/aws-sdk-go-v2/credentials v1.20.5
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.4.7
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.113.1
 	github.com/cucumber/godog v0.16.0
 	github.com/fsnotify/fsnotify v1.10.1
@@ -16,7 +16,7 @@ require (
 	github.com/go-logr/logr v1.4.4
 	github.com/go-playground/validator/v10 v10.30.4
 	github.com/go-viper/mapstructure/v2 v2.5.0
-	github.com/gomlx/go-huggingface v0.4.1
+	github.com/gomlx/go-huggingface v0.4.3
 	github.com/google/go-jsonnet v0.22.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.11.0
@@ -56,7 +56,7 @@ require (
 	k8s.io/api v0.37.0
 	k8s.io/apimachinery v0.37.0
 	k8s.io/client-go v0.37.0
-	modernc.org/sqlite v1.58.0
+	modernc.org/sqlite v1.59.0
 )
 
 require (
@@ -76,7 +76,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/signin v1.10.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.38.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.43.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.50.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.51.0 // indirect
 	github.com/aws/smithy-go v1.28.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20221221133751-67e37ae746cd // indirect
@@ -91,7 +91,7 @@ require (
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
-	github.com/fxamacker/cbor/v2 v2.9.3 // indirect
+	github.com/fxamacker/cbor/v2 v2.9.4 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.15 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.9.1 // indirect
@@ -112,9 +112,9 @@ require (
 	github.com/go-openapi/swag/yamlutils v0.29.2 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
-	github.com/gofrs/flock v0.13.0 // indirect
+	github.com/gofrs/flock v0.13.1 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
-	github.com/gomlx/compute v0.1.0 // indirect
+	github.com/gomlx/compute v0.1.6 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
@@ -176,7 +176,7 @@ require (
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260821135717-be32def86098 // indirect
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3 // indirect
-	modernc.org/libc v1.75.7 // indirect
+	modernc.org/libc v1.76.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 	sigs.k8s.io/json v0.0.0-20260909141634-11ed52e25bc5 // indirect
@@ -186,6 +186,23 @@ require (
 )
 
 exclude (
+	github.com/gomlx/compute v0.1.7
+	github.com/gomlx/compute v0.1.8
+	github.com/gomlx/compute v0.1.9
+	github.com/gomlx/compute v0.1.10
+	github.com/gomlx/compute v0.1.11
+	github.com/gomlx/compute v0.1.12
+	github.com/gomlx/compute v0.1.13
+	github.com/gomlx/compute v0.1.14
+	github.com/gomlx/go-huggingface v0.4.4
+	github.com/gomlx/go-huggingface v0.4.5
+	github.com/gomlx/go-huggingface v0.4.6
+	github.com/gomlx/go-huggingface v0.4.7
+	github.com/gomlx/go-huggingface v0.4.8
+	github.com/gomlx/go-huggingface v0.4.9
+	github.com/gomlx/go-huggingface v0.4.10
+	github.com/gomlx/go-huggingface v0.4.11
+	github.com/gomlx/go-huggingface v0.4.12
 	k8s.io/kube-openapi v0.0.0-20260908163437-c4db2bdfbfe6
 	k8s.io/kube-openapi v0.0.0-20260911184034-7970a1e230da
 )

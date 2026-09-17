@@ -135,6 +135,7 @@ func (h *KubernetesHelper) CreateConfigMap(
 	if namespace == "" || name == "" {
 		return nil, fmt.Errorf("namespace and name are required")
 	}
+	ctx, span := startK8sSpan(ctx, "create_configmap", "ConfigMap", namespace, name)
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
@@ -150,7 +151,9 @@ func (h *KubernetesHelper) CreateConfigMap(
 			cm.Annotations = opts.Annotations
 		}
 	}
-	return h.clientset.CoreV1().ConfigMaps(namespace).Create(ctx, cm, metav1.CreateOptions{})
+	created, err := h.clientset.CoreV1().ConfigMaps(namespace).Create(ctx, cm, metav1.CreateOptions{})
+	endK8sSpan(span, err)
+	return created, err
 }
 
 // CreateJob creates a Job in the given namespace.
@@ -158,7 +161,10 @@ func (h *KubernetesHelper) CreateJob(ctx context.Context, job *batchv1.Job) (*ba
 	if job == nil || job.Namespace == "" || job.Name == "" {
 		return nil, fmt.Errorf("job, namespace, and name are required")
 	}
-	return h.clientset.BatchV1().Jobs(job.Namespace).Create(ctx, job, metav1.CreateOptions{})
+	ctx, span := startK8sSpan(ctx, "create_job", "Job", job.Namespace, job.Name)
+	created, err := h.clientset.BatchV1().Jobs(job.Namespace).Create(ctx, job, metav1.CreateOptions{})
+	endK8sSpan(span, err)
+	return created, err
 }
 
 // DeleteJob deletes a Job in the given namespace.
@@ -166,7 +172,10 @@ func (h *KubernetesHelper) DeleteJob(ctx context.Context, namespace, name string
 	if namespace == "" || name == "" {
 		return fmt.Errorf("namespace and name are required")
 	}
-	return h.clientset.BatchV1().Jobs(namespace).Delete(ctx, name, opts)
+	ctx, span := startK8sSpan(ctx, "delete_job", "Job", namespace, name)
+	err := h.clientset.BatchV1().Jobs(namespace).Delete(ctx, name, opts)
+	endK8sSpan(span, err)
+	return err
 }
 
 // DeleteConfigMap deletes a ConfigMap in the given namespace.
@@ -174,7 +183,10 @@ func (h *KubernetesHelper) DeleteConfigMap(ctx context.Context, namespace, name 
 	if namespace == "" || name == "" {
 		return fmt.Errorf("namespace and name are required")
 	}
-	return h.clientset.CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	ctx, span := startK8sSpan(ctx, "delete_configmap", "ConfigMap", namespace, name)
+	err := h.clientset.CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	endK8sSpan(span, err)
+	return err
 }
 
 // ListJobs returns Jobs matching the label selector.
@@ -214,6 +226,10 @@ func (h *KubernetesHelper) SetConfigMapOwner(ctx context.Context, namespace, nam
 	if namespace == "" || name == "" {
 		return fmt.Errorf("namespace and name are required")
 	}
+	ctx, span := startK8sSpan(ctx, "set_configmap_owner", "ConfigMap", namespace, name)
+	var err error
+	defer func() { endK8sSpan(span, err) }()
+
 	cm, err := h.clientset.CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return err
@@ -236,8 +252,11 @@ func (h *KubernetesHelper) CreateSecret(ctx context.Context, namespace string, s
 	if secret == nil || namespace == "" || secret.Name == "" {
 		return nil, fmt.Errorf("secret, namespace, and name are required")
 	}
+	ctx, span := startK8sSpan(ctx, "create_secret", "Secret", namespace, secret.Name)
 	secret.Namespace = namespace
-	return h.clientset.CoreV1().Secrets(namespace).Create(ctx, secret, metav1.CreateOptions{})
+	created, err := h.clientset.CoreV1().Secrets(namespace).Create(ctx, secret, metav1.CreateOptions{})
+	endK8sSpan(span, err)
+	return created, err
 }
 
 // DeleteSecret deletes a Secret in the given namespace.
@@ -245,7 +264,10 @@ func (h *KubernetesHelper) DeleteSecret(ctx context.Context, namespace, name str
 	if namespace == "" || name == "" {
 		return fmt.Errorf("namespace and name are required")
 	}
-	return h.clientset.CoreV1().Secrets(namespace).Delete(ctx, name, opts)
+	ctx, span := startK8sSpan(ctx, "delete_secret", "Secret", namespace, name)
+	err := h.clientset.CoreV1().Secrets(namespace).Delete(ctx, name, opts)
+	endK8sSpan(span, err)
+	return err
 }
 
 // ListSecrets returns Secrets matching the label selector.
@@ -265,6 +287,10 @@ func (h *KubernetesHelper) SetSecretOwner(ctx context.Context, namespace, name s
 	if namespace == "" || name == "" {
 		return fmt.Errorf("namespace and name are required")
 	}
+	ctx, span := startK8sSpan(ctx, "set_secret_owner", "Secret", namespace, name)
+	var err error
+	defer func() { endK8sSpan(span, err) }()
+
 	secret, err := h.clientset.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return err
@@ -342,7 +368,9 @@ func (h *KubernetesHelper) PatchJobStatusAnnotation(ctx context.Context, namespa
 	if err != nil {
 		return fmt.Errorf("marshal patch: %w", err)
 	}
+	ctx, span := startK8sSpan(ctx, "patch_job_status_annotation", "Job", namespace, name)
 	_, err = h.clientset.BatchV1().Jobs(namespace).Patch(ctx, name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
+	endK8sSpan(span, err)
 	return err
 }
 
@@ -366,7 +394,9 @@ func (h *KubernetesHelper) PatchJobPhaseLabel(ctx context.Context, namespace, na
 	if err != nil {
 		return fmt.Errorf("marshal patch: %w", err)
 	}
+	ctx, span := startK8sSpan(ctx, "patch_job_phase_label", "Job", namespace, name)
 	_, err = h.clientset.BatchV1().Jobs(namespace).Patch(ctx, name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
+	endK8sSpan(span, err)
 	return err
 }
 

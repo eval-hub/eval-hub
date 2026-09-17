@@ -95,11 +95,11 @@ func matchLabels(pairs []*dto.LabelPair, want map[string]string) bool {
 func TestInitCreatesEvaluationJobInstruments(t *testing.T) {
 	reader, ctx := setupOTEL(t)
 
-	metrics.RecordEvaluationJobCreated(ctx, "kubernetes")
-	metrics.RecordEvaluationJobCancelled(ctx)
-	metrics.RecordEvaluationJobRuntimeStartFailed(ctx, "local")
-	metrics.RecordEvaluationJobTerminalState(ctx, api.OverallStateRunning, api.OverallStateCompleted)
-	metrics.RecordBenchmarkRuntimeError(ctx, "kubernetes")
+	metrics.RecordEvaluationJobCreated(ctx, "kubernetes", "tenant-a")
+	metrics.RecordEvaluationJobCancelled(ctx, "tenant-a")
+	metrics.RecordEvaluationJobRuntimeStartFailed(ctx, "local", "tenant-a")
+	metrics.RecordEvaluationJobTerminalState(ctx, api.OverallStateRunning, api.OverallStateCompleted, "tenant-a")
+	metrics.RecordBenchmarkRuntimeError(ctx, "kubernetes", "tenant-a")
 	metrics.RecordHTTPServerRequest(ctx, http.MethodGet, "/api/v1/health", http.StatusOK)
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/health", nil)
 	metrics.IncHTTPServerActiveRequests(ctx, req)
@@ -123,15 +123,16 @@ func TestInitCreatesEvaluationJobInstruments(t *testing.T) {
 func TestInitCreatesEvaluationDomainOTELInstruments(t *testing.T) {
 	reader, ctx := setupOTEL(t)
 
-	metrics.RecordEvaluationJobStateTransition(ctx, "prov", "coll", "pending")
-	metrics.ObserveEvaluationJobDuration(ctx, "prov", "coll", 10.0)
-	metrics.IncActiveJobs(ctx)
-	metrics.DecActiveJobs(ctx)
-	metrics.IncQueueDepth(ctx)
-	metrics.DecQueueDepth(ctx)
-	metrics.RecordEvaluationError(ctx, "test_err", "prov")
-	metrics.ObserveBenchmarkDuration(ctx, "mmlu", "prov", 5.0)
-	metrics.ObserveAPIRequestDuration(ctx, "/health", "GET", "", "", 0.01)
+	metrics.RecordEvaluationJobStateTransition(ctx, "prov", "coll", "pending", "tenant-a")
+	metrics.ObserveEvaluationJobDuration(ctx, "prov", "coll", 10.0, "tenant-a")
+	metrics.IncActiveJobs(ctx, "tenant-a")
+	metrics.DecActiveJobs(ctx, "tenant-a")
+	metrics.IncQueueDepth(ctx, "tenant-a")
+	metrics.DecQueueDepth(ctx, "tenant-a")
+	metrics.RecordEvaluationError(ctx, "test_err", "prov", "tenant-a")
+	metrics.ObserveBenchmarkDuration(ctx, "mmlu", "prov", 5.0, "tenant-a")
+	metrics.RecordBenchmarkCompletion(ctx, "mmlu", "prov", "completed", "tenant-a")
+	metrics.ObserveAPIRequestDuration(ctx, "/health", "GET", "", "", 0.01, "tenant-a")
 
 	names := collectOTELNames(t, reader, ctx)
 
@@ -142,6 +143,7 @@ func TestInitCreatesEvaluationDomainOTELInstruments(t *testing.T) {
 		"evalhub.eval.queue_depth",
 		"evalhub.eval.errors",
 		"evalhub.eval.benchmark_duration",
+		"evalhub.eval.benchmark_completions",
 		"evalhub.eval.api_request_duration",
 	} {
 		if _, ok := names[want]; !ok {
@@ -153,9 +155,9 @@ func TestInitCreatesEvaluationDomainOTELInstruments(t *testing.T) {
 func TestRecordEvaluationJobStateTransition(t *testing.T) {
 	reader, ctx := setupOTEL(t)
 
-	metrics.RecordEvaluationJobStateTransition(ctx, "llm-judge", "safety", "pending")
-	metrics.RecordEvaluationJobStateTransition(ctx, "llm-judge", "safety", "running")
-	metrics.RecordEvaluationJobStateTransition(ctx, "llm-judge", "safety", "completed")
+	metrics.RecordEvaluationJobStateTransition(ctx, "llm-judge", "safety", "pending", "tenant-a")
+	metrics.RecordEvaluationJobStateTransition(ctx, "llm-judge", "safety", "running", "tenant-a")
+	metrics.RecordEvaluationJobStateTransition(ctx, "llm-judge", "safety", "completed", "tenant-a")
 
 	m := getPromMetricWithLabels("evalhub_evaluation_jobs_total", map[string]string{
 		"provider": "llm-judge", "collection": "safety", "status": "completed",
@@ -176,7 +178,7 @@ func TestRecordEvaluationJobStateTransition(t *testing.T) {
 func TestObserveEvaluationJobDuration(t *testing.T) {
 	_, ctx := setupOTEL(t)
 
-	metrics.ObserveEvaluationJobDuration(ctx, "prov-a", "coll-x", 25.5)
+	metrics.ObserveEvaluationJobDuration(ctx, "prov-a", "coll-x", 25.5, "tenant-a")
 
 	m := getPromMetricWithLabels("evalhub_evaluation_job_duration_seconds", map[string]string{
 		"provider": "prov-a", "collection": "coll-x",
@@ -192,11 +194,11 @@ func TestObserveEvaluationJobDuration(t *testing.T) {
 func TestActiveJobsAndQueueDepthGauges(t *testing.T) {
 	_, ctx := setupOTEL(t)
 
-	metrics.IncActiveJobs(ctx)
-	metrics.IncActiveJobs(ctx)
-	metrics.IncQueueDepth(ctx)
-	metrics.IncQueueDepth(ctx)
-	metrics.DecQueueDepth(ctx)
+	metrics.IncActiveJobs(ctx, "tenant-a")
+	metrics.IncActiveJobs(ctx, "tenant-a")
+	metrics.IncQueueDepth(ctx, "tenant-a")
+	metrics.IncQueueDepth(ctx, "tenant-a")
+	metrics.DecQueueDepth(ctx, "tenant-a")
 
 	activeVal := getPromMetricValue("evalhub_evaluation_jobs_active")
 	if activeVal < 1 {
@@ -212,7 +214,7 @@ func TestActiveJobsAndQueueDepthGauges(t *testing.T) {
 func TestRecordEvaluationError(t *testing.T) {
 	_, ctx := setupOTEL(t)
 
-	metrics.RecordEvaluationError(ctx, "k8s_create_failed", "llm-judge")
+	metrics.RecordEvaluationError(ctx, "k8s_create_failed", "llm-judge", "tenant-a")
 
 	m := getPromMetricWithLabels("evalhub_evaluation_errors_total", map[string]string{
 		"error_type": "k8s_create_failed", "provider": "llm-judge",
@@ -228,7 +230,7 @@ func TestRecordEvaluationError(t *testing.T) {
 func TestObserveBenchmarkDuration(t *testing.T) {
 	_, ctx := setupOTEL(t)
 
-	metrics.ObserveBenchmarkDuration(ctx, "mmlu", "llm-judge", 45.2)
+	metrics.ObserveBenchmarkDuration(ctx, "mmlu", "llm-judge", 45.2, "tenant-a")
 
 	m := getPromMetricWithLabels("evalhub_benchmark_duration_seconds", map[string]string{
 		"benchmark_name": "mmlu", "provider": "llm-judge",
@@ -244,7 +246,7 @@ func TestObserveBenchmarkDuration(t *testing.T) {
 func TestObserveAPIRequestDuration(t *testing.T) {
 	_, ctx := setupOTEL(t)
 
-	metrics.ObserveAPIRequestDuration(ctx, "/api/v1/evaluations/jobs", "POST", "safety", "llm-judge", 0.123)
+	metrics.ObserveAPIRequestDuration(ctx, "/api/v1/evaluations/jobs", "POST", "safety", "llm-judge", 0.123, "tenant-a")
 
 	m := getPromMetricWithLabels("evalhub_api_request_duration_seconds", map[string]string{
 		"endpoint": "/api/v1/evaluations/jobs", "method": "POST",

@@ -31,7 +31,9 @@ func HTTPMetricsMiddleware(next http.Handler, metricsEnabled bool, logger *slog.
 
 		collection, provider := extractDomainLabels(r.URL.Path)
 		duration := time.Since(start).Seconds()
-		metrics.ObserveAPIRequestDuration(r.Context(), route, r.Method, collection, provider, duration)
+		// Tenant is sourced directly from the X-Tenant header (rather than the
+		// full ExecutionContext, which isn't constructed at this middleware layer).
+		metrics.ObserveAPIRequestDuration(r.Context(), route, r.Method, collection, provider, duration, r.Header.Get(TenantHeader))
 	})
 }
 
