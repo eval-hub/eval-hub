@@ -22,6 +22,9 @@ func (noopStorage) Ping(_ time.Duration) error                   { return nil }
 func (noopStorage) CreateEvaluationJob(_ *api.EvaluationJobResource) error {
 	return nil
 }
+func (noopStorage) CreateEvaluationJobWithCollectionRunCount(_ *api.EvaluationJobResource, _ string) error {
+	return nil
+}
 func (noopStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
 	return nil, nil
 }

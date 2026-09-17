@@ -45,6 +45,10 @@ func TestEvaluationsStorage(t *testing.T) {
 	testEvaluationsStorage(t, drivers[0], getDBName())
 }
 
+func TestCreateEvaluationJobWithCollectionRunCount(t *testing.T) {
+	testCreateEvaluationJobWithCollectionRunCount(t, drivers[0], getDBName())
+}
+
 func TestGetEvaluationJobs_Postgres(t *testing.T) {
 	image := false
 	databaseName := getDBName()
@@ -65,9 +69,113 @@ func TestGetEvaluationJobs_Postgres(t *testing.T) {
 	testUpdateEvaluationJob_PreservesProviderID(t, drivers[1], databaseName)
 	testUpdateEvaluationJob_PersistsPhase(t, drivers[1], databaseName)
 	testUpdateEvaluationJob_PersistsAdditionalInfo(t, drivers[1], databaseName)
+	testCreateEvaluationJobWithCollectionRunCount(t, drivers[1], databaseName)
 	testEvaluationsStorage(t, drivers[1], databaseName)
 	testUpdateBenchmarkStatus_RejectsTerminalDowngrade(t, drivers[1], databaseName)
 	testUpdateEvaluationJob_ConcurrentBenchmarkCompletions(t, drivers[1], databaseName)
+}
+
+func testCreateEvaluationJobWithCollectionRunCount(t *testing.T, driver string, databaseName string) {
+	store, err := getTestStorage(t, driver, databaseName)
+	if err != nil {
+		t.Fatalf("getTestStorage: %v", err)
+	}
+
+	tenant := api.Tenant(getTenant("collection-run-count"))
+	scoped := store.WithTenant(tenant).WithOwner("user-1")
+	collection := &api.CollectionResource{
+		Resource: api.Resource{ID: common.GUID(), Tenant: tenant, Owner: "user-1"},
+		CollectionConfig: api.CollectionConfig{
+			Name:     "collection run count",
+			Category: "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{
+				{Ref: api.Ref{ID: "benchmark-1"}, ProviderID: "provider-1"},
+			},
+		},
+		Status: &api.CollectionStatus{},
+	}
+	if err := scoped.CreateCollection(collection); err != nil {
+		t.Fatalf("CreateCollection: %v", err)
+	}
+
+	newJob := func(id, collectionID string) *api.EvaluationJobResource {
+		now := time.Now()
+		return &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{Resource: api.Resource{
+				ID: id, Tenant: tenant, Owner: "user-1", CreatedAt: now, UpdatedAt: now,
+			}},
+			Status: &api.EvaluationJobStatus{EvaluationJobState: api.EvaluationJobState{State: api.OverallStatePending}},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Name:       "collection run",
+				Model:      &api.ModelRef{URL: "http://test.com", Name: "test"},
+				Collection: &api.CollectionRef{ID: collectionID},
+			},
+		}
+	}
+
+	first := newJob(common.GUID(), collection.Resource.ID)
+	if err := scoped.CreateEvaluationJobWithCollectionRunCount(first, collection.Resource.ID); err != nil {
+		t.Fatalf("CreateEvaluationJobWithCollectionRunCount: %v", err)
+	}
+	assertRunCount := func(want int) {
+		t.Helper()
+		stored, err := scoped.GetCollection(collection.Resource.ID)
+		if err != nil {
+			t.Fatalf("GetCollection: %v", err)
+		}
+		if stored.Status == nil || stored.Status.RunCount != want {
+			t.Fatalf("collection run count = %v, want %d", stored.Status, want)
+		}
+	}
+	assertRunCount(1)
+
+	missingCollectionJob := newJob(common.GUID(), "missing-collection")
+	if err := scoped.CreateEvaluationJobWithCollectionRunCount(missingCollectionJob, "missing-collection"); err == nil {
+		t.Fatal("expected missing collection job creation to fail")
+	}
+	if _, err := scoped.GetEvaluationJob(missingCollectionJob.Resource.ID); err == nil {
+		t.Fatal("job for missing collection was persisted")
+	}
+
+	if err := scoped.CreateEvaluationJobWithCollectionRunCount(first, collection.Resource.ID); err == nil {
+		t.Fatal("expected duplicate job creation to fail")
+	}
+	assertRunCount(1)
+
+	const concurrentJobs = 4
+	errs := make(chan error, concurrentJobs)
+	for range concurrentJobs {
+		go func() {
+			errs <- scoped.CreateEvaluationJobWithCollectionRunCount(newJob(common.GUID(), collection.Resource.ID), collection.Resource.ID)
+		}()
+	}
+	for range concurrentJobs {
+		if err := <-errs; err != nil {
+			t.Fatalf("concurrent CreateEvaluationJobWithCollectionRunCount: %v", err)
+		}
+	}
+	assertRunCount(1 + concurrentJobs)
+
+	noStatusCollection := &api.CollectionResource{
+		Resource: api.Resource{ID: common.GUID(), Tenant: tenant, Owner: "user-1"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "collection without status", Category: "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "benchmark-1"}, ProviderID: "provider-1"}},
+		},
+	}
+	if err := scoped.CreateCollection(noStatusCollection); err != nil {
+		t.Fatalf("CreateCollection without status: %v", err)
+	}
+	if err := scoped.CreateEvaluationJobWithCollectionRunCount(newJob(common.GUID(), noStatusCollection.Resource.ID), noStatusCollection.Resource.ID); err != nil {
+		t.Fatalf("CreateEvaluationJobWithCollectionRunCount without status: %v", err)
+	}
+	storedNoStatus, err := scoped.GetCollection(noStatusCollection.Resource.ID)
+	if err != nil {
+		t.Fatalf("GetCollection without status: %v", err)
+	}
+	if storedNoStatus.Status != nil {
+		t.Errorf("collection without status was updated: %+v", storedNoStatus.Status)
+	}
 }
 
 func TestUpdateBenchmarkStatus_RejectsTerminalDowngrade(t *testing.T) {

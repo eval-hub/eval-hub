@@ -168,7 +168,11 @@ func (s *postgresStatementsFactory) CreateCountEntitiesStatement(tenant api.Tena
 
 func (s *postgresStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant, tableName string, limit, offset int, filter map[string]any) (string, []any) {
 	where, whereArgs := s.getWhereStatement(tenant, "", 1) // we don't need to filter by id as we want to list all entities
-	filterClause, args := shared.CreateFilterStatement(s, where, whereArgs, filter, "id DESC", limit, offset, tableName)
+	orderBy := "id DESC"
+	if tableName == shared.TableEvaluations {
+		orderBy = "created_at DESC, id DESC"
+	}
+	filterClause, args := shared.CreateFilterStatement(s, where, whereArgs, filter, orderBy, limit, offset, tableName)
 
 	var query string
 	switch tableName {
@@ -253,4 +257,9 @@ func (s *postgresStatementsFactory) CreateCollectionAddEntityStatement(collectio
 func (s *postgresStatementsFactory) CreateCollectionGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
 	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, query.Resource.ID, 1)
 	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
+}
+
+func (s *postgresStatementsFactory) CreateCollectionGetEntityForUpdateStatement(query *shared.EntityQuery) (string, []any, []any) {
+	stmt, args, scanArgs := s.CreateCollectionGetEntityStatement(query)
+	return strings.TrimSuffix(stmt, ";") + " FOR UPDATE;", args, scanArgs
 }

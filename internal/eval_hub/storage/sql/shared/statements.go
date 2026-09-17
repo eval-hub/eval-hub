@@ -23,6 +23,7 @@ type SQLStatementsFactory interface {
 	// collections operations
 	CreateCollectionAddEntityStatement(collection *api.CollectionResource, entity string) (string, []any)
 	CreateCollectionGetEntityStatement(query *EntityQuery) (string, []any, []any)
+	CreateCollectionGetEntityForUpdateStatement(query *EntityQuery) (string, []any, []any)
 
 	// providers operations
 	CreateProviderAddEntityStatement(provider *api.ProviderResource, entity string) (string, []any)

@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -22,6 +23,8 @@ type collectionRunCountStorage struct {
 	*fakeStorage
 	collection      *api.CollectionResource
 	createdJob      *api.EvaluationJobResource
+	atomicCalls     int
+	atomicErr       error
 	updatedStatusID string
 	updatedStatus   *api.CollectionStatus
 }
@@ -42,6 +45,20 @@ func (s *collectionRunCountStorage) GetCollection(id string) (*api.CollectionRes
 
 func (s *collectionRunCountStorage) CreateEvaluationJob(job *api.EvaluationJobResource) error {
 	s.createdJob = job
+	return nil
+}
+
+func (s *collectionRunCountStorage) CreateEvaluationJobWithCollectionRunCount(job *api.EvaluationJobResource, collectionID string) error {
+	s.atomicCalls++
+	if s.atomicErr != nil {
+		return s.atomicErr
+	}
+	s.createdJob = job
+	if s.collection.Status != nil {
+		s.collection.Status.RunCount++
+		s.updatedStatusID = collectionID
+		s.updatedStatus = s.collection.Status
+	}
 	return nil
 }
 
@@ -79,11 +96,14 @@ func TestHandleCreateEvaluationUpdatesCustomCollectionRunCount(t *testing.T) {
 	tests := []struct {
 		name         string
 		status       *api.CollectionStatus
+		atomicErr    error
+		wantCode     int
 		wantUpdate   bool
 		wantRunCount int
 	}{
-		{name: "custom collection", status: &api.CollectionStatus{RunCount: 2}, wantUpdate: true, wantRunCount: 3},
-		{name: "system collection"},
+		{name: "custom collection", status: &api.CollectionStatus{RunCount: 2}, wantCode: http.StatusAccepted, wantUpdate: true, wantRunCount: 3},
+		{name: "system collection", wantCode: http.StatusAccepted},
+		{name: "atomic storage failure", status: &api.CollectionStatus{RunCount: 2}, atomicErr: errors.New("storage failed"), wantCode: http.StatusInternalServerError},
 	}
 
 	for _, tt := range tests {
@@ -109,6 +129,7 @@ func TestHandleCreateEvaluationUpdatesCustomCollectionRunCount(t *testing.T) {
 					},
 					Status: tt.status,
 				},
+				atomicErr: tt.atomicErr,
 			}
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 			h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil)
@@ -121,11 +142,20 @@ func TestHandleCreateEvaluationUpdatesCustomCollectionRunCount(t *testing.T) {
 
 			h.HandleCreateEvaluation(ctx, req, MockResponseWrapper{recorder: recorder})
 
-			if recorder.Code != http.StatusAccepted {
-				t.Fatalf("expected status 202, got %d body %s", recorder.Code, recorder.Body.String())
+			if recorder.Code != tt.wantCode {
+				t.Fatalf("expected status %d, got %d body %s", tt.wantCode, recorder.Code, recorder.Body.String())
+			}
+			if tt.atomicErr != nil {
+				if storage.createdJob != nil {
+					t.Error("job was persisted after atomic storage failure")
+				}
+				return
 			}
 			if storage.createdJob == nil {
 				t.Fatal("expected evaluation job to be persisted")
+			}
+			if storage.atomicCalls != 1 {
+				t.Errorf("atomic create calls = %d, want 1", storage.atomicCalls)
 			}
 			if storage.createdJob.Collection == nil || storage.createdJob.Collection.CollectionUpdatedAt == nil || !storage.createdJob.Collection.CollectionUpdatedAt.Equal(now) {
 				t.Errorf("persisted job collection_updated_at = %v, want %v", storage.createdJob.Collection, now)

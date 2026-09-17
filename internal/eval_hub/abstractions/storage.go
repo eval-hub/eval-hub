@@ -68,6 +68,9 @@ type Storage interface {
 
 	// Evaluation job operations
 	CreateEvaluationJob(evaluation *api.EvaluationJobResource) error
+	// CreateEvaluationJobWithCollectionRunCount atomically persists an evaluation job and,
+	// for a custom collection, increments its persisted RunCount.
+	CreateEvaluationJobWithCollectionRunCount(evaluation *api.EvaluationJobResource, collectionID string) error
 	GetEvaluationJob(id string) (*api.EvaluationJobResource, error)
 	GetEvaluationJobs(filter *QueryFilter) (*QueryResults[api.EvaluationJobResource], error)
 	DeleteEvaluationJob(id string) error

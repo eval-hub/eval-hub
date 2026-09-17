@@ -166,6 +166,11 @@ func TestGetAllowedFilterColumns_Evaluations(t *testing.T) {
 	if len(args) != 1 || args[0] != "collection-1" {
 		t.Errorf("unexpected collection_id args: %v", args)
 	}
+
+	cond, args = f.CreateEntityFilterCondition("collection_id", "collection-1", 1, shared.TableCollections)
+	if cond != "" || len(args) != 0 {
+		t.Errorf("collection_id condition for collections = %q, %v; want empty", cond, args)
+	}
 }
 
 func TestCreateCountEntitiesStatement(t *testing.T) {
@@ -181,6 +186,19 @@ func TestCreateListEntitiesStatement(t *testing.T) {
 	stmt, _ := f.CreateListEntitiesStatement("t1", shared.TableCollections, 10, 0, map[string]any{})
 	if !strings.Contains(stmt, "SELECT") {
 		t.Errorf("expected SELECT, got: %s", stmt)
+	}
+	stmt, _ = f.CreateListEntitiesStatement("t1", shared.TableEvaluations, 10, 0, map[string]any{})
+	if !strings.Contains(stmt, "ORDER BY created_at DESC, id DESC") {
+		t.Errorf("expected evaluations ordered by creation date, got: %s", stmt)
+	}
+}
+
+func TestCreateCollectionGetEntityForUpdateStatement(t *testing.T) {
+	f := NewStatementsFactory(slog.Default())
+	query := &shared.EntityQuery{Resource: api.Resource{ID: "collection-1", Tenant: "tenant-1"}}
+	stmt, _, _ := f.CreateCollectionGetEntityForUpdateStatement(query)
+	if !strings.HasSuffix(stmt, "FOR UPDATE;") {
+		t.Errorf("expected FOR UPDATE statement, got %q", stmt)
 	}
 }
 

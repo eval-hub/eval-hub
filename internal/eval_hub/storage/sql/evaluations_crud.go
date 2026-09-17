@@ -22,18 +22,41 @@ type EvaluationJobEntity struct {
 // #######################################################################
 func (s *sqlStorage) CreateEvaluationJob(evaluation *api.EvaluationJobResource) error {
 	return s.withTransaction("create evaluation job", evaluation.Resource.ID, func(txn *sql.Tx) error {
-		evaluationJSON, err := s.createEvaluationJobEntity(evaluation)
-		if err != nil {
-			return se.WithRollback(err)
-		}
-		addEntityStatement, args := s.statementsFactory.CreateEvaluationAddEntityStatement(evaluation, string(evaluationJSON))
-		_, err = s.exec(txn, addEntityStatement, args...)
-		if err != nil {
-			return se.WithRollback(err)
-		}
-		s.logger.Info("Created evaluation job", "id", evaluation.Resource.ID, "addEntityStatement", addEntityStatement)
-		return nil
+		return s.createEvaluationJobTransactional(txn, evaluation)
 	})
+}
+
+// CreateEvaluationJobWithCollectionRunCount atomically persists an evaluation job and,
+// for a custom collection, increments the RunCount stored with that collection.
+func (s *sqlStorage) CreateEvaluationJobWithCollectionRunCount(evaluation *api.EvaluationJobResource, collectionID string) error {
+	return s.withTransaction("create evaluation job with collection run count", evaluation.Resource.ID, func(txn *sql.Tx) error {
+		collection, err := s.getCollectionTransactionalForUpdate(txn, collectionID)
+		if err != nil {
+			return se.WithRollback(err)
+		}
+		if err = s.createEvaluationJobTransactional(txn, evaluation); err != nil {
+			return err
+		}
+		if collection.Status == nil {
+			return nil
+		}
+		collection.Status.RunCount++
+		return s.updateCollectionTransactional(txn, collection.Resource.ID, collection)
+	})
+}
+
+func (s *sqlStorage) createEvaluationJobTransactional(txn *sql.Tx, evaluation *api.EvaluationJobResource) error {
+	evaluationJSON, err := s.createEvaluationJobEntity(evaluation)
+	if err != nil {
+		return se.WithRollback(err)
+	}
+	addEntityStatement, args := s.statementsFactory.CreateEvaluationAddEntityStatement(evaluation, string(evaluationJSON))
+	_, err = s.exec(txn, addEntityStatement, args...)
+	if err != nil {
+		return se.WithRollback(err)
+	}
+	s.logger.Info("Created evaluation job", "id", evaluation.Resource.ID, "addEntityStatement", addEntityStatement)
+	return nil
 }
 
 func (s *sqlStorage) createEvaluationJobEntity(evaluation *api.EvaluationJobResource) ([]byte, error) {

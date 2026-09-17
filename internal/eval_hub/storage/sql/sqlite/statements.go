@@ -172,7 +172,11 @@ func (s *sqliteStatementsFactory) CreateCountEntitiesStatement(tenant api.Tenant
 
 func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant, tableName string, limit, offset int, filter map[string]any) (string, []any) {
 	where, whereArgs := s.getWhereStatement(tenant, "") // we don't need to filter by id as we want to count all entities
-	filterClause, args := shared.CreateFilterStatement(s, where, whereArgs, filter, "id DESC", limit, offset, tableName)
+	orderBy := "id DESC"
+	if tableName == shared.TableEvaluations {
+		orderBy = "created_at DESC, id DESC"
+	}
+	filterClause, args := shared.CreateFilterStatement(s, where, whereArgs, filter, orderBy, limit, offset, tableName)
 
 	var query string
 	switch tableName {
@@ -257,4 +261,9 @@ func (s *sqliteStatementsFactory) CreateCollectionAddEntityStatement(collection 
 func (s *sqliteStatementsFactory) CreateCollectionGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
 	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, query.Resource.ID)
 	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
+}
+
+func (s *sqliteStatementsFactory) CreateCollectionGetEntityForUpdateStatement(query *shared.EntityQuery) (string, []any, []any) {
+	// SQLite serializes writers via SetMaxOpenConns(1); FOR UPDATE is unsupported.
+	return s.CreateCollectionGetEntityStatement(query)
 }

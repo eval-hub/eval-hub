@@ -320,15 +320,10 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				},
 				EvaluationJobConfig: *evaluation,
 			}
-			if err := storage.WithContext(runtimeCtx).CreateEvaluationJob(job); err != nil {
-				return err
+			if collection != nil {
+				return storage.WithContext(runtimeCtx).CreateEvaluationJobWithCollectionRunCount(job, collection.Resource.ID)
 			}
-			if collection != nil && collection.Status != nil {
-				collection.Status.RunCount++
-				_, err := storage.WithContext(runtimeCtx).UpdateCollectionStatus(collection.Resource.ID, collection.Status)
-				return err
-			}
-			return nil
+			return storage.WithContext(runtimeCtx).CreateEvaluationJob(job)
 		},
 		"storage",
 		"store-evaluation-job",
