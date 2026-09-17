@@ -566,6 +566,38 @@ func TestGetCollection(t *testing.T) {
 	}
 }
 
+func TestCreateCollection(t *testing.T) {
+	want := api.CollectionResource{
+		Resource:         api.Resource{ID: "col-created"},
+		CollectionConfig: api.CollectionConfig{Name: "new-collection", Category: "safety"},
+	}
+	srv, capture := newCapturingServer(t, http.StatusCreated, mustMarshal(t, want))
+
+	config := api.CollectionConfig{
+		Name:     "new-collection",
+		Category: "safety",
+		Benchmarks: []api.CollectionBenchmarkConfig{
+			{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness"},
+		},
+	}
+	got, err := newTestClient(srv).CreateCollection(config)
+	if err != nil {
+		t.Fatalf("CreateCollection: %v", err)
+	}
+	if capture.method != http.MethodPost {
+		t.Errorf("method = %s, want POST", capture.method)
+	}
+	if capture.path != "/api/v1/evaluations/collections" {
+		t.Errorf("path = %s, want /api/v1/evaluations/collections", capture.path)
+	}
+	if got.Resource.ID != "col-created" {
+		t.Errorf("ID = %q, want col-created", got.Resource.ID)
+	}
+	if got.Name != "new-collection" {
+		t.Errorf("Name = %q, want new-collection", got.Name)
+	}
+}
+
 // ─── Evaluation jobs ──────────────────────────────────────────────────────────
 
 func TestListJobs(t *testing.T) {

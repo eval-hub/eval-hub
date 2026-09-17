@@ -22,6 +22,7 @@ type EvalHubToolClient interface {
 	ListProviders(opts ...evalhubclient.ListOption) (*api.ProviderResourceList, error)
 	GetProvider(id string) (*api.ProviderResource, error)
 	GetBenchmark(id string) (*api.BenchmarkResource, error)
+	CreateCollection(config api.CollectionConfig) (*api.CollectionResource, error)
 }
 
 // --- input types ---
@@ -55,6 +56,15 @@ type GetJobStatusInput struct {
 	JobID string `json:"job_id" jsonschema:"ID of the evaluation job to check"`
 }
 
+type CreateCollectionInput struct {
+	Name         string                          `json:"name" jsonschema:"Collection name"`
+	Description  string                          `json:"description,omitempty" jsonschema:"Human-readable description of what this collection evaluates"`
+	Category     string                          `json:"category" jsonschema:"Collection category: general, safety, code, reasoning, telecom, long_context, instruction_following"`
+	Tags         []string                        `json:"tags,omitempty" jsonschema:"Tags for categorizing the collection"`
+	PassCriteria *api.PassCriteria               `json:"pass_criteria,omitempty" jsonschema:"Collection-level pass/fail threshold (weighted average of benchmark thresholds)"`
+	Benchmarks   []api.CollectionBenchmarkConfig `json:"benchmarks" jsonschema:"List of benchmarks with weights, metrics, thresholds, and parameters"`
+}
+
 // --- output types ---
 
 type SubmitEvaluationOutput struct {
@@ -84,6 +94,13 @@ type BenchmarkStatusOutput struct {
 	CompletedAt          string   `json:"completed_at,omitempty"`
 	ResultInterpretation string   `json:"result_interpretation,omitempty"`
 	Complements          []string `json:"complements,omitempty"`
+}
+
+type CreateCollectionOutput struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Owner     string `json:"owner"`
+	CreatedAt string `json:"created_at,omitempty"`
 }
 
 type ProviderSummaryOutput struct {
@@ -125,6 +142,11 @@ func registerTools(srv *mcp.Server, client EvalHubToolClient, logger *slog.Logge
 		Name:        "discover_providers",
 		Description: "Discover evaluation providers. Filter by target_type (model, agent, inference_server) and/or evaluates (e.g. safety, robustness) to find the right provider for your use case. Each result includes a summary, usage hints, result interpretation guidance, and complementary provider suggestions.",
 	}, discoverProvidersHandler(client, logger))
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "create_collection",
+		Description: "Create a new benchmark collection. Use after designing a collection (via the design_collection prompt or manually) to persist it in eval-hub. The collection can then be used with submit_evaluation to run evaluations.",
+	}, createCollectionHandler(client, logger))
 }
 
 // --- handlers ---
@@ -269,6 +291,51 @@ func discoverProvidersHandler(client EvalHubToolClient, logger *slog.Logger) mcp
 			},
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: fmt.Sprintf("Found %d providers", len(providers))},
+			},
+		}, out, nil
+	}
+}
+
+func createCollectionHandler(client EvalHubToolClient, logger *slog.Logger) mcp.ToolHandlerFor[CreateCollectionInput, CreateCollectionOutput] {
+	return func(ctx context.Context, req *mcp.CallToolRequest, input CreateCollectionInput) (*mcp.CallToolResult, CreateCollectionOutput, error) {
+		log := requestLogger(ctx, logger)
+		client := evalHubToolClientForRequest(ctx, client, logger)
+		log.Debug("create_collection called", "name", input.Name)
+
+		if input.Name == "" {
+			return errorResult("validation error: 'name' is required"), CreateCollectionOutput{}, nil
+		}
+		if input.Category == "" {
+			return errorResult("validation error: 'category' is required"), CreateCollectionOutput{}, nil
+		}
+		if len(input.Benchmarks) == 0 {
+			return errorResult("validation error: at least one benchmark is required"), CreateCollectionOutput{}, nil
+		}
+
+		config := api.CollectionConfig{
+			Name:         input.Name,
+			Description:  input.Description,
+			Category:     input.Category,
+			Tags:         input.Tags,
+			PassCriteria: input.PassCriteria,
+			Benchmarks:   input.Benchmarks,
+		}
+
+		collection, err := client.CreateCollection(config)
+		if err != nil {
+			log.Error("create_collection failed", "error", err)
+			return errorResult(fmt.Sprintf("failed to create collection: %v", err)), CreateCollectionOutput{}, nil
+		}
+
+		out := CreateCollectionOutput{
+			ID:        collection.Resource.ID,
+			Name:      collection.Name,
+			Owner:     string(collection.Resource.Owner),
+			CreatedAt: collection.Resource.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Collection created: %s (id: %s)", out.Name, out.ID)},
 			},
 		}, out, nil
 	}

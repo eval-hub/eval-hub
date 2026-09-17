@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,12 +17,13 @@ import (
 // --- mock tool client ---
 
 type mockToolClient struct {
-	createJobFn    func(config api.EvaluationJobConfig) (*api.EvaluationJobResource, error)
-	cancelJobFn    func(id string) error
-	getJobFn       func(id string) (*api.EvaluationJobResource, error)
-	listProviderFn func(opts ...evalhubclient.ListOption) (*api.ProviderResourceList, error)
-	getProviderFn  func(id string) (*api.ProviderResource, error)
-	getBenchmarkFn func(id string) (*api.BenchmarkResource, error)
+	createJobFn        func(config api.EvaluationJobConfig) (*api.EvaluationJobResource, error)
+	cancelJobFn        func(id string) error
+	getJobFn           func(id string) (*api.EvaluationJobResource, error)
+	listProviderFn     func(opts ...evalhubclient.ListOption) (*api.ProviderResourceList, error)
+	getProviderFn      func(id string) (*api.ProviderResource, error)
+	getBenchmarkFn     func(id string) (*api.BenchmarkResource, error)
+	createCollectionFn func(config api.CollectionConfig) (*api.CollectionResource, error)
 }
 
 func (m *mockToolClient) CreateJob(config api.EvaluationJobConfig) (*api.EvaluationJobResource, error) {
@@ -81,6 +83,20 @@ func (m *mockToolClient) GetBenchmark(id string) (*api.BenchmarkResource, error)
 		StatusCode: http.StatusNotFound,
 		Message:    fmt.Sprintf("benchmark %q not found", id),
 	}
+}
+
+func (m *mockToolClient) CreateCollection(config api.CollectionConfig) (*api.CollectionResource, error) {
+	if m.createCollectionFn != nil {
+		return m.createCollectionFn(config)
+	}
+	return &api.CollectionResource{
+		Resource: api.Resource{
+			ID:        "col-new",
+			Owner:     api.User("test-tenant"),
+			CreatedAt: time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC),
+		},
+		CollectionConfig: config,
+	}, nil
 }
 
 // --- test helpers ---
@@ -166,6 +182,7 @@ func TestToolsListIncludesAll(t *testing.T) {
 		"cancel_job":         false,
 		"get_job_status":     false,
 		"discover_providers": false,
+		"create_collection":  false,
 	}
 	for _, tool := range result.Tools {
 		if _, ok := want[tool.Name]; ok {
@@ -1068,6 +1085,95 @@ func TestGetJobStatusRunningNoEnrichment(t *testing.T) {
 	}
 	if len(b.Complements) != 0 {
 		t.Errorf("running benchmark should not have complements, got %v", b.Complements)
+	}
+}
+
+// --- create_collection ---
+
+func TestCreateCollectionSuccess(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithTools(t, &mockToolClient{})
+
+	out := callToolJSON[CreateCollectionOutput](t, ctx, cs, "create_collection", CreateCollectionInput{
+		Name:     "test-collection",
+		Category: "safety",
+		Benchmarks: []api.CollectionBenchmarkConfig{
+			{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness", Weight: 3},
+		},
+	})
+
+	if out.ID != "col-new" {
+		t.Errorf("ID = %q, want %q", out.ID, "col-new")
+	}
+	if out.Name != "test-collection" {
+		t.Errorf("Name = %q, want %q", out.Name, "test-collection")
+	}
+}
+
+func TestCreateCollectionMissingName(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithTools(t, &mockToolClient{})
+
+	errMsg := callToolExpectError(t, ctx, cs, "create_collection", CreateCollectionInput{
+		Category: "safety",
+		Benchmarks: []api.CollectionBenchmarkConfig{
+			{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness"},
+		},
+	})
+	if !strings.Contains(errMsg, "name") {
+		t.Errorf("error should mention name, got: %s", errMsg)
+	}
+}
+
+func TestCreateCollectionMissingCategory(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithTools(t, &mockToolClient{})
+
+	errMsg := callToolExpectError(t, ctx, cs, "create_collection", CreateCollectionInput{
+		Name: "test",
+		Benchmarks: []api.CollectionBenchmarkConfig{
+			{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness"},
+		},
+	})
+	if !strings.Contains(errMsg, "category") {
+		t.Errorf("error should mention category, got: %s", errMsg)
+	}
+}
+
+func TestCreateCollectionMissingBenchmarks(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithTools(t, &mockToolClient{})
+
+	errMsg := callToolExpectError(t, ctx, cs, "create_collection", CreateCollectionInput{
+		Name:     "test",
+		Category: "safety",
+	})
+	if !strings.Contains(errMsg, "benchmark") {
+		t.Errorf("error should mention benchmark, got: %s", errMsg)
+	}
+}
+
+func TestCreateCollectionAPIError(t *testing.T) {
+	t.Parallel()
+	client := &mockToolClient{
+		createCollectionFn: func(_ api.CollectionConfig) (*api.CollectionResource, error) {
+			return nil, &evalhubclient.APIError{
+				StatusCode: http.StatusBadRequest,
+				Message:    "invalid collection",
+			}
+		},
+	}
+	ctx, cs := connectWithTools(t, client)
+
+	errMsg := callToolExpectError(t, ctx, cs, "create_collection", CreateCollectionInput{
+		Name:     "test",
+		Category: "safety",
+		Benchmarks: []api.CollectionBenchmarkConfig{
+			{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness"},
+		},
+	})
+	if !strings.Contains(errMsg, "failed to create collection") {
+		t.Errorf("error should mention failure, got: %s", errMsg)
 	}
 }
 

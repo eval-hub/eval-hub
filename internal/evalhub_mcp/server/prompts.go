@@ -3,18 +3,21 @@ package server
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
 
+	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.yaml.in/yaml/v4"
 )
 
 const (
-	PromptNameEDDWorkflow   = "edd_workflow"
-	PromptNameEvaluateModel = "evaluate_model"
-	PromptNameCompareRuns   = "compare_runs"
+	PromptNameEDDWorkflow      = "edd_workflow"
+	PromptNameEvaluateModel    = "evaluate_model"
+	PromptNameCompareRuns      = "compare_runs"
+	PromptNameDesignCollection = "design_collection"
 
 	ApplicationTypeRAG        = "rag"
 	ApplicationTypeAgent      = "agent"
@@ -25,11 +28,17 @@ const (
 	ArgNameModelURL             = "model_url"
 	ArgNameBenchmarkPreferences = "benchmark_preferences"
 	ArgNameJobIds               = "job_ids"
+	ArgNameEvaluationGoal       = "evaluation_goal"
+	ArgNameProviderFilter       = "provider_filter"
+	ArgNameMaxBenchmarks        = "max_benchmarks"
+	ArgNameStrictness           = "strictness"
 
 	ArgNameGuidelineDefine         = "define"
 	ArgNameGuidelineMeasure        = "measure"
 	ArgNameGuidelineIterate        = "iterate"
 	ArgNameGuidelineStartingPrompt = "starting_prompt"
+
+	defaultStrictness = "moderate"
 )
 
 // For now the yaml files are embedded here, but in the future we should load them from config maps if needed
@@ -112,7 +121,7 @@ func (g *eddPhaseGuidance) IsValid() bool {
 	return g != nil && g.Define != "" && g.Measure != "" && g.Iterate != "" && g.StartingPrompt != ""
 }
 
-func registerPrompts(srv *mcp.Server, logger *slog.Logger) error {
+func registerPrompts(srv *mcp.Server, ds EvalHubDiscovery, logger *slog.Logger) error {
 	eddGuidance, err := loadGuidance()
 	if err != nil {
 		return err
@@ -132,6 +141,8 @@ func registerPrompts(srv *mcp.Server, logger *slog.Logger) error {
 			handler = evaluateModelHandler(prompt.Result, logger)
 		case PromptNameCompareRuns:
 			handler = compareRunsHandler(prompt.Result, logger)
+		case PromptNameDesignCollection:
+			handler = designCollectionHandler(prompt.Result, ds, logger)
 		default:
 			return fmt.Errorf("prompt %q not found", name)
 		}
@@ -261,6 +272,179 @@ func compareRunsHandler(result *promptResultConfig, logger *slog.Logger) mcp.Pro
 			Messages:    append(messages, comparisonMessages...),
 		}, nil
 	}
+}
+
+var validStrictness = []string{"lenient", "moderate", "strict"}
+
+func designCollectionHandler(result *promptResultConfig, ds EvalHubDiscovery, logger *slog.Logger) mcp.PromptHandler {
+	return func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+		log := requestLogger(ctx, logger)
+		ds := evalHubDiscoveryForRequest(ctx, ds, logger)
+
+		goal := strings.TrimSpace(req.Params.Arguments[ArgNameEvaluationGoal])
+		providerFilter := strings.TrimSpace(req.Params.Arguments[ArgNameProviderFilter])
+		maxBenchmarks := strings.TrimSpace(req.Params.Arguments[ArgNameMaxBenchmarks])
+		strictness := strings.TrimSpace(req.Params.Arguments[ArgNameStrictness])
+
+		log.Debug(fmt.Sprintf("%s called", PromptNameDesignCollection),
+			ArgNameEvaluationGoal, goal,
+			ArgNameProviderFilter, providerFilter,
+			ArgNameMaxBenchmarks, maxBenchmarks,
+			ArgNameStrictness, strictness,
+		)
+
+		if goal == "" {
+			return nil, fmt.Errorf("%s is required", ArgNameEvaluationGoal)
+		}
+
+		if strictness == "" {
+			strictness = defaultStrictness
+		} else if !isValidStrictness(strictness) {
+			return nil, fmt.Errorf("invalid %s %q; valid values: %s", ArgNameStrictness, strictness, strings.Join(validStrictness, ", "))
+		}
+
+		benchmarkCatalog, err := buildBenchmarkCatalog(ds, providerFilter)
+		if err != nil {
+			return nil, fmt.Errorf("fetching benchmark catalog: %w", err)
+		}
+
+		collectionExamples, err := buildCollectionExamples(ds)
+		if err != nil {
+			return nil, fmt.Errorf("fetching collection examples: %w", err)
+		}
+
+		var optionsParts []string
+		if providerFilter != "" {
+			optionsParts = append(optionsParts, fmt.Sprintf("Provider filter: %s", providerFilter))
+		}
+		if maxBenchmarks != "" {
+			optionsParts = append(optionsParts, fmt.Sprintf("Max benchmarks: %s", maxBenchmarks))
+		}
+		optionsParts = append(optionsParts, fmt.Sprintf("Strictness: %s", strictness))
+		optionsSummary := strings.Join(optionsParts, " | ")
+
+		messages := result.ToMCPPromptMessages(
+			"",
+			ArgNameEvaluationGoal, goal,
+			"options_summary", optionsSummary,
+			ArgNameStrictness, strictness,
+			"benchmark_catalog", benchmarkCatalog,
+			"collection_examples", collectionExamples,
+		)
+		if messages == nil {
+			return nil, fmt.Errorf("no messages found for design_collection prompt")
+		}
+
+		return &mcp.GetPromptResult{
+			Description: replaceTemplateVariables(
+				result.Description, ArgNameEvaluationGoal, goal,
+			),
+			Messages: messages,
+		}, nil
+	}
+}
+
+func isValidStrictness(s string) bool {
+	for _, v := range validStrictness {
+		if s == v {
+			return true
+		}
+	}
+	return false
+}
+
+type benchmarkCatalogEntry struct {
+	ID          string   `json:"id"`
+	ProviderID  string   `json:"provider_id"`
+	Name        string   `json:"name,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	Metrics     []string `json:"metrics,omitempty"`
+}
+
+func buildBenchmarkCatalog(ds EvalHubDiscovery, providerFilter string) (string, error) {
+	var allowedProviders map[string]struct{}
+	if providerFilter != "" {
+		allowedProviders = make(map[string]struct{})
+		for p := range strings.SplitSeq(providerFilter, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				allowedProviders[p] = struct{}{}
+			}
+		}
+	}
+
+	providerList, err := ds.ListProviders()
+	if err != nil {
+		return "", err
+	}
+
+	var entries []benchmarkCatalogEntry
+	for _, p := range providerList.Items {
+		if allowedProviders != nil {
+			if _, ok := allowedProviders[p.Resource.ID]; !ok {
+				continue
+			}
+		}
+		for _, b := range p.Benchmarks {
+			entry := benchmarkCatalogEntry{
+				ID:          b.ID,
+				ProviderID:  p.Resource.ID,
+				Name:        b.Name,
+				Description: b.Description,
+				Tags:        b.Tags,
+			}
+			if len(b.Metrics) > 0 {
+				entry.Metrics = b.Metrics
+			}
+			entries = append(entries, entry)
+		}
+	}
+
+	data, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("marshalling benchmark catalog: %w", err)
+	}
+	return string(data), nil
+}
+
+type collectionExample struct {
+	ID           string                          `json:"id"`
+	Name         string                          `json:"name"`
+	Category     string                          `json:"category,omitempty"`
+	Description  string                          `json:"description,omitempty"`
+	Tags         []string                        `json:"tags,omitempty"`
+	PassCriteria *api.PassCriteria               `json:"pass_criteria,omitempty"`
+	Benchmarks   []api.CollectionBenchmarkConfig `json:"benchmarks"`
+}
+
+func buildCollectionExamples(ds EvalHubDiscovery) (string, error) {
+	list, err := ds.ListCollections()
+	if err != nil {
+		return "", err
+	}
+
+	var examples []collectionExample
+	for _, c := range list.Items {
+		if c.Resource.Owner != "system" {
+			continue
+		}
+		examples = append(examples, collectionExample{
+			ID:           c.Resource.ID,
+			Name:         c.Name,
+			Category:     c.Category,
+			Description:  c.Description,
+			Tags:         c.Tags,
+			PassCriteria: c.PassCriteria,
+			Benchmarks:   c.Benchmarks,
+		})
+	}
+
+	data, err := json.MarshalIndent(examples, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("marshalling collection examples: %w", err)
+	}
+	return string(data), nil
 }
 
 func loadPrompts() (map[string]promptConfig, error) {

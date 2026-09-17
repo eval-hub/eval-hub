@@ -101,6 +101,7 @@ When `EVALHUB_BASE_URL` is configured and the eval-hub API is reachable, the MCP
 | `discover_providers` | Optional: `target_type` (`model`, `agent`, or `inference_server`); `evaluates` (array of capability tags, e.g. `safety`, `robustness` — provider must evaluate **all** listed values) | Discover evaluation providers with agent-oriented metadata: summary, usage hints, result interpretation, complementary providers, and when to use each provider. Unfiltered calls return every provider; when filters are set, only providers with agent metadata can match. |
 | `submit_evaluation` | Required: `name`, `model`; either `benchmarks` **or** `collection` (not both). Optional: `description`, `tags`, `experiment`. Request fields match the eval-hub HTTP API (`POST /api/v1/evaluations`). See **submit_evaluation request shape** below. | Submit a new evaluation job. Returns `job_id` and initial `state`. |
 | `get_job_status` | Required: `job_id` | Poll job state, progress percentage, and per-benchmark status. Completed benchmarks may include `result_interpretation` and `complements` from provider metadata. |
+| `create_collection` | Required: `name`, `category`, `benchmarks`. Optional: `description`, `tags`, `pass_criteria`. | Create a new benchmark collection. Use after designing a collection (via the `design_collection` prompt or manually) to persist it. The collection can then be referenced in `submit_evaluation`. |
 | `cancel_job` | Required: `job_id` | Cancel a running or pending job. Use `get_job_status` to confirm the final state. |
 
 **Example — discover providers for agent safety evaluation:**
@@ -179,6 +180,7 @@ All resource URIs use the `evalhub://` scheme and return JSON.
 
 | Prompt | Arguments | Description |
 |--------|-----------|-------------|
+| `design_collection` | Required: `evaluation_goal`. Optional: `provider_filter`, `max_benchmarks`, `strictness` (`lenient`, `moderate`, `strict`) | Design a benchmark collection from a natural-language evaluation goal. Dynamically fetches the live benchmark catalog and curated collection examples, then provides calibration guidelines for benchmark selection, weighting, and threshold setting. Use `create_collection` to persist the result. |
 | `edd_workflow` | Required: `application_type` (`rag`, `agent`, `safety`, or `classifier`) | Evaluation-Driven Development cycle (Define → Measure → Iterate) tailored to the application type |
 | `evaluate_model` | Optional: `model_url`, `benchmark_preferences` | Step-by-step model evaluation workflow (model URL, benchmark selection, experiment config, submission, monitoring) |
 | `compare_runs` | Optional: `job_ids` (comma-separated) | Compare two or more evaluation jobs: fetch results, compare metrics, summarize findings |
@@ -194,6 +196,28 @@ Argument completion is available for resource template parameters (provider, ben
 3. Call `submit_evaluation` with the model endpoint and selected benchmarks or collection.
 4. Poll with `get_job_status` until the job reaches a terminal state.
 5. Optionally use the `compare_runs` prompt to compare multiple completed jobs.
+
+### Collection design workflow
+
+Use the `design_collection` prompt to generate a benchmark collection from a natural-language goal:
+
+1. Invoke `design_collection` with your `evaluation_goal` (e.g. "enterprise deployment requiring safety and instruction following").
+2. The agent receives the full benchmark catalog and calibration guidelines, then proposes a collection.
+3. Iterate conversationally ("add more safety benchmarks", "lower the thresholds").
+4. When satisfied, use the `create_collection` tool to persist the collection in eval-hub.
+5. Use the created collection ID with `submit_evaluation` to run evaluations.
+
+**Example — design and create a collection:**
+
+```
+# Step 1: invoke the prompt
+design_collection(evaluation_goal="enterprise deployment requiring safety, instruction following, and long-context support")
+
+# Step 2: agent proposes a collection, user approves
+
+# Step 3: persist it
+create_collection(name="enterprise-safety-v1", category="safety", benchmarks=[...], pass_criteria={threshold: 0.72})
+```
 
 ## Testing that the MCP service is functioning
 
