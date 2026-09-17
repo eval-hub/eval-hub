@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	SidecarJobInfoFileName  = "sidecar-job-info.json"
-	DefaultModelHTTPTimeout = 60 * time.Second
+	SidecarJobInfoFileName = "sidecar-job-info.json"
+	// Align with lm_evaluation_harness adapter default (timeout_seconds: 300).
+	DefaultModelHTTPTimeout = 300 * time.Second
 )
 
 // SidecarJobInfo is the per-job config written to sidecar-job-info.json in local sidecar mode.

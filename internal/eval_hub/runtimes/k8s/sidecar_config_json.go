@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/internal/otel"
 )
 
@@ -47,11 +48,17 @@ func sidecarForJobPod(cfg *config.Config, jc *jobConfig) (*config.SidecarConfig,
 			export.MLFlow.CACertPath = mlflowCACertPathForJob(jc, cfg)
 		}
 		if jc.modelTargetURL != "" {
-			mc := &config.SidecarModelConfig{URL: jc.modelTargetURL}
+			mc := &config.SidecarModelConfig{
+				URL:         jc.modelTargetURL,
+				HTTPTimeout: shared.DefaultModelHTTPTimeout,
+			}
 			// AuthSecretMountPath is only set when a credentials secret is configured;
 			// open models have no secret mount but still use the sidecar proxy.
 			if jc.modelAuthSecretRef != "" {
 				mc.AuthSecretMountPath = modelAuthMountPath
+			}
+			if export.Model != nil && export.Model.HTTPTimeout > 0 {
+				mc.HTTPTimeout = export.Model.HTTPTimeout
 			}
 			export.Model = mc
 		}
