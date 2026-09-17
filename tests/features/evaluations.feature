@@ -470,6 +470,10 @@ Feature: Evaluations Endpoint
     Then the response code should be 202
     And the response should contain the value "{{value:collection_id}}" at path "$.collection.id"
     And the response should contain the value "pending" at path "$.status.state"
+    When I send a GET request to "/api/v1/evaluations/jobs?collection_id={{value:collection_id}}"
+    Then the response code should be 200
+    And the response should contain the value "1" at path "$.total_count"
+    And the response should contain the value "{{value:collection_id}}" at path "$.items[0].collection.id"
     When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_pass_criteria_provider_b1.json"
     Then the response code should be 204
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
