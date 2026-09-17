@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
+	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.yaml.in/yaml/v4"
 )
@@ -38,7 +40,8 @@ const (
 	ArgNameGuidelineIterate        = "iterate"
 	ArgNameGuidelineStartingPrompt = "starting_prompt"
 
-	defaultStrictness = "moderate"
+	defaultStrictness    = "moderate"
+	defaultMaxBenchmarks = 12
 )
 
 // For now the yaml files are embedded here, but in the future we should load them from config maps if needed
@@ -283,8 +286,15 @@ func designCollectionHandler(result *promptResultConfig, ds EvalHubDiscovery, lo
 
 		goal := strings.TrimSpace(req.Params.Arguments[ArgNameEvaluationGoal])
 		providerFilter := strings.TrimSpace(req.Params.Arguments[ArgNameProviderFilter])
-		maxBenchmarks := strings.TrimSpace(req.Params.Arguments[ArgNameMaxBenchmarks])
+		maxBenchmarksRaw := strings.TrimSpace(req.Params.Arguments[ArgNameMaxBenchmarks])
 		strictness := strings.TrimSpace(req.Params.Arguments[ArgNameStrictness])
+
+		maxBenchmarks := defaultMaxBenchmarks
+		if maxBenchmarksRaw != "" {
+			if n, err := strconv.Atoi(maxBenchmarksRaw); err == nil && n > 0 {
+				maxBenchmarks = n
+			}
+		}
 
 		log.Debug(fmt.Sprintf("%s called", PromptNameDesignCollection),
 			ArgNameEvaluationGoal, goal,
@@ -308,18 +318,18 @@ func designCollectionHandler(result *promptResultConfig, ds EvalHubDiscovery, lo
 			return nil, fmt.Errorf("fetching benchmark catalog: %w", err)
 		}
 
-		collectionExamples, err := buildCollectionExamples(ds)
+		collectionExamples, err := buildCollectionExamples(ds, providerFilter)
 		if err != nil {
 			return nil, fmt.Errorf("fetching collection examples: %w", err)
 		}
+
+		maxBenchmarksStr := strconv.Itoa(maxBenchmarks)
 
 		var optionsParts []string
 		if providerFilter != "" {
 			optionsParts = append(optionsParts, fmt.Sprintf("Provider filter: %s", providerFilter))
 		}
-		if maxBenchmarks != "" {
-			optionsParts = append(optionsParts, fmt.Sprintf("Max benchmarks: %s", maxBenchmarks))
-		}
+		optionsParts = append(optionsParts, fmt.Sprintf("Max benchmarks: %s", maxBenchmarksStr))
 		optionsParts = append(optionsParts, fmt.Sprintf("Strictness: %s", strictness))
 		optionsSummary := strings.Join(optionsParts, " | ")
 
@@ -374,13 +384,13 @@ func buildBenchmarkCatalog(ds EvalHubDiscovery, providerFilter string) (string, 
 		}
 	}
 
-	providerList, err := ds.ListProviders()
+	providers, err := allProviders(ds)
 	if err != nil {
 		return "", err
 	}
 
 	var entries []benchmarkCatalogEntry
-	for _, p := range providerList.Items {
+	for _, p := range providers {
 		if allowedProviders != nil {
 			if _, ok := allowedProviders[p.Resource.ID]; !ok {
 				continue
@@ -418,16 +428,34 @@ type collectionExample struct {
 	Benchmarks   []api.CollectionBenchmarkConfig `json:"benchmarks"`
 }
 
-func buildCollectionExamples(ds EvalHubDiscovery) (string, error) {
-	list, err := ds.ListCollections()
+func buildCollectionExamples(ds EvalHubDiscovery, providerFilter string) (string, error) {
+	var allowedProviders map[string]struct{}
+	if providerFilter != "" {
+		allowedProviders = make(map[string]struct{})
+		for p := range strings.SplitSeq(providerFilter, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				allowedProviders[p] = struct{}{}
+			}
+		}
+	}
+
+	collections, err := allCollections(ds)
 	if err != nil {
 		return "", err
 	}
 
 	var examples []collectionExample
-	for _, c := range list.Items {
+	for _, c := range collections {
 		if c.Resource.Owner != "system" {
 			continue
+		}
+		benchmarks := c.Benchmarks
+		if allowedProviders != nil {
+			benchmarks = filterBenchmarksByProvider(benchmarks, allowedProviders)
+			if len(benchmarks) == 0 {
+				continue
+			}
 		}
 		examples = append(examples, collectionExample{
 			ID:           c.Resource.ID,
@@ -436,7 +464,7 @@ func buildCollectionExamples(ds EvalHubDiscovery) (string, error) {
 			Description:  c.Description,
 			Tags:         c.Tags,
 			PassCriteria: c.PassCriteria,
-			Benchmarks:   c.Benchmarks,
+			Benchmarks:   benchmarks,
 		})
 	}
 
@@ -445,6 +473,50 @@ func buildCollectionExamples(ds EvalHubDiscovery) (string, error) {
 		return "", fmt.Errorf("marshalling collection examples: %w", err)
 	}
 	return string(data), nil
+}
+
+func filterBenchmarksByProvider(benchmarks []api.CollectionBenchmarkConfig, allowed map[string]struct{}) []api.CollectionBenchmarkConfig {
+	var filtered []api.CollectionBenchmarkConfig
+	for _, b := range benchmarks {
+		if _, ok := allowed[b.ProviderID]; ok {
+			filtered = append(filtered, b)
+		}
+	}
+	return filtered
+}
+
+// allProviders paginates through all provider pages from the discovery source.
+func allProviders(ds EvalHubDiscovery) ([]api.ProviderResource, error) {
+	pageSize := evalhubclient.DefaultListPageLimit
+	var all []api.ProviderResource
+	for offset := 0; ; offset += pageSize {
+		list, err := ds.ListProviders(evalhubclient.WithLimit(pageSize), evalhubclient.WithOffset(offset))
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, list.Items...)
+		if len(all) >= list.TotalCount || len(list.Items) < pageSize {
+			break
+		}
+	}
+	return all, nil
+}
+
+// allCollections paginates through all collection pages from the discovery source.
+func allCollections(ds EvalHubDiscovery) ([]api.CollectionResource, error) {
+	pageSize := evalhubclient.DefaultListPageLimit
+	var all []api.CollectionResource
+	for offset := 0; ; offset += pageSize {
+		list, err := ds.ListCollections(evalhubclient.WithLimit(pageSize), evalhubclient.WithOffset(offset))
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, list.Items...)
+		if len(all) >= list.TotalCount || len(list.Items) < pageSize {
+			break
+		}
+	}
+	return all, nil
 }
 
 func loadPrompts() (map[string]promptConfig, error) {

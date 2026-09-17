@@ -116,7 +116,7 @@ design_collection:
           2. Sets appropriate weights (higher = more important to the use-case)
           3. Sets per-benchmark pass_criteria thresholds calibrated to domain norms
           4. Sets a collection-level pass_criteria threshold (weighted average of benchmark thresholds)
-          5. Fills in id, name, description, category, and tags
+          5. Fills in name, description, category, and tags
 
           ### Threshold Calibration Guidelines
 
