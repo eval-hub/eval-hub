@@ -18,7 +18,6 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/gomlx/go-huggingface v0.4.3
 	github.com/google/go-jsonnet v0.22.0
-	github.com/google/jsonschema-go v0.4.3
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
@@ -52,7 +51,7 @@ require (
 	go.uber.org/zap v1.28.0
 	go.uber.org/zap/exp v0.3.0
 	go.yaml.in/yaml/v4 v4.0.0-rc.6
-	google.golang.org/grpc v1.84.0
+	google.golang.org/grpc v1.83.2
 	gopkg.in/evanphx/json-patch.v4 v4.13.0
 	k8s.io/api v0.37.0
 	k8s.io/apimachinery v0.37.0
@@ -117,6 +116,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/gomlx/compute v0.1.6 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
+	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/go-memdb v1.3.5 // indirect
@@ -203,6 +203,8 @@ exclude (
 	github.com/gomlx/go-huggingface v0.4.10
 	github.com/gomlx/go-huggingface v0.4.11
 	github.com/gomlx/go-huggingface v0.4.12
+	// this version has a vulnerability
+	google.golang.org/grpc v1.84.0
 	k8s.io/kube-openapi v0.0.0-20260908163437-c4db2bdfbfe6
 	k8s.io/kube-openapi v0.0.0-20260911184034-7970a1e230da
 )
