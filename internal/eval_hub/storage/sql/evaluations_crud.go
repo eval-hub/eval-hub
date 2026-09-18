@@ -27,8 +27,13 @@ func (s *sqlStorage) CreateEvaluationJob(evaluation *api.EvaluationJobResource) 
 }
 
 // CreateEvaluationJobAndUpdateCollection atomically persists an evaluation job and
-// applies server-managed updates to its collection.
-func (s *sqlStorage) CreateEvaluationJobAndUpdateCollection(evaluation *api.EvaluationJobResource, collectionID string) error {
+// applies server-managed updates to the collection referenced by the job.
+func (s *sqlStorage) CreateEvaluationJobAndUpdateCollection(evaluation *api.EvaluationJobResource) error {
+	if evaluation == nil || evaluation.Collection == nil || evaluation.Collection.ID == "" {
+		return se.NewServiceError(messages.RequestValidationFailed, "Error", "collection ID is required")
+	}
+
+	collectionID := evaluation.Collection.ID
 	return s.withTransaction("create evaluation job and update collection", evaluation.Resource.ID, func(txn *sql.Tx) error {
 		collection, err := s.getCollectionTransactionalForUpdate(txn, collectionID)
 		if err != nil {

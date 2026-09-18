@@ -3,7 +3,7 @@
   "info": {
     "title": "Eval Hub",
     "description": "API REST server for evaluation backend orchestration",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "contact": {
       "name": "API Support"
     },
@@ -529,7 +529,7 @@
               "type": "string",
               "title": "Owner"
             },
-            "description": "Filter by job owner"
+            "description": "Filter by job owner within the current tenant"
           },
           {
             "name": "experiment_id",

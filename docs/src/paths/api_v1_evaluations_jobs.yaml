@@ -232,7 +232,7 @@ get:
       schema:
         type: string
         title: Owner
-      description: Filter by job owner
+      description: Filter by job owner within the current tenant
     - name: experiment_id
       in: query
       required: false
