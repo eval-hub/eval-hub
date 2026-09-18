@@ -175,17 +175,29 @@ func TestGetAllowedFilterColumns_Evaluations(t *testing.T) {
 
 func TestCreateCountEntitiesStatement(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
-	stmt, _ := f.CreateCountEntitiesStatement("t1", "", shared.TableCollections, map[string]any{})
+	stmt, args := f.CreateCountEntitiesStatement("t1", "u1", shared.TableCollections, map[string]any{})
 	if !strings.Contains(stmt, "SELECT COUNT(*)") {
 		t.Errorf("expected COUNT(*), got: %s", stmt)
+	}
+	if !strings.Contains(stmt, "((tenant_id = $1 AND owner = $2) OR owner = 'system')") {
+		t.Errorf("expected owner and system visibility predicates, got: %s", stmt)
+	}
+	if !slices.Equal(args, []any{"t1", "u1"}) {
+		t.Errorf("expected tenant and owner args, got: %v", args)
 	}
 }
 
 func TestCreateListEntitiesStatement(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
-	stmt, _ := f.CreateListEntitiesStatement("t1", "", shared.TableCollections, 10, 0, map[string]any{})
+	stmt, args := f.CreateListEntitiesStatement("t1", "u1", shared.TableCollections, 10, 0, map[string]any{})
 	if !strings.Contains(stmt, "SELECT") {
 		t.Errorf("expected SELECT, got: %s", stmt)
+	}
+	if !strings.Contains(stmt, "((tenant_id = $1 AND owner = $2) OR owner = 'system')") {
+		t.Errorf("expected owner and system visibility predicates, got: %s", stmt)
+	}
+	if !slices.Equal(args, []any{"t1", "u1", 10}) {
+		t.Errorf("expected tenant, owner, and limit args, got: %v", args)
 	}
 }
 
@@ -200,24 +212,30 @@ func TestCreateCollectionGetEntityForUpdateStatement(t *testing.T) {
 
 func TestCreateDeleteEntityStatement(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
-	stmt, args := f.CreateDeleteEntityStatement("t1", "", shared.TableCollections, "coll-1")
+	stmt, args := f.CreateDeleteEntityStatement("t1", "u1", shared.TableCollections, "coll-1")
 	if !strings.Contains(stmt, "DELETE FROM collections") {
 		t.Errorf("expected DELETE FROM collections, got: %s", stmt)
 	}
-	if len(args) == 0 {
-		t.Error("expected args for delete statement")
+	if !strings.Contains(stmt, "id = $1 AND tenant_id = $2 AND owner = $3") {
+		t.Errorf("expected exact-owner delete predicate, got: %s", stmt)
+	}
+	if !slices.Equal(args, []any{"coll-1", "t1", "u1"}) {
+		t.Errorf("expected id, tenant, and owner args, got: %v", args)
 	}
 }
 
 func TestCreateUpdateEntityStatement(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
 	entity := `{"name":"test"}`
-	stmt, args := f.CreateUpdateEntityStatement("t1", "", shared.TableCollections, "coll-1", entity, nil)
+	stmt, args := f.CreateUpdateEntityStatement("t1", "u1", shared.TableCollections, "coll-1", entity, nil)
 	if !strings.Contains(stmt, "UPDATE collections") {
 		t.Errorf("expected UPDATE collections, got: %s", stmt)
 	}
-	if len(args) == 0 {
-		t.Error("expected args for update statement")
+	if !strings.Contains(stmt, "id = $2 AND tenant_id = $3 AND owner = $4") {
+		t.Errorf("expected exact-owner update predicate, got: %s", stmt)
+	}
+	if !slices.Equal(args, []any{entity, "coll-1", "t1", "u1"}) {
+		t.Errorf("expected entity, id, tenant, and owner args, got: %v", args)
 	}
 }
 
