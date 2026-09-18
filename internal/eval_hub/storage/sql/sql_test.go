@@ -10,6 +10,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/internal/logging"
+	"github.com/eval-hub/eval-hub/pkg/api"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
@@ -132,6 +133,55 @@ func getTestStorage(t *testing.T, driver string, databaseName string) (abstracti
 		return storage.NewStorage(&databaseConfig, nil, nil, false, false, logger)
 	default:
 		return nil, fmt.Errorf("unsupported driver: %s", driver)
+	}
+}
+
+func TestWithOwner_RejectsOwnerWithoutTenant(t *testing.T) {
+	store, err := getTestStorage(t, "sqlite", getDBName())
+	if err != nil {
+		t.Fatalf("getTestStorage: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	tenant := api.Tenant("scope-test")
+	makeJob := func(id string, owner api.User) *api.EvaluationJobResource {
+		return &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{
+					ID:     id,
+					Tenant: tenant,
+					Owner:  owner,
+				},
+				MLFlowExperimentID: "exp-1",
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{State: api.OverallStatePending},
+			},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Model:      &api.ModelRef{URL: "http://model", Name: "m"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
+			},
+		}
+	}
+	if err := store.WithTenant(tenant).WithOwner("alice").CreateEvaluationJob(makeJob("job-alice", "alice")); err != nil {
+		t.Fatalf("create alice job: %v", err)
+	}
+	if err := store.WithTenant(tenant).WithOwner("bob").CreateEvaluationJob(makeJob("job-bob", "bob")); err != nil {
+		t.Fatalf("create bob job: %v", err)
+	}
+
+	filter := &abstractions.QueryFilter{Limit: 50, Params: map[string]any{}}
+
+	// WithOwner without WithTenant should clear the owner (guard rejects it).
+	// Without a tenant scope the query has no WHERE clause, so both jobs are
+	// returned — proving the owner filter was not silently applied.
+	scoped := store.WithOwner("alice")
+	res, err := scoped.GetEvaluationJobs(filter)
+	if err != nil {
+		t.Fatalf("GetEvaluationJobs: %v", err)
+	}
+	if res.TotalCount != 2 {
+		t.Errorf("expected 2 results (owner cleared, no filtering), got %d", res.TotalCount)
 	}
 }
 

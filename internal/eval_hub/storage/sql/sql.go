@@ -409,6 +409,10 @@ func (s *sqlStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
 }
 
 func (s *sqlStorage) WithOwner(owner api.User) abstractions.Storage {
+	if owner != "" && s.tenant.IsEmpty() {
+		s.logger.Error("rejecting owner scope without tenant: owner isolation requires a tenant", "owner", string(owner))
+		owner = ""
+	}
 	return &sqlStorage{
 		sqlConfig:         s.sqlConfig,
 		statementsFactory: s.statementsFactory,
