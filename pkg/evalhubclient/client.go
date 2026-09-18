@@ -557,6 +557,15 @@ func (c *Client) GetCollection(id string) (*api.CollectionResource, error) {
 	return decode[api.CollectionResource](body)
 }
 
+// CreateCollection creates a new benchmark collection and returns the created resource.
+func (c *Client) CreateCollection(config api.CollectionConfig) (*api.CollectionResource, error) {
+	body, _, err := c.doRequest(http.MethodPost, apiBasePath+"/collections", config, nil)
+	if err != nil {
+		return nil, err
+	}
+	return decode[api.CollectionResource](body)
+}
+
 // ─── Evaluation Jobs ──────────────────────────────────────────────────────────
 
 // ListJobs returns all evaluation jobs. Use WithLimit/WithOffset for pagination.

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -14,9 +15,14 @@ import (
 
 func connectWithPrompts(t *testing.T) (context.Context, *mcp.ClientSession) {
 	t.Helper()
+	return connectWithPromptsAndDS(t, &mockDataSource{})
+}
+
+func connectWithPromptsAndDS(t *testing.T, ds EvalHubDiscovery) (context.Context, *mcp.ClientSession) {
+	t.Helper()
 
 	srv := New(&ServerInfo{Build: "test"}, discardLogger, nil)
-	if err := registerPrompts(srv, discardLogger); err != nil {
+	if err := registerPrompts(srv, ds, discardLogger); err != nil {
 		t.Fatalf("registerPrompts failed: %v", err)
 	}
 
@@ -62,9 +68,10 @@ func TestPromptsListIncludesAll(t *testing.T) {
 	}
 
 	want := map[string]bool{
-		"edd_workflow":   false,
-		"evaluate_model": false,
-		"compare_runs":   false,
+		"edd_workflow":      false,
+		"evaluate_model":    false,
+		"compare_runs":      false,
+		"design_collection": false,
 	}
 	for _, p := range result.Prompts {
 		if _, ok := want[p.Name]; ok {
@@ -104,9 +111,10 @@ func TestPromptsHaveArgumentMetadata(t *testing.T) {
 	}
 
 	wantArgs := map[string]map[string]bool{
-		"edd_workflow":   {"application_type": true},
-		"evaluate_model": {"model_url": false, "benchmark_preferences": false},
-		"compare_runs":   {"job_ids": false},
+		"edd_workflow":      {"application_type": true},
+		"evaluate_model":    {"model_url": false, "benchmark_preferences": false},
+		"compare_runs":      {"job_ids": false},
+		"design_collection": {"evaluation_goal": true, "provider_filter": false, "max_benchmarks": false, "strictness": false},
 	}
 
 	for _, p := range result.Prompts {
@@ -450,6 +458,200 @@ func TestCompareRunsIncludesComparisonSteps(t *testing.T) {
 		if !containsCI(text, step) {
 			t.Errorf("compare_runs guidance missing step keyword %q", step)
 		}
+	}
+}
+
+// --- design_collection ---
+
+func testDesignCollectionDS() *mockDataSource {
+	return &mockDataSource{
+		providers: []api.ProviderResource{
+			{
+				Resource: api.Resource{ID: "lm_evaluation_harness"},
+				ProviderConfig: api.ProviderConfig{
+					Name: "LM Evaluation Harness",
+					Benchmarks: []api.BenchmarkResource{
+						{
+							ID:          "toxigen",
+							Name:        "Toxigen",
+							Description: "Toxicity detection benchmark",
+							Tags:        []string{"safety", "toxicity"},
+							Metrics:     []string{"acc"},
+						},
+						{
+							ID:          "gsm8k",
+							Name:        "GSM8K",
+							Description: "Grade school math word problems",
+							Tags:        []string{"reasoning", "math"},
+							Metrics:     []string{"exact_match"},
+						},
+					},
+				},
+			},
+			{
+				Resource: api.Resource{ID: "lighteval"},
+				ProviderConfig: api.ProviderConfig{
+					Name: "LightEval",
+					Benchmarks: []api.BenchmarkResource{
+						{
+							ID:          "ifeval",
+							Name:        "IFEval",
+							Description: "Instruction following evaluation",
+							Tags:        []string{"instruction_following"},
+							Metrics:     []string{"inst_level_strict_acc"},
+						},
+					},
+				},
+			},
+		},
+		collections: []api.CollectionResource{
+			{
+				Resource: api.Resource{ID: "safety-v1", Owner: "system"},
+				CollectionConfig: api.CollectionConfig{
+					Name:     "Safety Suite v1",
+					Category: "safety",
+					Tags:     []string{"safety"},
+					Benchmarks: []api.CollectionBenchmarkConfig{
+						{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness", Weight: 3},
+					},
+				},
+			},
+		},
+	}
+}
+
+func TestDesignCollectionBasic(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithPromptsAndDS(t, testDesignCollectionDS())
+
+	result := getPrompt(t, ctx, cs, "design_collection", map[string]string{
+		"evaluation_goal": "enterprise safety deployment",
+	})
+
+	if len(result.Messages) < 2 {
+		t.Fatalf("expected at least 2 messages, got %d", len(result.Messages))
+	}
+	assertMessageRoles(t, result.Messages)
+
+	text := allMessageText(result.Messages)
+	for _, keyword := range []string{"enterprise safety deployment", "toxigen", "gsm8k", "Safety Suite v1", "Threshold"} {
+		if !containsCI(text, keyword) {
+			t.Errorf("design_collection output missing keyword %q", keyword)
+		}
+	}
+}
+
+func TestDesignCollectionWithProviderFilter(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithPromptsAndDS(t, testDesignCollectionDS())
+
+	resultFiltered := getPrompt(t, ctx, cs, "design_collection", map[string]string{
+		"evaluation_goal": "safety check",
+		"provider_filter": "lighteval",
+	})
+	resultAll := getPrompt(t, ctx, cs, "design_collection", map[string]string{
+		"evaluation_goal": "safety check",
+	})
+
+	textFiltered := allMessageText(resultFiltered.Messages)
+	textAll := allMessageText(resultAll.Messages)
+
+	if !containsCI(textFiltered, "ifeval") {
+		t.Error("filtered prompt should include lighteval benchmarks")
+	}
+	if strings.Contains(textFiltered, `"name": "Toxigen"`) {
+		t.Error("filtered prompt benchmark catalog should not include Toxigen (lm_evaluation_harness)")
+	}
+	if !strings.Contains(textAll, `"name": "Toxigen"`) {
+		t.Error("unfiltered prompt should include Toxigen in benchmark catalog")
+	}
+	if textFiltered == textAll {
+		t.Error("filtered and unfiltered prompts should differ")
+	}
+}
+
+func TestDesignCollectionStrictnessValidation(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithPromptsAndDS(t, testDesignCollectionDS())
+
+	errMsg := getPromptExpectError(t, ctx, cs, "design_collection", map[string]string{
+		"evaluation_goal": "test",
+		"strictness":      "extreme",
+	})
+	if !strings.Contains(errMsg, "extreme") {
+		t.Errorf("error should mention invalid value, got: %s", errMsg)
+	}
+	for _, valid := range validStrictness {
+		if !strings.Contains(errMsg, valid) {
+			t.Errorf("error should list valid value %q, got: %s", valid, errMsg)
+		}
+	}
+}
+
+func TestDesignCollectionMissingGoal(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithPromptsAndDS(t, testDesignCollectionDS())
+
+	errMsg := getPromptExpectError(t, ctx, cs, "design_collection", map[string]string{})
+	if !strings.Contains(errMsg, "evaluation_goal") {
+		t.Errorf("error should mention evaluation_goal, got: %s", errMsg)
+	}
+}
+
+func TestDesignCollectionDefaultStrictness(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithPromptsAndDS(t, testDesignCollectionDS())
+
+	result := getPrompt(t, ctx, cs, "design_collection", map[string]string{
+		"evaluation_goal": "general evaluation",
+	})
+
+	text := allMessageText(result.Messages)
+	if !strings.Contains(text, "Strictness: **moderate**") {
+		t.Error("default strictness should be moderate")
+	}
+}
+
+func TestDesignCollectionOnlySystemCollections(t *testing.T) {
+	t.Parallel()
+	ds := testDesignCollectionDS()
+	ds.collections = append(ds.collections, api.CollectionResource{
+		Resource: api.Resource{ID: "tenant-col", Owner: "my-tenant"},
+		CollectionConfig: api.CollectionConfig{
+			Name:     "Tenant Collection",
+			Category: "general",
+			Benchmarks: []api.CollectionBenchmarkConfig{
+				{Ref: api.Ref{ID: "gsm8k"}, ProviderID: "lm_evaluation_harness"},
+			},
+		},
+	})
+	ctx, cs := connectWithPromptsAndDS(t, ds)
+
+	result := getPrompt(t, ctx, cs, "design_collection", map[string]string{
+		"evaluation_goal": "test",
+	})
+
+	text := allMessageText(result.Messages)
+	if containsCI(text, "Tenant Collection") {
+		t.Error("design_collection should only include system collections as examples")
+	}
+}
+
+func TestDesignCollectionEmptyProvidersReturnsEmptyArray(t *testing.T) {
+	t.Parallel()
+	ds := &mockDataSource{}
+	ctx, cs := connectWithPromptsAndDS(t, ds)
+
+	result := getPrompt(t, ctx, cs, "design_collection", map[string]string{
+		"evaluation_goal": "safety check",
+	})
+
+	text := allMessageText(result.Messages)
+	if strings.Contains(text, "\nnull\n") || strings.Contains(text, "\nnull") {
+		t.Error("empty provider list should produce [] not null in benchmark catalog")
+	}
+	if !strings.Contains(text, "[]") {
+		t.Error("empty provider list should produce [] in benchmark catalog")
 	}
 }
 
