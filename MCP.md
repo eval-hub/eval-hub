@@ -273,3 +273,19 @@ EVALHUB_BASE_URL=http://localhost:8080 EVALHUB_TOKEN=token EVALHUB_TENANT=tenant
 ```
 
 Default `auth_type` is `none`; no bearer token is required to reach the MCP endpoint.
+
+### Local testing
+
+```shell
+make start-service
+make start-mcp
+```
+
+Now the MCP servife will be running on `http://localhost:3001` and connected to the local service running
+on `http://localhost:8080`.
+
+### Adding the MCP server to `Claude`
+
+```shell
+claude mcp add --transport http evalhub http://localhost:3001
+```
