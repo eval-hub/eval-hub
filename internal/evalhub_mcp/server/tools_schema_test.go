@@ -93,6 +93,180 @@ func TestFixNullableTypeArraysNoOp(t *testing.T) {
 	}
 }
 
+func TestFixNullableTypeArraysAllOfOneOf(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]any{
+		"allOf": []any{
+			map[string]any{
+				"type": []any{"null", "object"},
+				"properties": map[string]any{
+					"x": map[string]any{"type": "string"},
+				},
+			},
+		},
+		"oneOf": []any{
+			map[string]any{
+				"type": []any{"null", "number"},
+			},
+		},
+	}
+
+	fixNullableTypeArrays(input)
+
+	allOf := input["allOf"].([]any)
+	branch := allOf[0].(map[string]any)
+	if _, ok := branch["anyOf"]; !ok {
+		t.Error("allOf branch should be converted to anyOf")
+	}
+
+	oneOf := input["oneOf"].([]any)
+	branch2 := oneOf[0].(map[string]any)
+	if _, ok := branch2["anyOf"]; !ok {
+		t.Error("oneOf branch should be converted to anyOf")
+	}
+}
+
+func TestFixNullableTypeArraysPrefixItems(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]any{
+		"type": "array",
+		"prefixItems": []any{
+			map[string]any{
+				"type": []any{"null", "integer"},
+			},
+		},
+	}
+
+	fixNullableTypeArrays(input)
+
+	pi := input["prefixItems"].([]any)
+	branch := pi[0].(map[string]any)
+	anyOf, ok := branch["anyOf"].([]any)
+	if !ok || len(anyOf) != 2 {
+		t.Fatalf("prefixItems branch should be converted to anyOf, got %v", branch)
+	}
+	if anyOf[1].(map[string]any)["type"] != "integer" {
+		t.Errorf("prefixItems non-null branch should be integer, got %v", anyOf[1])
+	}
+}
+
+func TestFixNullableTypeArraysAdditionalProperties(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]any{
+		"type": "object",
+		"additionalProperties": map[string]any{
+			"type": []any{"null", "string"},
+		},
+	}
+
+	fixNullableTypeArrays(input)
+
+	ap := input["additionalProperties"].(map[string]any)
+	anyOf, ok := ap["anyOf"].([]any)
+	if !ok || len(anyOf) != 2 {
+		t.Fatalf("additionalProperties should be converted to anyOf, got %v", ap)
+	}
+	if anyOf[1].(map[string]any)["type"] != "string" {
+		t.Errorf("non-null branch should be string, got %v", anyOf[1])
+	}
+}
+
+func TestFixNullableTypeArraysDefs(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]any{
+		"type": "object",
+		"$defs": map[string]any{
+			"Score": map[string]any{
+				"type": []any{"null", "object"},
+				"properties": map[string]any{
+					"value": map[string]any{"type": "number"},
+				},
+			},
+		},
+	}
+
+	fixNullableTypeArrays(input)
+
+	score := input["$defs"].(map[string]any)["Score"].(map[string]any)
+	anyOf, ok := score["anyOf"].([]any)
+	if !ok || len(anyOf) != 2 {
+		t.Fatalf("$defs entry should be converted to anyOf, got %v", score)
+	}
+	objBranch := anyOf[1].(map[string]any)
+	if objBranch["type"] != "object" {
+		t.Errorf("non-null branch type should be 'object', got %v", objBranch["type"])
+	}
+	if _, ok := objBranch["properties"]; !ok {
+		t.Error("non-null branch should retain properties")
+	}
+}
+
+func TestConvertTypeArrayEdgeCases(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no type key", func(t *testing.T) {
+		node := map[string]any{"description": "no type here"}
+		if convertTypeArray(node) {
+			t.Error("should return false when no type key")
+		}
+	})
+
+	t.Run("single string type", func(t *testing.T) {
+		node := map[string]any{"type": "string"}
+		if convertTypeArray(node) {
+			t.Error("should return false for single string type")
+		}
+	})
+
+	t.Run("three element array", func(t *testing.T) {
+		node := map[string]any{"type": []any{"null", "string", "number"}}
+		if convertTypeArray(node) {
+			t.Error("should return false for 3-element type array")
+		}
+	})
+
+	t.Run("non-string element in array", func(t *testing.T) {
+		node := map[string]any{"type": []any{"null", 42}}
+		if convertTypeArray(node) {
+			t.Error("should return false for non-string element")
+		}
+	})
+
+	t.Run("both elements are null", func(t *testing.T) {
+		node := map[string]any{"type": []any{"null", "null"}}
+		if convertTypeArray(node) {
+			t.Error("should return false when otherType is empty")
+		}
+	})
+
+	t.Run("neither element is null", func(t *testing.T) {
+		node := map[string]any{"type": []any{"string", "number"}}
+		if convertTypeArray(node) {
+			t.Error("should return false when nullType is empty")
+		}
+	})
+}
+
+func TestMcpToolSchemaProducesValidSchema(t *testing.T) {
+	t.Parallel()
+
+	schema, err := mcpToolSchema[SubmitEvaluationInput]()
+	if err != nil {
+		t.Fatalf("mcpToolSchema: %v", err)
+	}
+	m, ok := schema.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map[string]any, got %T", schema)
+	}
+	if _, ok := m["properties"]; !ok {
+		t.Error("schema should have properties")
+	}
+}
+
 // TestMcpToolSchemasHaveNoTypeArrays is a regression guard: it registers all
 // MCP tools and asserts that no property in any tool's inputSchema or
 // outputSchema uses the array form of "type".
