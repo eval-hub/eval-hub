@@ -404,16 +404,6 @@
             "description": "Tags to search for"
           },
           {
-            "name": "owner",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "title": "Owner"
-            },
-            "description": "Filter by job owner within the current tenant"
-          },
-          {
             "name": "experiment_id",
             "in": "query",
             "required": false,
