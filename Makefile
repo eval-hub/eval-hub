@@ -471,7 +471,7 @@ cls:
 
 .PHONY: generate-public-docs verify-api-docs generate-ignore-file
 
-REDOCLY_CLI ?= ${PWD}/node_modules/.bin/redocly
+REDOCLY_CLI ?= ./node_modules/.bin/redocly
 
 ${REDOCLY_CLI}:
 	npm i @redocly/cli
