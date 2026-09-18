@@ -110,7 +110,7 @@ func (s *sqlStorage) updateEvaluationJobTxn(txn *sql.Tx, id string, status api.O
 		// we should never get here
 		return se.WithRollback(se.NewServiceError(messages.InternalServerError, "Error", err.Error()))
 	}
-	updateQuery, args := s.statementsFactory.CreateUpdateEntityStatement(s.tenant, shared.TableEvaluations, id, string(entityJSON), &status)
+	updateQuery, args := s.statementsFactory.CreateUpdateEntityStatement(s.tenant, s.owner, shared.TableEvaluations, id, string(entityJSON), &status)
 
 	_, err = s.exec(txn, updateQuery, args...)
 	if err != nil {

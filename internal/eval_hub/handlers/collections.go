@@ -97,7 +97,7 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 				return err
 			}
 
-			allowedParams := []string{"limit", "offset", "name", "category", "tags", "owner", "scope",
+			allowedParams := []string{"limit", "offset", "name", "category", "tags", "scope",
 				"domains", "tasks", "modalities", "industries", "evaluation_targets", "sort_by"}
 			badParams := getAllParams(req, allowedParams...)
 			if len(badParams) > 0 {

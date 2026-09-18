@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/common"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql"
@@ -685,4 +686,114 @@ func TestCollectionFilters_MultiValueArrayField(t *testing.T) {
 	if !found {
 		t.Error("multi-domain collection should match rag+grounding filter")
 	}
+}
+
+func TestCollections_OwnerIsolation(t *testing.T) {
+	t.Parallel()
+	store, err := getTestStorage(t, "sqlite", getDBName())
+	if err != nil {
+		t.Fatalf("getTestStorage: %v", err)
+	}
+
+	tenant := api.Tenant("owner-iso-coll-" + common.GUID())
+
+	collA := &api.CollectionResource{
+		Resource: api.Resource{ID: "coll-a-" + common.GUID(), Tenant: tenant, Owner: "user-a"},
+		CollectionConfig: api.CollectionConfig{
+			Name:       "Collection A",
+			Category:   "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	collB := &api.CollectionResource{
+		Resource: api.Resource{ID: "coll-b-" + common.GUID(), Tenant: tenant, Owner: "user-b"},
+		CollectionConfig: api.CollectionConfig{
+			Name:       "Collection B",
+			Category:   "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b2"}, ProviderID: "p1"}},
+		},
+	}
+
+	// Create a system collection visible to all (same tenant, owner "system")
+	sysColl := &api.CollectionResource{
+		Resource: api.Resource{ID: "sys-coll-" + common.GUID(), Tenant: tenant, Owner: "system"},
+		CollectionConfig: api.CollectionConfig{
+			Name:       "System Collection",
+			Category:   "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b3"}, ProviderID: "p1"}},
+		},
+	}
+
+	if err := store.WithTenant(tenant).WithOwner("user-a").CreateCollection(collA); err != nil {
+		t.Fatalf("CreateCollection user-a: %v", err)
+	}
+	if err := store.WithTenant(tenant).WithOwner("user-b").CreateCollection(collB); err != nil {
+		t.Fatalf("CreateCollection user-b: %v", err)
+	}
+	if err := store.CreateCollection(sysColl); err != nil {
+		t.Fatalf("CreateCollection system: %v", err)
+	}
+
+	filter := &abstractions.QueryFilter{Limit: 50, Offset: 0, Params: map[string]any{}}
+
+	t.Run("user-a listing sees only own collection plus system", func(t *testing.T) {
+		scoped := store.WithTenant(tenant).WithOwner("user-a")
+		res, err := scoped.GetCollections(filter)
+		if err != nil {
+			t.Fatalf("GetCollections: %v", err)
+		}
+		foundOwn := false
+		foundSystem := false
+		for _, c := range res.Items {
+			if c.Resource.ID == collA.Resource.ID {
+				foundOwn = true
+			}
+			if c.Resource.ID == sysColl.Resource.ID {
+				foundSystem = true
+			}
+			if c.Resource.ID == collB.Resource.ID {
+				t.Error("user-a should not see user-b's collection in listing")
+			}
+		}
+		if !foundOwn {
+			t.Error("user-a should see own collection")
+		}
+		if !foundSystem {
+			t.Error("user-a should see system collection")
+		}
+	})
+
+	t.Run("user-a cannot GET user-b collection by ID", func(t *testing.T) {
+		scoped := store.WithTenant(tenant).WithOwner("user-a")
+		_, err := scoped.GetCollection(collB.Resource.ID)
+		if err == nil {
+			t.Fatal("expected error getting other user's collection, got nil")
+		}
+	})
+
+	t.Run("user-a cannot delete user-b collection", func(t *testing.T) {
+		scoped := store.WithTenant(tenant).WithOwner("user-a")
+		err := scoped.DeleteCollection(collB.Resource.ID)
+		if err == nil {
+			t.Fatal("expected error deleting other user's collection, got nil")
+		}
+	})
+
+	t.Run("system collection visible to all owners", func(t *testing.T) {
+		scoped := store.WithTenant(tenant).WithOwner("user-b")
+		res, err := scoped.GetCollections(filter)
+		if err != nil {
+			t.Fatalf("GetCollections: %v", err)
+		}
+		found := false
+		for _, c := range res.Items {
+			if c.Resource.ID == sysColl.Resource.ID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("expected system collection to be visible to user-b")
+		}
+	})
 }

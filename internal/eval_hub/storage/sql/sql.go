@@ -293,8 +293,8 @@ func (s *sqlStorage) queryRow(txn *sql.Tx, query string, args ...any) *sql.Row {
 	}
 }
 
-func (s *sqlStorage) getTotalCount(txn *sql.Tx, tenant api.Tenant, tableName string, params map[string]any, typeName string) (int, error) {
-	countQuery, countArgs := s.statementsFactory.CreateCountEntitiesStatement(tenant, tableName, params)
+func (s *sqlStorage) getTotalCount(txn *sql.Tx, tenant api.Tenant, owner api.User, tableName string, params map[string]any, typeName string) (int, error) {
+	countQuery, countArgs := s.statementsFactory.CreateCountEntitiesStatement(tenant, owner, tableName, params)
 
 	var totalCount int
 	var err error
@@ -322,14 +322,14 @@ func (s *sqlStorage) ensureSchema() error {
 	return nil
 }
 
-// isVisibleResource checks if a resource is visible to the current tenant.
-// A system resource is always visible, a user resource is visible if the tenant_id matches.
 func (s *sqlStorage) isVisibleResource(resource *api.Resource) bool {
-	// now check that the tenant_id matches and owner matches the system owner
 	if !resource.IsSystemResource() {
-		// this is a user resource so check the tenant_id matches
-		if resource.Tenant.String() != s.tenant.String() {
+		if !s.tenant.IsEmpty() && resource.Tenant.String() != s.tenant.String() {
 			s.logger.Debug("Tenant mismatch for resource", "id", resource.ID, "resource_tenant", resource.Tenant, "resource", s.prettyPrint(resource))
+			return false
+		}
+		if s.owner != "" && resource.Owner != s.owner {
+			s.logger.Debug("Owner mismatch for resource", "id", resource.ID, "resource_owner", resource.Owner, "caller_owner", s.owner)
 			return false
 		}
 	}

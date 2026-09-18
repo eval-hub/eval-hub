@@ -27,6 +27,10 @@ func TestGetEvaluationJobs_TenantFilter(t *testing.T) {
 	testGetEvaluationJobs_TenantFilter(t, drivers[0], getDBName())
 }
 
+func TestGetEvaluationJobs_OwnerIsolation(t *testing.T) {
+	testGetEvaluationJobs_OwnerIsolation(t, drivers[0], getDBName())
+}
+
 func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {
 	testUpdateEvaluationJob_PreservesProviderID(t, drivers[0], getDBName())
 }
@@ -493,11 +497,114 @@ func testGetEvaluationJobs_TenantFilter(t *testing.T, driver string, databaseNam
 	})
 }
 
-// TestUpdateEvaluationJob_PreservesProviderID verifies that provider_id is
-// preserved when creating benchmark statuses via status updates.
-//
-// Regression test for: provider_id was empty in results because the fallback
-// path in findAndUpdateBenchmarkStatus didn't preserve it from the status event.
+func testGetEvaluationJobs_OwnerIsolation(t *testing.T, driver string, databaseName string) {
+	store, err := getTestStorage(t, driver, databaseName)
+	if err != nil {
+		t.Fatalf("failed to create storage: %v", err)
+	}
+
+	now := time.Now()
+	tenant := api.Tenant(getTenant("owner-iso"))
+	makeJob := func(id string, owner api.User) *api.EvaluationJobResource {
+		return &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{
+				Resource: api.Resource{
+					ID:        id,
+					Tenant:    tenant,
+					Owner:     owner,
+					CreatedAt: now,
+					UpdatedAt: now,
+				},
+				MLFlowExperimentID: "exp-1",
+			},
+			Status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{State: api.OverallStatePending},
+			},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Model:      &api.ModelRef{URL: "http://model", Name: "m"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{{Ref: api.Ref{ID: "b"}, ProviderID: "p"}},
+			},
+		}
+	}
+
+	jobA := common.GUID()
+	if err := store.CreateEvaluationJob(makeJob(jobA, "user-a")); err != nil {
+		t.Fatalf("create job user-a: %v", err)
+	}
+	jobB := common.GUID()
+	if err := store.CreateEvaluationJob(makeJob(jobB, "user-b")); err != nil {
+		t.Fatalf("create job user-b: %v", err)
+	}
+
+	filter := &abstractions.QueryFilter{Limit: 50, Offset: 0, Params: map[string]any{}}
+
+	t.Run("user-a sees only own jobs", func(t *testing.T) {
+		scoped := store.WithTenant(tenant).WithOwner("user-a")
+		res, err := scoped.GetEvaluationJobs(filter)
+		if err != nil {
+			t.Fatalf("GetEvaluationJobs: %v", err)
+		}
+		if len(res.Items) != 1 {
+			t.Fatalf("expected 1 job, got %d", len(res.Items))
+		}
+		if res.Items[0].Resource.ID != jobA {
+			t.Fatalf("expected job %s, got %s", jobA, res.Items[0].Resource.ID)
+		}
+	})
+
+	t.Run("user-b sees only own jobs", func(t *testing.T) {
+		scoped := store.WithTenant(tenant).WithOwner("user-b")
+		res, err := scoped.GetEvaluationJobs(filter)
+		if err != nil {
+			t.Fatalf("GetEvaluationJobs: %v", err)
+		}
+		if len(res.Items) != 1 {
+			t.Fatalf("expected 1 job, got %d", len(res.Items))
+		}
+		if res.Items[0].Resource.ID != jobB {
+			t.Fatalf("expected job %s, got %s", jobB, res.Items[0].Resource.ID)
+		}
+	})
+
+	t.Run("user-a cannot GET user-b job by ID", func(t *testing.T) {
+		scoped := store.WithTenant(tenant).WithOwner("user-a")
+		_, err := scoped.GetEvaluationJob(jobB)
+		if err == nil {
+			t.Fatal("expected error getting other user's job")
+		}
+	})
+
+	t.Run("user-a cannot delete user-b job", func(t *testing.T) {
+		scoped := store.WithTenant(tenant).WithOwner("user-a")
+		err := scoped.DeleteEvaluationJob(jobB)
+		if err == nil {
+			t.Fatal("expected error deleting other user's job")
+		}
+	})
+
+	t.Run("system resources visible to all owners", func(t *testing.T) {
+		sysJob := common.GUID()
+		if err := store.CreateEvaluationJob(makeJob(sysJob, "system")); err != nil {
+			t.Fatalf("create system job: %v", err)
+		}
+		scoped := store.WithTenant(tenant).WithOwner("user-a")
+		res, err := scoped.GetEvaluationJobs(filter)
+		if err != nil {
+			t.Fatalf("GetEvaluationJobs: %v", err)
+		}
+		found := false
+		for _, j := range res.Items {
+			if j.Resource.ID == sysJob {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatal("expected system job to be visible to user-a")
+		}
+	})
+}
+
 func testUpdateEvaluationJob_PreservesProviderID(t *testing.T, driver string, databaseName string) {
 	// Setup storage
 	store, err := getTestStorage(t, driver, databaseName)

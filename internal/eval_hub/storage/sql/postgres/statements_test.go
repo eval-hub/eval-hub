@@ -175,7 +175,7 @@ func TestGetAllowedFilterColumns_Evaluations(t *testing.T) {
 
 func TestCreateCountEntitiesStatement(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
-	stmt, _ := f.CreateCountEntitiesStatement("t1", shared.TableCollections, map[string]any{})
+	stmt, _ := f.CreateCountEntitiesStatement("t1", "", shared.TableCollections, map[string]any{})
 	if !strings.Contains(stmt, "SELECT COUNT(*)") {
 		t.Errorf("expected COUNT(*), got: %s", stmt)
 	}
@@ -183,7 +183,7 @@ func TestCreateCountEntitiesStatement(t *testing.T) {
 
 func TestCreateListEntitiesStatement(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
-	stmt, _ := f.CreateListEntitiesStatement("t1", shared.TableCollections, 10, 0, map[string]any{})
+	stmt, _ := f.CreateListEntitiesStatement("t1", "", shared.TableCollections, 10, 0, map[string]any{})
 	if !strings.Contains(stmt, "SELECT") {
 		t.Errorf("expected SELECT, got: %s", stmt)
 	}
@@ -200,7 +200,7 @@ func TestCreateCollectionGetEntityForUpdateStatement(t *testing.T) {
 
 func TestCreateDeleteEntityStatement(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
-	stmt, args := f.CreateDeleteEntityStatement("t1", shared.TableCollections, "coll-1")
+	stmt, args := f.CreateDeleteEntityStatement("t1", "", shared.TableCollections, "coll-1")
 	if !strings.Contains(stmt, "DELETE FROM collections") {
 		t.Errorf("expected DELETE FROM collections, got: %s", stmt)
 	}
@@ -212,7 +212,7 @@ func TestCreateDeleteEntityStatement(t *testing.T) {
 func TestCreateUpdateEntityStatement(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
 	entity := `{"name":"test"}`
-	stmt, args := f.CreateUpdateEntityStatement("t1", shared.TableCollections, "coll-1", entity, nil)
+	stmt, args := f.CreateUpdateEntityStatement("t1", "", shared.TableCollections, "coll-1", entity, nil)
 	if !strings.Contains(stmt, "UPDATE collections") {
 		t.Errorf("expected UPDATE collections, got: %s", stmt)
 	}
