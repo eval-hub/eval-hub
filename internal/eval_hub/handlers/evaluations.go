@@ -575,7 +575,9 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 }
 
 func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext, r httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
-	storage := h.getStorage(ctx)
+	// Skip owner scoping: this endpoint receives runtime callbacks from K8s
+	// sidecars that authenticate as a ServiceAccount, not the job creator.
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
 
 	logging.LogRequestStarted(ctx)
 
