@@ -233,17 +233,25 @@ Feature: Evaluations Endpoint
     Then the response code should be 202
     And the response should contain the value "iso-user-2" at path "$.resource.owner"
     And the "resource.id" field in the response should be saved as "value:iso_job_2_id"
+    And I set the header "X-User" to "iso-user-3"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    Then the response code should be 202
+    And the response should contain the value "iso-user-3" at path "$.resource.owner"
+    And the "resource.id" field in the response should be saved as "value:iso_job_3_id"
+    And I set the header "X-User" to "iso-user-2"
     # iso-user-2 lists jobs — should see only their own
     When I send a GET request to "/api/v1/evaluations/jobs"
     Then the response code should be 200
-    And the response should contain the value "{{value:iso_job_2_id}}" at path "$.items[*].resource.id"
+    And the response should equal the value "{{value:iso_job_2_id}}" at path "$.items[?(@.resource.owner != &quot;system&quot;)].resource.id"
     And the response should not contain the value "{{value:iso_job_1_id}}" at path "$.items[*].resource.id"
+    And the response should not contain the value "{{value:iso_job_3_id}}" at path "$.items[*].resource.id"
     # iso-user-1 lists jobs — should see only their own
     And I set the header "X-User" to "iso-user-1"
     When I send a GET request to "/api/v1/evaluations/jobs"
     Then the response code should be 200
-    And the response should contain the value "{{value:iso_job_1_id}}" at path "$.items[*].resource.id"
+    And the response should equal the value "{{value:iso_job_1_id}}" at path "$.items[?(@.resource.owner != &quot;system&quot;)].resource.id"
     And the response should not contain the value "{{value:iso_job_2_id}}" at path "$.items[*].resource.id"
+    And the response should not contain the value "{{value:iso_job_3_id}}" at path "$.items[*].resource.id"
     # iso-user-1 cannot GET iso-user-2's job by ID
     When I send a GET request to "/api/v1/evaluations/jobs/{{value:iso_job_2_id}}"
     Then the response code should be 404
