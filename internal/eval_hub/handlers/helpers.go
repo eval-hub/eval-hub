@@ -104,15 +104,6 @@ func GetParam[T string | int | bool](r httpwrappers.RequestWrapper, name string,
 }
 
 func CheckScope(filter *abstractions.QueryFilter) error {
-	// owner and scope are mutually exclusive
-	mismatchedParams := []string{"owner", "scope"}
-	if filter.HasParams(mismatchedParams...) {
-		return serviceerrors.NewServiceError(messages.QueryParameterMismatch, "ParameterNames", strings.Join(mismatchedParams, ","))
-	}
-
-	// scope matches to other fields in the filter
-	// scope==system ==> owner EQ system
-	// scope==tenant ==> owner NE system
 	if scope, ok := filter.Params["scope"]; ok {
 		switch scope {
 		case abstractions.ScopeSystem, abstractions.ScopeTenant:
@@ -153,15 +144,9 @@ func CommonListFilters(r httpwrappers.RequestWrapper, extraParams ...string) (*a
 		return nil, err
 	}
 
-	owner, err := GetParam(r, "owner", true, "")
-	if err != nil {
-		return nil, err
-	}
-
 	params := map[string]any{
-		"name":  name,
-		"tags":  tags,
-		"owner": owner,
+		"name": name,
+		"tags": tags,
 	}
 
 	for _, param := range extraParams {

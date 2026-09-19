@@ -163,7 +163,7 @@ func (s *sqlStorage) updateCollectionTransactional(txn *sql.Tx, collectionID str
 	if err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", err)
 	}
-	updateCollectionStatement, args := s.statementsFactory.CreateUpdateEntityStatement(s.tenant, shared.TableCollections, collectionID, string(collectionJSON), nil)
+	updateCollectionStatement, args := s.statementsFactory.CreateUpdateEntityStatement(s.tenant, s.owner, shared.TableCollections, collectionID, string(collectionJSON), nil)
 	_, err = s.exec(txn, updateCollectionStatement, args...)
 	if err != nil {
 		return serviceerrors.WithRollback(err)
@@ -172,7 +172,7 @@ func (s *sqlStorage) updateCollectionTransactional(txn *sql.Tx, collectionID str
 }
 
 func (s *sqlStorage) deleteCollectionTxn(txn *sql.Tx, id string) error {
-	deleteQuery, args := s.statementsFactory.CreateDeleteEntityStatement(s.tenant, shared.TableCollections, id)
+	deleteQuery, args := s.statementsFactory.CreateDeleteEntityStatement(s.tenant, s.owner, shared.TableCollections, id)
 
 	_, err := s.exec(txn, deleteQuery, args...)
 	if err != nil {

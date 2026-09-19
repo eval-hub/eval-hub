@@ -108,6 +108,10 @@ func (s *sqlStorage) scanEvaluationJobTransactional(txn *sql.Tx, id string, forU
 		return nil, se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error()))
 	}
 
+	if !s.isVisibleResource(&query.Resource) {
+		return nil, se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
+	}
+
 	var evaluationJobEntity EvaluationJobEntity
 	err = json.Unmarshal([]byte(query.EntityJSON), &evaluationJobEntity)
 	if err != nil {
@@ -130,7 +134,7 @@ func (s *sqlStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstr
 
 func (s *sqlStorage) DeleteEvaluationJob(id string) error {
 	// Build the DELETE query
-	deleteQuery, args := s.statementsFactory.CreateDeleteEntityStatement(s.tenant, shared.TableEvaluations, id)
+	deleteQuery, args := s.statementsFactory.CreateDeleteEntityStatement(s.tenant, s.owner, shared.TableEvaluations, id)
 
 	// Execute the DELETE query
 	result, err := s.exec(nil, deleteQuery, args...)

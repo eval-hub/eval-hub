@@ -159,15 +159,15 @@ func (s *postgresStatementsFactory) CreateEntityFilterCondition(key string, valu
 	}
 }
 
-func (s *postgresStatementsFactory) CreateCountEntitiesStatement(tenant api.Tenant, tableName string, filter map[string]any) (string, []any) {
-	where, whereArgs := s.getWhereStatement(tenant, "", 1) // we don't need to filter by id as we want to count all entities
+func (s *postgresStatementsFactory) CreateCountEntitiesStatement(tenant api.Tenant, owner api.User, tableName string, filter map[string]any) (string, []any) {
+	where, whereArgs := s.getWhereStatement(tenant, owner, "", 1)
 	filterClause, args := shared.CreateFilterStatement(s, where, whereArgs, filter, "", 0, 0, tableName)
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, tableName, filterClause)
 	return query, args
 }
 
-func (s *postgresStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant, tableName string, limit, offset int, filter map[string]any) (string, []any) {
-	where, whereArgs := s.getWhereStatement(tenant, "", 1) // we don't need to filter by id as we want to list all entities
+func (s *postgresStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant, owner api.User, tableName string, limit, offset int, filter map[string]any) (string, []any) {
+	where, whereArgs := s.getWhereStatement(tenant, owner, "", 1)
 	filterClause, args := shared.CreateFilterStatement(s, where, whereArgs, filter, "id DESC", limit, offset, tableName)
 
 	var query string
@@ -190,8 +190,11 @@ func (s *postgresStatementsFactory) ScanRowForEntity(tenant api.Tenant, tableNam
 	}
 }
 
-func (s *postgresStatementsFactory) CreateDeleteEntityStatement(tenant api.Tenant, tableName string, id string) (string, []any) {
+func (s *postgresStatementsFactory) CreateDeleteEntityStatement(tenant api.Tenant, owner api.User, tableName string, id string) (string, []any) {
 	if !tenant.IsEmpty() {
+		if owner != "" {
+			return fmt.Sprintf(`DELETE FROM %s WHERE id = $1 AND tenant_id = $2 AND owner = $3;`, tableName), []any{id, tenant.String(), string(owner)}
+		}
 		return fmt.Sprintf(`DELETE FROM %s WHERE id = $1 AND tenant_id = $2;`, tableName), []any{id, tenant.String()}
 	}
 	return fmt.Sprintf(`DELETE FROM %s WHERE id = $1;`, tableName), []any{id}
@@ -201,16 +204,21 @@ func (s *postgresStatementsFactory) CreateDeleteSystemEntitiesStatement(tableNam
 	return fmt.Sprintf(`DELETE FROM %s WHERE owner = $1;`, tableName), []any{abstractions.OwnerSystem}
 }
 
-func (s *postgresStatementsFactory) CreateUpdateEntityStatement(tenant api.Tenant, tableName, id string, entityJSON string, status *api.OverallState) (string, []any) {
-	// UPDATE "evaluations" SET "status" = ?, "entity" = ?, "updated_at" = CURRENT_TIMESTAMP WHERE "id" = ?;
+func (s *postgresStatementsFactory) CreateUpdateEntityStatement(tenant api.Tenant, owner api.User, tableName, id string, entityJSON string, status *api.OverallState) (string, []any) {
 	switch tableName {
 	case shared.TableEvaluations:
 		if !tenant.IsEmpty() {
+			if owner != "" {
+				return fmt.Sprintf(`UPDATE %s SET status = $1, entity = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND tenant_id = $4 AND owner = $5;`, tableName), []any{*status, entityJSON, id, tenant.String(), string(owner)}
+			}
 			return fmt.Sprintf(`UPDATE %s SET status = $1, entity = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND tenant_id = $4;`, tableName), []any{*status, entityJSON, id, tenant.String()}
 		}
 		return fmt.Sprintf(`UPDATE %s SET status = $1, entity = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3;`, tableName), []any{*status, entityJSON, id}
 	default:
 		if !tenant.IsEmpty() {
+			if owner != "" {
+				return fmt.Sprintf(`UPDATE %s SET entity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND tenant_id = $3 AND owner = $4;`, tableName), []any{entityJSON, id, tenant.String(), string(owner)}
+			}
 			return fmt.Sprintf(`UPDATE %s SET entity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND tenant_id = $3;`, tableName), []any{entityJSON, id, tenant.String()}
 		}
 		return fmt.Sprintf(`UPDATE %s SET entity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2;`, tableName), []any{entityJSON, id}
@@ -221,7 +229,7 @@ func (s *postgresStatementsFactory) CreateProviderAddEntityStatement(provider *a
 	return insertProviderStatement, []any{provider.Resource.ID, provider.Resource.Tenant, provider.Resource.Owner, provider.Resource.CreatedAt, provider.Resource.UpdatedAt, entity}
 }
 
-func (s *postgresStatementsFactory) getWhereStatement(tenant api.Tenant, id string, index int) (string, []any) {
+func (s *postgresStatementsFactory) getWhereStatement(tenant api.Tenant, owner api.User, id string, index int) (string, []any) {
 	var sb strings.Builder
 	var args []any
 	if id != "" {
@@ -229,20 +237,23 @@ func (s *postgresStatementsFactory) getWhereStatement(tenant api.Tenant, id stri
 		index++
 		args = append(args, id)
 	}
-	// As we want to allow system providers to be selected without a tenant_id, we have to select
-	// either with tenant_id == tenant_id OR owner == system
 	if !tenant.IsEmpty() {
 		if sb.Len() > 0 {
 			sb.WriteString(" AND ")
 		}
-		fmt.Fprintf(&sb, "(tenant_id = $%d OR owner = '%s')", index, abstractions.OwnerSystem)
-		args = append(args, tenant.String())
+		if owner != "" {
+			fmt.Fprintf(&sb, "((tenant_id = $%d AND owner = $%d) OR owner = '%s')", index, index+1, abstractions.OwnerSystem)
+			args = append(args, tenant.String(), owner.String())
+		} else {
+			fmt.Fprintf(&sb, "(tenant_id = $%d OR owner = '%s')", index, abstractions.OwnerSystem)
+			args = append(args, tenant.String())
+		}
 	}
 	return sb.String(), args
 }
 
 func (s *postgresStatementsFactory) CreateProviderGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
-	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, query.Resource.ID, 1)
+	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, "", query.Resource.ID, 1)
 	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, entity FROM providers WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }
 
@@ -251,7 +262,7 @@ func (s *postgresStatementsFactory) CreateCollectionAddEntityStatement(collectio
 }
 
 func (s *postgresStatementsFactory) CreateCollectionGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
-	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, query.Resource.ID, 1)
+	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, "", query.Resource.ID, 1)
 	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }
 

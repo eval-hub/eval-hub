@@ -98,7 +98,7 @@ func (s *sqliteStatementsFactory) CreateEvaluationAddEntityStatement(evaluation 
 }
 
 func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
-	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, query.Resource.ID)
+	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, "", query.Resource.ID)
 	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
 }
 
@@ -163,15 +163,15 @@ func (s *sqliteStatementsFactory) CreateEntityFilterCondition(key string, value 
 	}
 }
 
-func (s *sqliteStatementsFactory) CreateCountEntitiesStatement(tenant api.Tenant, tableName string, filter map[string]any) (string, []any) {
-	where, whereArgs := s.getWhereStatement(tenant, "") // we don't need to filter by id as we want to count all entities
+func (s *sqliteStatementsFactory) CreateCountEntitiesStatement(tenant api.Tenant, owner api.User, tableName string, filter map[string]any) (string, []any) {
+	where, whereArgs := s.getWhereStatement(tenant, owner, "")
 	filterClause, args := shared.CreateFilterStatement(s, where, whereArgs, filter, "", 0, 0, tableName)
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, tableName, filterClause)
 	return query, args
 }
 
-func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant, tableName string, limit, offset int, filter map[string]any) (string, []any) {
-	where, whereArgs := s.getWhereStatement(tenant, "") // we don't need to filter by id as we want to count all entities
+func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant, owner api.User, tableName string, limit, offset int, filter map[string]any) (string, []any) {
+	where, whereArgs := s.getWhereStatement(tenant, owner, "")
 	filterClause, args := shared.CreateFilterStatement(s, where, whereArgs, filter, "id DESC", limit, offset, tableName)
 
 	var query string
@@ -194,9 +194,11 @@ func (s *sqliteStatementsFactory) ScanRowForEntity(tenant api.Tenant, tableName 
 	}
 }
 
-func (s *sqliteStatementsFactory) CreateDeleteEntityStatement(tenant api.Tenant, tableName string, id string) (string, []any) {
-	// these WHERE statements are okay because we can only delete user resources
+func (s *sqliteStatementsFactory) CreateDeleteEntityStatement(tenant api.Tenant, owner api.User, tableName string, id string) (string, []any) {
 	if !tenant.IsEmpty() {
+		if owner != "" {
+			return fmt.Sprintf(`DELETE FROM %s WHERE id = ? AND tenant_id = ? AND owner = ?;`, tableName), []any{id, tenant.String(), string(owner)}
+		}
 		return fmt.Sprintf(`DELETE FROM %s WHERE id = ? AND tenant_id = ?;`, tableName), []any{id, tenant.String()}
 	}
 	return fmt.Sprintf(`DELETE FROM %s WHERE id = ?;`, tableName), []any{id}
@@ -206,16 +208,21 @@ func (s *sqliteStatementsFactory) CreateDeleteSystemEntitiesStatement(tableName 
 	return fmt.Sprintf(`DELETE FROM %s WHERE owner = ?;`, tableName), []any{abstractions.OwnerSystem}
 }
 
-func (s *sqliteStatementsFactory) CreateUpdateEntityStatement(tenant api.Tenant, tableName, id string, entityJSON string, status *api.OverallState) (string, []any) {
-	// these WHERE statements are okay because we can only update user resources
+func (s *sqliteStatementsFactory) CreateUpdateEntityStatement(tenant api.Tenant, owner api.User, tableName, id string, entityJSON string, status *api.OverallState) (string, []any) {
 	switch tableName {
 	case shared.TableEvaluations:
 		if !tenant.IsEmpty() {
+			if owner != "" {
+				return fmt.Sprintf(`UPDATE %s SET status = ?, entity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ? AND owner = ?;`, tableName), []any{*status, entityJSON, id, tenant.String(), string(owner)}
+			}
 			return fmt.Sprintf(`UPDATE %s SET status = ?, entity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?;`, tableName), []any{*status, entityJSON, id, tenant.String()}
 		}
 		return fmt.Sprintf(`UPDATE %s SET status = ?, entity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;`, tableName), []any{*status, entityJSON, id}
 	default:
 		if !tenant.IsEmpty() {
+			if owner != "" {
+				return fmt.Sprintf(`UPDATE %s SET entity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ? AND owner = ?;`, tableName), []any{entityJSON, id, tenant.String(), string(owner)}
+			}
 			return fmt.Sprintf(`UPDATE %s SET entity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?;`, tableName), []any{entityJSON, id, tenant.String()}
 		}
 		return fmt.Sprintf(`UPDATE %s SET entity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;`, tableName), []any{entityJSON, id}
@@ -226,27 +233,30 @@ func (s *sqliteStatementsFactory) CreateProviderAddEntityStatement(provider *api
 	return insertProviderStatement, []any{provider.Resource.ID, provider.Resource.Tenant, provider.Resource.Owner, provider.Resource.CreatedAt, provider.Resource.UpdatedAt, entity}
 }
 
-func (s *sqliteStatementsFactory) getWhereStatement(tenant api.Tenant, id string) (string, []any) {
+func (s *sqliteStatementsFactory) getWhereStatement(tenant api.Tenant, owner api.User, id string) (string, []any) {
 	var sb strings.Builder
 	var args []any
 	if id != "" {
 		sb.WriteString("id = ?")
 		args = append(args, id)
 	}
-	// As we want to allow system providers to be selected without a tenant_id, we have to select
-	// either with tenant_id == tenant_id OR owner == system
 	if !tenant.IsEmpty() {
 		if sb.Len() > 0 {
 			sb.WriteString(" AND ")
 		}
-		fmt.Fprintf(&sb, "(tenant_id = ? OR owner = '%s')", abstractions.OwnerSystem)
-		args = append(args, tenant.String())
+		if owner != "" {
+			fmt.Fprintf(&sb, "((tenant_id = ? AND owner = ?) OR owner = '%s')", abstractions.OwnerSystem)
+			args = append(args, tenant.String(), string(owner))
+		} else {
+			fmt.Fprintf(&sb, "(tenant_id = ? OR owner = '%s')", abstractions.OwnerSystem)
+			args = append(args, tenant.String())
+		}
 	}
 	return sb.String(), args
 }
 
 func (s *sqliteStatementsFactory) CreateProviderGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
-	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, query.Resource.ID)
+	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, "", query.Resource.ID)
 	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, entity FROM providers WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }
 
@@ -255,7 +265,7 @@ func (s *sqliteStatementsFactory) CreateCollectionAddEntityStatement(collection 
 }
 
 func (s *sqliteStatementsFactory) CreateCollectionGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
-	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, query.Resource.ID)
+	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, "", query.Resource.ID)
 	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }
 

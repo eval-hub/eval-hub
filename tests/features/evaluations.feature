@@ -219,162 +219,42 @@ Feature: Evaluations Endpoint
         "required": ["limit", "first", "total_count", "items"]
       }
     """
-    When I send a GET request to "/api/v1/evaluations/jobs?owner=test-user-not-3"
-    Then the response code should be 200
-    And the response should have schema as:
-    """
-      {
-        "properties": {
-          "total_count": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 0
-          }
-        },
-        "required": ["total_count"]
-      }
-    """
 
   @local
-  Scenario: List evaluation jobs with multiple users
+  Scenario: Owner isolation for evaluation jobs
     Given the service is running
-    And I set the header "X-User" to "test-user-1"
+    And I set the header "X-User" to "iso-user-1"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
-    And the response should contain the value "test-user-1" at path "$.resource.owner"
-    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.resource.tenant"
-    And I set the header "X-User" to "test-user-2"
+    And the response should contain the value "iso-user-1" at path "$.resource.owner"
+    And the "resource.id" field in the response should be saved as "value:iso_job_1_id"
+    And I set the header "X-User" to "iso-user-2"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
-    And the response should contain the value "test-user-2" at path "$.resource.owner"
-    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.resource.tenant"
-    And I set the header "X-User" to "test-user-3"
+    And the response should contain the value "iso-user-2" at path "$.resource.owner"
+    And the "resource.id" field in the response should be saved as "value:iso_job_2_id"
+    And I set the header "X-User" to "iso-user-3"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
-    And the response should contain the value "test-user-3" at path "$.resource.owner"
-    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.resource.tenant"
-    When I send a GET request to "/api/v1/evaluations/jobs?limit=2"
+    And the response should contain the value "iso-user-3" at path "$.resource.owner"
+    And the "resource.id" field in the response should be saved as "value:iso_job_3_id"
+    And I set the header "X-User" to "iso-user-2"
+    # iso-user-2 lists jobs — should see only their own
+    When I send a GET request to "/api/v1/evaluations/jobs"
     Then the response code should be 200
-    And the "next.href" field in the response should be saved as "value:next_url"
-    And the response should have schema as:
-    """
-      {
-        "properties": {
-            "first": {"type": "object"},
-            "next": {
-              "type": "object",
-              "properties": {
-                "href": {"type": "string"}
-              },
-              "required": ["href"]
-            },
-            "limit": {"type": "integer"},
-            "total_count": {
-              "type": "integer",
-              "minimum": 3
-            },
-            "items": {
-              "type": "array",
-              "minItems": 2,
-              "maxItems": 2
-            }
-        },
-        "required": ["limit", "first", "next", "total_count", "items"]
-      }
-    """
-    When I send a GET request to "{{value:next_url}}"
+    And the response should equal the value "{{value:iso_job_2_id}}" at path "$.items[?(@.resource.owner != &quot;system&quot;)].resource.id"
+    And the response should not contain the value "{{value:iso_job_1_id}}" at path "$.items[*].resource.id"
+    And the response should not contain the value "{{value:iso_job_3_id}}" at path "$.items[*].resource.id"
+    # iso-user-1 lists jobs — should see only their own
+    And I set the header "X-User" to "iso-user-1"
+    When I send a GET request to "/api/v1/evaluations/jobs"
     Then the response code should be 200
-    And the response should have schema as:
-    """
-      {
-        "properties": {
-            "first": {"type": "object"},
-            "next": {
-              "type": "object",
-              "properties": {
-                "href": {"type": "string"}
-              },
-              "required": ["href"]
-            },
-            "limit": {"type": "integer"},
-            "total_count": {
-              "type": "integer",
-              "minimum": 3
-            },
-            "items": {
-              "type": "array",
-              "minItems": 1
-            }
-        },
-        "required": ["limit", "first", "total_count", "items"]
-      }
-    """
-    When I send a GET request to "/api/v1/evaluations/jobs?owner=test-user-1"
-    Then the response code should be 200
-    And the response should have schema as:
-    """
-      {
-        "properties": {
-          "items": {
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 1
-          }
-        },
-        "required": ["items"]
-      }
-    """
-    And the response should contain the value "test-user-1" at path "$.items[0].resource.owner"
-    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.items[0].resource.tenant"
-    When I send a GET request to "/api/v1/evaluations/jobs?owner=test-user-2"
-    Then the response code should be 200
-    And the response should have schema as:
-    """
-      {
-        "properties": {
-          "items": {
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 1
-          }
-        },
-        "required": ["items"]
-      }
-    """
-    And the response should contain the value "test-user-2" at path "$.items[0].resource.owner"
-    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.items[0].resource.tenant"
-    When I send a GET request to "/api/v1/evaluations/jobs?owner=test-user-3"
-    Then the response code should be 200
-    And the response should have schema as:
-    """
-      {
-        "properties": {
-          "items": {
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 1
-          }
-        },
-        "required": ["items"]
-      }
-    """
-    And the response should contain the value "test-user-3" at path "$.items[0].resource.owner"
-    And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.items[0].resource.tenant"
-    When I send a GET request to "/api/v1/evaluations/jobs?owner=test-user-not-3"
-    Then the response code should be 200
-    And the response should have schema as:
-    """
-      {
-        "properties": {
-          "total_count": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 0
-          }
-        },
-        "required": ["total_count"]
-      }
-    """
+    And the response should equal the value "{{value:iso_job_1_id}}" at path "$.items[?(@.resource.owner != &quot;system&quot;)].resource.id"
+    And the response should not contain the value "{{value:iso_job_2_id}}" at path "$.items[*].resource.id"
+    And the response should not contain the value "{{value:iso_job_3_id}}" at path "$.items[*].resource.id"
+    # iso-user-1 cannot GET iso-user-2's job by ID
+    When I send a GET request to "/api/v1/evaluations/jobs/{{value:iso_job_2_id}}"
+    Then the response code should be 404
 
   @local
   Scenario: Update evaluation job status with running status
@@ -640,7 +520,7 @@ Feature: Evaluations Endpoint
 
   Scenario: List evaluation jobs returns empty when filter matches no jobs
     Given the service is running
-    When I send a GET request to "/api/v1/evaluations/jobs?owner=nonexistent-user-empty-list&limit=10"
+    When I send a GET request to "/api/v1/evaluations/jobs?name=nonexistent-job-name-empty-list&limit=10"
     Then the response code should be 200
     And the response should contain the value "0" at path "$.total_count"
 
@@ -723,7 +603,7 @@ Feature: Evaluations Endpoint
     When I send a GET request to "/api/v1/evaluations/jobs?limit=10"
     Then the response code should be 200
     And the response should contain the value "{{env:X_TENANT|test-tenant}}" at path "$.items[0].resource.tenant"
-    And the response should contain at least the value "4" at path "$.total_count"
+    And the response should contain at least the value "2" at path "$.total_count"
 
   @negative
   Scenario: Evaluation endpoints reject unsupported methods

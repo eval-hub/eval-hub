@@ -34,13 +34,14 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 	offset := filter.Offset
 
 	tenant := s.tenant
+	owner := s.owner
 
 	if scope, ok := params["scope"]; ok {
 		switch scope {
 		case abstractions.ScopeSystem:
 			params["owner"] = abstractions.OwnerSystem
-			// we don't want to filter by tenant_id for system resources
 			tenant = ""
+			owner = ""
 		case abstractions.ScopeTenant:
 			params["owner"] = "!" + abstractions.OwnerSystem
 		}
@@ -54,13 +55,13 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 	typeName := getTypeFromTableName(tableName)
 
 	// Get total count (with filter if provided)
-	totalCount, err := s.getTotalCount(txn, tenant, tableName, filter.Params, typeName)
+	totalCount, err := s.getTotalCount(txn, tenant, owner, tableName, filter.Params, typeName)
 	if err != nil {
 		return nil, err
 	}
 
 	// Build the list query with pagination and filters
-	listQuery, listArgs := s.statementsFactory.CreateListEntitiesStatement(tenant, tableName, limit, offset, params)
+	listQuery, listArgs := s.statementsFactory.CreateListEntitiesStatement(tenant, owner, tableName, limit, offset, params)
 	s.logger.Debug(fmt.Sprintf("List %s query", typeName), "query", listQuery, "args", listArgs, "params", params, "limit", limit, "offset", offset)
 
 	// Query the database

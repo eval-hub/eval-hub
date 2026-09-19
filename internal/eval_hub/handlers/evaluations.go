@@ -471,7 +471,7 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 
 			logging.LogRequestStarted(ctx, "filter", filter)
 
-			allowedParams := []string{"limit", "offset", "status", "name", "tags", "owner", "experiment_id", "collection_id"}
+			allowedParams := []string{"limit", "offset", "status", "name", "tags", "experiment_id", "collection_id"}
 			badParams := getAllParams(req, allowedParams...)
 			if len(badParams) > 0 {
 				// just report the first bad parameter
@@ -575,7 +575,9 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 }
 
 func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext, r httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
-	storage := h.getStorage(ctx)
+	// Skip owner scoping: this endpoint receives runtime callbacks from K8s
+	// sidecars that authenticate as a ServiceAccount, not the job creator.
+	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
 
 	logging.LogRequestStarted(ctx)
 

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/common"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -177,6 +178,109 @@ func TestProviderStorage(t *testing.T) {
 		_, err = store.GetProvider("provider-1")
 		if err == nil {
 			t.Fatal("Expected error after delete, provider should not exist")
+		}
+	})
+}
+
+func TestProviders_OwnerIsolation(t *testing.T) {
+	store, err := getTestStorage(t, "sqlite", getDBName())
+	if err != nil {
+		t.Fatalf("failed to create storage: %v", err)
+	}
+
+	now := time.Now()
+	tenant := api.Tenant(getTenant("prov-owner-iso"))
+
+	makeProvider := func(id string, owner api.User) *api.ProviderResource {
+		return &api.ProviderResource{
+			Resource: api.Resource{
+				ID:        id,
+				Tenant:    tenant,
+				Owner:     owner,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			ProviderConfig: api.ProviderConfig{
+				Name:        "Provider " + id,
+				Description: "Owned by " + string(owner),
+			},
+		}
+	}
+
+	provA := common.GUID()
+	if err := store.CreateProvider(makeProvider(provA, "user-a")); err != nil {
+		t.Fatalf("create provider user-a: %v", err)
+	}
+	provB := common.GUID()
+	if err := store.CreateProvider(makeProvider(provB, "user-b")); err != nil {
+		t.Fatalf("create provider user-b: %v", err)
+	}
+
+	filter := &abstractions.QueryFilter{Limit: 50, Offset: 0, Params: map[string]any{}}
+
+	t.Run("user-a sees only own providers", func(t *testing.T) {
+		scoped := store.WithTenant(tenant).WithOwner("user-a")
+		res, err := scoped.GetProviders(filter)
+		if err != nil {
+			t.Fatalf("GetProviders: %v", err)
+		}
+		if len(res.Items) != 1 {
+			t.Fatalf("expected 1 provider, got %d", len(res.Items))
+		}
+		if res.Items[0].Resource.ID != provA {
+			t.Fatalf("expected provider %s, got %s", provA, res.Items[0].Resource.ID)
+		}
+	})
+
+	t.Run("user-b sees only own providers", func(t *testing.T) {
+		scoped := store.WithTenant(tenant).WithOwner("user-b")
+		res, err := scoped.GetProviders(filter)
+		if err != nil {
+			t.Fatalf("GetProviders: %v", err)
+		}
+		if len(res.Items) != 1 {
+			t.Fatalf("expected 1 provider, got %d", len(res.Items))
+		}
+		if res.Items[0].Resource.ID != provB {
+			t.Fatalf("expected provider %s, got %s", provB, res.Items[0].Resource.ID)
+		}
+	})
+
+	t.Run("user-a cannot GET user-b provider by ID", func(t *testing.T) {
+		scoped := store.WithTenant(tenant).WithOwner("user-a")
+		_, err := scoped.GetProvider(provB)
+		if err == nil {
+			t.Fatal("expected error getting other user's provider")
+		}
+	})
+
+	t.Run("user-a cannot delete user-b provider", func(t *testing.T) {
+		scoped := store.WithTenant(tenant).WithOwner("user-a")
+		err := scoped.DeleteProvider(provB)
+		if err == nil {
+			t.Fatal("expected error deleting other user's provider")
+		}
+	})
+
+	t.Run("system providers visible to all owners", func(t *testing.T) {
+		sysProv := common.GUID()
+		if err := store.CreateProvider(makeProvider(sysProv, "system")); err != nil {
+			t.Fatalf("create system provider: %v", err)
+		}
+		scoped := store.WithTenant(tenant).WithOwner("user-a")
+		res, err := scoped.GetProviders(filter)
+		if err != nil {
+			t.Fatalf("GetProviders: %v", err)
+		}
+		found := false
+		for _, p := range res.Items {
+			if p.Resource.ID == sysProv {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatal("expected system provider to be visible to user-a")
 		}
 	})
 }
