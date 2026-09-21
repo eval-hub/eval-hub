@@ -135,7 +135,7 @@ func (s *sqlStorage) UpdateCollection(id string, collection *api.CollectionConfi
 	var updated *api.CollectionResource
 
 	err := s.withTransaction("update collection", id, func(txn *sql.Tx) error {
-		persistedCollection, err := s.getCollectionTransactional(txn, id)
+		persistedCollection, err := s.getCollectionTransactionalForUpdate(txn, id)
 		if err != nil {
 			return err
 		}
@@ -205,7 +205,7 @@ func (s *sqlStorage) UpdateCollectionStatus(id string, state *api.CollectionStat
 	var updated *api.CollectionResource
 
 	err := s.withTransaction("update collection state", id, func(txn *sql.Tx) error {
-		coll, err := s.getCollectionTransactional(txn, id)
+		coll, err := s.getCollectionTransactionalForUpdate(txn, id)
 		if err != nil {
 			return err
 		}
@@ -224,10 +224,12 @@ func (s *sqlStorage) PatchCollection(id string, patches *api.Patch) (*api.Collec
 	var updated *api.CollectionResource
 
 	err := s.withTransaction("patch collection", id, func(txn *sql.Tx) error {
-		persistedCollection, err := s.getCollectionTransactional(txn, id)
+		persistedCollection, err := s.getCollectionTransactionalForUpdate(txn, id)
 		if err != nil {
 			return err
 		}
+		// Test hook: no-op unless a test installs a callback (see test_hooks.go).
+		invokeCollectionPatchAfterLockedReadHook(id)
 		if persistedCollection.Resource.Owner == "system" || persistedCollection.CurationOrder > 0 {
 			return serviceerrors.NewServiceError(
 				messages.ReadOnlyCollection,
