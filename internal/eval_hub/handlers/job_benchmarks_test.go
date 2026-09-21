@@ -48,7 +48,7 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 		}
 	})
 
-	t.Run("non-empty collection value overrides job for same key", func(t *testing.T) {
+	t.Run("collection value overrides provider-level job value for same key", func(t *testing.T) {
 		t.Parallel()
 		benchmark := api.CollectionBenchmarkConfig{
 			ProviderID: "prov-a",
@@ -61,6 +61,42 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 		got := mergeBenchmarkParameters(benchmark, job)
 		if got.Parameters["k"] != "from_collection" {
 			t.Fatalf("k = %v, want from_collection", got.Parameters["k"])
+		}
+	})
+
+	t.Run("exact benchmark job values override collection while provider values remain scoped", func(t *testing.T) {
+		t.Parallel()
+		benchmark := api.CollectionBenchmarkConfig{
+			Ref:        api.Ref{ID: "bench-1"},
+			ProviderID: "prov-a",
+			Parameters: map[string]any{"collection_only": true, "shared": "from_collection"},
+		}
+		job := []api.EvaluationBenchmarkConfig{
+			{
+				ProviderID: "prov-a",
+				Parameters: map[string]any{"provider_only": true, "shared": "from_provider"},
+			},
+			{
+				Ref:        api.Ref{ID: "bench-1"},
+				ProviderID: "prov-a",
+				Parameters: map[string]any{"benchmark_only": true, "shared": "from_benchmark"},
+			},
+			{
+				Ref:        api.Ref{ID: "bench-2"},
+				ProviderID: "prov-a",
+				Parameters: map[string]any{"other_benchmark": true},
+			},
+		}
+		got := mergeBenchmarkParameters(benchmark, job)
+		want := map[string]any{
+			"collection_only": true,
+			"provider_only":   true,
+			"benchmark_only":  true,
+			"other_benchmark": true,
+			"shared":          "from_benchmark",
+		}
+		if !reflect.DeepEqual(got.Parameters, want) {
+			t.Fatalf("Parameters = %#v, want %#v", got.Parameters, want)
 		}
 	})
 

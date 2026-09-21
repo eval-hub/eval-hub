@@ -261,16 +261,35 @@ func GetJobBenchmarks(job *api.EvaluationJobResource, collection *api.Collection
 
 func mergeBenchmarkParameters(benchmark api.CollectionBenchmarkConfig, jobBenchmarks []api.EvaluationBenchmarkConfig) api.EvaluationBenchmarkConfig {
 	parameters := map[string]any{}
-	for _, jobBenchmark := range jobBenchmarks {
-		if jobBenchmark.ProviderID == benchmark.ProviderID {
-			maps.Copy(parameters, jobBenchmark.Parameters)
+	applyParameters := func(source map[string]any) {
+		for key, value := range source {
+			if isEmpty(value) {
+				delete(parameters, key)
+			} else {
+				parameters[key] = value
+			}
 		}
 	}
-	for key, value := range benchmark.Parameters {
-		if isEmpty(value) {
-			delete(parameters, key)
-		} else {
-			parameters[key] = value
+
+	// Request parameters remain provider-scoped for compatibility: every request
+	// benchmark entry for this provider contributes to the shared parameter map.
+	// Apply them before collection parameters so collection values retain the
+	// next level of precedence.
+	for _, jobBenchmark := range jobBenchmarks {
+		if jobBenchmark.ProviderID == benchmark.ProviderID {
+			applyParameters(jobBenchmark.Parameters)
+		}
+	}
+
+	// Collection parameters override provider-scoped request values.
+	applyParameters(benchmark.Parameters)
+
+	// Exact benchmark request parameters have the highest precedence. Reapply
+	// the matching entry after the collection merge, while retaining the
+	// provider-scoped behavior above for non-overlapping keys.
+	for _, jobBenchmark := range jobBenchmarks {
+		if jobBenchmark.ProviderID == benchmark.ProviderID && jobBenchmark.ID == benchmark.ID && jobBenchmark.ID != "" {
+			applyParameters(jobBenchmark.Parameters)
 		}
 	}
 	// pick up TestDataRef and HardwareConfig from the job override if provided
