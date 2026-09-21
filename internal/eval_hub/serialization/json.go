@@ -47,6 +47,8 @@ func formatValidationError(errs validator.ValidationErrors) string {
 		if isTestDataRefSourceField(e.Field()) {
 			return "test_data_ref: one of s3, pvc, git, or hf must be set"
 		}
+	case "category_or_domains":
+		return "either category or a non-empty domains array must be provided"
 	case "git_http_with_secret":
 		if param := e.Param(); param != "" {
 			return param

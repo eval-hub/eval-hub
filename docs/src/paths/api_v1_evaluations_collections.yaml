@@ -186,7 +186,16 @@ post:
     content:
       application/json:
         schema:
-          $ref: ../components/schemas/CollectionConfig.yaml
+          allOf:
+            - $ref: ../components/schemas/CollectionConfig.yaml
+            - anyOf:
+                - required:
+                    - category
+                - required:
+                    - domains
+                  properties:
+                    domains:
+                      minItems: 1
         examples:
           request:
             summary: Create a safety evaluation collection
@@ -220,10 +229,11 @@ post:
                   pass_criteria:
                     threshold: 0.3
           MinimalCollection:
-            summary: Create a minimal collection
+            summary: Create a minimal collection using domains
             value:
               name: "quick-reasoning-check"
-              category: "reasoning"
+              domains:
+                - knowledge_and_reasoning
               benchmarks:
                 - id: "arc_easy"
                   provider_id: "lm_evaluation_harness"

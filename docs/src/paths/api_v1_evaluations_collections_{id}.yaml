@@ -78,7 +78,16 @@ put:
     content:
       application/json:
         schema:
-          $ref: ../components/schemas/CollectionConfig.yaml
+          allOf:
+            - $ref: ../components/schemas/CollectionConfig.yaml
+            - anyOf:
+                - required:
+                    - category
+                - required:
+                    - domains
+                  properties:
+                    domains:
+                      minItems: 1
         examples:
           request:
             summary: Update collection to add a quality benchmark
