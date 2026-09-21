@@ -169,8 +169,9 @@ func (r *listEvaluationsRequest) PathValue(name string) string {
 
 type listEvaluationsStorage struct {
 	*fakeStorage
-	jobs []api.EvaluationJobResource
-	err  error
+	jobs       []api.EvaluationJobResource
+	err        error
+	lastFilter *abstractions.QueryFilter
 }
 
 func (s *listEvaluationsStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return s }
@@ -180,7 +181,8 @@ func (s *listEvaluationsStorage) WithContext(_ context.Context) abstractions.Sto
 func (s *listEvaluationsStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
 func (s *listEvaluationsStorage) WithOwner(_ api.User) abstractions.Storage    { return s }
 
-func (s *listEvaluationsStorage) GetEvaluationJobs(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
+func (s *listEvaluationsStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
+	s.lastFilter = filter
 	if s.err != nil {
 		return nil, s.err
 	}

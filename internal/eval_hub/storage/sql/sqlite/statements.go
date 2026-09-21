@@ -83,7 +83,7 @@ func (s *sqliteStatementsFactory) GetAllowedFilterColumns(tableName string) []st
 	allColumns := []string{"owner", "name", "tags"}
 	switch tableName {
 	case shared.TableEvaluations:
-		return append(allColumns, "status", "experiment_id")
+		return append(allColumns, "status", "experiment_id", "collection_id")
 	case shared.TableProviders:
 		return allColumns // "benchmarks" and "scope" are not allowed filters for providers from the database
 	case shared.TableCollections:
@@ -118,6 +118,11 @@ func (s *sqliteStatementsFactory) CreateEntityFilterCondition(key string, value 
 		}
 		// name at top level
 		return fmt.Sprintf("json_extract(entity, '%s') = ?", namePath), []any{value}
+	case "collection_id":
+		if tableName == shared.TableEvaluations {
+			return "json_extract(entity, '$.config.collection.id') = ?", []any{value}
+		}
+		return "", []any{}
 	case "category":
 		if tableName == shared.TableCollections {
 			return "json_extract(entity, '$.category') = ?", []any{value}
@@ -252,4 +257,9 @@ func (s *sqliteStatementsFactory) CreateCollectionAddEntityStatement(collection 
 func (s *sqliteStatementsFactory) CreateCollectionGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
 	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, query.Resource.ID)
 	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
+}
+
+func (s *sqliteStatementsFactory) CreateCollectionGetEntityForUpdateStatement(query *shared.EntityQuery) (string, []any, []any) {
+	// SQLite serializes writers via SetMaxOpenConns(1); FOR UPDATE is unsupported.
+	return s.CreateCollectionGetEntityStatement(query)
 }

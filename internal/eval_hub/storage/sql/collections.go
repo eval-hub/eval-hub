@@ -72,8 +72,22 @@ func (s *sqlStorage) GetCollection(id string) (*api.CollectionResource, error) {
 }
 
 func (s *sqlStorage) getCollectionTransactional(txn *sql.Tx, id string) (*api.CollectionResource, error) {
+	return s.getCollectionTransactionalWithLock(txn, id, false)
+}
+
+func (s *sqlStorage) getCollectionTransactionalForUpdate(txn *sql.Tx, id string) (*api.CollectionResource, error) {
+	return s.getCollectionTransactionalWithLock(txn, id, true)
+}
+
+func (s *sqlStorage) getCollectionTransactionalWithLock(txn *sql.Tx, id string, forUpdate bool) (*api.CollectionResource, error) {
 	query := shared.EntityQuery{Resource: api.Resource{ID: id, Tenant: s.tenant}}
-	selectQuery, selectArgs, queryArgs := s.statementsFactory.CreateCollectionGetEntityStatement(&query)
+	var selectQuery string
+	var selectArgs, queryArgs []any
+	if forUpdate {
+		selectQuery, selectArgs, queryArgs = s.statementsFactory.CreateCollectionGetEntityForUpdateStatement(&query)
+	} else {
+		selectQuery, selectArgs, queryArgs = s.statementsFactory.CreateCollectionGetEntityStatement(&query)
+	}
 
 	err := s.queryRow(txn, selectQuery, selectArgs...).Scan(queryArgs...)
 	if err != nil {

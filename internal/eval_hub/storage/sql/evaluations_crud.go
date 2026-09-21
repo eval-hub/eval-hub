@@ -22,18 +22,46 @@ type EvaluationJobEntity struct {
 // #######################################################################
 func (s *sqlStorage) CreateEvaluationJob(evaluation *api.EvaluationJobResource) error {
 	return s.withTransaction("create evaluation job", evaluation.Resource.ID, func(txn *sql.Tx) error {
-		evaluationJSON, err := s.createEvaluationJobEntity(evaluation)
-		if err != nil {
-			return se.WithRollback(err)
-		}
-		addEntityStatement, args := s.statementsFactory.CreateEvaluationAddEntityStatement(evaluation, string(evaluationJSON))
-		_, err = s.exec(txn, addEntityStatement, args...)
-		if err != nil {
-			return se.WithRollback(err)
-		}
-		s.logger.Info("Created evaluation job", "id", evaluation.Resource.ID, "addEntityStatement", addEntityStatement)
-		return nil
+		return s.createEvaluationJobTransactional(txn, evaluation)
 	})
+}
+
+// CreateEvaluationJobAndUpdateCollection atomically persists an evaluation job and
+// applies server-managed updates to the collection referenced by the job.
+func (s *sqlStorage) CreateEvaluationJobAndUpdateCollection(evaluation *api.EvaluationJobResource) error {
+	if evaluation == nil || evaluation.Collection == nil || evaluation.Collection.ID == "" {
+		return se.NewServiceError(messages.RequestValidationFailed, "Error", "collection ID is required")
+	}
+
+	collectionID := evaluation.Collection.ID
+	return s.withTransaction("create evaluation job and update collection", evaluation.Resource.ID, func(txn *sql.Tx) error {
+		collection, err := s.getCollectionTransactionalForUpdate(txn, collectionID)
+		if err != nil {
+			return se.WithRollback(err)
+		}
+		if err = s.createEvaluationJobTransactional(txn, evaluation); err != nil {
+			return err
+		}
+		if collection.Status == nil {
+			return nil
+		}
+		collection.Status.RunCount++
+		return s.updateCollectionTransactional(txn, collection.Resource.ID, collection)
+	})
+}
+
+func (s *sqlStorage) createEvaluationJobTransactional(txn *sql.Tx, evaluation *api.EvaluationJobResource) error {
+	evaluationJSON, err := s.createEvaluationJobEntity(evaluation)
+	if err != nil {
+		return se.WithRollback(err)
+	}
+	addEntityStatement, args := s.statementsFactory.CreateEvaluationAddEntityStatement(evaluation, string(evaluationJSON))
+	_, err = s.exec(txn, addEntityStatement, args...)
+	if err != nil {
+		return se.WithRollback(err)
+	}
+	s.logger.Info("Created evaluation job", "id", evaluation.Resource.ID, "addEntityStatement", addEntityStatement)
+	return nil
 }
 
 func (s *sqlStorage) createEvaluationJobEntity(evaluation *api.EvaluationJobResource) ([]byte, error) {

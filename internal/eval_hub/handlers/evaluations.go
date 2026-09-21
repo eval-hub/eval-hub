@@ -320,6 +320,9 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				},
 				EvaluationJobConfig: *evaluation,
 			}
+			if collection != nil {
+				return storage.WithContext(runtimeCtx).CreateEvaluationJobAndUpdateCollection(job)
+			}
 			return storage.WithContext(runtimeCtx).CreateEvaluationJob(job)
 		},
 		"storage",
@@ -468,7 +471,7 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 
 			logging.LogRequestStarted(ctx, "filter", filter)
 
-			allowedParams := []string{"limit", "offset", "status", "name", "tags", "owner", "experiment_id"}
+			allowedParams := []string{"limit", "offset", "status", "name", "tags", "owner", "experiment_id", "collection_id"}
 			badParams := getAllParams(req, allowedParams...)
 			if len(badParams) > 0 {
 				// just report the first bad parameter
@@ -488,6 +491,13 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 			}
 			if experimentID != "" {
 				filter.Params["experiment_id"] = experimentID
+			}
+			collectionID, err := GetParam(req, "collection_id", true, "")
+			if err != nil {
+				return err
+			}
+			if collectionID != "" {
+				filter.Params["collection_id"] = collectionID
 			}
 
 			ofilter = filter

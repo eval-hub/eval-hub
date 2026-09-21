@@ -226,6 +226,13 @@ get:
         type: string
         title: Tags
       description: Tags to search for
+    - name: experiment_id
+      in: query
+      required: false
+      schema:
+        type: string
+        title: Experiment Id
+      description: Filter by MLflow experiment ID
     - name: collection_id
       in: query
       required: false
@@ -235,7 +242,7 @@ get:
       description: >
         Filter by the ID of the collection the job was created from.
         Maps to the collection.id field on the job record.
-        Returns all jobs for the collection, ordered by date.
+        Returns all jobs for the collection.
   responses:
     '200':
       description: Successful Response

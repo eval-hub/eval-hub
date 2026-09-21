@@ -91,7 +91,7 @@ func (s *postgresStatementsFactory) GetAllowedFilterColumns(tableName string) []
 	allColumns := []string{"owner", "name", "tags"}
 	switch tableName {
 	case shared.TableEvaluations:
-		return append(allColumns, "status", "experiment_id")
+		return append(allColumns, "status", "experiment_id", "collection_id")
 	case shared.TableProviders:
 		return allColumns // "benchmarks" and "scope" are not allowed filters for providers from the database
 	case shared.TableCollections:
@@ -114,6 +114,11 @@ func (s *postgresStatementsFactory) CreateEntityFilterCondition(key string, valu
 			namePath = "entity->'config'->>'name'"
 		}
 		return fmt.Sprintf("%s = $%d", namePath, index), []any{value}
+	case "collection_id":
+		if tableName == shared.TableEvaluations {
+			return fmt.Sprintf("entity->'config'->'collection'->>'id' = $%d", index), []any{value}
+		}
+		return "", []any{}
 	case "category":
 		if tableName == shared.TableCollections {
 			categoryPath := "entity->>'category'"
@@ -248,4 +253,9 @@ func (s *postgresStatementsFactory) CreateCollectionAddEntityStatement(collectio
 func (s *postgresStatementsFactory) CreateCollectionGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
 	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, query.Resource.ID, 1)
 	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
+}
+
+func (s *postgresStatementsFactory) CreateCollectionGetEntityForUpdateStatement(query *shared.EntityQuery) (string, []any, []any) {
+	stmt, args, scanArgs := s.CreateCollectionGetEntityStatement(query)
+	return strings.TrimSuffix(stmt, ";") + " FOR UPDATE;", args, scanArgs
 }

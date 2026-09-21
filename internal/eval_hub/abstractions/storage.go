@@ -68,6 +68,9 @@ type Storage interface {
 
 	// Evaluation job operations
 	CreateEvaluationJob(evaluation *api.EvaluationJobResource) error
+	// CreateEvaluationJobAndUpdateCollection atomically persists an evaluation job and
+	// applies server-managed updates to the collection referenced by the job.
+	CreateEvaluationJobAndUpdateCollection(evaluation *api.EvaluationJobResource) error
 	GetEvaluationJob(id string) (*api.EvaluationJobResource, error)
 	GetEvaluationJobs(filter *QueryFilter) (*QueryResults[api.EvaluationJobResource], error)
 	DeleteEvaluationJob(id string) error

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"log/slog"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -154,8 +155,21 @@ func min(a, b int) int {
 func TestGetAllowedFilterColumns_Evaluations(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
 	cols := f.GetAllowedFilterColumns(shared.TableEvaluations)
-	if len(cols) == 0 {
-		t.Error("expected non-empty filter columns for evaluations")
+	if !slices.Contains(cols, "collection_id") {
+		t.Errorf("GetAllowedFilterColumns missing collection_id: %v", cols)
+	}
+
+	cond, args := f.CreateEntityFilterCondition("collection_id", "collection-1", 1, shared.TableEvaluations)
+	if !strings.Contains(cond, "entity->'config'->'collection'->>'id'") {
+		t.Errorf("unexpected collection_id condition: %q", cond)
+	}
+	if len(args) != 1 || args[0] != "collection-1" {
+		t.Errorf("unexpected collection_id args: %v", args)
+	}
+
+	cond, args = f.CreateEntityFilterCondition("collection_id", "collection-1", 1, shared.TableCollections)
+	if cond != "" || len(args) != 0 {
+		t.Errorf("collection_id condition for collections = %q, %v; want empty", cond, args)
 	}
 }
 
@@ -172,6 +186,15 @@ func TestCreateListEntitiesStatement(t *testing.T) {
 	stmt, _ := f.CreateListEntitiesStatement("t1", shared.TableCollections, 10, 0, map[string]any{})
 	if !strings.Contains(stmt, "SELECT") {
 		t.Errorf("expected SELECT, got: %s", stmt)
+	}
+}
+
+func TestCreateCollectionGetEntityForUpdateStatement(t *testing.T) {
+	f := NewStatementsFactory(slog.Default())
+	query := &shared.EntityQuery{Resource: api.Resource{ID: "collection-1", Tenant: "tenant-1"}}
+	stmt, _, _ := f.CreateCollectionGetEntityForUpdateStatement(query)
+	if !strings.HasSuffix(stmt, "FOR UPDATE;") {
+		t.Errorf("expected FOR UPDATE statement, got %q", stmt)
 	}
 }
 
