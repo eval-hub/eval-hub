@@ -80,7 +80,7 @@ func (s *sqlStorage) getCollectionTransactionalForUpdate(txn *sql.Tx, id string)
 }
 
 func (s *sqlStorage) getCollectionTransactionalWithLock(txn *sql.Tx, id string, forUpdate bool) (*api.CollectionResource, error) {
-	query := shared.EntityQuery{Resource: api.Resource{ID: id, Tenant: s.tenant}}
+	query := shared.EntityQuery{Resource: api.Resource{ID: id, Tenant: s.tenant, Owner: s.owner}}
 	var selectQuery string
 	var selectArgs, queryArgs []any
 	if forUpdate {

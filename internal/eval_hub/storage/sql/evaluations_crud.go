@@ -90,7 +90,7 @@ func (s *sqlStorage) getEvaluationJobTransactionalForUpdate(txn *sql.Tx, id stri
 }
 
 func (s *sqlStorage) scanEvaluationJobTransactional(txn *sql.Tx, id string, forUpdate bool) (*api.EvaluationJobResource, error) {
-	query := shared.EntityQuery{Resource: api.Resource{ID: id, Tenant: s.tenant}}
+	query := shared.EntityQuery{Resource: api.Resource{ID: id, Tenant: s.tenant, Owner: s.owner}}
 	var selectQuery string
 	var selectArgs, queryArgs []any
 	if forUpdate {

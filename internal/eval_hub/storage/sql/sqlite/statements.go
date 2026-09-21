@@ -98,7 +98,7 @@ func (s *sqliteStatementsFactory) CreateEvaluationAddEntityStatement(evaluation 
 }
 
 func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
-	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, "", query.Resource.ID)
+	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, query.Resource.Owner, query.Resource.ID)
 	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
 }
 
@@ -256,7 +256,7 @@ func (s *sqliteStatementsFactory) getWhereStatement(tenant api.Tenant, owner api
 }
 
 func (s *sqliteStatementsFactory) CreateProviderGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
-	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, "", query.Resource.ID)
+	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, query.Resource.Owner, query.Resource.ID)
 	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, entity FROM providers WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }
 
@@ -265,7 +265,7 @@ func (s *sqliteStatementsFactory) CreateCollectionAddEntityStatement(collection 
 }
 
 func (s *sqliteStatementsFactory) CreateCollectionGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
-	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, "", query.Resource.ID)
+	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, query.Resource.Owner, query.Resource.ID)
 	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, entity FROM collections WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.EntityJSON}
 }
 
