@@ -30,7 +30,7 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 		}
 	})
 
-	t.Run("job matching provider adds parameters not in collection", func(t *testing.T) {
+	t.Run("matching benchmark job override adds parameters not in collection", func(t *testing.T) {
 		t.Parallel()
 		benchmark := api.CollectionBenchmarkConfig{
 			Ref:        api.Ref{ID: "bench-1"},
@@ -38,6 +38,7 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 			Parameters: map[string]any{"from_collection": "x"},
 		}
 		job := []api.EvaluationBenchmarkConfig{{
+			Ref:        api.Ref{ID: "bench-1"},
 			ProviderID: "prov-a",
 			Parameters: map[string]any{"from_job": "y"},
 		}}
@@ -48,52 +49,88 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 		}
 	})
 
-	t.Run("non-empty collection value overrides job for same key", func(t *testing.T) {
+	t.Run("matching benchmark job value overrides collection value for same key", func(t *testing.T) {
 		t.Parallel()
 		benchmark := api.CollectionBenchmarkConfig{
+			Ref:        api.Ref{ID: "bench-1"},
 			ProviderID: "prov-a",
 			Parameters: map[string]any{"k": "from_collection"},
 		}
 		job := []api.EvaluationBenchmarkConfig{{
+			Ref:        api.Ref{ID: "bench-1"},
 			ProviderID: "prov-a",
 			Parameters: map[string]any{"k": "from_job"},
 		}}
 		got := mergeBenchmarkParameters(benchmark, job)
-		if got.Parameters["k"] != "from_collection" {
-			t.Fatalf("k = %v, want from_collection", got.Parameters["k"])
+		if got.Parameters["k"] != "from_job" {
+			t.Fatalf("k = %v, want from_job", got.Parameters["k"])
 		}
 	})
 
-	t.Run("empty string in collection removes key including job-only keys", func(t *testing.T) {
+	t.Run("exact benchmark job values override collection while provider values remain scoped", func(t *testing.T) {
 		t.Parallel()
 		benchmark := api.CollectionBenchmarkConfig{
+			Ref:        api.Ref{ID: "bench-1"},
 			ProviderID: "prov-a",
-			Parameters: map[string]any{"k": ""},
+			Parameters: map[string]any{"collection_only": true, "shared": "from_collection"},
 		}
-		job := []api.EvaluationBenchmarkConfig{{
-			ProviderID: "prov-a",
-			Parameters: map[string]any{"k": "job_val", "other": "keep"},
-		}}
+		job := []api.EvaluationBenchmarkConfig{
+			{
+				Ref:        api.Ref{ID: "bench-1"},
+				ProviderID: "prov-a",
+				Parameters: map[string]any{"benchmark_only": true, "shared": "from_benchmark"},
+			},
+			{
+				Ref:        api.Ref{ID: "bench-2"},
+				ProviderID: "prov-a",
+				Parameters: map[string]any{"other_benchmark": true},
+			},
+		}
 		got := mergeBenchmarkParameters(benchmark, job)
-		want := map[string]any{"other": "keep"}
+		want := map[string]any{
+			"collection_only": true,
+			"benchmark_only":  true,
+			"shared":          "from_benchmark",
+		}
 		if !reflect.DeepEqual(got.Parameters, want) {
 			t.Fatalf("Parameters = %#v, want %#v", got.Parameters, want)
 		}
 	})
 
-	t.Run("nil parameter value in collection removes key", func(t *testing.T) {
+	t.Run("matching job value overrides empty collection value", func(t *testing.T) {
 		t.Parallel()
 		benchmark := api.CollectionBenchmarkConfig{
+			Ref:        api.Ref{ID: "bench-1"},
+			ProviderID: "prov-a",
+			Parameters: map[string]any{"k": ""},
+		}
+		job := []api.EvaluationBenchmarkConfig{{
+			Ref:        api.Ref{ID: "bench-1"},
+			ProviderID: "prov-a",
+			Parameters: map[string]any{"k": "job_val", "other": "keep"},
+		}}
+		got := mergeBenchmarkParameters(benchmark, job)
+		want := map[string]any{"k": "job_val", "other": "keep"}
+		if !reflect.DeepEqual(got.Parameters, want) {
+			t.Fatalf("Parameters = %#v, want %#v", got.Parameters, want)
+		}
+	})
+
+	t.Run("matching job value overrides nil collection value", func(t *testing.T) {
+		t.Parallel()
+		benchmark := api.CollectionBenchmarkConfig{
+			Ref:        api.Ref{ID: "bench-1"},
 			ProviderID: "prov-a",
 			Parameters: map[string]any{"k": nil},
 		}
 		job := []api.EvaluationBenchmarkConfig{{
+			Ref:        api.Ref{ID: "bench-1"},
 			ProviderID: "prov-a",
 			Parameters: map[string]any{"k": "job_val"},
 		}}
 		got := mergeBenchmarkParameters(benchmark, job)
-		if _, ok := got.Parameters["k"]; ok {
-			t.Fatalf("expected k removed, got %#v", got.Parameters)
+		if got.Parameters["k"] != "job_val" {
+			t.Fatalf("k = %v, want job_val", got.Parameters["k"])
 		}
 	})
 
@@ -156,22 +193,22 @@ func TestMergeBenchmarkParameters(t *testing.T) {
 		}
 	})
 
-	t.Run("multiple job blocks same provider accumulate then collection overlays", func(t *testing.T) {
+	t.Run("parameters from another benchmark do not bleed across same provider", func(t *testing.T) {
 		t.Parallel()
 		benchmark := api.CollectionBenchmarkConfig{
+			Ref:        api.Ref{ID: "bench-1"},
 			ProviderID: "prov-a",
 			Parameters: map[string]any{"third": "from_collection", "dup": "collection_wins"},
 		}
 		job := []api.EvaluationBenchmarkConfig{
-			{ProviderID: "prov-a", Parameters: map[string]any{"first": 1, "dup": "first"}},
-			{ProviderID: "prov-a", Parameters: map[string]any{"second": 2, "dup": "second"}},
+			{Ref: api.Ref{ID: "bench-1"}, ProviderID: "prov-a", Parameters: map[string]any{"first": 1, "dup": "first"}},
+			{Ref: api.Ref{ID: "bench-2"}, ProviderID: "prov-a", Parameters: map[string]any{"second": 2, "dup": "second"}},
 		}
 		got := mergeBenchmarkParameters(benchmark, job)
 		want := map[string]any{
-			"first":  1,
-			"second": 2,
-			"third":  "from_collection",
-			"dup":    "collection_wins",
+			"first": 1,
+			"third": "from_collection",
+			"dup":   "first",
 		}
 		if !reflect.DeepEqual(got.Parameters, want) {
 			t.Fatalf("Parameters = %#v, want %#v", got.Parameters, want)
@@ -265,10 +302,12 @@ func TestGetJobBenchmarks(t *testing.T) {
 			ID: "col-1",
 			Benchmarks: []api.EvaluationBenchmarkConfig{
 				{
+					Ref:        api.Ref{ID: "a-ref"},
 					ProviderID: "prov-a-ref",
 					Parameters: map[string]any{"shared": "from_job_a", "only_a": 1},
 				},
 				{
+					Ref:        api.Ref{ID: "b-ref"},
 					ProviderID: "prov-b-ref",
 					Parameters: map[string]any{"shared": "from_job_b"},
 				},
@@ -299,7 +338,7 @@ func TestGetJobBenchmarks(t *testing.T) {
 		if len(got) != 2 {
 			t.Fatalf("len = %d, want 2", len(got))
 		}
-		want0 := map[string]any{"shared": "from_collection_a", "only_a": 1, "base": "x"}
+		want0 := map[string]any{"shared": "from_job_a", "only_a": 1, "base": "x"}
 		if !reflect.DeepEqual(got[0].Parameters, want0) {
 			t.Fatalf("first benchmark parameters = %#v, want %#v", got[0].Parameters, want0)
 		}

@@ -261,16 +261,25 @@ func GetJobBenchmarks(job *api.EvaluationJobResource, collection *api.Collection
 
 func mergeBenchmarkParameters(benchmark api.CollectionBenchmarkConfig, jobBenchmarks []api.EvaluationBenchmarkConfig) api.EvaluationBenchmarkConfig {
 	parameters := map[string]any{}
-	for _, jobBenchmark := range jobBenchmarks {
-		if jobBenchmark.ProviderID == benchmark.ProviderID {
-			maps.Copy(parameters, jobBenchmark.Parameters)
+	applyParameters := func(source map[string]any) {
+		for key, value := range source {
+			if isEmpty(value) {
+				delete(parameters, key)
+			} else {
+				parameters[key] = value
+			}
 		}
 	}
-	for key, value := range benchmark.Parameters {
-		if isEmpty(value) {
-			delete(parameters, key)
-		} else {
-			parameters[key] = value
+
+	// Collection parameters provide the defaults for this benchmark.
+	applyParameters(benchmark.Parameters)
+
+	// An exact benchmark request override has the highest precedence. Parameters
+	// from another benchmark, even when it uses the same provider, must not bleed
+	// into this benchmark.
+	for _, jobBenchmark := range jobBenchmarks {
+		if jobBenchmark.ProviderID == benchmark.ProviderID && jobBenchmark.ID == benchmark.ID && jobBenchmark.ID != "" {
+			applyParameters(jobBenchmark.Parameters)
 		}
 	}
 	// pick up TestDataRef and HardwareConfig from the job override if provided
