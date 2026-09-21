@@ -118,6 +118,17 @@ design_collection:
           4. Sets a collection-level pass_criteria threshold (weighted average of benchmark thresholds)
           5. Fills in name, description, category, and tags
 
+          ### Sourcing benchmarks
+
+          Always select benchmarks from the AVAILABLE BENCHMARKS catalog below — it is
+          the live provider catalog and is the source of truth for valid `id` and
+          `provider_id` values. **Do not read local files or invent benchmark IDs.**
+
+          If a benchmark you need is not in the catalog below, or you need more detail
+          about a provider's benchmarks, call the `discover_providers` tool to fetch the
+          live catalog (filter by `target_type` and/or `evaluates`, e.g. safety,
+          robustness). Use only the `id` and `provider_id` values it returns.
+
           ### Threshold Calibration Guidelines
 
           - **Safety benchmarks** (toxicity, bias, fairness): high thresholds (0.75-0.90) — safety-critical
@@ -146,6 +157,10 @@ design_collection:
           | RAG, retrieval augmented | RAGAS suite | 0.60-0.80 |
           | red team, vulnerability | garak intents | lower_is_better, ceiling 0.15-0.25 |
 
+          These are illustrative signal→benchmark hints, not IDs; always confirm the
+          exact `id` and `provider_id` against the AVAILABLE BENCHMARKS catalog or
+          `discover_providers` before using them.
+
           ### Output Format
 
           Produce a JSON object matching the `CollectionConfig` schema with these fields:
@@ -159,17 +174,6 @@ design_collection:
           After generating the collection, explain your benchmark selection and threshold choices.
 
           Use the `create_collection` tool to persist the collection when the user approves it.
-
-          ### Sourcing benchmarks
-
-          Always select benchmarks from the AVAILABLE BENCHMARKS catalog below — it is
-          the live provider catalog and is the source of truth for valid `id` and
-          `provider_id` values. **Do not read local files or invent benchmark IDs.**
-
-          If a benchmark you need is not in the catalog below, or you need more detail
-          about a provider's benchmarks, call the `discover_providers` tool to fetch the
-          live catalog (filter by `target_type` and/or `evaluates`, e.g. safety,
-          robustness). Use only the `id` and `provider_id` values it returns.
 
           ## Available Benchmarks
 
