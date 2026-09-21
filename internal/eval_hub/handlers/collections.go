@@ -375,10 +375,7 @@ func (h *Handlers) HandleCreateCollection(ctx *executioncontext.ExecutionContext
 			if err != nil {
 				return err
 			}
-			if err := serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, collection); err != nil {
-				return err
-			}
-			return validateCollectionClassification(collection)
+			return serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, collection)
 		},
 		"validation",
 		"validate-collection",
@@ -477,10 +474,7 @@ func (h *Handlers) HandleUpdateCollection(ctx *executioncontext.ExecutionContext
 			if err != nil {
 				return err
 			}
-			if err := serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, request); err != nil {
-				return err
-			}
-			return validateCollectionClassification(request)
+			return serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, request)
 		},
 		"validation",
 		"validate-collection-update",
@@ -521,13 +515,6 @@ func (h *Handlers) HandleUpdateCollection(ctx *executioncontext.ExecutionContext
 		"update-collection",
 		"collection.id", collectionID,
 	)
-}
-
-func validateCollectionClassification(collection *api.CollectionConfig) error {
-	if collection.Category == "" && len(collection.Domains) == 0 {
-		return serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error", "either category or a non-empty domains array must be provided")
-	}
-	return nil
 }
 
 // HandlePatchCollection handles PATCH /api/v1/evaluations/collections/{collection_id}
