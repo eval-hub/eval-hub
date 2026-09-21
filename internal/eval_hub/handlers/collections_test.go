@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
@@ -521,6 +524,81 @@ func TestHandleCreateCollection(t *testing.T) {
 	}
 	if got.Benchmarks[0].URL != "https://example.com/b1" {
 		t.Errorf("benchmark url = %q, want https://example.com/b1", got.Benchmarks[0].URL)
+	}
+}
+
+func TestHandleCreateCollection_RequiresCategoryOrDomains(t *testing.T) {
+	storage := &createCollectionStorage{fakeStorage: &fakeStorage{}}
+	validate := testhelpers.NewValidator(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/collections"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{},
+	}
+	req.SetBody([]byte(`{
+		"name": "My Collection",
+		"benchmarks": [{"id": "b1", "provider_id": "p1"}]
+	}`))
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
+
+	h.HandleCreateCollection(ctx, req, resp)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d body %s", http.StatusBadRequest, recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "either category or a non-empty domains array must be provided") {
+		t.Fatalf("expected classification validation error, got %s", recorder.Body.String())
+	}
+}
+
+func TestHandleCreateCollection_AllowsDomainsWithoutCategory(t *testing.T) {
+	storage := &createCollectionStorage{fakeStorage: &fakeStorage{
+		providerConfigs: map[string]api.ProviderResource{
+			"p1": {
+				Resource: api.Resource{ID: "p1"},
+				ProviderConfig: api.ProviderConfig{
+					Benchmarks: []api.BenchmarkResource{{ID: "b1", URL: "https://example.com/b1"}},
+				},
+			},
+		},
+	}}
+	validate := testhelpers.NewValidator(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/collections"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{},
+	}
+	req.SetBody([]byte(`{
+		"name": "My Collection",
+		"domains": ["knowledge_and_reasoning"],
+		"benchmarks": [{"id": "b1", "provider_id": "p1"}]
+	}`))
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
+
+	h.HandleCreateCollection(ctx, req, resp)
+
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d body %s", http.StatusCreated, recorder.Code, recorder.Body.String())
+	}
+	var got api.CollectionResource
+	if err := json.NewDecoder(recorder.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.Category != "" {
+		t.Errorf("expected no category, got %q", got.Category)
+	}
+	if !reflect.DeepEqual(got.Domains, []string{"knowledge_and_reasoning"}) {
+		t.Errorf("Domains: got %v, want [knowledge_and_reasoning]", got.Domains)
 	}
 }
 

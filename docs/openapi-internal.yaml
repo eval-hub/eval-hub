@@ -1590,7 +1590,16 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CollectionConfig'
+              allOf:
+                - $ref: '#/components/schemas/CollectionConfig'
+                - anyOf:
+                    - required:
+                        - category
+                    - required:
+                        - domains
+                      properties:
+                        domains:
+                          minItems: 1
             examples:
               request:
                 summary: Create a safety evaluation collection
@@ -1624,10 +1633,11 @@ paths:
                       pass_criteria:
                         threshold: 0.3
               MinimalCollection:
-                summary: Create a minimal collection
+                summary: Create a minimal collection using domains
                 value:
                   name: quick-reasoning-check
-                  category: reasoning
+                  domains:
+                    - knowledge_and_reasoning
                   benchmarks:
                     - id: arc_easy
                       provider_id: lm_evaluation_harness
@@ -1802,7 +1812,16 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CollectionConfig'
+              allOf:
+                - $ref: '#/components/schemas/CollectionConfig'
+                - anyOf:
+                    - required:
+                        - category
+                    - required:
+                        - domains
+                      properties:
+                        domains:
+                          minItems: 1
             examples:
               request:
                 summary: Update collection to add a quality benchmark
@@ -3731,8 +3750,10 @@ components:
         category:
           deprecated: true
           type: string
+          minLength: 1
+          maxLength: 128
           description: |
-            DEPRECATED — use `domains` instead. Retained for backwards compatibility; will be made optional and eventually removed in a future version.
+            DEPRECATED — use `domains` instead. Retained for backwards compatibility. A create or update request must include either this field or a non-empty `domains` array.
         description:
           type: string
           description: Optional description.
@@ -3792,7 +3813,6 @@ components:
           description: Structured metadata for AI agent discoverability at the collection level.
       required:
         - name
-        - category
         - benchmarks
     CollectionResource:
       type: object
