@@ -224,6 +224,8 @@ func (s *sqlStorage) PatchCollection(id string, patches *api.Patch) (*api.Collec
 	var updated *api.CollectionResource
 
 	err := s.withTransaction("patch collection", id, func(txn *sql.Tx) error {
+		// Test hook: no-op unless a test installs a callback (see test_hooks.go).
+		invokeCollectionPatchBeforeLockedReadHook(id)
 		persistedCollection, err := s.getCollectionTransactionalForUpdate(txn, id)
 		if err != nil {
 			return err

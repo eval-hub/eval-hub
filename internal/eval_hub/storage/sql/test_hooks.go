@@ -5,6 +5,8 @@ import "sync"
 var (
 	evaluationJobUpdateTestHookMu      sync.RWMutex
 	evaluationJobUpdateAfterLockedRead func(jobID, benchmarkID string)
+	collectionPatchBeforeReadHookMu    sync.RWMutex
+	collectionPatchBeforeLockedRead    func(collectionID string)
 	collectionPatchTestHookMu          sync.RWMutex
 	collectionPatchAfterLockedRead     func(collectionID string)
 )
@@ -21,6 +23,21 @@ func invokeEvaluationJobUpdateAfterLockedReadHook(jobID, benchmarkID string) {
 	evaluationJobUpdateTestHookMu.RUnlock()
 	if fn != nil {
 		fn(jobID, benchmarkID)
+	}
+}
+
+func setCollectionPatchBeforeLockedReadHook(fn func(collectionID string)) {
+	collectionPatchBeforeReadHookMu.Lock()
+	defer collectionPatchBeforeReadHookMu.Unlock()
+	collectionPatchBeforeLockedRead = fn
+}
+
+func invokeCollectionPatchBeforeLockedReadHook(collectionID string) {
+	collectionPatchBeforeReadHookMu.RLock()
+	fn := collectionPatchBeforeLockedRead
+	collectionPatchBeforeReadHookMu.RUnlock()
+	if fn != nil {
+		fn(collectionID)
 	}
 }
 

@@ -48,6 +48,10 @@ func runMakeCommand(t *testing.T, databaseName string, user string, args ...stri
 }
 
 func startPostgres(t *testing.T, databaseName string, user string, image bool) error {
+	if os.Getenv("POSTGRES_URL") != "" {
+		t.Log("Using PostgreSQL from POSTGRES_URL")
+		return nil
+	}
 	if image {
 		_ = runMakeCommand(t, databaseName, user, "stop-postgres-container")
 		_ = runMakeCommand(t, databaseName, user, "delete-postgres-container")
@@ -80,6 +84,9 @@ func startPostgres(t *testing.T, databaseName string, user string, image bool) e
 }
 
 func stopPostgres(t *testing.T, databaseName string, user string, image bool) {
+	if os.Getenv("POSTGRES_URL") != "" {
+		return
+	}
 	if image {
 		err := runMakeCommand(t, databaseName, user, "stop-postgres-container")
 		if err != nil {

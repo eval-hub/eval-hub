@@ -3,11 +3,13 @@ package sql_test
 import (
 	"encoding/json"
 	"math"
+	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/common"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql"
@@ -504,6 +506,10 @@ func TestCollectionPatchCollection(t *testing.T) {
 func TestCollectionPatchConcurrentPostgres(t *testing.T) {
 	image := false
 	databaseName := getDBName()
+	if os.Getenv("POSTGRES_URL") != "" {
+		testCollectionPatchConcurrentDisjoint(t, "postgres", databaseName)
+		return
+	}
 	user, err := getPostgresUser()
 	if err != nil {
 		t.Skipf("Failed to get Postgres user: %v", err)
@@ -525,7 +531,7 @@ func testCollectionPatchConcurrentDisjoint(t *testing.T, driver, databaseName st
 	}
 	scoped := store.WithTenant("t1").WithOwner("user1")
 	collection := &api.CollectionResource{
-		Resource: api.Resource{ID: "concurrent-patch", Owner: "user1", Tenant: "t1"},
+		Resource: api.Resource{ID: common.GUID(), Owner: "user1", Tenant: "t1"},
 		CollectionConfig: api.CollectionConfig{
 			Name:        "Original Name",
 			Description: "Original description",
@@ -541,15 +547,27 @@ func testCollectionPatchConcurrentDisjoint(t *testing.T, driver, databaseName st
 	// must wait at SELECT ... FOR UPDATE, then apply its change to the first
 	// transaction's committed entity instead of overwriting it with a stale copy.
 	locked := make(chan struct{})
+	secondLockedReadAttempt := make(chan struct{})
 	release := make(chan struct{})
 	var holdGate sync.Mutex
 	var holdingTxn bool
+	var readAttemptGate sync.Mutex
+	readAttempts := 0
 	t.Cleanup(func() {
+		sql.SetCollectionPatchBeforeLockedReadHook(nil)
 		sql.SetCollectionPatchAfterLockedReadHook(nil)
 		select {
 		case <-release:
 		default:
 			close(release)
+		}
+	})
+	sql.SetCollectionPatchBeforeLockedReadHook(func(_ string) {
+		readAttemptGate.Lock()
+		defer readAttemptGate.Unlock()
+		readAttempts++
+		if readAttempts == 2 {
+			close(secondLockedReadAttempt)
 		}
 	})
 	sql.SetCollectionPatchAfterLockedReadHook(func(_ string) {
@@ -583,6 +601,11 @@ func testCollectionPatchConcurrentDisjoint(t *testing.T, driver, databaseName st
 		_, err := scoped.PatchCollection(collection.Resource.ID, patchDescription)
 		secondDone <- err
 	}()
+	select {
+	case <-secondLockedReadAttempt:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for second PATCH transaction to attempt the row lock")
+	}
 
 	select {
 	case err := <-firstDone:
