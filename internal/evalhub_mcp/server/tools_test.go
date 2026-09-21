@@ -185,6 +185,8 @@ func TestToolsListIncludesAll(t *testing.T) {
 		"get_job_status":     false,
 		"discover_providers": false,
 		"create_collection":  false,
+		"search_benchmarks":  false,
+		"get_benchmark":      false,
 	}
 	for _, tool := range result.Tools {
 		if _, ok := want[tool.Name]; ok {
@@ -1087,6 +1089,133 @@ func TestGetJobStatusRunningNoEnrichment(t *testing.T) {
 	}
 	if len(b.Complements) != 0 {
 		t.Errorf("running benchmark should not have complements, got %v", b.Complements)
+	}
+}
+
+// --- search_benchmarks / get_benchmark ---
+
+func testProvidersWithBenchmarks() []api.ProviderResource {
+	return []api.ProviderResource{
+		{
+			Resource: api.Resource{ID: "lm_evaluation_harness"},
+			ProviderConfig: api.ProviderConfig{
+				Name:  "lm_evaluation_harness",
+				Title: "LM Evaluation Harness",
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "ifeval", Name: "IFEval", Description: "Instruction following", Category: "instruction_following", Tags: []string{"instruction", "core"}, Metrics: []string{"acc"}},
+					{ID: "toxigen", Name: "ToxiGen", Description: "Toxicity detection", Category: "safety", Tags: []string{"safety", "toxicity"}, Metrics: []string{"acc"}},
+				},
+			},
+		},
+		{
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				Name:  "garak",
+				Title: "Garak",
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "dan", Name: "DAN", Description: "Jailbreak probe", Category: "safety", Tags: []string{"safety", "red_teaming"}},
+				},
+			},
+		},
+	}
+}
+
+func TestGetBenchmarkToolFound(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithBenchmarks())
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[BenchmarkOutput](t, ctx, cs, "get_benchmark", map[string]any{"benchmark_id": "toxigen"})
+	if out.ID != "toxigen" {
+		t.Fatalf("expected toxigen, got %q", out.ID)
+	}
+	if out.ProviderID != "lm_evaluation_harness" {
+		t.Errorf("expected provider_id lm_evaluation_harness, got %q", out.ProviderID)
+	}
+}
+
+func TestGetBenchmarkToolNotFound(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithBenchmarks())
+	ctx, cs := connectWithTools(t, client)
+
+	errMsg := callToolExpectError(t, ctx, cs, "get_benchmark", map[string]any{"benchmark_id": "does-not-exist"})
+	if !strings.Contains(errMsg, "not found") {
+		t.Errorf("expected not-found error, got %q", errMsg)
+	}
+}
+
+func TestGetBenchmarkToolMissingID(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithBenchmarks())
+	ctx, cs := connectWithTools(t, client)
+
+	errMsg := callToolExpectError(t, ctx, cs, "get_benchmark", map[string]any{})
+	if !strings.Contains(errMsg, "benchmark_id") {
+		t.Errorf("expected validation error mentioning benchmark_id, got %q", errMsg)
+	}
+}
+
+func TestSearchBenchmarksByCategory(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithBenchmarks())
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[SearchBenchmarksOutput](t, ctx, cs, "search_benchmarks", map[string]any{"category": "safety"})
+	if out.Total != 2 {
+		t.Fatalf("expected 2 safety benchmarks, got %d", out.Total)
+	}
+	for _, b := range out.Benchmarks {
+		if b.ProviderID == "" {
+			t.Errorf("benchmark %q missing provider_id", b.ID)
+		}
+	}
+}
+
+func TestSearchBenchmarksByLabel(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithBenchmarks())
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[SearchBenchmarksOutput](t, ctx, cs, "search_benchmarks", map[string]any{"labels": []string{"toxicity"}})
+	if out.Total != 1 || out.Benchmarks[0].ID != "toxigen" {
+		t.Fatalf("expected only toxigen for label toxicity, got %+v", out.Benchmarks)
+	}
+}
+
+func TestSearchBenchmarksByQuery(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithBenchmarks())
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[SearchBenchmarksOutput](t, ctx, cs, "search_benchmarks", map[string]any{"query": "IFEval"})
+	if out.Total != 1 || out.Benchmarks[0].ID != "ifeval" {
+		t.Fatalf("expected only ifeval for query IFEval, got %+v", out.Benchmarks)
+	}
+}
+
+func TestSearchBenchmarksByProvider(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithBenchmarks())
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[SearchBenchmarksOutput](t, ctx, cs, "search_benchmarks", map[string]any{"provider_id": "garak"})
+	if out.Total != 1 || out.Benchmarks[0].ID != "dan" {
+		t.Fatalf("expected only dan for provider garak, got %+v", out.Benchmarks)
+	}
+}
+
+func TestSearchBenchmarksLimit(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithBenchmarks())
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[SearchBenchmarksOutput](t, ctx, cs, "search_benchmarks", map[string]any{"limit": 1})
+	if out.Total != 3 {
+		t.Errorf("expected total 3 (unbounded count), got %d", out.Total)
+	}
+	if len(out.Benchmarks) != 1 {
+		t.Errorf("expected 1 returned benchmark with limit=1, got %d", len(out.Benchmarks))
 	}
 }
 

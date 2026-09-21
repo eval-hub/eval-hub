@@ -124,10 +124,19 @@ design_collection:
           the live provider catalog and is the source of truth for valid `id` and
           `provider_id` values. **Do not read local files or invent benchmark IDs.**
 
-          If a benchmark you need is not in the catalog below, or you need more detail
-          about a provider's benchmarks, call the `discover_providers` tool to fetch the
-          live catalog (filter by `target_type` and/or `evaluates`, e.g. safety,
-          robustness). Use only the `id` and `provider_id` values it returns.
+          **If the AVAILABLE BENCHMARKS catalog below is empty (no entries), stop
+          immediately and fail.** Do not call `discover_providers`, do not invent IDs,
+          and do not produce a collection. Report that the benchmark catalog is empty —
+          the eval-hub service has no providers/benchmarks loaded — and end without
+          calling `create_collection`.
+
+          Otherwise, if a specific benchmark you need is missing from the (non-empty)
+          catalog below, or you need more detail about a benchmark, use the
+          `search_benchmarks` tool (filter by `query`, `labels`, `category`, or
+          `provider_id`) to find benchmark IDs, and `get_benchmark` to fetch full detail
+          for a specific `id`. Use `discover_providers` only to choose a provider by
+          capability — it returns provider-level metadata, not benchmark IDs. Use only
+          the `id` and `provider_id` values these tools return.
 
           ### Threshold Calibration Guidelines
 
