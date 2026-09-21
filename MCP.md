@@ -281,7 +281,7 @@ make start-service
 make start-mcp
 ```
 
-Now the MCP servife will be running on `http://localhost:3001` and connected to the local service running
+Now the MCP service will be running on `http://localhost:3001` and connected to the local service running
 on `http://localhost:8080`.
 
 ### Adding the MCP server to `Claude`
