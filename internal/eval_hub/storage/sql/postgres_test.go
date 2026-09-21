@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -18,6 +19,14 @@ var (
 )
 
 const defaultPostgresImagePassword = "eval-hub-test-password"
+
+func usesExternalPostgres() bool {
+	return usesExternalPostgresURL(os.Getenv("POSTGRES_URL"))
+}
+
+func usesExternalPostgresURL(postgresURL string) bool {
+	return strings.TrimSpace(postgresURL) != ""
+}
 
 func usePostgresImage() bool {
 	useImage, _ := strconv.ParseBool(os.Getenv("POSTGRES_USE_IMAGE"))
@@ -43,8 +52,8 @@ func getPostgresUser() (string, error) {
 }
 
 func getPostgresURL(databaseName string) (string, error) {
-	if dbURL := os.Getenv("POSTGRES_URL"); dbURL != "" {
-		return dbURL, nil
+	if usesExternalPostgres() {
+		return strings.TrimSpace(os.Getenv("POSTGRES_URL")), nil
 	}
 	user, err := getPostgresUser()
 	if err != nil {
@@ -73,6 +82,9 @@ func runMakeCommand(t *testing.T, databaseName string, user string, args ...stri
 }
 
 func startPostgres(t *testing.T, databaseName string, user string, image bool) error {
+	if usesExternalPostgres() {
+		return nil
+	}
 	if image {
 		_ = runMakeCommand(t, databaseName, user, "cleanup-postgres-container")
 		err := runMakeCommand(t, databaseName, user, "start-postgres-container")
@@ -109,6 +121,9 @@ func startPostgres(t *testing.T, databaseName string, user string, image bool) e
 }
 
 func stopPostgres(t *testing.T, databaseName string, user string, image bool) {
+	if usesExternalPostgres() {
+		return
+	}
 	if image {
 		err := runMakeCommand(t, databaseName, user, "stop-postgres-container")
 		if err != nil {
@@ -123,6 +138,16 @@ func stopPostgres(t *testing.T, databaseName string, user string, image bool) {
 		if err != nil {
 			t.Fatalf("Failed to stop postgres: %v", err)
 		}
+	}
+}
+
+func TestUsesExternalPostgres(t *testing.T) {
+	if usesExternalPostgresURL("") {
+		t.Error("usesExternalPostgresURL() = true with an empty POSTGRES_URL")
+	}
+
+	if !usesExternalPostgresURL(" postgres://example.test/eval_hub ") {
+		t.Error("usesExternalPostgresURL() = false with a configured POSTGRES_URL")
 	}
 }
 
