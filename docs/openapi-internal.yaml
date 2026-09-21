@@ -365,7 +365,7 @@ paths:
             type: string
             title: Collection Id
           description: |
-            Filter by the ID of the collection the job was created from. Maps to the collection.id field on the job record. Returns all jobs for the collection.
+            Filter by the ID of the collection the job was created from. Maps to the collection.id field on the job record. Returns the caller's own jobs for the collection (plus system-owned jobs); results are scoped to the authenticated user, not tenant-wide.
       responses:
         '200':
           description: Successful Response

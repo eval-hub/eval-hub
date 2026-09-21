@@ -577,6 +577,10 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext, r httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
 	// Skip owner scoping: this endpoint receives runtime callbacks from K8s
 	// sidecars that authenticate as a ServiceAccount, not the job creator.
+	// Because there is no storage-level owner backstop here, access to this
+	// route MUST be restricted to the runtime ServiceAccount at the
+	// kube-rbac-proxy layer; otherwise a tenant user could forge status/result
+	// events against another user's job in the same tenant.
 	storage := h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant)
 
 	logging.LogRequestStarted(ctx)

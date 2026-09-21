@@ -410,7 +410,9 @@ func (s *sqlStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
 
 func (s *sqlStorage) WithOwner(owner api.User) abstractions.Storage {
 	if owner != "" && s.tenant.IsEmpty() {
-		s.logger.Error("rejecting owner scope without tenant: owner isolation requires a tenant", "owner", string(owner))
+		// Expected in local/non-cluster mode where no tenant header is present:
+		// owner isolation only applies within a tenant, so clear the owner scope.
+		s.logger.Debug("clearing owner scope without tenant: owner isolation requires a tenant", "owner", string(owner))
 		owner = ""
 	}
 	return &sqlStorage{
