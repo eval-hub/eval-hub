@@ -109,7 +109,7 @@ func (c *Client) ResolveWorkspaceSupport(ctx context.Context) error {
 		return fmt.Errorf("mlflow client workspace capability is nil")
 	}
 	if ctx == nil {
-		ctx = context.Background()
+		return fmt.Errorf("context is nil for workspace support probe")
 	}
 	// Cached capability wins over a cancelled ctx — no probe is needed.
 	if c.WorkspaceSupportResolved() {

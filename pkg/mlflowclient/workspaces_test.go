@@ -666,6 +666,148 @@ func TestGetWorkspace_validation(t *testing.T) {
 	}
 }
 
+func TestResolveWorkspaceSupport_edgeCases(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil client", func(t *testing.T) {
+		t.Parallel()
+		var c *Client
+		if err := c.ResolveWorkspaceSupport(t.Context()); err == nil {
+			t.Fatal("expected error for nil client")
+		}
+	})
+
+	t.Run("nil capability", func(t *testing.T) {
+		t.Parallel()
+		c := &Client{ctx: t.Context()}
+		if err := c.ResolveWorkspaceSupport(t.Context()); err == nil {
+			t.Fatal("expected error for nil workspace capability")
+		}
+	})
+
+	t.Run("nil context", func(t *testing.T) {
+		t.Parallel()
+		client := NewClient("http://example")
+		var ctx context.Context
+		if err := client.ResolveWorkspaceSupport(ctx); err == nil {
+			t.Fatal("expected error for nil context")
+		}
+	})
+
+	t.Run("disabled server warns when workspace configured", func(t *testing.T) {
+		t.Parallel()
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewEncoder(w).Encode(ServerInfoResponse{WorkspacesEnabled: false})
+		}))
+		t.Cleanup(srv.Close)
+
+		client := NewClient(srv.URL).WithWorkspace("configured-ws")
+		if err := client.ResolveWorkspaceSupport(t.Context()); err != nil {
+			t.Fatalf("ResolveWorkspaceSupport() = %v", err)
+		}
+		if !client.WorkspaceSupportResolved() || client.WorkspacesEnabled() {
+			t.Fatal("expected resolved disabled support")
+		}
+		if client.WorkspaceName() != "configured-ws" {
+			t.Fatalf("WorkspaceName() = %q, want configured-ws", client.WorkspaceName())
+		}
+		if client.workspaceHeaderValue() != "" {
+			t.Fatal("expected no workspace header when disabled")
+		}
+	})
+
+	t.Run("lock re-check returns when resolved concurrently", func(t *testing.T) {
+		t.Parallel()
+		client := NewClient("http://example")
+		client.ws.mu.Lock()
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- client.ResolveWorkspaceSupport(context.Background())
+		}()
+		// Resolve passes the unlocked check then blocks on mu. Give it a moment,
+		// mark support resolved, then unlock so the under-lock re-check returns.
+		time.Sleep(20 * time.Millisecond)
+		client.ws.support.Store(int32(workspaceSupportEnabled))
+		client.ws.mu.Unlock()
+		if err := <-errCh; err != nil {
+			t.Fatalf("ResolveWorkspaceSupport() = %v, want nil after concurrent resolve", err)
+		}
+		if !client.WorkspacesEnabled() {
+			t.Fatal("expected workspaces enabled")
+		}
+	})
+}
+
+func TestWorkspaceHelpers_nilClient(t *testing.T) {
+	t.Parallel()
+	var c *Client
+	if c.WorkspacesEnabled() || c.WorkspaceSupportResolved() {
+		t.Fatal("nil client should report false")
+	}
+	if c.WorkspaceName() != "" || c.configuredWorkspaceName() != "" || c.workspaceHeaderValue() != "" {
+		t.Fatal("nil client should report empty workspace helpers")
+	}
+}
+
+func TestCreateWorkspace_validation(t *testing.T) {
+	t.Parallel()
+	var c *Client
+	if _, err := c.CreateWorkspace(&CreateWorkspaceRequest{Name: "x"}); err == nil {
+		t.Fatal("expected error for nil client")
+	}
+	client := NewClient("http://example")
+	if _, err := client.CreateWorkspace(nil); err == nil {
+		t.Fatal("expected error for nil request")
+	}
+	if _, err := client.CreateWorkspace(&CreateWorkspaceRequest{Name: "  "}); err == nil {
+		t.Fatal("expected error for empty name")
+	}
+}
+
+func TestEnsureWorkspace_nilClientAndEmptyName(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil client", func(t *testing.T) {
+		t.Parallel()
+		var c *Client
+		if err := c.EnsureWorkspace(); err == nil {
+			t.Fatal("expected error for nil client")
+		}
+	})
+
+	t.Run("enabled with empty workspace name is no-op", func(t *testing.T) {
+		t.Parallel()
+		client := NewClient("http://example").WithWorkspacesSupport(true)
+		if err := client.EnsureWorkspace(); err != nil {
+			t.Fatalf("EnsureWorkspace() = %v", err)
+		}
+	})
+
+	t.Run("nil client context uses background", func(t *testing.T) {
+		t.Parallel()
+		client := NewClient("http://example").WithWorkspacesSupport(true).WithWorkspace("default")
+		client.ctx = nil
+		if err := client.EnsureWorkspace(); err != nil {
+			t.Fatalf("EnsureWorkspace() = %v", err)
+		}
+	})
+
+	t.Run("returns resolve error when support unknown", func(t *testing.T) {
+		t.Parallel()
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		}))
+		t.Cleanup(srv.Close)
+
+		client := NewClient(srv.URL).WithContext(t.Context()).WithWorkspace("ws")
+		if err := client.EnsureWorkspace(); err == nil {
+			t.Fatal("expected EnsureWorkspace to fail when probe fails")
+		} else if !errors.Is(err, ErrWorkspaceSupportUnresolved) {
+			t.Fatalf("error = %v, want ErrWorkspaceSupportUnresolved", err)
+		}
+	})
+}
+
 func TestWithWorkspaceRespectsServerSupport(t *testing.T) {
 	t.Parallel()
 

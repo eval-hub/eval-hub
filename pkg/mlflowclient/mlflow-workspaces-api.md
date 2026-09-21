@@ -225,7 +225,7 @@ The eval-hub MLflow client (`pkg/mlflowclient/workspaces.go`) uses these endpoin
    result is cached for the process lifetime (`enabled` or `disabled`). On failure
    support stays **unknown** so a later call (for example from `EnsureWorkspace` on
    the next MLflow-dependent job) can try again. Returns immediately when capability
-   is already known, even if `ctx` is cancelled.
+   is already known, even if `ctx` is cancelled. A nil `ctx` is rejected.
 
 2. **`ProbeWorkspacesEnabled()`** — calls `GET /api/3.0/mlflow/server-info` to check
    whether the connected MLflow server supports workspaces. Returns `false` for

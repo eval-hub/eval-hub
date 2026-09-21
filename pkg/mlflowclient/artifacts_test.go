@@ -142,6 +142,31 @@ func TestUploadArtifactWithWorkspaceHeader(t *testing.T) {
 	}
 }
 
+func TestDownloadArtifactWithWorkspaceHeader(t *testing.T) {
+	t.Parallel()
+
+	var workspaceHeader string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		workspaceHeader = r.Header.Get("X-MLFLOW-WORKSPACE")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := NewClient(srv.URL).
+		WithContext(t.Context()).
+		WithWorkspacesSupport(true).
+		WithWorkspace("tenant-b")
+	reader, err := client.DownloadArtifact("1/run-1/artifacts/file.json")
+	if err != nil {
+		t.Fatalf("DownloadArtifact() err = %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+	if workspaceHeader != "tenant-b" {
+		t.Fatalf("workspace header = %q", workspaceHeader)
+	}
+}
+
 func TestReaderContentLength(t *testing.T) {
 	t.Parallel()
 
