@@ -92,12 +92,12 @@ design_collection:
     evaluation_goal:
       description: "Natural-language description of the evaluation use-case (e.g. 'enterprise deployment requiring safety, instruction following, and long-context support')."
       required: true
-    provider_filter:
-      description: "Comma-separated provider IDs to restrict benchmark selection (e.g. 'lm_evaluation_harness,lighteval'). Omit to consider all providers."
     max_benchmarks:
       description: "Maximum number of benchmarks to include (default: 12)."
     strictness:
       description: "Threshold strictness level: lenient, moderate, or strict. Shifts all thresholds down/center/up respectively. Defaults to moderate."
+    provider_filter:
+      description: "Comma-separated provider IDs to restrict benchmark selection (e.g. 'lm_evaluation_harness,lighteval'). Omit to consider all providers."
   result:
     description: "A collection design prompt with the full benchmark catalog and calibration guidelines."
     messages:
