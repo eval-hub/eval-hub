@@ -637,21 +637,32 @@ func TestDesignCollectionOnlySystemCollections(t *testing.T) {
 	}
 }
 
-func TestDesignCollectionEmptyProvidersReturnsEmptyArray(t *testing.T) {
+func TestDesignCollectionEmptyProvidersErrors(t *testing.T) {
 	t.Parallel()
 	ds := &mockDataSource{}
 	ctx, cs := connectWithPromptsAndDS(t, ds)
 
-	result := getPrompt(t, ctx, cs, "design_collection", map[string]string{
+	errMsg := getPromptExpectError(t, ctx, cs, "design_collection", map[string]string{
 		"evaluation_goal": "safety check",
 	})
 
-	text := allMessageText(result.Messages)
-	if strings.Contains(text, "\nnull\n") || strings.Contains(text, "\nnull") {
-		t.Error("empty provider list should produce [] not null in benchmark catalog")
+	if !strings.Contains(errMsg, "benchmark catalog is empty") {
+		t.Errorf("expected empty-catalog error, got: %q", errMsg)
 	}
-	if !strings.Contains(text, "[]") {
-		t.Error("empty provider list should produce [] in benchmark catalog")
+}
+
+func TestDesignCollectionEmptyProviderFilterErrors(t *testing.T) {
+	t.Parallel()
+	ds := testDesignCollectionDS()
+	ctx, cs := connectWithPromptsAndDS(t, ds)
+
+	errMsg := getPromptExpectError(t, ctx, cs, "design_collection", map[string]string{
+		"evaluation_goal": "safety check",
+		"provider_filter": "nonexistent_provider",
+	})
+
+	if !strings.Contains(errMsg, "nonexistent_provider") {
+		t.Errorf("expected filter-specific empty-catalog error, got: %q", errMsg)
 	}
 }
 

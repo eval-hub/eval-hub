@@ -313,9 +313,15 @@ func designCollectionHandler(result *promptResultConfig, ds EvalHubDiscovery, lo
 			return nil, fmt.Errorf("invalid %s %q; valid values: %s", ArgNameStrictness, strictness, strings.Join(validStrictness, ", "))
 		}
 
-		benchmarkCatalog, err := buildBenchmarkCatalog(ds, providerFilter)
+		benchmarkCatalog, benchmarkCount, err := buildBenchmarkCatalog(ds, providerFilter)
 		if err != nil {
 			return nil, fmt.Errorf("fetching benchmark catalog: %w", err)
+		}
+		if benchmarkCount == 0 {
+			if providerFilter != "" {
+				return nil, fmt.Errorf("benchmark catalog is empty for provider filter %q; check that the eval-hub service has these providers loaded", providerFilter)
+			}
+			return nil, fmt.Errorf("benchmark catalog is empty; check that the eval-hub service has providers loaded")
 		}
 
 		collectionExamples, err := buildCollectionExamples(ds, providerFilter)
@@ -372,7 +378,7 @@ type benchmarkCatalogEntry struct {
 	Metrics     []string `json:"metrics,omitempty"`
 }
 
-func buildBenchmarkCatalog(ds EvalHubDiscovery, providerFilter string) (string, error) {
+func buildBenchmarkCatalog(ds EvalHubDiscovery, providerFilter string) (string, int, error) {
 	var allowedProviders map[string]struct{}
 	if providerFilter != "" {
 		allowedProviders = make(map[string]struct{})
@@ -386,7 +392,7 @@ func buildBenchmarkCatalog(ds EvalHubDiscovery, providerFilter string) (string, 
 
 	providers, err := allProviders(ds)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
 	entries := make([]benchmarkCatalogEntry, 0)
@@ -413,9 +419,9 @@ func buildBenchmarkCatalog(ds EvalHubDiscovery, providerFilter string) (string, 
 
 	data, err := json.MarshalIndent(entries, "", "  ")
 	if err != nil {
-		return "", fmt.Errorf("marshalling benchmark catalog: %w", err)
+		return "", 0, fmt.Errorf("marshalling benchmark catalog: %w", err)
 	}
-	return string(data), nil
+	return string(data), len(entries), nil
 }
 
 type collectionExample struct {

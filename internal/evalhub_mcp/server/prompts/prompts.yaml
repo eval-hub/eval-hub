@@ -160,6 +160,17 @@ design_collection:
 
           Use the `create_collection` tool to persist the collection when the user approves it.
 
+          ### Sourcing benchmarks
+
+          Always select benchmarks from the AVAILABLE BENCHMARKS catalog below — it is
+          the live provider catalog and is the source of truth for valid `id` and
+          `provider_id` values. **Do not read local files or invent benchmark IDs.**
+
+          If a benchmark you need is not in the catalog below, or you need more detail
+          about a provider's benchmarks, call the `discover_providers` tool to fetch the
+          live catalog (filter by `target_type` and/or `evaluates`, e.g. safety,
+          robustness). Use only the `id` and `provider_id` values it returns.
+
           ## Available Benchmarks
 
           {benchmark_catalog}
