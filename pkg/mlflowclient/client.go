@@ -10,9 +10,43 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
+
+// workspaceSupportKind is the result of probing MLflow server-info for workspace APIs.
+// Unknown means the probe has not succeeded yet (for example MLflow was unreachable);
+// Enabled/Disabled are set only after a definitive probe response and kept for the process lifetime.
+type workspaceSupportKind int32
+
+const (
+	workspaceSupportUnknown workspaceSupportKind = iota
+	workspaceSupportEnabled
+	workspaceSupportDisabled
+)
+
+// workspaceCapability is shared across Client copies so a successful probe on a
+// WithContext()/WithLogger() copy still updates process-wide capability state.
+// Workspace names stay on each Client (not shared) for tenant isolation.
+type workspaceCapability struct {
+	support atomic.Int32 // workspaceSupportKind
+
+	mu       sync.Mutex
+	inflight *workspaceProbeCall // non-nil while a probe is in progress
+
+	// onJoinWait is invoked when a caller begins waiting on an in-flight probe.
+	// Tests set this for explicit synchronization; production leaves it nil.
+	onJoinWait func()
+}
+
+// workspaceProbeCall lets concurrent ResolveWorkspaceSupport callers share one
+// in-flight probe (including its failure). After inflight clears, a later call
+// may probe again while support is still unknown.
+type workspaceProbeCall struct {
+	done chan struct{}
+	err  error
+}
 
 // API endpoint constants
 const (
@@ -40,8 +74,8 @@ type Client struct {
 	authToken                  string
 	authTokenPath              string
 	authTokenPathWarningLogged atomic.Bool
-	workspace                  string
-	workspacesEnabled          bool
+	ws                         *workspaceCapability
+	workspace                  string // per-client; not shared across copies
 	logger                     *slog.Logger
 }
 
@@ -50,14 +84,14 @@ func (c *Client) copy() *Client {
 		return nil
 	}
 	cp := &Client{
-		ctx:               c.ctx,
-		baseURL:           c.baseURL,
-		httpClient:        c.httpClient,
-		authToken:         c.authToken,
-		authTokenPath:     c.authTokenPath,
-		workspace:         c.workspace,
-		workspacesEnabled: c.workspacesEnabled,
-		logger:            c.logger,
+		ctx:           c.ctx,
+		baseURL:       c.baseURL,
+		httpClient:    c.httpClient,
+		authToken:     c.authToken,
+		authTokenPath: c.authTokenPath,
+		ws:            c.ws, // shared capability/probe state only
+		workspace:     c.workspace,
+		logger:        c.logger,
 	}
 	cp.authTokenPathWarningLogged.Store(c.authTokenPathWarningLogged.Load())
 	return cp
@@ -76,6 +110,7 @@ func NewClient(baseURL string) *Client {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		ws:     &workspaceCapability{},
 		logger: slog.New(slog.DiscardHandler),
 	}
 }
@@ -130,40 +165,52 @@ func (c *Client) WithTokenPath(authTokenPath string) *Client {
 }
 
 // WithWorkspacesSupport records whether the server supports X-MLFLOW-WORKSPACE headers.
-// Call ProbeWorkspacesEnabled during client setup, then pass the result here.
+// Prefer ResolveWorkspaceSupport during setup; this setter remains for tests and callers
+// that already know the server capability.
 func (c *Client) WithWorkspacesSupport(enabled bool) *Client {
 	if c == nil {
 		return nil
 	}
 	cp := c.copy()
-	cp.workspacesEnabled = enabled
-	if !enabled {
-		cp.workspace = ""
+	if enabled {
+		cp.ws.support.Store(int32(workspaceSupportEnabled))
+	} else {
+		cp.ws.support.Store(int32(workspaceSupportDisabled))
 	}
 	return cp
 }
 
-// WithWorkspace sets the workspace name sent as X-MLFLOW-WORKSPACE when the server supports workspaces.
+// WithWorkspace sets the workspace name sent as X-MLFLOW-WORKSPACE when workspaces are enabled.
+// The name is private to this client copy (tenant isolation); capability state remains shared.
 func (c *Client) WithWorkspace(workspace string) *Client {
 	if c == nil {
 		return nil
 	}
 	cp := c.copy()
-	workspace = strings.TrimSpace(workspace)
-	if workspace == "" {
-		cp.workspace = ""
-		return cp
-	}
-	if !cp.workspacesEnabled {
-		cp.logger.Info(
-			"MLflow workspaces not enabled on server; ignoring workspace",
-			"workspace", workspace,
-		)
-		cp.workspace = ""
-		return cp
-	}
-	cp.workspace = workspace
+	cp.workspace = strings.TrimSpace(workspace)
 	return cp
+}
+
+func (c *Client) workspaceHeaderValue() string {
+	if c == nil || c.ws == nil {
+		return ""
+	}
+	if workspaceSupportKind(c.ws.support.Load()) != workspaceSupportEnabled {
+		return ""
+	}
+	return c.workspace
+}
+
+func (c *Client) configuredWorkspaceName() string {
+	if c == nil {
+		return ""
+	}
+	return c.workspace
+}
+
+// WorkspaceName returns the configured X-MLFLOW-WORKSPACE value for this client copy.
+func (c *Client) WorkspaceName() string {
+	return c.configuredWorkspaceName()
 }
 
 func (c *Client) GetHTTPClient() *http.Client {
@@ -253,8 +300,10 @@ func (c *Client) doRequestInternal(method, endpoint string, body any, includeWor
 	// X-MLFLOW-WORKSPACE scopes requests to a workspace on servers started with
 	// --enable-workspaces (MLflow 3.10+). Sending it when workspaces are disabled
 	// returns FEATURE_DISABLED from MLflow 3.13+.
-	if includeWorkspaceHeader && c.workspacesEnabled && c.workspace != "" {
-		req.Header.Set("X-MLFLOW-WORKSPACE", c.workspace)
+	if includeWorkspaceHeader {
+		if ws := c.workspaceHeaderValue(); ws != "" {
+			req.Header.Set("X-MLFLOW-WORKSPACE", ws)
+		}
 	}
 
 	resp, err := c.httpClient.Do(req)

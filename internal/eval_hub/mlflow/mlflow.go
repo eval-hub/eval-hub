@@ -19,8 +19,6 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-const workspaceProbeTimeout = 5 * time.Second
-
 func SetupMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.Client, string, string, error) {
 	mlflowClient, err := NewMLFlowClient(config, logger)
 	if err != nil {
@@ -117,30 +115,22 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.
 		logger.Info("Enabled OTEL transport for MLFlow client")
 	}
 
-	probeCtx, cancel := context.WithTimeout(context.Background(), workspaceProbeTimeout)
-	defer cancel()
-
-	workspacesEnabled, err := client.WithContext(probeCtx).ProbeWorkspacesEnabled()
-	if err != nil {
-		logger.Warn(
-			"Could not probe MLflow workspace support; workspace headers will not be sent",
-			"error", err.Error(),
-		)
-		workspacesEnabled = false
-	}
-	client = client.WithWorkspacesSupport(workspacesEnabled)
-	logger.Info("MLflow workspace support probed", "workspaces_enabled", workspacesEnabled)
-
+	// Retain the configured workspace name even if the probe fails; EnsureWorkspace
+	// re-probes later when support is still unknown.
 	if config.MLFlow.Workspace != "" {
-		if workspacesEnabled {
-			client = client.WithWorkspace(config.MLFlow.Workspace)
-			logger.Info("MLflow workspace configured", "workspace", config.MLFlow.Workspace)
-		} else {
-			logger.Warn(
-				"MLFLOW_WORKSPACE is set but the MLflow server does not support workspaces; ignoring",
-				"workspace", config.MLFlow.Workspace,
-			)
-		}
+		client = client.WithWorkspace(config.MLFlow.Workspace)
+	}
+
+	// Single probe at startup. A definitive enabled/disabled result is cached;
+	// failure leaves support unknown for the next MLflow-dependent job to retry.
+	if err := client.ResolveWorkspaceSupport(context.Background()); err != nil {
+		logger.Warn(
+			"Could not probe MLflow workspace support during startup; will retry on the next MLflow-dependent job",
+			"error", err.Error(),
+			"workspace", config.MLFlow.Workspace,
+		)
+	} else if client.WorkspacesEnabled() && config.MLFlow.Workspace != "" {
+		logger.Info("MLflow workspace configured", "workspace", config.MLFlow.Workspace)
 	}
 
 	logger.Info("MLFlow tracking enabled", "mlflow_experiment_url", client.GetExperimentsURL())

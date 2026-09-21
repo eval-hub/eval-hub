@@ -84,7 +84,7 @@ func TestMLFlowIntegration(t *testing.T) {
 				Logger:           logger,
 			})
 
-			t.Run("NewMLFlowClient probes server", func(t *testing.T) {
+			t.Run("NewMLFlowClient probes once then EnsureWorkspace uses result", func(t *testing.T) {
 				cfg := mlflowServiceConfig(t, srv.TrackingURI, func(m *config.MLFlowConfig) {
 					if tc.enableWorkspaces {
 						m.Workspace = "integration-workspace"
@@ -97,11 +97,16 @@ func TestMLFlowIntegration(t *testing.T) {
 				if client == nil {
 					t.Fatal("expected non-nil client")
 				}
+				if !client.WorkspaceSupportResolved() {
+					t.Fatal("expected workspace support resolved by startup probe")
+				}
 				if client.WorkspacesEnabled() != tc.enableWorkspaces {
 					t.Fatalf("WorkspacesEnabled() = %t, want %t", client.WorkspacesEnabled(), tc.enableWorkspaces)
 				}
-				t.Logf("NewMLFlowClient: workspaces_enabled=%t", client.WorkspacesEnabled())
-				// TODO client.GetVersion()
+				if err := client.EnsureWorkspace(); err != nil {
+					t.Fatalf("EnsureWorkspace() = %v", err)
+				}
+				t.Logf("workspaces_enabled=%t", client.WorkspacesEnabled())
 			})
 
 			t.Run("GetOrCreateExperimentID without workspace", func(t *testing.T) {

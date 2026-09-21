@@ -220,17 +220,27 @@ Trace archival settings accepted by workspace APIs and returned in workspace met
 
 The eval-hub MLflow client (`pkg/mlflowclient/workspaces.go`) uses these endpoints as follows:
 
-1. **`ProbeWorkspacesEnabled()`** — calls `GET /api/3.0/mlflow/server-info` to check
-   whether the connected MLflow server supports workspaces. Returns `false` for
-   older servers that respond with `404`.
+1. **`ResolveWorkspaceSupport(ctx)`** — probes workspace capability once (5s timeout)
+   via `server-info`. Concurrent callers share one in-flight probe. On success the
+   result is cached for the process lifetime (`enabled` or `disabled`). On failure
+   support stays **unknown** so a later call (for example from `EnsureWorkspace` on
+   the next MLflow-dependent job) can try again. Returns immediately when capability
+   is already known, even if `ctx` is cancelled.
 
-2. **`GetWorkspace(name)`** — calls `GET /api/3.0/mlflow/workspaces/{name}` to
+2. **`ProbeWorkspacesEnabled()`** — calls `GET /api/3.0/mlflow/server-info` to check
+   whether the connected MLflow server supports workspaces. Returns `false` for
+   older servers that respond with `404`. Prefer `ResolveWorkspaceSupport` so
+   results are shared and cached.
+
+3. **`GetWorkspace(name)`** — calls `GET /api/3.0/mlflow/workspaces/{name}` to
    retrieve a single workspace.
 
-3. **`CreateWorkspace(req)`** — calls `POST /api/3.0/mlflow/workspaces` (without the
+4. **`CreateWorkspace(req)`** — calls `POST /api/3.0/mlflow/workspaces` (without the
    `X-MLFLOW-WORKSPACE` header) to create a new workspace.
 
-4. **`EnsureWorkspace()`** — idempotent helper that creates the client's active
-   workspace if it does not already exist. Skips creation for the reserved
-   `default` workspace. Handles the `RESOURCE_ALREADY_EXISTS` race condition
-   from concurrent creators.
+5. **`EnsureWorkspace()`** — resolves workspace support if still unknown, then
+   creates the client's active workspace when workspaces are enabled. Skips
+   creation for the reserved `default` workspace. Handles the
+   `RESOURCE_ALREADY_EXISTS` race condition from concurrent creators.
+   Workspace **names** are per client copy (tenant isolation); capability state
+   is shared across copies.

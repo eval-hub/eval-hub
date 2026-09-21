@@ -1,6 +1,7 @@
 package mlflow
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -9,7 +10,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
@@ -51,15 +54,16 @@ func TestNewMLFlowClient(t *testing.T) {
 		}
 	})
 
-	t.Run("probes workspaces and configures workspace", func(t *testing.T) {
+	t.Run("probes workspaces once at startup when available", func(t *testing.T) {
 		t.Parallel()
+		var probes atomic.Int32
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			switch r.URL.Path {
-			case "/api/3.0/mlflow/server-info":
-				_ = json.NewEncoder(w).Encode(mlflowclient.ServerInfoResponse{WorkspacesEnabled: true})
-			default:
+			if r.URL.Path != "/api/3.0/mlflow/server-info" {
 				http.NotFound(w, r)
+				return
 			}
+			probes.Add(1)
+			_ = json.NewEncoder(w).Encode(mlflowclient.ServerInfoResponse{WorkspacesEnabled: true})
 		}))
 		t.Cleanup(srv.Close)
 
@@ -71,27 +75,146 @@ func TestNewMLFlowClient(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewMLFlowClient() err = %v", err)
 		}
-		if !client.WorkspacesEnabled() {
-			t.Fatal("expected workspaces enabled after probe")
+		if probes.Load() != 1 {
+			t.Fatalf("startup probes = %d, want 1", probes.Load())
+		}
+		if !client.WorkspacesEnabled() || !client.WorkspaceSupportResolved() {
+			t.Fatal("expected workspaces enabled after startup probe")
+		}
+		if client.WorkspaceName() != "prod-ws" {
+			t.Fatalf("workspace = %q, want prod-ws", client.WorkspaceName())
 		}
 	})
 
-	t.Run("probe failure still returns client", func(t *testing.T) {
+	t.Run("SetupMLFlowClient still fetches /version", func(t *testing.T) {
 		t.Parallel()
-		cfg := mlflowServiceConfig(t, "http://127.0.0.1:1", nil)
+		var versionHits atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/version":
+				versionHits.Add(1)
+				_, _ = w.Write([]byte("3.12.0"))
+			case "/api/3.0/mlflow/server-info":
+				_ = json.NewEncoder(w).Encode(mlflowclient.ServerInfoResponse{WorkspacesEnabled: false})
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := mlflowServiceConfig(t, srv.URL, nil)
+		client, uri, version, err := SetupMLFlowClient(cfg, logger)
+		if err != nil {
+			t.Fatalf("SetupMLFlowClient() err = %v", err)
+		}
+		if client == nil || uri != srv.URL {
+			t.Fatalf("client/uri unexpected: client=%v uri=%q", client != nil, uri)
+		}
+		if version != "3.12.0" {
+			t.Fatalf("version = %q, want 3.12.0", version)
+		}
+		if versionHits.Load() != 1 {
+			t.Fatalf("/version hits = %d, want 1", versionHits.Load())
+		}
+	})
+
+	t.Run("startup probe success skips EnsureWorkspace re-probe", func(t *testing.T) {
+		t.Parallel()
+		var probes atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case r.URL.Path == "/api/3.0/mlflow/server-info":
+				probes.Add(1)
+				_ = json.NewEncoder(w).Encode(mlflowclient.ServerInfoResponse{WorkspacesEnabled: true})
+			case strings.HasPrefix(r.URL.Path, "/api/3.0/mlflow/workspaces/"):
+				_ = json.NewEncoder(w).Encode(mlflowclient.GetWorkspaceResponse{
+					Workspace: mlflowclient.Workspace{Name: "prod-ws"},
+				})
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		t.Cleanup(srv.Close)
+
+		cfg := mlflowServiceConfig(t, srv.URL, func(m *config.MLFlowConfig) {
+			m.Workspace = "prod-ws"
+		})
+		client, err := NewMLFlowClient(cfg, logger)
+		if err != nil {
+			t.Fatalf("NewMLFlowClient() err = %v", err)
+		}
+		if probes.Load() != 1 {
+			t.Fatalf("startup probes = %d, want 1", probes.Load())
+		}
+		if err := client.EnsureWorkspace(); err != nil {
+			t.Fatalf("EnsureWorkspace() = %v", err)
+		}
+		if probes.Load() != 1 {
+			t.Fatalf("probes after EnsureWorkspace = %d, want 1 (no retry when resolved)", probes.Load())
+		}
+		if !client.WorkspacesEnabled() {
+			t.Fatal("expected workspaces enabled")
+		}
+	})
+
+	t.Run("failed startup probe leaves unknown and retries on EnsureWorkspace", func(t *testing.T) {
+		t.Parallel()
+		var probes atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/api/3.0/mlflow/server-info" {
+				http.NotFound(w, r)
+				return
+			}
+			n := probes.Add(1)
+			if n == 1 {
+				http.Error(w, "unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(mlflowclient.ServerInfoResponse{WorkspacesEnabled: true})
+		}))
+		t.Cleanup(srv.Close)
+
+		// No workspace name: EnsureWorkspace only re-resolves capability.
+		cfg := mlflowServiceConfig(t, srv.URL, nil)
+		client, err := NewMLFlowClient(cfg, logger)
+		if err != nil {
+			t.Fatalf("NewMLFlowClient() err = %v", err)
+		}
+		if probes.Load() != 1 {
+			t.Fatalf("startup probes = %d, want 1 (no startup retries)", probes.Load())
+		}
+		if client.WorkspacesEnabled() || client.WorkspaceSupportResolved() {
+			t.Fatal("expected unknown support after failed startup probe")
+		}
+		if err := client.EnsureWorkspace(); err != nil {
+			t.Fatalf("EnsureWorkspace() = %v", err)
+		}
+		if !client.WorkspacesEnabled() {
+			t.Fatal("expected workspaces enabled after job-time retry")
+		}
+		if probes.Load() < 2 {
+			t.Fatalf("probes = %d, want at least 2 after EnsureWorkspace retry", probes.Load())
+		}
+	})
+
+	t.Run("unreachable startup probe leaves unknown", func(t *testing.T) {
+		t.Parallel()
+		cfg := mlflowServiceConfig(t, "http://127.0.0.1:1", func(m *config.MLFlowConfig) {
+			m.Workspace = "pending-ws"
+		})
 		client, err := NewMLFlowClient(cfg, logger)
 		if err != nil {
 			t.Fatalf("NewMLFlowClient() err = %v", err)
 		}
 		if client == nil {
-			t.Fatal("expected client when probe fails")
+			t.Fatal("expected client")
 		}
-		if client.WorkspacesEnabled() {
-			t.Fatal("expected workspaces disabled when probe fails")
+		if client.WorkspacesEnabled() || client.WorkspaceSupportResolved() {
+			t.Fatal("expected unknown support after failed startup probe")
 		}
 	})
 
-	t.Run("workspace ignored when server disables workspaces", func(t *testing.T) {
+	t.Run("disabled server is resolved at startup", func(t *testing.T) {
 		t.Parallel()
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_ = json.NewEncoder(w).Encode(mlflowclient.ServerInfoResponse{WorkspacesEnabled: false})
@@ -105,9 +228,23 @@ func TestNewMLFlowClient(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewMLFlowClient() err = %v", err)
 		}
+		if !client.WorkspaceSupportResolved() {
+			t.Fatal("expected resolved after definitive startup probe")
+		}
 		if client.WorkspacesEnabled() {
 			t.Fatal("expected workspaces disabled")
 		}
+	})
+
+	t.Run("unresolved probe returns mlflow_request_failed", func(t *testing.T) {
+		t.Parallel()
+		ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+		defer cancel()
+		client := mlflowclient.NewClient("http://127.0.0.1:1").WithContext(ctx)
+		_, _, err := GetOrCreateExperimentID(client, &api.EvaluationJobConfig{
+			Experiment: &api.ExperimentConfig{Name: "demo"},
+		}, "job-1")
+		assertServiceErrorCode(t, err, messages.MLFlowRequestFailed)
 	})
 
 	t.Run("invalid CA certificate path", func(t *testing.T) {
