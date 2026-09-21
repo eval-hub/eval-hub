@@ -3,7 +3,6 @@ package sql_test
 import (
 	"encoding/json"
 	"math"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -504,12 +503,8 @@ func TestCollectionPatchCollection(t *testing.T) {
 }
 
 func TestCollectionPatchConcurrentPostgres(t *testing.T) {
-	image := false
+	image := usePostgresImage()
 	databaseName := getDBName()
-	if os.Getenv("POSTGRES_URL") != "" {
-		testCollectionPatchConcurrentDisjoint(t, "postgres", databaseName)
-		return
-	}
 	user, err := getPostgresUser()
 	if err != nil {
 		t.Skipf("Failed to get Postgres user: %v", err)
