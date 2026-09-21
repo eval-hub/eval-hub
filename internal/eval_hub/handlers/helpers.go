@@ -271,22 +271,12 @@ func mergeBenchmarkParameters(benchmark api.CollectionBenchmarkConfig, jobBenchm
 		}
 	}
 
-	// Request parameters remain provider-scoped for compatibility: every request
-	// benchmark entry for this provider contributes to the shared parameter map.
-	// Apply them before collection parameters so collection values retain the
-	// next level of precedence.
-	for _, jobBenchmark := range jobBenchmarks {
-		if jobBenchmark.ProviderID == benchmark.ProviderID {
-			applyParameters(jobBenchmark.Parameters)
-		}
-	}
-
-	// Collection parameters override provider-scoped request values.
+	// Collection parameters provide the defaults for this benchmark.
 	applyParameters(benchmark.Parameters)
 
-	// Exact benchmark request parameters have the highest precedence. Reapply
-	// the matching entry after the collection merge, while retaining the
-	// provider-scoped behavior above for non-overlapping keys.
+	// An exact benchmark request override has the highest precedence. Parameters
+	// from another benchmark, even when it uses the same provider, must not bleed
+	// into this benchmark.
 	for _, jobBenchmark := range jobBenchmarks {
 		if jobBenchmark.ProviderID == benchmark.ProviderID && jobBenchmark.ID == benchmark.ID && jobBenchmark.ID != "" {
 			applyParameters(jobBenchmark.Parameters)
