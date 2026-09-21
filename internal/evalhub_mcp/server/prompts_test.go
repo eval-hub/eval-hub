@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -138,6 +139,36 @@ func TestPromptsHaveArgumentMetadata(t *testing.T) {
 			if gotRequired != wantRequired {
 				t.Errorf("prompt %q argument %q: required = %v, want %v", p.Name, argName, gotRequired, wantRequired)
 			}
+		}
+	}
+}
+
+// TestPromptArgumentOrder verifies that prompt arguments are surfaced in their
+// declared (YAML) order rather than a non-deterministic map order.
+func TestPromptArgumentOrder(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithPrompts(t)
+
+	result, err := cs.ListPrompts(ctx, nil)
+	if err != nil {
+		t.Fatalf("ListPrompts failed: %v", err)
+	}
+
+	wantOrder := map[string][]string{
+		"design_collection": {"evaluation_goal", "provider_filter", "max_benchmarks", "strictness"},
+	}
+
+	for _, p := range result.Prompts {
+		expected, ok := wantOrder[p.Name]
+		if !ok {
+			continue
+		}
+		got := make([]string, 0, len(p.Arguments))
+		for _, arg := range p.Arguments {
+			got = append(got, arg.Name)
+		}
+		if !slices.Equal(got, expected) {
+			t.Errorf("prompt %q argument order = %v, want %v", p.Name, got, expected)
 		}
 	}
 }

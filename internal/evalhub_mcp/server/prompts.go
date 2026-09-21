@@ -55,14 +55,38 @@ var guidanceYAML []byte
 var validApplicationTypes = []string{ApplicationTypeRAG, ApplicationTypeAgent, ApplicationTypeSafety, ApplicationTypeClassifier}
 
 type promptConfig struct {
-	Description string                     `yaml:"description"`
-	Arguments   map[string]*promptArgument `yaml:"arguments"`
-	Result      *promptResultConfig        `yaml:"result"`
+	Description string              `yaml:"description"`
+	Arguments   promptArguments     `yaml:"arguments"`
+	Result      *promptResultConfig `yaml:"result"`
 }
 
 type promptArgument struct {
+	Name        string `yaml:"-"`
 	Description string `yaml:"description"`
 	Required    bool   `yaml:"required,omitempty"`
+}
+
+// promptArguments preserves the order in which arguments are declared in the
+// YAML mapping. A plain map[string]*promptArgument would surface arguments in a
+// non-deterministic order, so we decode the mapping node manually.
+type promptArguments []*promptArgument
+
+func (a *promptArguments) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("prompt arguments must be a mapping, got node kind %d", node.Kind)
+	}
+	result := make(promptArguments, 0, len(node.Content)/2)
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		keyNode := node.Content[i]
+		valNode := node.Content[i+1]
+		arg := &promptArgument{Name: keyNode.Value}
+		if err := valNode.Decode(arg); err != nil {
+			return fmt.Errorf("decoding prompt argument %q: %w", keyNode.Value, err)
+		}
+		result = append(result, arg)
+	}
+	*a = result
+	return nil
 }
 
 type promptResultConfig struct {
@@ -80,9 +104,9 @@ func (p *promptConfig) ToMCPPrompt(name string) *mcp.Prompt {
 
 func (p *promptConfig) ToMCPPromptArguments() []*mcp.PromptArgument {
 	arguments := make([]*mcp.PromptArgument, 0, len(p.Arguments))
-	for name, argument := range p.Arguments {
+	for _, argument := range p.Arguments {
 		arguments = append(arguments, &mcp.PromptArgument{
-			Name:        name,
+			Name:        argument.Name,
 			Description: argument.Description,
 			Required:    argument.Required,
 		})
