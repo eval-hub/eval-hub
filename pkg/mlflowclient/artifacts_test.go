@@ -122,9 +122,9 @@ func TestUploadArtifactErrorResponse(t *testing.T) {
 func TestUploadArtifactWithWorkspaceHeader(t *testing.T) {
 	t.Parallel()
 
-	var workspaceHeader string
+	headerCh := make(chan string, 1)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		workspaceHeader = r.Header.Get("X-MLFLOW-WORKSPACE")
+		headerCh <- r.Header.Get("X-MLFLOW-WORKSPACE")
 		w.WriteHeader(http.StatusOK)
 	}))
 	t.Cleanup(srv.Close)
@@ -137,17 +137,17 @@ func TestUploadArtifactWithWorkspaceHeader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UploadArtifact() err = %v", err)
 	}
-	if workspaceHeader != "tenant-a" {
-		t.Fatalf("workspace header = %q", workspaceHeader)
+	if got := <-headerCh; got != "tenant-a" {
+		t.Fatalf("workspace header = %q", got)
 	}
 }
 
 func TestDownloadArtifactWithWorkspaceHeader(t *testing.T) {
 	t.Parallel()
 
-	var workspaceHeader string
+	headerCh := make(chan string, 1)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		workspaceHeader = r.Header.Get("X-MLFLOW-WORKSPACE")
+		headerCh <- r.Header.Get("X-MLFLOW-WORKSPACE")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{}`))
 	}))
@@ -162,8 +162,8 @@ func TestDownloadArtifactWithWorkspaceHeader(t *testing.T) {
 		t.Fatalf("DownloadArtifact() err = %v", err)
 	}
 	defer func() { _ = reader.Close() }()
-	if workspaceHeader != "tenant-b" {
-		t.Fatalf("workspace header = %q", workspaceHeader)
+	if got := <-headerCh; got != "tenant-b" {
+		t.Fatalf("workspace header = %q", got)
 	}
 }
 
