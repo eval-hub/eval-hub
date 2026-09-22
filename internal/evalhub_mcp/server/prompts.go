@@ -313,75 +313,103 @@ func designCollectionHandler(result *promptResultConfig, ds EvalHubDiscovery, lo
 		maxBenchmarksRaw := strings.TrimSpace(req.Params.Arguments[ArgNameMaxBenchmarks])
 		strictness := strings.TrimSpace(req.Params.Arguments[ArgNameStrictness])
 
-		maxBenchmarks := defaultMaxBenchmarks
-		if maxBenchmarksRaw != "" {
-			if n, err := strconv.Atoi(maxBenchmarksRaw); err == nil && n > 0 {
-				maxBenchmarks = n
-			}
-		}
-
 		log.Debug(fmt.Sprintf("%s called", PromptNameDesignCollection),
 			ArgNameEvaluationGoal, goal,
 			ArgNameProviderFilter, providerFilter,
-			ArgNameMaxBenchmarks, maxBenchmarks,
+			ArgNameMaxBenchmarks, maxBenchmarksRaw,
 			ArgNameStrictness, strictness,
 		)
 
-		if goal == "" {
-			return nil, fmt.Errorf("%s is required", ArgNameEvaluationGoal)
-		}
-
-		if strictness == "" {
-			strictness = defaultStrictness
-		} else if !isValidStrictness(strictness) {
-			return nil, fmt.Errorf("invalid %s %q; valid values: %s", ArgNameStrictness, strictness, strings.Join(validStrictness, ", "))
-		}
-
-		benchmarkCatalog, benchmarkCount, err := buildBenchmarkCatalog(ds, providerFilter)
+		description, messages, err := buildDesignCollection(ds, result, goal, providerFilter, maxBenchmarksRaw, strictness)
 		if err != nil {
-			return nil, fmt.Errorf("fetching benchmark catalog: %w", err)
-		}
-		if benchmarkCount == 0 {
-			if providerFilter != "" {
-				return nil, fmt.Errorf("benchmark catalog is empty for provider filter %q; check that the eval-hub service has these providers loaded", providerFilter)
-			}
-			return nil, fmt.Errorf("benchmark catalog is empty; check that the eval-hub service has providers loaded")
-		}
-
-		collectionExamples, err := buildCollectionExamples(ds, providerFilter)
-		if err != nil {
-			return nil, fmt.Errorf("fetching collection examples: %w", err)
-		}
-
-		maxBenchmarksStr := strconv.Itoa(maxBenchmarks)
-
-		var optionsParts []string
-		if providerFilter != "" {
-			optionsParts = append(optionsParts, fmt.Sprintf("Provider filter: %s", providerFilter))
-		}
-		optionsParts = append(optionsParts, fmt.Sprintf("Max benchmarks: %s", maxBenchmarksStr))
-		optionsParts = append(optionsParts, fmt.Sprintf("Strictness: %s", strictness))
-		optionsSummary := strings.Join(optionsParts, " | ")
-
-		messages := result.ToMCPPromptMessages(
-			"",
-			ArgNameEvaluationGoal, goal,
-			"options_summary", optionsSummary,
-			ArgNameStrictness, strictness,
-			"benchmark_catalog", benchmarkCatalog,
-			"collection_examples", collectionExamples,
-		)
-		if messages == nil {
-			return nil, fmt.Errorf("no messages found for design_collection prompt")
+			return nil, err
 		}
 
 		return &mcp.GetPromptResult{
-			Description: replaceTemplateVariables(
-				result.Description, ArgNameEvaluationGoal, goal,
-			),
-			Messages: messages,
+			Description: description,
+			Messages:    messages,
 		}, nil
 	}
+}
+
+// buildDesignCollection validates the design inputs and assembles the benchmark
+// catalog and calibration guidance shared by the design_collection prompt and
+// tool. It returns the (templated) description and the prompt messages, or an
+// error for invalid input or an empty catalog. maxBenchmarksRaw is accepted as a
+// string so both callers (prompt arguments and tool input) can share parsing.
+func buildDesignCollection(ds EvalHubDiscovery, result *promptResultConfig, goal, providerFilter, maxBenchmarksRaw, strictness string) (string, []*mcp.PromptMessage, error) {
+	goal = strings.TrimSpace(goal)
+	providerFilter = strings.TrimSpace(providerFilter)
+	maxBenchmarksRaw = strings.TrimSpace(maxBenchmarksRaw)
+	strictness = strings.TrimSpace(strictness)
+
+	if goal == "" {
+		return "", nil, fmt.Errorf("%s is required", ArgNameEvaluationGoal)
+	}
+
+	maxBenchmarks := defaultMaxBenchmarks
+	if maxBenchmarksRaw != "" {
+		if n, err := strconv.Atoi(maxBenchmarksRaw); err == nil && n > 0 {
+			maxBenchmarks = n
+		}
+	}
+
+	if strictness == "" {
+		strictness = defaultStrictness
+	} else if !isValidStrictness(strictness) {
+		return "", nil, fmt.Errorf("invalid %s %q; valid values: %s", ArgNameStrictness, strictness, strings.Join(validStrictness, ", "))
+	}
+
+	benchmarkCatalog, benchmarkCount, err := buildBenchmarkCatalog(ds, providerFilter)
+	if err != nil {
+		return "", nil, fmt.Errorf("fetching benchmark catalog: %w", err)
+	}
+	if benchmarkCount == 0 {
+		if providerFilter != "" {
+			return "", nil, fmt.Errorf("benchmark catalog is empty for provider filter %q; check that the eval-hub service has these providers loaded", providerFilter)
+		}
+		return "", nil, fmt.Errorf("benchmark catalog is empty; check that the eval-hub service has providers loaded")
+	}
+
+	collectionExamples, err := buildCollectionExamples(ds, providerFilter)
+	if err != nil {
+		return "", nil, fmt.Errorf("fetching collection examples: %w", err)
+	}
+
+	var optionsParts []string
+	if providerFilter != "" {
+		optionsParts = append(optionsParts, fmt.Sprintf("Provider filter: %s", providerFilter))
+	}
+	optionsParts = append(optionsParts, fmt.Sprintf("Max benchmarks: %s", strconv.Itoa(maxBenchmarks)))
+	optionsParts = append(optionsParts, fmt.Sprintf("Strictness: %s", strictness))
+	optionsSummary := strings.Join(optionsParts, " | ")
+
+	messages := result.ToMCPPromptMessages(
+		"",
+		ArgNameEvaluationGoal, goal,
+		"options_summary", optionsSummary,
+		ArgNameStrictness, strictness,
+		"benchmark_catalog", benchmarkCatalog,
+		"collection_examples", collectionExamples,
+	)
+	if messages == nil {
+		return "", nil, fmt.Errorf("no messages found for design_collection prompt")
+	}
+
+	description := replaceTemplateVariables(result.Description, ArgNameEvaluationGoal, goal)
+	return description, messages, nil
+}
+
+// promptMessagesText joins the text content of prompt messages into a single
+// document, used to surface the design_collection guidance as tool output.
+func promptMessagesText(messages []*mcp.PromptMessage) string {
+	parts := make([]string, 0, len(messages))
+	for _, m := range messages {
+		if tc, ok := m.Content.(*mcp.TextContent); ok && tc.Text != "" {
+			parts = append(parts, tc.Text)
+		}
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 func isValidStrictness(s string) bool {

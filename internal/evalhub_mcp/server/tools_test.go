@@ -103,9 +103,14 @@ func (m *mockToolClient) CreateCollection(config api.CollectionConfig) (*api.Col
 
 func connectWithTools(t *testing.T, client EvalHubToolClient) (context.Context, *mcp.ClientSession) {
 	t.Helper()
+	return connectWithToolsAndDS(t, client, nil)
+}
+
+func connectWithToolsAndDS(t *testing.T, client EvalHubToolClient, ds EvalHubDiscovery) (context.Context, *mcp.ClientSession) {
+	t.Helper()
 
 	srv := New(&ServerInfo{Build: "test"}, discardLogger, nil)
-	if err := registerTools(srv, client, discardLogger); err != nil {
+	if err := registerTools(srv, client, ds, discardLogger); err != nil {
 		t.Fatalf("registerTools: %v", err)
 	}
 
@@ -187,6 +192,7 @@ func TestToolsListIncludesAll(t *testing.T) {
 		"create_collection":  false,
 		"search_benchmarks":  false,
 		"get_benchmark":      false,
+		"design_collection":  false,
 	}
 	for _, tool := range result.Tools {
 		if _, ok := want[tool.Name]; ok {
@@ -1305,6 +1311,66 @@ func TestCreateCollectionAPIError(t *testing.T) {
 	})
 	if !strings.Contains(errMsg, "failed to create collection") {
 		t.Errorf("error should mention failure, got: %s", errMsg)
+	}
+}
+
+// --- design_collection ---
+
+func TestDesignCollectionToolBasic(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithToolsAndDS(t, &mockToolClient{}, testDesignCollectionDS())
+
+	out := callToolJSON[DesignCollectionOutput](t, ctx, cs, "design_collection", map[string]any{
+		"evaluation_goal": "enterprise safety deployment",
+	})
+
+	for _, keyword := range []string{"enterprise safety deployment", "toxigen", "gsm8k", "Safety Suite v1", "Threshold"} {
+		if !containsCI(out.Guidance, keyword) {
+			t.Errorf("design_collection tool guidance missing keyword %q", keyword)
+		}
+	}
+}
+
+func TestDesignCollectionToolProviderFilter(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithToolsAndDS(t, &mockToolClient{}, testDesignCollectionDS())
+
+	out := callToolJSON[DesignCollectionOutput](t, ctx, cs, "design_collection", map[string]any{
+		"evaluation_goal": "instruction following",
+		"provider_filter": "lighteval",
+	})
+
+	if !containsCI(out.Guidance, "ifeval") {
+		t.Errorf("design_collection tool guidance should include lighteval benchmark ifeval")
+	}
+	// Check the marshaled benchmark catalog (not the static reference table, which
+	// mentions Toxigen regardless of filter): the lm_evaluation_harness entry must
+	// be filtered out of the catalog.
+	if strings.Contains(out.Guidance, `"name": "Toxigen"`) {
+		t.Errorf("design_collection tool catalog should exclude filtered-out benchmark Toxigen")
+	}
+}
+
+func TestDesignCollectionToolMissingGoal(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithToolsAndDS(t, &mockToolClient{}, testDesignCollectionDS())
+
+	errMsg := callToolExpectError(t, ctx, cs, "design_collection", map[string]any{})
+	if !containsCI(errMsg, "evaluation_goal") {
+		t.Errorf("error should mention evaluation_goal, got: %s", errMsg)
+	}
+}
+
+func TestDesignCollectionToolInvalidStrictness(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithToolsAndDS(t, &mockToolClient{}, testDesignCollectionDS())
+
+	errMsg := callToolExpectError(t, ctx, cs, "design_collection", map[string]any{
+		"evaluation_goal": "safety check",
+		"strictness":      "extreme",
+	})
+	if !containsCI(errMsg, "strictness") {
+		t.Errorf("error should mention strictness, got: %s", errMsg)
 	}
 }
 

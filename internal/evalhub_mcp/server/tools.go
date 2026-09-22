@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -67,6 +68,13 @@ type CreateCollectionInput struct {
 
 type GetBenchmarkInput struct {
 	BenchmarkID string `json:"benchmark_id" jsonschema:"ID of the benchmark to look up (e.g. ifeval, toxigen, mmlu)"`
+}
+
+type DesignCollectionInput struct {
+	EvaluationGoal string `json:"evaluation_goal" jsonschema:"Natural-language description of the evaluation use-case (e.g. 'enterprise deployment requiring safety, instruction following, and long-context support')"`
+	ProviderFilter string `json:"provider_filter,omitempty" jsonschema:"Comma-separated provider IDs to restrict benchmark selection (e.g. 'lm_evaluation_harness,lighteval'); omit to consider all providers"`
+	MaxBenchmarks  int    `json:"max_benchmarks,omitempty" jsonschema:"Maximum number of benchmarks to include (default 12)"`
+	Strictness     string `json:"strictness,omitempty" jsonschema:"Threshold strictness: lenient, moderate, or strict; shifts thresholds down/center/up respectively (default moderate)"`
 }
 
 type SearchBenchmarksInput struct {
@@ -156,9 +164,13 @@ type SearchBenchmarksOutput struct {
 	Total      int               `json:"total"`
 }
 
+type DesignCollectionOutput struct {
+	Guidance string `json:"guidance"`
+}
+
 // --- registration ---
 
-func registerTools(srv *mcp.Server, client EvalHubToolClient, logger *slog.Logger) error {
+func registerTools(srv *mcp.Server, client EvalHubToolClient, ds EvalHubDiscovery, logger *slog.Logger) error {
 	submitIn, err := mcpToolSchema[SubmitEvaluationInput]()
 	if err != nil {
 		return fmt.Errorf("submit_evaluation input schema: %w", err)
@@ -215,6 +227,25 @@ func registerTools(srv *mcp.Server, client EvalHubToolClient, logger *slog.Logge
 	if err != nil {
 		return fmt.Errorf("search_benchmarks output schema: %w", err)
 	}
+	designCollectionIn, err := mcpToolSchema[DesignCollectionInput]()
+	if err != nil {
+		return fmt.Errorf("design_collection input schema: %w", err)
+	}
+	designCollectionOut, err := mcpToolSchema[DesignCollectionOutput]()
+	if err != nil {
+		return fmt.Errorf("design_collection output schema: %w", err)
+	}
+
+	// The design_collection tool mirrors the design_collection prompt: it reuses
+	// the same YAML guidance templates so both channels stay in sync.
+	prompts, err := loadPrompts()
+	if err != nil {
+		return fmt.Errorf("loading prompts for design_collection tool: %w", err)
+	}
+	designPrompt, ok := prompts[PromptNameDesignCollection]
+	if !ok || designPrompt.Result == nil {
+		return fmt.Errorf("design_collection prompt config is missing")
+	}
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:         "submit_evaluation",
@@ -264,6 +295,13 @@ func registerTools(srv *mcp.Server, client EvalHubToolClient, logger *slog.Logge
 		InputSchema:  getBenchmarkIn,
 		OutputSchema: getBenchmarkOut,
 	}, getBenchmarkToolHandler(client, logger))
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:         "design_collection",
+		Description:  "Design a benchmark collection from a natural-language evaluation goal. Fetches the live provider catalog and curated collection examples and returns guidance for benchmark selection, weight assignment, and threshold calibration. Returns guidance only — follow it up with create_collection to persist the design. This is the model-callable equivalent of the design_collection prompt.",
+		InputSchema:  designCollectionIn,
+		OutputSchema: designCollectionOut,
+	}, designCollectionToolHandler(ds, designPrompt.Result, logger))
 
 	return nil
 }
@@ -549,6 +587,42 @@ func getBenchmarkToolHandler(client EvalHubToolClient, logger *slog.Logger) mcp.
 			}
 		}
 		return errorResult(fmt.Sprintf("benchmark %q not found; use search_benchmarks to find valid benchmark ids", id)), BenchmarkOutput{}, nil
+	}
+}
+
+// designCollectionToolHandler is the model-callable equivalent of the
+// design_collection prompt. It shares buildDesignCollection with the prompt so
+// the guidance (benchmark catalog + calibration instructions) stays identical,
+// and returns that guidance as text without persisting anything.
+func designCollectionToolHandler(ds EvalHubDiscovery, result *promptResultConfig, logger *slog.Logger) mcp.ToolHandlerFor[DesignCollectionInput, DesignCollectionOutput] {
+	return func(ctx context.Context, req *mcp.CallToolRequest, input DesignCollectionInput) (*mcp.CallToolResult, DesignCollectionOutput, error) {
+		log := requestLogger(ctx, logger)
+		ds := evalHubDiscoveryForRequest(ctx, ds, logger)
+
+		maxBenchmarksRaw := ""
+		if input.MaxBenchmarks > 0 {
+			maxBenchmarksRaw = strconv.Itoa(input.MaxBenchmarks)
+		}
+
+		log.Debug("design_collection tool called",
+			ArgNameEvaluationGoal, input.EvaluationGoal,
+			ArgNameProviderFilter, input.ProviderFilter,
+			ArgNameMaxBenchmarks, maxBenchmarksRaw,
+			ArgNameStrictness, input.Strictness,
+		)
+
+		_, messages, err := buildDesignCollection(ds, result, input.EvaluationGoal, input.ProviderFilter, maxBenchmarksRaw, input.Strictness)
+		if err != nil {
+			log.Error("design_collection tool failed", "error", err)
+			return errorResult(err.Error()), DesignCollectionOutput{}, nil
+		}
+
+		guidance := promptMessagesText(messages)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: guidance},
+			},
+		}, DesignCollectionOutput{Guidance: guidance}, nil
 	}
 }
 
