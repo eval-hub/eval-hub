@@ -35,8 +35,9 @@ type ExportTarget interface {
 
 // ManagerConfig configures shared dependencies for export targets.
 type ManagerConfig struct {
-	MLFlowClient        *mlflowclient.Client
-	OCIPublisherFactory OCIPublisherFactory
+	MLFlowClient           *mlflowclient.Client
+	MLFlowWorkspaceSupport *evalhubmlflow.WorkspaceSupport
+	OCIPublisherFactory    OCIPublisherFactory
 }
 
 // Manager routes evaluation card export to enabled targets.
@@ -55,7 +56,7 @@ func NewManager(logger *slog.Logger, cfg ManagerConfig) *Manager {
 		ociFactory = NewNoopOCIPublisherFactory()
 	}
 	targets := []ExportTarget{
-		NewMLflowTarget(cfg.MLFlowClient, logger),
+		NewMLflowTarget(cfg.MLFlowClient, cfg.MLFlowWorkspaceSupport, logger),
 		NewOCITarget(ociFactory, logger),
 	}
 	return &Manager{logger: logger, targets: targets}
@@ -103,12 +104,13 @@ func (m *Manager) Export(ctx context.Context, job *api.EvaluationJobResource, ca
 }
 
 type mlflowTarget struct {
-	client *mlflowclient.Client
-	logger *slog.Logger
+	client           *mlflowclient.Client
+	workspaceSupport *evalhubmlflow.WorkspaceSupport
+	logger           *slog.Logger
 }
 
-func NewMLflowTarget(client *mlflowclient.Client, logger *slog.Logger) ExportTarget {
-	return &mlflowTarget{client: client, logger: logger}
+func NewMLflowTarget(client *mlflowclient.Client, workspaceSupport *evalhubmlflow.WorkspaceSupport, logger *slog.Logger) ExportTarget {
+	return &mlflowTarget{client: client, workspaceSupport: workspaceSupport, logger: logger}
 }
 
 func (t *mlflowTarget) Target() Target {
@@ -144,6 +146,7 @@ func (t *mlflowTarget) Export(ctx context.Context, job *api.EvaluationJobResourc
 
 	artifactURL, err := evalhubmlflow.PersistEvalCard(
 		client,
+		t.workspaceSupport,
 		job.Resource.MLFlowExperimentID,
 		job.Resource.ID,
 		job.Name,

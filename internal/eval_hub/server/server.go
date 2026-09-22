@@ -18,6 +18,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/httpwrappers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
 	"github.com/eval-hub/eval-hub/internal/platform"
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 	"github.com/go-playground/validator/v10"
@@ -36,6 +37,7 @@ type Server struct {
 	validate        *validator.Validate
 	runtime         abstractions.Runtime
 	mlflowClient    *mlflowclient.Client
+	mlflowWorkspace *mlflow.WorkspaceSupport
 	resultsExporter evalcards.ResultsExporter
 	ociCleanup      func()
 }
@@ -71,6 +73,7 @@ func NewServer(logger *slog.Logger,
 	validate *validator.Validate,
 	runtime abstractions.Runtime,
 	mlflowClient *mlflowclient.Client,
+	mlflowWorkspace *mlflow.WorkspaceSupport,
 ) (*Server, error) {
 
 	if logger == nil {
@@ -88,8 +91,9 @@ func NewServer(logger *slog.Logger,
 
 	ociFactory, ociCleanup := newOCIPublisherFactory(logger, serviceConfig)
 	resultsExporter := evalcards.NewManager(logger, evalcards.ManagerConfig{
-		MLFlowClient:        mlflowClient,
-		OCIPublisherFactory: ociFactory,
+		MLFlowClient:           mlflowClient,
+		MLFlowWorkspaceSupport: mlflowWorkspace,
+		OCIPublisherFactory:    ociFactory,
 	})
 
 	return &Server{
@@ -100,6 +104,7 @@ func NewServer(logger *slog.Logger,
 		validate:        validate,
 		runtime:         runtime,
 		mlflowClient:    mlflowClient,
+		mlflowWorkspace: mlflowWorkspace,
 		resultsExporter: resultsExporter,
 		ociCleanup:      ociCleanup,
 	}, nil
@@ -472,7 +477,7 @@ func (s *Server) canContinueRequest(ctx *executioncontext.ExecutionContext, resp
 
 func (s *Server) setupRoutes() (http.Handler, error) {
 	router := http.NewServeMux()
-	h := handlers.New(s.storage, s.validate, s.runtime, s.mlflowClient, s.serviceConfig, s.resultsExporter)
+	h := handlers.New(s.storage, s.validate, s.runtime, s.mlflowClient, s.mlflowWorkspace, s.serviceConfig, s.resultsExporter)
 
 	// Health
 	s.setupHealthRoutes(h, router)

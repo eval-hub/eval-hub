@@ -111,11 +111,13 @@ func RegisterHandlers(srv *mcp.Server, client *evalhubclient.Client, info *Serve
 	registerVersionResource(srv, info, logger)
 	// should we error if no client is provided?
 	if client != nil {
-		if err := registerPrompts(srv, logger); err != nil {
+		if err := registerPrompts(srv, client, logger); err != nil {
 			return err
 		}
 		registerResources(srv, client, logger, listPageLimit)
-		registerTools(srv, client, logger)
+		if err := registerTools(srv, client, client, logger); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -18,6 +18,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/gomlx/go-huggingface v0.4.3
 	github.com/google/go-jsonnet v0.22.0
+	github.com/google/jsonschema-go v0.4.3
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
@@ -116,7 +117,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/gomlx/compute v0.1.6 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
-	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/go-memdb v1.3.5 // indirect

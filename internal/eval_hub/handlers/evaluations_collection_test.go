@@ -71,7 +71,7 @@ func (s *collectionRunCountStorage) UpdateCollectionStatus(id string, status *ap
 func TestHandleListEvaluationsCollectionIDFilter(t *testing.T) {
 	storage := &listEvaluationsStorage{fakeStorage: &fakeStorage{}}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, nil)
 	req := &listEvaluationsRequest{
 		MockRequest: createMockRequest("GET", "/api/v1/evaluations/jobs?collection_id=collection-1"),
 		queryValues: map[string][]string{"collection_id": {"collection-1"}},
@@ -132,7 +132,7 @@ func TestHandleCreateEvaluationUpdatesCustomCollectionRunCount(t *testing.T) {
 				atomicErr: tt.atomicErr,
 			}
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-			h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil)
+			h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, nil)
 			req := &bodyRequest{
 				MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
 				body:        []byte(`{"name":"evaluation","model":{"url":"http://test.com","name":"test"},"collection":{"id":"collection-1"}}`),

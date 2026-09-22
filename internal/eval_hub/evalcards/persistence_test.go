@@ -55,7 +55,7 @@ func TestManagerExportEnabledTargetsOnly(t *testing.T) {
 }
 
 func TestMLflowTargetDisabledWithoutExperimentName(t *testing.T) {
-	target := NewMLflowTarget(mlflowclient.NewClient("http://example.com"), nil)
+	target := NewMLflowTarget(mlflowclient.NewClient("http://example.com"), nil, nil)
 	job := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource:           api.Resource{ID: "job-1"},
@@ -68,7 +68,7 @@ func TestMLflowTargetDisabledWithoutExperimentName(t *testing.T) {
 }
 
 func TestMLflowTargetDisabledWithoutExperimentID(t *testing.T) {
-	target := NewMLflowTarget(mlflowclient.NewClient("http://example.com"), nil)
+	target := NewMLflowTarget(mlflowclient.NewClient("http://example.com"), nil, nil)
 	job := &api.EvaluationJobResource{
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Experiment: &api.ExperimentConfig{Name: "exp"},
@@ -98,7 +98,7 @@ func TestMLflowTargetExportWithoutArtifactLocation(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	target := NewMLflowTarget(mlflowclient.NewClient(srv.URL), nil)
+	target := NewMLflowTarget(mlflowclient.NewClient(srv.URL), nil, nil)
 	job := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource:           api.Resource{ID: "job-1"},
@@ -138,7 +138,7 @@ func TestMLflowTargetExport(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	target := NewMLflowTarget(mlflowclient.NewClient(srv.URL), nil)
+	target := NewMLflowTarget(mlflowclient.NewClient(srv.URL), nil, nil)
 	job := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource:           api.Resource{ID: "job-1", Tenant: "tenant-a"},
@@ -238,7 +238,7 @@ func TestManagerExportJoinsTargetErrors(t *testing.T) {
 }
 
 func TestMLflowTargetExportNilClient(t *testing.T) {
-	target := NewMLflowTarget(nil, nil)
+	target := NewMLflowTarget(nil, nil, nil)
 	if target.Target() != TargetMLflow {
 		t.Fatalf("target = %q", target.Target())
 	}
@@ -275,7 +275,7 @@ func TestMLflowTargetExportWithLoggerAndTenant(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	target := NewMLflowTarget(mlflowclient.NewClient(srv.URL), logger)
+	target := NewMLflowTarget(mlflowclient.NewClient(srv.URL), nil, logger)
 	job := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{
 			Resource:           api.Resource{ID: "job-1", Tenant: "tenant-a"},
