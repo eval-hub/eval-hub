@@ -155,7 +155,7 @@ func TestPromptArgumentOrder(t *testing.T) {
 	}
 
 	wantOrder := map[string][]string{
-		"design_collection": {"evaluation_goal", "provider_filter", "max_benchmarks", "strictness"},
+		"design_collection": {"evaluation_goal", "max_benchmarks", "strictness", "provider_filter"},
 	}
 
 	for _, p := range result.Prompts {
