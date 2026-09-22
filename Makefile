@@ -226,7 +226,7 @@ FVT_CONCURRENCY ?= 1
 
 .PHONY: test-setup
 test-setup: venv ## Set up Python test environment (venv + eval-hub-sdk adapter)
-	@uv pip install "eval-hub-sdk[adapter]>=0.1.5"
+	@uv pip install "eval-hub-sdk[adapter]>=1.0.4"
 
 test-fvt: $(BIN_DIR) test-setup ## Run FVT (Functional Verification Tests) using godog
 	@echo "Running FVT tests..."
@@ -234,6 +234,9 @@ test-fvt: $(BIN_DIR) test-setup ## Run FVT (Functional Verification Tests) using
 
 test-fvt-server: start-service ## Run FVT tests using godog against a running server
 	@SERVER_URL="${SERVER_URL}" make test-fvt; status=$$?; make stop-service; exit $$status
+
+test-fvt-server-local:
+	@FVT_TAGS="--godog.tags=~@ignore && ~@mlflow && ~@cluster && ~@benchmark_providers" make test-fvt-server
 
 test-fvt-coverage: $(BIN_DIR)## Run integration (FVT) tests with coverage
 	@echo "Running integration (FVT) tests with coverage..."
