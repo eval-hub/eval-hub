@@ -38,6 +38,7 @@ func BuildRunArtifactPath(experimentID, runID, relativeArtifactPath, artifactLoc
 // UploadArtifactToExperiment uploads content to a run artifact path under an experiment.
 func UploadArtifactToExperiment(
 	client *mlflowclient.Client,
+	workspaceSupport *WorkspaceSupport,
 	experimentID string,
 	runID string,
 	relativeArtifactPath string,
@@ -54,10 +55,14 @@ func UploadArtifactToExperiment(
 	if strings.TrimSpace(runID) == "" {
 		return "", fmt.Errorf("run id is required")
 	}
-	if err := client.EnsureWorkspace(); err != nil {
+	prepared, err := prepareMLFlowClient(client, workspaceSupport)
+	if err != nil {
 		return "", err
 	}
-	return client.UploadArtifact(
+	if err := prepared.EnsureWorkspace(); err != nil {
+		return "", err
+	}
+	return prepared.UploadArtifact(
 		BuildRunArtifactPath(experimentID, runID, relativeArtifactPath, artifactLocation),
 		bytes.NewReader(content),
 		contentType,
@@ -65,7 +70,7 @@ func UploadArtifactToExperiment(
 }
 
 // CreateEvaluationCardRun creates a new MLflow run for storing evaluation card artifacts.
-func CreateEvaluationCardRun(client *mlflowclient.Client, experimentID, jobID, runName string) (string, error) {
+func CreateEvaluationCardRun(client *mlflowclient.Client, workspaceSupport *WorkspaceSupport, experimentID, jobID, runName string) (string, error) {
 	if client == nil {
 		return "", fmt.Errorf("mlflow client is nil")
 	}
@@ -75,14 +80,18 @@ func CreateEvaluationCardRun(client *mlflowclient.Client, experimentID, jobID, r
 	if strings.TrimSpace(jobID) == "" {
 		return "", fmt.Errorf("job id is required")
 	}
-	if err := client.EnsureWorkspace(); err != nil {
+	prepared, err := prepareMLFlowClient(client, workspaceSupport)
+	if err != nil {
+		return "", err
+	}
+	if err := prepared.EnsureWorkspace(); err != nil {
 		return "", err
 	}
 
 	if strings.TrimSpace(runName) == "" {
 		runName = "evaluation-card-" + jobID
 	}
-	createResp, err := client.CreateRun(&mlflowclient.CreateRunRequest{
+	createResp, err := prepared.CreateRun(&mlflowclient.CreateRunRequest{
 		ExperimentID: experimentID,
 		RunName:      runName,
 		Tags: []mlflowclient.RunTag{
@@ -102,13 +111,18 @@ func CreateEvaluationCardRun(client *mlflowclient.Client, experimentID, jobID, r
 // PersistEvalCard uploads the evaluation card JSON artifact to a new MLflow run in the job's experiment.
 func PersistEvalCard(
 	client *mlflowclient.Client,
+	workspaceSupport *WorkspaceSupport,
 	experimentID, jobID, runName, artifactLocation string,
 	cardJSON []byte,
 ) (string, error) {
-	runID, err := CreateEvaluationCardRun(client, experimentID, jobID, runName)
+	runID, err := CreateEvaluationCardRun(client, workspaceSupport, experimentID, jobID, runName)
+	if err != nil {
+		return "", err
+	}
+	prepared, err := prepareMLFlowClient(client, workspaceSupport)
 	if err != nil {
 		return "", err
 	}
 	artifactPath := BuildRunArtifactPath(experimentID, runID, EvalCardArtifactFileName, artifactLocation)
-	return client.UploadArtifact(artifactPath, bytes.NewReader(cardJSON), "application/json")
+	return prepared.UploadArtifact(artifactPath, bytes.NewReader(cardJSON), "application/json")
 }

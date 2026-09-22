@@ -52,9 +52,7 @@ func (c *Client) UploadArtifact(artifactPath string, content io.Reader, contentT
 		req.ContentLength = contentLength
 	}
 	c.applyAuthHeader(req)
-	if c.workspacesEnabled && c.workspace != "" {
-		req.Header.Set("X-MLFLOW-WORKSPACE", c.workspace)
-	}
+	c.applyWorkspaceHeaders(req.Header)
 
 	if contentLength >= 0 {
 		c.logger.Info("MLFlow artifact upload started", "endpoint", endpoint, "bytes", contentLength)
@@ -163,9 +161,7 @@ func (c *Client) DownloadArtifact(artifactPath string) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("failed to create download request: %w", err)
 	}
 	c.applyAuthHeader(req)
-	if c.workspacesEnabled && c.workspace != "" {
-		req.Header.Set("X-MLFLOW-WORKSPACE", c.workspace)
-	}
+	c.applyWorkspaceHeaders(req.Header)
 
 	c.logger.Info("MLFlow artifact download started", "endpoint", endpoint)
 	resp, err := c.httpClient.Do(req)
