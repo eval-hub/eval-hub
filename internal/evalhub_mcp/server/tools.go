@@ -60,7 +60,8 @@ type GetJobStatusInput struct {
 type CreateCollectionInput struct {
 	Name         string                          `json:"name" jsonschema:"Collection name"`
 	Description  string                          `json:"description,omitempty" jsonschema:"Human-readable description of what this collection evaluates"`
-	Category     string                          `json:"category" jsonschema:"Collection category: general, safety, code, reasoning, telecom, long_context, instruction_following"`
+	Category     string                          `json:"category,omitempty" jsonschema:"Deprecated: use domains instead. Legacy collection category (e.g. general, safety, code, reasoning). Provide either category or a non-empty domains array."`
+	Domains      []string                        `json:"domains,omitempty" jsonschema:"High-level evaluation domains in snake_case (e.g. safety, instruction_following, long_context). Supersedes category. Provide either domains or a category."`
 	Tags         []string                        `json:"tags,omitempty" jsonschema:"Tags for categorizing the collection"`
 	PassCriteria *api.PassCriteria               `json:"pass_criteria,omitempty" jsonschema:"Collection-level pass/fail threshold (weighted average of benchmark thresholds)"`
 	Benchmarks   []api.CollectionBenchmarkConfig `json:"benchmarks" jsonschema:"List of benchmarks with weights, metrics, thresholds, and parameters"`
@@ -469,8 +470,11 @@ func createCollectionHandler(client EvalHubToolClient, logger *slog.Logger) mcp.
 		if input.Name == "" {
 			return errorResult("validation error: 'name' is required"), CreateCollectionOutput{}, nil
 		}
-		if input.Category == "" {
-			return errorResult("validation error: 'category' is required"), CreateCollectionOutput{}, nil
+		// Mirror the eval-hub handler rule (#1028): category is deprecated and
+		// optional, but a collection must be classified by either a category or a
+		// non-empty domains array.
+		if input.Category == "" && len(input.Domains) == 0 {
+			return errorResult("validation error: either category or a non-empty domains array must be provided"), CreateCollectionOutput{}, nil
 		}
 		if len(input.Benchmarks) == 0 {
 			return errorResult("validation error: at least one benchmark is required"), CreateCollectionOutput{}, nil
@@ -480,6 +484,7 @@ func createCollectionHandler(client EvalHubToolClient, logger *slog.Logger) mcp.
 			Name:         input.Name,
 			Description:  input.Description,
 			Category:     input.Category,
+			Domains:      input.Domains,
 			Tags:         input.Tags,
 			PassCriteria: input.PassCriteria,
 			Benchmarks:   input.Benchmarks,
@@ -651,14 +656,15 @@ func designCollectionToolHandler(ds EvalHubDiscovery, result *promptResultConfig
 
 // collectBenchmarks flattens every provider's benchmarks into BenchmarkOutput
 // entries, attaching the owning provider_id to each (which the raw benchmark
-// resource does not carry).
+// resource does not carry). It paginates through all provider pages so the
+// catalog is complete even when the provider list exceeds a single page.
 func collectBenchmarks(client EvalHubToolClient) ([]BenchmarkOutput, error) {
-	list, err := client.ListProviders()
+	providers, err := allProviders(client)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]BenchmarkOutput, 0)
-	for _, p := range list.Items {
+	for _, p := range providers {
 		for _, b := range p.Benchmarks {
 			out = append(out, toBenchmarkOutput(b, p.Resource.ID))
 		}

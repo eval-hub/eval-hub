@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1225,6 +1228,82 @@ func TestSearchBenchmarksLimit(t *testing.T) {
 	}
 }
 
+// mockWithPaginatedProviders returns a mock whose ListProviders honors the
+// limit/offset options and serves at most one page per call, so tests can
+// exercise multi-page catalog traversal.
+func mockWithPaginatedProviders(providers []api.ProviderResource) *mockToolClient {
+	return &mockToolClient{
+		listProviderFn: func(opts ...evalhubclient.ListOption) (*api.ProviderResourceList, error) {
+			v := url.Values{}
+			for _, o := range opts {
+				o(v)
+			}
+			offset, _ := strconv.Atoi(v.Get("offset"))
+			limit, _ := strconv.Atoi(v.Get("limit"))
+			if limit <= 0 {
+				limit = evalhubclient.DefaultListPageLimit
+			}
+			if offset > len(providers) {
+				offset = len(providers)
+			}
+			end := offset + limit
+			if end > len(providers) {
+				end = len(providers)
+			}
+			return &api.ProviderResourceList{
+				Items: providers[offset:end],
+				Page:  api.Page{Limit: limit, TotalCount: len(providers)},
+			}, nil
+		},
+	}
+}
+
+// TestSearchBenchmarksPaginatesProviders is a regression test for a bug where
+// collectBenchmarks fetched only the first provider page: benchmarks belonging to
+// providers on later pages were silently dropped from the catalog.
+func TestSearchBenchmarksPaginatesProviders(t *testing.T) {
+	t.Parallel()
+
+	// One more than a single page, so the last provider is only reachable via a
+	// second page.
+	total := evalhubclient.DefaultListPageLimit + 1
+	providers := make([]api.ProviderResource, 0, total)
+	for i := 0; i < total; i++ {
+		id := fmt.Sprintf("p%d", i)
+		providers = append(providers, api.ProviderResource{
+			Resource: api.Resource{ID: id},
+			ProviderConfig: api.ProviderConfig{
+				Name: id,
+				Benchmarks: []api.BenchmarkResource{
+					{ID: fmt.Sprintf("b%d", i), Name: fmt.Sprintf("Benchmark %d", i)},
+				},
+			},
+		})
+	}
+
+	client := mockWithPaginatedProviders(providers)
+	ctx, cs := connectWithTools(t, client)
+
+	// Set a limit above the total so every collected benchmark is returned, not
+	// truncated by the default search page size.
+	out := callToolJSON[SearchBenchmarksOutput](t, ctx, cs, "search_benchmarks", map[string]any{"limit": total + 1})
+	if out.Total != total {
+		t.Errorf("expected %d benchmarks across all provider pages, got %d", total, out.Total)
+	}
+	// The benchmark on the second page must be present.
+	lastID := fmt.Sprintf("b%d", total-1)
+	found := false
+	for _, b := range out.Benchmarks {
+		if b.ID == lastID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("benchmark %q from the second provider page is missing from the catalog", lastID)
+	}
+}
+
 // --- create_collection ---
 
 func TestCreateCollectionSuccess(t *testing.T) {
@@ -1262,18 +1341,53 @@ func TestCreateCollectionMissingName(t *testing.T) {
 	}
 }
 
-func TestCreateCollectionMissingCategory(t *testing.T) {
+func TestCreateCollectionMissingClassification(t *testing.T) {
 	t.Parallel()
 	ctx, cs := connectWithTools(t, &mockToolClient{})
 
+	// Neither category nor domains provided: must be rejected with the same rule
+	// the eval-hub handler enforces (#1028).
 	errMsg := callToolExpectError(t, ctx, cs, "create_collection", CreateCollectionInput{
 		Name: "test",
 		Benchmarks: []api.CollectionBenchmarkConfig{
 			{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness"},
 		},
 	})
-	if !strings.Contains(errMsg, "category") {
-		t.Errorf("error should mention category, got: %s", errMsg)
+	if !strings.Contains(errMsg, "category or a non-empty domains array") {
+		t.Errorf("error should mention category-or-domains rule, got: %s", errMsg)
+	}
+}
+
+func TestCreateCollectionDomainsWithoutCategory(t *testing.T) {
+	t.Parallel()
+	var captured api.CollectionConfig
+	client := &mockToolClient{
+		createCollectionFn: func(config api.CollectionConfig) (*api.CollectionResource, error) {
+			captured = config
+			return &api.CollectionResource{
+				Resource:         api.Resource{ID: "col-new", Owner: api.User("test-tenant")},
+				CollectionConfig: config,
+			}, nil
+		},
+	}
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[CreateCollectionOutput](t, ctx, cs, "create_collection", CreateCollectionInput{
+		Name:    "test-collection",
+		Domains: []string{"safety", "instruction_following"},
+		Benchmarks: []api.CollectionBenchmarkConfig{
+			{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness", Weight: 3},
+		},
+	})
+
+	if out.ID != "col-new" {
+		t.Errorf("ID = %q, want %q", out.ID, "col-new")
+	}
+	if captured.Category != "" {
+		t.Errorf("Category = %q, want empty", captured.Category)
+	}
+	if !slices.Equal(captured.Domains, []string{"safety", "instruction_following"}) {
+		t.Errorf("Domains = %v, want [safety instruction_following]", captured.Domains)
 	}
 }
 

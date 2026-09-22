@@ -586,8 +586,15 @@ func filterBenchmarksByProvider(benchmarks []api.CollectionBenchmarkConfig, allo
 	return filtered
 }
 
+// providerLister is the subset needed to page through providers. Both
+// EvalHubDiscovery and EvalHubToolClient satisfy it, so allProviders can be
+// shared by the prompt/tool discovery paths and the benchmark tool handlers.
+type providerLister interface {
+	ListProviders(opts ...evalhubclient.ListOption) (*api.ProviderResourceList, error)
+}
+
 // allProviders paginates through all provider pages from the discovery source.
-func allProviders(ds EvalHubDiscovery) ([]api.ProviderResource, error) {
+func allProviders(ds providerLister) ([]api.ProviderResource, error) {
 	pageSize := evalhubclient.DefaultListPageLimit
 	var all []api.ProviderResource
 	for offset := 0; ; offset += pageSize {
