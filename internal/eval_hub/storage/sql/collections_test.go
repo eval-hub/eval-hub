@@ -3,9 +3,12 @@ package sql_test
 import (
 	"encoding/json"
 	"math"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/common"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql"
@@ -496,6 +499,135 @@ func TestCollectionPatchCollection(t *testing.T) {
 				t.Errorf("expected name 'Patched Name', got %q", updated.Name)
 			}
 		})
+	}
+}
+
+func TestCollectionPatchConcurrentPostgres(t *testing.T) {
+	image := usePostgresImage()
+	databaseName := getDBName()
+	user, err := getPostgresUser()
+	if err != nil {
+		t.Skipf("Failed to get Postgres user: %v", err)
+	}
+	if err := startPostgres(t, databaseName, user, image); err != nil {
+		t.Skipf("Skipping postgres tests: %v", err)
+	}
+	t.Cleanup(func() {
+		stopPostgres(t, databaseName, user, image)
+	})
+
+	testCollectionPatchConcurrentDisjoint(t, "postgres", databaseName)
+}
+
+func testCollectionPatchConcurrentDisjoint(t *testing.T, driver, databaseName string) {
+	store, err := getTestStorage(t, driver, databaseName)
+	if err != nil {
+		t.Fatalf("getTestStorage: %v", err)
+	}
+	scoped := store.WithTenant("t1").WithOwner("user1")
+	collection := &api.CollectionResource{
+		Resource: api.Resource{ID: common.GUID(), Owner: "user1", Tenant: "t1"},
+		CollectionConfig: api.CollectionConfig{
+			Name:        "Original Name",
+			Description: "Original description",
+			Category:    "test",
+			Benchmarks:  []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	if err := scoped.CreateCollection(collection); err != nil {
+		t.Fatalf("CreateCollection: %v", err)
+	}
+
+	// Hold the first PATCH transaction after its locked read. A concurrent PATCH
+	// must wait at SELECT ... FOR UPDATE, then apply its change to the first
+	// transaction's committed entity instead of overwriting it with a stale copy.
+	locked := make(chan struct{})
+	secondLockedReadAttempt := make(chan struct{})
+	release := make(chan struct{})
+	var holdGate sync.Mutex
+	var holdingTxn bool
+	var readAttemptGate sync.Mutex
+	readAttempts := 0
+	t.Cleanup(func() {
+		sql.SetCollectionPatchBeforeLockedReadHook(nil)
+		sql.SetCollectionPatchAfterLockedReadHook(nil)
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	})
+	sql.SetCollectionPatchBeforeLockedReadHook(func(_ string) {
+		readAttemptGate.Lock()
+		defer readAttemptGate.Unlock()
+		readAttempts++
+		if readAttempts == 2 {
+			close(secondLockedReadAttempt)
+		}
+	})
+	sql.SetCollectionPatchAfterLockedReadHook(func(_ string) {
+		holdGate.Lock()
+		if holdingTxn {
+			holdGate.Unlock()
+			return
+		}
+		holdingTxn = true
+		holdGate.Unlock()
+		close(locked)
+		<-release
+	})
+
+	patchName := &api.Patch{{Op: api.PatchOpReplace, Path: "/name", Value: "Updated Name"}}
+	patchDescription := &api.Patch{{Op: api.PatchOpReplace, Path: "/description", Value: "Updated description"}}
+	firstDone := make(chan error, 1)
+	secondDone := make(chan error, 1)
+	go func() {
+		_, err := scoped.PatchCollection(collection.Resource.ID, patchName)
+		firstDone <- err
+	}()
+
+	select {
+	case <-locked:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for first PATCH transaction to acquire row lock")
+	}
+
+	go func() {
+		_, err := scoped.PatchCollection(collection.Resource.ID, patchDescription)
+		secondDone <- err
+	}()
+	select {
+	case <-secondLockedReadAttempt:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for second PATCH transaction to attempt the row lock")
+	}
+
+	select {
+	case err := <-firstDone:
+		t.Fatalf("first PATCH completed while holding row lock: %v", err)
+	case err := <-secondDone:
+		t.Fatalf("second PATCH completed before row lock released (FOR UPDATE not contending): %v", err)
+	case <-time.After(time.Second):
+		// Expected: the second transaction is blocked on SELECT ... FOR UPDATE.
+	}
+
+	close(release)
+	if err := <-firstDone; err != nil {
+		t.Fatalf("first PatchCollection: %v", err)
+	}
+	if err := <-secondDone; err != nil {
+		t.Fatalf("second PatchCollection: %v", err)
+	}
+
+	updated, err := scoped.GetCollection(collection.Resource.ID)
+	if err != nil {
+		t.Fatalf("GetCollection: %v", err)
+	}
+	if updated.Name != "Updated Name" {
+		t.Errorf("Name: got %q, want %q", updated.Name, "Updated Name")
+	}
+	if updated.Description != "Updated description" {
+		t.Errorf("Description: got %q, want %q", updated.Description, "Updated description")
 	}
 }
 

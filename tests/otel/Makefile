@@ -5,6 +5,7 @@ COMPOSE_FILE ?= pours/deployment/compose.yaml
 FOUNDRYCTL ?= foundryctl
 
 start-signoz: ## Start local SigNoz stack (Podman Compose)
+	@echo "Starting SigNoz stack (Podman Compose) SigNoz UI: http://localhost:3301 ..."
 	$(PODMAN) compose -f $(COMPOSE_FILE) up -d
 
 stop-signoz: ## Stop local SigNoz stack

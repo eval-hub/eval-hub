@@ -32,6 +32,50 @@ func TestNewValidator(t *testing.T) {
 	}
 }
 
+func TestCollectionConfigClassification(t *testing.T) {
+	validate := newTestValidator(t)
+	cases := []struct {
+		name     string
+		category string
+		domains  []string
+		wantErr  bool
+	}{
+		{name: "legacy category", category: "reasoning"},
+		{name: "legacy category with empty domains", category: "reasoning", domains: []string{}},
+		{name: "domains", domains: []string{"knowledge_and_reasoning"}},
+		{name: "neither", wantErr: true},
+		{name: "empty domains", domains: []string{}, wantErr: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := api.CollectionConfig{
+				Name:     "test-collection",
+				Category: tc.category,
+				Domains:  tc.domains,
+				Benchmarks: []api.CollectionBenchmarkConfig{{
+					Ref:        api.Ref{ID: "benchmark-1"},
+					ProviderID: "provider-1",
+				}},
+			}
+			err := validate.Struct(cfg)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("validation error = %v, wantErr %t", err, tc.wantErr)
+			}
+			if !tc.wantErr {
+				return
+			}
+			valErr, ok := err.(validator.ValidationErrors)
+			if !ok || len(valErr) == 0 {
+				t.Fatalf("expected validator.ValidationErrors, got %T: %v", err, err)
+			}
+			if valErr[0].Tag() != "category_or_domains" || valErr[0].Field() != "domains" {
+				t.Errorf("first error = tag %q field %q, want category_or_domains on domains", valErr[0].Tag(), valErr[0].Field())
+			}
+		})
+	}
+}
+
 func TestEvaluationJobConfigBenchmarksMin_WithCollection(t *testing.T) {
 	validate := newTestValidator(t)
 	// When Collection is set with ID, empty Benchmarks is allowed

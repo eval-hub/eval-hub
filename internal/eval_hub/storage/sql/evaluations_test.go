@@ -50,7 +50,7 @@ func TestCreateEvaluationJobAndUpdateCollection(t *testing.T) {
 }
 
 func TestGetEvaluationJobs_Postgres(t *testing.T) {
-	image := false
+	image := usePostgresImage()
 	databaseName := getDBName()
 	user, err := getPostgresUser()
 	if err != nil {

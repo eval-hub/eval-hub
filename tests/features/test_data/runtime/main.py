@@ -13,6 +13,7 @@ from evalhub.adapter import (
     JobSpec,
     JobStatus,
     JobStatusUpdate,
+    configure_telemetry,
 )
 from evalhub.adapter.callbacks import DefaultCallbacks
 
@@ -55,6 +56,11 @@ class LocalTestAdapter(FrameworkAdapter):
 
 
 def main() -> None:
+    # Bridge Python logging to OTEL so adapter logs are exported as structured
+    # log records (with trace/span correlation). No-op when OTEL env vars are
+    # absent, so this is safe for local runs without a collector.
+    configure_telemetry()
+
     logger.info("Starting local adapter test")
 
     try:
@@ -64,20 +70,26 @@ def main() -> None:
             "Loaded job spec:\n%s", json.dumps(adapter.job_spec.model_dump(), indent=2)
         )
 
+        # from_adapter builds an EvalTracer via EvalTracer.from_job_spec, which
+        # sets the job-level log context (job_id, benchmark_id, ...) attached to
+        # every OTEL log record.
         callbacks = DefaultCallbacks.from_adapter(adapter)
 
-        # status update: running
-        callbacks.report_status(
-            JobStatusUpdate(
-                status=JobStatus.RUNNING,
-                phase=JobPhase.INITIALIZING,
+        # Wrap the run in the root evaluation span so exported logs carry the
+        # trace_id/span_id for log-trace correlation.
+        with callbacks.tracer.evaluation_run():
+            # status update: running
+            callbacks.report_status(
+                JobStatusUpdate(
+                    status=JobStatus.RUNNING,
+                    phase=JobPhase.INITIALIZING,
+                )
             )
-        )
-        results = adapter.run_benchmark_job(adapter.job_spec, callbacks)
+            results = adapter.run_benchmark_job(adapter.job_spec, callbacks)
 
-        # status update: completed
-        callbacks.report_results(results)
-        logger.info("EVALUATION COMPLETE")
+            # status update: completed
+            callbacks.report_results(results)
+            logger.info("EVALUATION COMPLETE")
 
     except Exception as e:
         logger.error("Evaluation failed: %s", e, exc_info=True)
