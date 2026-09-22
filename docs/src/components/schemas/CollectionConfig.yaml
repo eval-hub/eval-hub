@@ -7,9 +7,12 @@ properties:
   category:
     deprecated: true
     type: string
+    minLength: 1
+    maxLength: 128
     description: >
-      DEPRECATED — use `domains` instead. Retained for backwards compatibility;
-      will be made optional and eventually removed in a future version.
+      DEPRECATED — use `domains` instead. Retained for backwards compatibility.
+      A create or update request must include either this field or a non-empty
+      `domains` array.
   description:
     type: string
     description: Optional description.
@@ -93,5 +96,4 @@ properties:
     description: Structured metadata for AI agent discoverability at the collection level.
 required:
   - name
-  - category
   - benchmarks

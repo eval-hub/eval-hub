@@ -63,6 +63,7 @@ func registerCustomValidators(instance *validator.Validate) error {
 	instance.RegisterStructValidation(evaluationJobConfig, api.EvaluationJobConfig{})
 	instance.RegisterStructValidation(validateBenchmarkStatusEventMetricsSchema, api.BenchmarkStatusEvent{})
 	instance.RegisterStructValidation(validateGitTestDataRefAuth, api.GitTestDataRef{})
+	instance.RegisterStructValidation(validateCollectionClassification, api.CollectionConfig{})
 	// hardware_profile_name is mutually exclusive with inline queue/cpu/memory/gpu.
 	instance.RegisterStructValidation(validateBenchmarkHardwareConfigExclusive, api.BenchmarkHardwareConfig{})
 	return nil
@@ -86,6 +87,15 @@ func validateGitTestDataRefAuth(sl validator.StructLevel) {
 	if err := api.ValidateGitCloneURLAuth(ref.URL, strings.TrimSpace(ref.SecretRef) != ""); err != nil {
 		sl.ReportError(ref.URL, "url", "URL", "git_http_with_secret", err.Error())
 	}
+}
+
+// validateCollectionClassification requires a legacy category or at least one domain.
+func validateCollectionClassification(sl validator.StructLevel) {
+	collection, ok := sl.Current().Interface().(api.CollectionConfig)
+	if !ok || collection.Category != "" || len(collection.Domains) > 0 {
+		return
+	}
+	sl.ReportError(collection.Domains, "domains", "Domains", "category_or_domains", "")
 }
 
 // ValidateCollectionOverrides returns an error if any override references a

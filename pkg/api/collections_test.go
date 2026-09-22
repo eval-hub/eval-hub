@@ -108,10 +108,10 @@ func TestCollectionConfigNewFieldsSerialization(t *testing.T) {
 }
 
 func TestCollectionConfigNewFieldsAreOptional(t *testing.T) {
-	// Existing minimal payload must still validate — new fields are optional
+	// A collection using domains instead of the deprecated category must validate.
 	src := `{
 		"name": "minimal",
-		"category": "reasoning",
+		"domains": ["knowledge_and_reasoning"],
 		"benchmarks": [{"id": "arc_easy", "provider_id": "lm_evaluation_harness"}]
 	}`
 
@@ -128,8 +128,8 @@ func TestCollectionConfigNewFieldsAreOptional(t *testing.T) {
 	if config.CurationOrder != 0 {
 		t.Errorf("CurationOrder should default to 0, got %d", config.CurationOrder)
 	}
-	if config.Domains != nil {
-		t.Errorf("Domains should be nil, got %v", config.Domains)
+	if !reflect.DeepEqual(config.Domains, []string{"knowledge_and_reasoning"}) {
+		t.Errorf("Domains: got %v, want [knowledge_and_reasoning]", config.Domains)
 	}
 	if config.Tasks != nil {
 		t.Errorf("Tasks should be nil, got %v", config.Tasks)
