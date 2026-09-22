@@ -1,4 +1,4 @@
-.PHONY: install-postgres start-postgres stop-postgres create-database create-user grant-permissions start-postgres-container stop-postgres-container delete-postgres-container
+.PHONY: install-postgres start-postgres stop-postgres create-database create-user grant-permissions start-postgres-container wait-postgres-container stop-postgres-container delete-postgres-container cleanup-postgres-container
 
 UNAME := $(shell uname)
 
@@ -56,12 +56,26 @@ grant-permissions:
 ### Run postgres in a container
 
 PODMAN ?= podman
+POSTGRES_CONTAINER_NAME ?= postgres-${POSTGRES_VERSION}
+POSTGRES_PASSWORD ?= eval-hub-test-password
+POSTGRES_READY_RETRIES ?= 30
 
 start-postgres-container:
-	${PODMAN} run -d --name postgres-${POSTGRES_VERSION} -p 5432:5432 -e POSTGRES_USER=${POSTGRES_USER} -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD} -e POSTGRES_DB=${POSTGRES_DATABASE_NAME} postgres:${POSTGRES_VERSION}
+	${PODMAN} run -d --name ${POSTGRES_CONTAINER_NAME} -p 127.0.0.1:5432:5432 -e POSTGRES_USER=${POSTGRES_USER} -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD} -e POSTGRES_DB=${POSTGRES_DATABASE_NAME} postgres:${POSTGRES_VERSION}
+
+cleanup-postgres-container:
+	@${PODMAN} rm -f ${POSTGRES_CONTAINER_NAME} >/dev/null 2>&1 || true
+
+wait-postgres-container:
+	@for attempt in $$(seq 1 ${POSTGRES_READY_RETRIES}); do \
+		if ${PODMAN} exec ${POSTGRES_CONTAINER_NAME} pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DATABASE_NAME}; then exit 0; fi; \
+		sleep 1; \
+	done; \
+	echo "PostgreSQL container did not become ready"; \
+	exit 1
 
 stop-postgres-container:
-	${PODMAN} stop postgres-${POSTGRES_VERSION}
+	${PODMAN} stop ${POSTGRES_CONTAINER_NAME}
 
 delete-postgres-container:
-	${PODMAN} rm postgres-${POSTGRES_VERSION}
+	${PODMAN} rm ${POSTGRES_CONTAINER_NAME}

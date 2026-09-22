@@ -3,10 +3,13 @@ package sql_test
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -14,6 +17,28 @@ import (
 var (
 	timeout = 2 * time.Minute
 )
+
+const defaultPostgresImagePassword = "eval-hub-test-password"
+
+func usesExternalPostgres() bool {
+	return usesExternalPostgresURL(os.Getenv("POSTGRES_URL"))
+}
+
+func usesExternalPostgresURL(postgresURL string) bool {
+	return strings.TrimSpace(postgresURL) != ""
+}
+
+func usePostgresImage() bool {
+	useImage, _ := strconv.ParseBool(os.Getenv("POSTGRES_USE_IMAGE"))
+	return useImage
+}
+
+func postgresImagePassword() string {
+	if password := os.Getenv("POSTGRES_PASSWORD"); password != "" {
+		return password
+	}
+	return defaultPostgresImagePassword
+}
 
 func getPostgresUser() (string, error) {
 	user := os.Getenv("USER")
@@ -27,12 +52,21 @@ func getPostgresUser() (string, error) {
 }
 
 func getPostgresURL(databaseName string) (string, error) {
-	if dbURL := os.Getenv("POSTGRES_URL"); dbURL != "" {
-		return dbURL, nil
+	if usesExternalPostgres() {
+		return strings.TrimSpace(os.Getenv("POSTGRES_URL")), nil
 	}
 	user, err := getPostgresUser()
 	if err != nil {
 		return "", err
+	}
+	if usePostgresImage() {
+		return (&url.URL{
+			Scheme:   "postgres",
+			User:     url.UserPassword(user, postgresImagePassword()),
+			Host:     "localhost:5432",
+			Path:     databaseName,
+			RawQuery: "sslmode=disable",
+		}).String(), nil
 	}
 	// postgres://user@localhost:5432/eval_hub
 	return fmt.Sprintf("postgres://%s@localhost:5432/%s", user, databaseName), nil
@@ -48,12 +82,19 @@ func runMakeCommand(t *testing.T, databaseName string, user string, args ...stri
 }
 
 func startPostgres(t *testing.T, databaseName string, user string, image bool) error {
+	if usesExternalPostgres() {
+		return nil
+	}
 	if image {
-		_ = runMakeCommand(t, databaseName, user, "stop-postgres-container")
-		_ = runMakeCommand(t, databaseName, user, "delete-postgres-container")
+		_ = runMakeCommand(t, databaseName, user, "cleanup-postgres-container")
 		err := runMakeCommand(t, databaseName, user, "start-postgres-container")
 		if err != nil {
-			t.Fatalf("Failed to start postgres: %v", err)
+			return fmt.Errorf("failed to start postgres container: %w", err)
+		}
+		err = runMakeCommand(t, databaseName, user, "wait-postgres-container")
+		if err != nil {
+			_ = runMakeCommand(t, databaseName, user, "cleanup-postgres-container")
+			return fmt.Errorf("failed to wait for postgres container: %w", err)
 		}
 	} else {
 		t.Logf("Installing postgres GOOS=%s GOARCH=%s", runtime.GOOS, runtime.GOARCH)
@@ -80,16 +121,33 @@ func startPostgres(t *testing.T, databaseName string, user string, image bool) e
 }
 
 func stopPostgres(t *testing.T, databaseName string, user string, image bool) {
+	if usesExternalPostgres() {
+		return
+	}
 	if image {
 		err := runMakeCommand(t, databaseName, user, "stop-postgres-container")
 		if err != nil {
 			t.Fatalf("Failed to stop postgres: %v", err)
+		}
+		err = runMakeCommand(t, databaseName, user, "delete-postgres-container")
+		if err != nil {
+			t.Fatalf("Failed to delete postgres container: %v", err)
 		}
 	} else {
 		err := runMakeCommand(t, databaseName, user, "stop-postgres")
 		if err != nil {
 			t.Fatalf("Failed to stop postgres: %v", err)
 		}
+	}
+}
+
+func TestUsesExternalPostgres(t *testing.T) {
+	if usesExternalPostgresURL("") {
+		t.Error("usesExternalPostgresURL() = true with an empty POSTGRES_URL")
+	}
+
+	if !usesExternalPostgresURL(" postgres://example.test/eval_hub ") {
+		t.Error("usesExternalPostgresURL() = false with a configured POSTGRES_URL")
 	}
 }
 
@@ -130,6 +188,9 @@ func getMakeCommandWithTimeout(databaseName string, user string, cmdTimeout time
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = append(os.Environ(), "POSTGRES_DATABASE_NAME="+databaseName, "POSTGRES_USER="+user)
+	if usePostgresImage() && os.Getenv("POSTGRES_PASSWORD") == "" {
+		cmd.Env = append(cmd.Env, "POSTGRES_PASSWORD="+defaultPostgresImagePassword)
+	}
 
 	return cmd, cancel, nil
 }
