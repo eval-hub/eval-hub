@@ -74,7 +74,7 @@ type GetBenchmarkInput struct {
 type DesignCollectionInput struct {
 	EvaluationGoal string `json:"evaluation_goal" jsonschema:"Natural-language description of the evaluation use-case (e.g. 'enterprise deployment requiring safety, instruction following, and long-context support')"`
 	ProviderFilter string `json:"provider_filter,omitempty" jsonschema:"Comma-separated provider IDs to restrict benchmark selection (e.g. 'lm_evaluation_harness,lighteval'); omit to consider all providers"`
-	MaxBenchmarks  int    `json:"max_benchmarks,omitempty" jsonschema:"Maximum number of benchmarks to include (default 12)"`
+	MaxBenchmarks  *int   `json:"max_benchmarks,omitempty" jsonschema:"Maximum number of benchmarks to include (default 12)"`
 	Strictness     string `json:"strictness,omitempty" jsonschema:"Threshold strictness: lenient, moderate, or strict; shifts thresholds down/center/up respectively (default moderate)"`
 }
 
@@ -633,8 +633,8 @@ func designCollectionToolHandler(ds EvalHubDiscovery, result *promptResultConfig
 		ds := evalHubDiscoveryForRequest(ctx, ds, logger)
 
 		maxBenchmarksRaw := ""
-		if input.MaxBenchmarks > 0 {
-			maxBenchmarksRaw = strconv.Itoa(input.MaxBenchmarks)
+		if input.MaxBenchmarks != nil {
+			maxBenchmarksRaw = strconv.Itoa(*input.MaxBenchmarks)
 		}
 
 		log.Debug("design_collection tool called",
