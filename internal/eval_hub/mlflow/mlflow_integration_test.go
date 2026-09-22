@@ -84,24 +84,29 @@ func TestMLFlowIntegration(t *testing.T) {
 				Logger:           logger,
 			})
 
-			t.Run("NewMLFlowClient probes server", func(t *testing.T) {
+			t.Run("NewMLFlowClient probes once then EnsureWorkspace uses result", func(t *testing.T) {
 				cfg := mlflowServiceConfig(t, srv.TrackingURI, func(m *config.MLFlowConfig) {
 					if tc.enableWorkspaces {
 						m.Workspace = "integration-workspace"
 					}
 				})
-				client, err := NewMLFlowClient(cfg, logger)
+				client, workspaceSupport, err := NewMLFlowClient(cfg, logger)
 				if err != nil {
 					t.Fatalf("NewMLFlowClient() err = %v", err)
 				}
 				if client == nil {
 					t.Fatal("expected non-nil client")
 				}
+				if !workspaceSupport.Resolved() {
+					t.Fatal("expected workspace support resolved by startup probe")
+				}
 				if client.WorkspacesEnabled() != tc.enableWorkspaces {
 					t.Fatalf("WorkspacesEnabled() = %t, want %t", client.WorkspacesEnabled(), tc.enableWorkspaces)
 				}
-				t.Logf("NewMLFlowClient: workspaces_enabled=%t", client.WorkspacesEnabled())
-				// TODO client.GetVersion()
+				if err := client.EnsureWorkspace(); err != nil {
+					t.Fatalf("EnsureWorkspace() = %v", err)
+				}
+				t.Logf("workspaces_enabled=%t", client.WorkspacesEnabled())
 			})
 
 			t.Run("GetOrCreateExperimentID without workspace", func(t *testing.T) {
@@ -116,7 +121,7 @@ func TestMLFlowIntegration(t *testing.T) {
 				client = client.WithWorkspacesSupport(workspacesEnabled)
 
 				expName := fmt.Sprintf("test-exp-no-ws-%s-%s", tc.name, uuid.New().String())
-				id, url, err := GetOrCreateExperimentID(client, &api.EvaluationJobConfig{
+				id, url, err := GetOrCreateExperimentID(client, nil, &api.EvaluationJobConfig{
 					Name:       "eval-job",
 					Experiment: &api.ExperimentConfig{Name: expName},
 				}, "job-1")
@@ -141,7 +146,7 @@ func TestMLFlowIntegration(t *testing.T) {
 					client = client.WithWorkspacesSupport(true).WithWorkspace("integration-workspace")
 
 					expName := fmt.Sprintf("test-exp-ws-%s-%s", tc.name, uuid.New().String())
-					id, url, err := GetOrCreateExperimentID(client, &api.EvaluationJobConfig{
+					id, url, err := GetOrCreateExperimentID(client, nil, &api.EvaluationJobConfig{
 						Name:       "eval-job-ws",
 						Experiment: &api.ExperimentConfig{Name: expName},
 					}, "job-2")

@@ -274,7 +274,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				if !ctx.Tenant.IsEmpty() {
 					client = client.WithWorkspace(ctx.Tenant.String())
 				}
-				mlflowExperimentID, mlflowExperimentURL, err = mlflow.GetOrCreateExperimentID(client, evaluation, id)
+				mlflowExperimentID, mlflowExperimentURL, err = mlflow.GetOrCreateExperimentID(client, h.mlflowWorkspaceSupport, evaluation, id)
 				return err
 			},
 			"mlflow",

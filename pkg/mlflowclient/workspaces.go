@@ -119,11 +119,18 @@ func (c *Client) CreateWorkspace(req *CreateWorkspaceRequest) (*Workspace, error
 
 // EnsureWorkspace creates the client's active workspace when workspaces are enabled.
 // The reserved "default" workspace is assumed to exist. Idempotent for concurrent creators.
+// Callers must set WithWorkspacesSupport after resolving capability (service layer).
 func (c *Client) EnsureWorkspace() error {
-	if c == nil || !c.workspacesEnabled || strings.TrimSpace(c.workspace) == "" {
+	if c == nil {
+		return fmt.Errorf("mlflow client does not exist")
+	}
+	if !c.WorkspacesEnabled() {
 		return nil
 	}
-	name := strings.TrimSpace(c.workspace)
+	name := strings.TrimSpace(c.configuredWorkspaceName())
+	if name == "" {
+		return nil
+	}
 	if name == defaultWorkspaceName {
 		return nil
 	}
