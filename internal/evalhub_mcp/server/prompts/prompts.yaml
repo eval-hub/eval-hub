@@ -86,6 +86,111 @@ evaluate_model:
           After submission, use `get_job_status` to track progress.
           The job will report per-benchmark status and overall completion percentage.
           Once complete, review the results to understand your model's performance.
+design_collection:
+  description: "Design a benchmark collection from a natural-language evaluation goal. Fetches the live provider catalog and curated collection examples, then guides you through benchmark selection, weight assignment, and threshold calibration."
+  arguments:
+    evaluation_goal:
+      description: "Natural-language description of the evaluation use-case (e.g. 'enterprise deployment requiring safety, instruction following, and long-context support')."
+      required: true
+    max_benchmarks:
+      description: "Maximum number of benchmarks to include (default: 12)."
+    strictness:
+      description: "Threshold strictness level: lenient, moderate, or strict. Shifts all thresholds down/center/up respectively. Defaults to moderate."
+    provider_filter:
+      description: "Comma-separated provider IDs to restrict benchmark selection (e.g. 'lm_evaluation_harness,lighteval'). Omit to consider all providers."
+  result:
+    description: "A collection design prompt with the full benchmark catalog and calibration guidelines."
+    messages:
+      any:
+        user: "I need to design an evaluation collection for the following goal: {evaluation_goal}"
+        assistant: |
+          I'll help you design a benchmark collection for: **{evaluation_goal}**
+
+          {options_summary}
+
+          ## Instructions
+
+          You are an evaluation collection designer for EvalHub. Given the evaluation goal above, produce a collection configuration that:
+
+          1. Selects benchmarks from the AVAILABLE BENCHMARKS catalog below
+          2. Sets appropriate weights (higher = more important to the use-case)
+          3. Sets per-benchmark pass_criteria thresholds calibrated to domain norms
+          4. Sets a collection-level pass_criteria threshold (weighted average of benchmark thresholds)
+          5. Fills in name, description, domains, and tags
+
+          ### Sourcing benchmarks
+
+          Always select benchmarks from the AVAILABLE BENCHMARKS catalog below — it is
+          the live provider catalog and is the source of truth for valid `id` and
+          `provider_id` values. **Do not read local files or invent benchmark IDs.**
+
+          **If the AVAILABLE BENCHMARKS catalog below is empty (no entries), stop
+          immediately and fail.** Do not call `discover_providers`, do not invent IDs,
+          and do not produce a collection. Report that the benchmark catalog is empty —
+          the eval-hub service has no providers/benchmarks loaded — and end without
+          calling `create_collection`.
+
+          Otherwise, if a specific benchmark you need is missing from the (non-empty)
+          catalog below, or you need more detail about a benchmark, use the
+          `search_benchmarks` tool (filter by `query`, `labels`, `category`, or
+          `provider_id`) to find benchmark IDs, and `get_benchmark` to fetch full detail
+          for a specific `id`. Use `discover_providers` only to choose a provider by
+          capability — it returns provider-level metadata, not benchmark IDs. Use only
+          the `id` and `provider_id` values these tools return.
+
+          ### Threshold Calibration Guidelines
+
+          - **Safety benchmarks** (toxicity, bias, fairness): high thresholds (0.75-0.90) — safety-critical
+          - **General accuracy** (MCQ-style): moderate (0.40-0.65) — random baseline is 0.25
+          - **Competition math** (AIME): low (0.10-0.20) — even strong models score low
+          - **Code generation** (pass@1): moderate-low (0.20-0.35)
+          - **Long-context** (AUC): moderate (0.35-0.55), declining with needle count
+          - **Attack success rate** (lower_is_better): threshold is a ceiling (0.15-0.25)
+          - **Collection-level threshold**: weighted average of benchmark thresholds
+
+          Strictness: **{strictness}**
+          - lenient: multiply thresholds by ~0.85
+          - moderate: use standard ranges above
+          - strict: multiply thresholds by ~1.10 (capped at 1.0 for accuracy metrics)
+
+          ### Domain Signal Mapping
+
+          | Signal in goal | Benchmarks to consider | Threshold range |
+          |---|---|---|
+          | safe, bias, toxic, fairness | TruthfulQA, Toxigen, BBQ, CrowS-Pairs, Winogender, Ethics-CM, garak intents | 0.75-0.90 |
+          | reasoning, math, chain-of-thought | GSM8K, MMLU-Pro, Math 500, AIME 25, GPQA Diamond | 0.15-0.60 |
+          | code, programming | LiveCodeBench v6 | 0.20-0.35 |
+          | instruction following, enterprise | IFEval, MMLU, GSM8K | 0.50-0.65 |
+          | long context, documents, retrieval | MRCR 1/2/4/8 needle | 0.35-0.55 |
+          | telecom, 3GPP, network | TeleMath, TeleQnA, TeleLogs, 3GPP-TSG | 0.25-0.70 |
+          | RAG, retrieval augmented | RAGAS suite | 0.60-0.80 |
+          | red team, vulnerability | garak intents | lower_is_better, ceiling 0.15-0.25 |
+
+          These are illustrative signal→benchmark hints, not IDs; always confirm the
+          exact `id` and `provider_id` against the AVAILABLE BENCHMARKS catalog,
+          `search_benchmarks`, or `get_benchmark` before using them.
+
+          ### Output Format
+
+          Produce a JSON object matching the `CollectionConfig` schema with these fields:
+          - `name` (string, required)
+          - `description` (string)
+          - `domains` (array of strings in snake_case, e.g. general, safety, code, reasoning, telecom, long_context, instruction_following; at least one required)
+          - `tags` (array of strings)
+          - `pass_criteria` with `threshold` (number 0-1)
+          - `benchmarks` array, each with: `id`, `provider_id`, `weight`, `primary_score` (`metric`, `lower_is_better`), `pass_criteria` (`threshold`), `parameters`
+
+          After generating the collection, explain your benchmark selection and threshold choices.
+
+          Use the `create_collection` tool to persist the collection when the user approves it.
+
+          ## Available Benchmarks
+
+          {benchmark_catalog}
+
+          ## Reference Collections
+
+          {collection_examples}
 compare_runs:
   description: "Guidance for comparing two or more evaluation jobs: select jobs, fetch results, compare metrics, and summarize findings."
   arguments:

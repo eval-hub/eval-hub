@@ -5,6 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"slices"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,12 +20,13 @@ import (
 // --- mock tool client ---
 
 type mockToolClient struct {
-	createJobFn    func(config api.EvaluationJobConfig) (*api.EvaluationJobResource, error)
-	cancelJobFn    func(id string) error
-	getJobFn       func(id string) (*api.EvaluationJobResource, error)
-	listProviderFn func(opts ...evalhubclient.ListOption) (*api.ProviderResourceList, error)
-	getProviderFn  func(id string) (*api.ProviderResource, error)
-	getBenchmarkFn func(id string) (*api.BenchmarkResource, error)
+	createJobFn        func(config api.EvaluationJobConfig) (*api.EvaluationJobResource, error)
+	cancelJobFn        func(id string) error
+	getJobFn           func(id string) (*api.EvaluationJobResource, error)
+	listProviderFn     func(opts ...evalhubclient.ListOption) (*api.ProviderResourceList, error)
+	getProviderFn      func(id string) (*api.ProviderResource, error)
+	getBenchmarkFn     func(id string) (*api.BenchmarkResource, error)
+	createCollectionFn func(config api.CollectionConfig) (*api.CollectionResource, error)
 }
 
 func (m *mockToolClient) CreateJob(config api.EvaluationJobConfig) (*api.EvaluationJobResource, error) {
@@ -83,13 +88,34 @@ func (m *mockToolClient) GetBenchmark(id string) (*api.BenchmarkResource, error)
 	}
 }
 
+func (m *mockToolClient) CreateCollection(config api.CollectionConfig) (*api.CollectionResource, error) {
+	if m.createCollectionFn != nil {
+		return m.createCollectionFn(config)
+	}
+	return &api.CollectionResource{
+		Resource: api.Resource{
+			ID:        "col-new",
+			Owner:     api.User("test-tenant"),
+			CreatedAt: time.Date(2026, 5, 1, 10, 0, 0, 0, time.UTC),
+		},
+		CollectionConfig: config,
+	}, nil
+}
+
 // --- test helpers ---
 
 func connectWithTools(t *testing.T, client EvalHubToolClient) (context.Context, *mcp.ClientSession) {
 	t.Helper()
+	return connectWithToolsAndDS(t, client, nil)
+}
+
+func connectWithToolsAndDS(t *testing.T, client EvalHubToolClient, ds EvalHubDiscovery) (context.Context, *mcp.ClientSession) {
+	t.Helper()
 
 	srv := New(&ServerInfo{Build: "test"}, discardLogger, nil)
-	registerTools(srv, client, discardLogger)
+	if err := registerTools(srv, client, ds, discardLogger); err != nil {
+		t.Fatalf("registerTools: %v", err)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	t.Cleanup(cancel)
@@ -166,6 +192,10 @@ func TestToolsListIncludesAll(t *testing.T) {
 		"cancel_job":         false,
 		"get_job_status":     false,
 		"discover_providers": false,
+		"create_collection":  false,
+		"search_benchmarks":  false,
+		"get_benchmark":      false,
+		"design_collection":  false,
 	}
 	for _, tool := range result.Tools {
 		if _, ok := want[tool.Name]; ok {
@@ -1068,6 +1098,483 @@ func TestGetJobStatusRunningNoEnrichment(t *testing.T) {
 	}
 	if len(b.Complements) != 0 {
 		t.Errorf("running benchmark should not have complements, got %v", b.Complements)
+	}
+}
+
+// --- search_benchmarks / get_benchmark ---
+
+func testProvidersWithBenchmarks() []api.ProviderResource {
+	return []api.ProviderResource{
+		{
+			Resource: api.Resource{ID: "lm_evaluation_harness"},
+			ProviderConfig: api.ProviderConfig{
+				Name:  "lm_evaluation_harness",
+				Title: "LM Evaluation Harness",
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "ifeval", Name: "IFEval", Description: "Instruction following", Category: "instruction_following", Tags: []string{"instruction", "core"}, Metrics: []string{"acc"}},
+					{ID: "toxigen", Name: "ToxiGen", Description: "Toxicity detection", Category: "safety", Tags: []string{"safety", "toxicity"}, Metrics: []string{"acc"}},
+				},
+			},
+		},
+		{
+			Resource: api.Resource{ID: "garak"},
+			ProviderConfig: api.ProviderConfig{
+				Name:  "garak",
+				Title: "Garak",
+				Benchmarks: []api.BenchmarkResource{
+					{ID: "dan", Name: "DAN", Description: "Jailbreak probe", Category: "safety", Tags: []string{"safety", "red_teaming"}},
+				},
+			},
+		},
+	}
+}
+
+func TestGetBenchmarkToolFound(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithBenchmarks())
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[BenchmarkOutput](t, ctx, cs, "get_benchmark", map[string]any{"benchmark_id": "toxigen"})
+	if out.ID != "toxigen" {
+		t.Fatalf("expected toxigen, got %q", out.ID)
+	}
+	if out.ProviderID != "lm_evaluation_harness" {
+		t.Errorf("expected provider_id lm_evaluation_harness, got %q", out.ProviderID)
+	}
+}
+
+func testProvidersWithSharedBenchmarkID() []api.ProviderResource {
+	return []api.ProviderResource{
+		{
+			Resource: api.Resource{ID: "lm_evaluation_harness"},
+			ProviderConfig: api.ProviderConfig{
+				Name:       "lm_evaluation_harness",
+				Benchmarks: []api.BenchmarkResource{{ID: "mmlu", Name: "MMLU (harness)"}},
+			},
+		},
+		{
+			Resource: api.Resource{ID: "lighteval"},
+			ProviderConfig: api.ProviderConfig{
+				Name:       "lighteval",
+				Benchmarks: []api.BenchmarkResource{{ID: "mmlu", Name: "MMLU (lighteval)"}},
+			},
+		},
+	}
+}
+
+func TestGetBenchmarkToolAmbiguous(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithSharedBenchmarkID())
+	ctx, cs := connectWithTools(t, client)
+
+	errMsg := callToolExpectError(t, ctx, cs, "get_benchmark", map[string]any{"benchmark_id": "mmlu"})
+	if !strings.Contains(errMsg, "multiple providers") {
+		t.Errorf("expected ambiguity error, got %q", errMsg)
+	}
+	for _, p := range []string{"lm_evaluation_harness", "lighteval"} {
+		if !strings.Contains(errMsg, p) {
+			t.Errorf("ambiguity error should list provider %q, got %q", p, errMsg)
+		}
+	}
+}
+
+func TestGetBenchmarkToolDisambiguatedByProvider(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithSharedBenchmarkID())
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[BenchmarkOutput](t, ctx, cs, "get_benchmark", map[string]any{
+		"benchmark_id": "mmlu",
+		"provider_id":  "lighteval",
+	})
+	if out.ID != "mmlu" || out.ProviderID != "lighteval" {
+		t.Errorf("expected mmlu@lighteval, got %q@%q", out.ID, out.ProviderID)
+	}
+}
+
+func TestGetBenchmarkToolProviderMismatch(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithBenchmarks())
+	ctx, cs := connectWithTools(t, client)
+
+	errMsg := callToolExpectError(t, ctx, cs, "get_benchmark", map[string]any{
+		"benchmark_id": "toxigen",
+		"provider_id":  "garak",
+	})
+	if !strings.Contains(errMsg, "not found") || !strings.Contains(errMsg, "garak") {
+		t.Errorf("expected not-found-for-provider error, got %q", errMsg)
+	}
+}
+
+func TestGetBenchmarkToolNotFound(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithBenchmarks())
+	ctx, cs := connectWithTools(t, client)
+
+	errMsg := callToolExpectError(t, ctx, cs, "get_benchmark", map[string]any{"benchmark_id": "does-not-exist"})
+	if !strings.Contains(errMsg, "not found") {
+		t.Errorf("expected not-found error, got %q", errMsg)
+	}
+}
+
+func TestGetBenchmarkToolMissingID(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithBenchmarks())
+	ctx, cs := connectWithTools(t, client)
+
+	errMsg := callToolExpectError(t, ctx, cs, "get_benchmark", map[string]any{})
+	if !strings.Contains(errMsg, "benchmark_id") {
+		t.Errorf("expected validation error mentioning benchmark_id, got %q", errMsg)
+	}
+}
+
+func TestSearchBenchmarksByCategory(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithBenchmarks())
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[SearchBenchmarksOutput](t, ctx, cs, "search_benchmarks", map[string]any{"category": "safety"})
+	if out.Total != 2 {
+		t.Fatalf("expected 2 safety benchmarks, got %d", out.Total)
+	}
+	for _, b := range out.Benchmarks {
+		if b.ProviderID == "" {
+			t.Errorf("benchmark %q missing provider_id", b.ID)
+		}
+	}
+}
+
+func TestSearchBenchmarksByLabel(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithBenchmarks())
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[SearchBenchmarksOutput](t, ctx, cs, "search_benchmarks", map[string]any{"labels": []string{"toxicity"}})
+	if out.Total != 1 || out.Benchmarks[0].ID != "toxigen" {
+		t.Fatalf("expected only toxigen for label toxicity, got %+v", out.Benchmarks)
+	}
+}
+
+func TestSearchBenchmarksByQuery(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithBenchmarks())
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[SearchBenchmarksOutput](t, ctx, cs, "search_benchmarks", map[string]any{"query": "IFEval"})
+	if out.Total != 1 || out.Benchmarks[0].ID != "ifeval" {
+		t.Fatalf("expected only ifeval for query IFEval, got %+v", out.Benchmarks)
+	}
+}
+
+func TestSearchBenchmarksByProvider(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithBenchmarks())
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[SearchBenchmarksOutput](t, ctx, cs, "search_benchmarks", map[string]any{"provider_id": "garak"})
+	if out.Total != 1 || out.Benchmarks[0].ID != "dan" {
+		t.Fatalf("expected only dan for provider garak, got %+v", out.Benchmarks)
+	}
+}
+
+func TestSearchBenchmarksLimit(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithBenchmarks())
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[SearchBenchmarksOutput](t, ctx, cs, "search_benchmarks", map[string]any{"limit": 1})
+	if out.Total != 3 {
+		t.Errorf("expected total 3 (unbounded count), got %d", out.Total)
+	}
+	if len(out.Benchmarks) != 1 {
+		t.Errorf("expected 1 returned benchmark with limit=1, got %d", len(out.Benchmarks))
+	}
+}
+
+// mockWithPaginatedProviders returns a mock whose ListProviders honors the
+// limit/offset options and serves at most one page per call, so tests can
+// exercise multi-page catalog traversal.
+func mockWithPaginatedProviders(providers []api.ProviderResource) *mockToolClient {
+	return &mockToolClient{
+		listProviderFn: func(opts ...evalhubclient.ListOption) (*api.ProviderResourceList, error) {
+			v := url.Values{}
+			for _, o := range opts {
+				o(v)
+			}
+			offset, _ := strconv.Atoi(v.Get("offset"))
+			limit, _ := strconv.Atoi(v.Get("limit"))
+			if limit <= 0 {
+				limit = evalhubclient.DefaultListPageLimit
+			}
+			if offset > len(providers) {
+				offset = len(providers)
+			}
+			end := offset + limit
+			if end > len(providers) {
+				end = len(providers)
+			}
+			return &api.ProviderResourceList{
+				Items: providers[offset:end],
+				Page:  api.Page{Limit: limit, TotalCount: len(providers)},
+			}, nil
+		},
+	}
+}
+
+// TestSearchBenchmarksPaginatesProviders is a regression test for a bug where
+// collectBenchmarks fetched only the first provider page: benchmarks belonging to
+// providers on later pages were silently dropped from the catalog.
+func TestSearchBenchmarksPaginatesProviders(t *testing.T) {
+	t.Parallel()
+
+	// One more than a single page, so the last provider is only reachable via a
+	// second page.
+	total := evalhubclient.DefaultListPageLimit + 1
+	providers := make([]api.ProviderResource, 0, total)
+	for i := 0; i < total; i++ {
+		id := fmt.Sprintf("p%d", i)
+		providers = append(providers, api.ProviderResource{
+			Resource: api.Resource{ID: id},
+			ProviderConfig: api.ProviderConfig{
+				Name: id,
+				Benchmarks: []api.BenchmarkResource{
+					{ID: fmt.Sprintf("b%d", i), Name: fmt.Sprintf("Benchmark %d", i)},
+				},
+			},
+		})
+	}
+
+	client := mockWithPaginatedProviders(providers)
+	ctx, cs := connectWithTools(t, client)
+
+	// Set a limit above the total so every collected benchmark is returned, not
+	// truncated by the default search page size.
+	out := callToolJSON[SearchBenchmarksOutput](t, ctx, cs, "search_benchmarks", map[string]any{"limit": total + 1})
+	if out.Total != total {
+		t.Errorf("expected %d benchmarks across all provider pages, got %d", total, out.Total)
+	}
+	// The benchmark on the second page must be present.
+	lastID := fmt.Sprintf("b%d", total-1)
+	found := false
+	for _, b := range out.Benchmarks {
+		if b.ID == lastID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("benchmark %q from the second provider page is missing from the catalog", lastID)
+	}
+}
+
+// --- create_collection ---
+
+func TestCreateCollectionSuccess(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithTools(t, &mockToolClient{})
+
+	out := callToolJSON[CreateCollectionOutput](t, ctx, cs, "create_collection", CreateCollectionInput{
+		Name:    "test-collection",
+		Domains: []string{"safety"},
+		Benchmarks: []api.CollectionBenchmarkConfig{
+			{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness", Weight: 3},
+		},
+	})
+
+	if out.ID != "col-new" {
+		t.Errorf("ID = %q, want %q", out.ID, "col-new")
+	}
+	if out.Name != "test-collection" {
+		t.Errorf("Name = %q, want %q", out.Name, "test-collection")
+	}
+}
+
+func TestCreateCollectionMissingName(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithTools(t, &mockToolClient{})
+
+	errMsg := callToolExpectError(t, ctx, cs, "create_collection", CreateCollectionInput{
+		Domains: []string{"safety"},
+		Benchmarks: []api.CollectionBenchmarkConfig{
+			{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness"},
+		},
+	})
+	if !strings.Contains(errMsg, "name") {
+		t.Errorf("error should mention name, got: %s", errMsg)
+	}
+}
+
+func TestCreateCollectionMissingDomains(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithTools(t, &mockToolClient{})
+
+	// Collections are classified by domains only; an empty domains array must be
+	// rejected.
+	errMsg := callToolExpectError(t, ctx, cs, "create_collection", CreateCollectionInput{
+		Name: "test",
+		Benchmarks: []api.CollectionBenchmarkConfig{
+			{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness"},
+		},
+	})
+	if !strings.Contains(errMsg, "at least one domain is required") {
+		t.Errorf("error should mention the domains requirement, got: %s", errMsg)
+	}
+}
+
+func TestCreateCollectionDomains(t *testing.T) {
+	t.Parallel()
+	var captured api.CollectionConfig
+	client := &mockToolClient{
+		createCollectionFn: func(config api.CollectionConfig) (*api.CollectionResource, error) {
+			captured = config
+			return &api.CollectionResource{
+				Resource:         api.Resource{ID: "col-new", Owner: api.User("test-tenant")},
+				CollectionConfig: config,
+			}, nil
+		},
+	}
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[CreateCollectionOutput](t, ctx, cs, "create_collection", CreateCollectionInput{
+		Name:    "test-collection",
+		Domains: []string{"safety", "instruction_following"},
+		Benchmarks: []api.CollectionBenchmarkConfig{
+			{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness", Weight: 3},
+		},
+	})
+
+	if out.ID != "col-new" {
+		t.Errorf("ID = %q, want %q", out.ID, "col-new")
+	}
+	if captured.Category != "" {
+		t.Errorf("Category = %q, want empty", captured.Category)
+	}
+	if !slices.Equal(captured.Domains, []string{"safety", "instruction_following"}) {
+		t.Errorf("Domains = %v, want [safety instruction_following]", captured.Domains)
+	}
+}
+
+func TestCreateCollectionMissingBenchmarks(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithTools(t, &mockToolClient{})
+
+	errMsg := callToolExpectError(t, ctx, cs, "create_collection", CreateCollectionInput{
+		Name:    "test",
+		Domains: []string{"safety"},
+	})
+	if !strings.Contains(errMsg, "benchmark") {
+		t.Errorf("error should mention benchmark, got: %s", errMsg)
+	}
+}
+
+func TestCreateCollectionAPIError(t *testing.T) {
+	t.Parallel()
+	client := &mockToolClient{
+		createCollectionFn: func(_ api.CollectionConfig) (*api.CollectionResource, error) {
+			return nil, &evalhubclient.APIError{
+				StatusCode: http.StatusBadRequest,
+				Message:    "invalid collection",
+			}
+		},
+	}
+	ctx, cs := connectWithTools(t, client)
+
+	errMsg := callToolExpectError(t, ctx, cs, "create_collection", CreateCollectionInput{
+		Name:    "test",
+		Domains: []string{"safety"},
+		Benchmarks: []api.CollectionBenchmarkConfig{
+			{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness"},
+		},
+	})
+	if !strings.Contains(errMsg, "failed to create collection") {
+		t.Errorf("error should mention failure, got: %s", errMsg)
+	}
+}
+
+// --- design_collection ---
+
+func TestDesignCollectionToolBasic(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithToolsAndDS(t, &mockToolClient{}, testDesignCollectionDS())
+
+	out := callToolJSON[DesignCollectionOutput](t, ctx, cs, "design_collection", map[string]any{
+		"evaluation_goal": "enterprise safety deployment",
+	})
+
+	// The guidance carries the echoed goal and calibration instructions; the
+	// catalog and reference collections travel in the structured fields.
+	for _, keyword := range []string{"enterprise safety deployment", "Threshold"} {
+		if !containsCI(out.Guidance, keyword) {
+			t.Errorf("design_collection tool guidance missing keyword %q", keyword)
+		}
+	}
+
+	for _, id := range []string{"toxigen", "gsm8k"} {
+		if !hasBenchmarkID(out.Benchmarks, id) {
+			t.Errorf("design_collection tool benchmarks missing %q; got %+v", id, out.Benchmarks)
+		}
+	}
+	if !hasCollectionExampleName(out.CollectionExamples, "Safety Suite v1") {
+		t.Errorf("design_collection tool collection_examples missing %q; got %+v", "Safety Suite v1", out.CollectionExamples)
+	}
+}
+
+func hasBenchmarkID(entries []benchmarkCatalogEntry, id string) bool {
+	for _, e := range entries {
+		if e.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func hasCollectionExampleName(examples []collectionExample, name string) bool {
+	for _, e := range examples {
+		if e.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func TestDesignCollectionToolProviderFilter(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithToolsAndDS(t, &mockToolClient{}, testDesignCollectionDS())
+
+	out := callToolJSON[DesignCollectionOutput](t, ctx, cs, "design_collection", map[string]any{
+		"evaluation_goal": "instruction following",
+		"provider_filter": "lighteval",
+	})
+
+	if !hasBenchmarkID(out.Benchmarks, "ifeval") {
+		t.Errorf("design_collection tool benchmarks should include lighteval benchmark ifeval; got %+v", out.Benchmarks)
+	}
+	// The lm_evaluation_harness benchmark must be filtered out of the catalog.
+	if hasBenchmarkID(out.Benchmarks, "toxigen") {
+		t.Errorf("design_collection tool benchmarks should exclude filtered-out benchmark toxigen; got %+v", out.Benchmarks)
+	}
+}
+
+func TestDesignCollectionToolMissingGoal(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithToolsAndDS(t, &mockToolClient{}, testDesignCollectionDS())
+
+	errMsg := callToolExpectError(t, ctx, cs, "design_collection", map[string]any{})
+	if !containsCI(errMsg, "evaluation_goal") {
+		t.Errorf("error should mention evaluation_goal, got: %s", errMsg)
+	}
+}
+
+func TestDesignCollectionToolInvalidStrictness(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithToolsAndDS(t, &mockToolClient{}, testDesignCollectionDS())
+
+	errMsg := callToolExpectError(t, ctx, cs, "design_collection", map[string]any{
+		"evaluation_goal": "safety check",
+		"strictness":      "extreme",
+	})
+	if !containsCI(errMsg, "strictness") {
+		t.Errorf("error should mention strictness, got: %s", errMsg)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ type EvalHubToolClient interface {
 	ListProviders(opts ...evalhubclient.ListOption) (*api.ProviderResourceList, error)
 	GetProvider(id string) (*api.ProviderResource, error)
 	GetBenchmark(id string) (*api.BenchmarkResource, error)
+	CreateCollection(config api.CollectionConfig) (*api.CollectionResource, error)
 }
 
 // --- input types ---
@@ -55,6 +57,35 @@ type GetJobStatusInput struct {
 	JobID string `json:"job_id" jsonschema:"ID of the evaluation job to check"`
 }
 
+type CreateCollectionInput struct {
+	Name         string                          `json:"name" jsonschema:"Collection name"`
+	Description  string                          `json:"description,omitempty" jsonschema:"Human-readable description of what this collection evaluates"`
+	Domains      []string                        `json:"domains" jsonschema:"High-level evaluation domains in snake_case (e.g. safety, instruction_following, long_context). At least one domain is required."`
+	Tags         []string                        `json:"tags,omitempty" jsonschema:"Tags for categorizing the collection"`
+	PassCriteria *api.PassCriteria               `json:"pass_criteria,omitempty" jsonschema:"Collection-level pass/fail threshold (weighted average of benchmark thresholds)"`
+	Benchmarks   []api.CollectionBenchmarkConfig `json:"benchmarks" jsonschema:"List of benchmarks with weights, metrics, thresholds, and parameters"`
+}
+
+type GetBenchmarkInput struct {
+	BenchmarkID string `json:"benchmark_id" jsonschema:"ID of the benchmark to look up (e.g. ifeval, toxigen, mmlu)"`
+	ProviderID  string `json:"provider_id,omitempty" jsonschema:"Optional owning provider ID to disambiguate when the same benchmark ID is offered by multiple providers"`
+}
+
+type DesignCollectionInput struct {
+	EvaluationGoal string `json:"evaluation_goal" jsonschema:"Natural-language description of the evaluation use-case (e.g. 'enterprise deployment requiring safety, instruction following, and long-context support')"`
+	ProviderFilter string `json:"provider_filter,omitempty" jsonschema:"Comma-separated provider IDs to restrict benchmark selection (e.g. 'lm_evaluation_harness,lighteval'); omit to consider all providers"`
+	MaxBenchmarks  *int   `json:"max_benchmarks,omitempty" jsonschema:"Maximum number of benchmarks to include (default 12)"`
+	Strictness     string `json:"strictness,omitempty" jsonschema:"Threshold strictness: lenient, moderate, or strict; shifts thresholds down/center/up respectively (default moderate)"`
+}
+
+type SearchBenchmarksInput struct {
+	Query      string   `json:"query,omitempty" jsonschema:"Case-insensitive substring matched against benchmark id, name, description, and tags"`
+	Labels     []string `json:"labels,omitempty" jsonschema:"Filter to benchmarks tagged with all of these labels (matched case-insensitively against tags)"`
+	Category   string   `json:"category,omitempty" jsonschema:"Filter by benchmark category (e.g. safety, reasoning, instruction_following)"`
+	ProviderID string   `json:"provider_id,omitempty" jsonschema:"Filter to benchmarks belonging to this provider id"`
+	Limit      int      `json:"limit,omitempty" jsonschema:"Maximum number of benchmarks to return (default 50)"`
+}
+
 // --- output types ---
 
 type SubmitEvaluationOutput struct {
@@ -86,6 +117,13 @@ type BenchmarkStatusOutput struct {
 	Complements          []string `json:"complements,omitempty"`
 }
 
+type CreateCollectionOutput struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Owner     string `json:"owner"`
+	CreatedAt string `json:"created_at,omitempty"`
+}
+
 type ProviderSummaryOutput struct {
 	ID                   string   `json:"id"`
 	Name                 string   `json:"name"`
@@ -103,28 +141,177 @@ type DiscoverProvidersOutput struct {
 	Providers []ProviderSummaryOutput `json:"providers"`
 }
 
+// BenchmarkOutput is a benchmark enriched with the owning provider_id, which the
+// raw api.BenchmarkResource does not carry but callers need for submit_evaluation
+// and create_collection.
+type BenchmarkOutput struct {
+	ID           string            `json:"id"`
+	ProviderID   string            `json:"provider_id"`
+	Name         string            `json:"name,omitempty"`
+	Description  string            `json:"description,omitempty"`
+	Category     string            `json:"category,omitempty"`
+	Metrics      []string          `json:"metrics,omitempty"`
+	Tags         []string          `json:"tags,omitempty"`
+	NumFewShot   int               `json:"num_few_shot,omitempty"`
+	DatasetSize  int               `json:"dataset_size,omitempty"`
+	PrimaryScore *api.PrimaryScore `json:"primary_score,omitempty"`
+	PassCriteria *api.PassCriteria `json:"pass_criteria,omitempty"`
+	Domains      []string          `json:"domains,omitempty"`
+	Tasks        []string          `json:"tasks,omitempty"`
+}
+
+type SearchBenchmarksOutput struct {
+	Benchmarks []BenchmarkOutput `json:"benchmarks"`
+	Total      int               `json:"total"`
+}
+
+type DesignCollectionOutput struct {
+	// Guidance holds the calibration instructions only (benchmark selection,
+	// weighting, and threshold guidance). The benchmark catalog and reference
+	// collections are returned as the structured Benchmarks and CollectionExamples
+	// fields rather than embedded in the guidance text, so callers can consume them
+	// directly instead of re-querying search_benchmarks.
+	Guidance           string                  `json:"guidance"`
+	Benchmarks         []benchmarkCatalogEntry `json:"benchmarks"`
+	CollectionExamples []collectionExample     `json:"collection_examples"`
+}
+
 // --- registration ---
 
-func registerTools(srv *mcp.Server, client EvalHubToolClient, logger *slog.Logger) {
+func registerTools(srv *mcp.Server, client EvalHubToolClient, ds EvalHubDiscovery, logger *slog.Logger) error {
+	submitIn, err := mcpToolSchema[SubmitEvaluationInput]()
+	if err != nil {
+		return fmt.Errorf("submit_evaluation input schema: %w", err)
+	}
+	submitOut, err := mcpToolSchema[SubmitEvaluationOutput]()
+	if err != nil {
+		return fmt.Errorf("submit_evaluation output schema: %w", err)
+	}
+	cancelIn, err := mcpToolSchema[CancelJobInput]()
+	if err != nil {
+		return fmt.Errorf("cancel_job input schema: %w", err)
+	}
+	cancelOut, err := mcpToolSchema[CancelJobOutput]()
+	if err != nil {
+		return fmt.Errorf("cancel_job output schema: %w", err)
+	}
+	statusIn, err := mcpToolSchema[GetJobStatusInput]()
+	if err != nil {
+		return fmt.Errorf("get_job_status input schema: %w", err)
+	}
+	statusOut, err := mcpToolSchema[GetJobStatusOutput]()
+	if err != nil {
+		return fmt.Errorf("get_job_status output schema: %w", err)
+	}
+	discoverIn, err := mcpToolSchema[DiscoverProvidersInput]()
+	if err != nil {
+		return fmt.Errorf("discover_providers input schema: %w", err)
+	}
+	discoverOut, err := mcpToolSchema[DiscoverProvidersOutput]()
+	if err != nil {
+		return fmt.Errorf("discover_providers output schema: %w", err)
+	}
+	collectionIn, err := mcpToolSchema[CreateCollectionInput]()
+	if err != nil {
+		return fmt.Errorf("create_collection input schema: %w", err)
+	}
+	collectionOut, err := mcpToolSchema[CreateCollectionOutput]()
+	if err != nil {
+		return fmt.Errorf("create_collection output schema: %w", err)
+	}
+	getBenchmarkIn, err := mcpToolSchema[GetBenchmarkInput]()
+	if err != nil {
+		return fmt.Errorf("get_benchmark input schema: %w", err)
+	}
+	getBenchmarkOut, err := mcpToolSchema[BenchmarkOutput]()
+	if err != nil {
+		return fmt.Errorf("get_benchmark output schema: %w", err)
+	}
+	searchBenchmarksIn, err := mcpToolSchema[SearchBenchmarksInput]()
+	if err != nil {
+		return fmt.Errorf("search_benchmarks input schema: %w", err)
+	}
+	searchBenchmarksOut, err := mcpToolSchema[SearchBenchmarksOutput]()
+	if err != nil {
+		return fmt.Errorf("search_benchmarks output schema: %w", err)
+	}
+	designCollectionIn, err := mcpToolSchema[DesignCollectionInput]()
+	if err != nil {
+		return fmt.Errorf("design_collection input schema: %w", err)
+	}
+	designCollectionOut, err := mcpToolSchema[DesignCollectionOutput]()
+	if err != nil {
+		return fmt.Errorf("design_collection output schema: %w", err)
+	}
+
+	// The design_collection tool mirrors the design_collection prompt: it reuses
+	// the same YAML guidance templates so both channels stay in sync.
+	prompts, err := loadPrompts()
+	if err != nil {
+		return fmt.Errorf("loading prompts for design_collection tool: %w", err)
+	}
+	designPrompt, ok := prompts[PromptNameDesignCollection]
+	if !ok || designPrompt.Result == nil {
+		return fmt.Errorf("design_collection prompt config is missing")
+	}
+
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "submit_evaluation",
-		Description: "Submit a new model evaluation job. Specify benchmarks (a list of benchmark IDs with their provider) OR a collection (a pre-defined set of benchmarks), plus the model endpoint to evaluate. Returns the job ID and initial state for tracking.",
+		Name:         "submit_evaluation",
+		Description:  "Submit a new model evaluation job. Specify benchmarks (a list of benchmark IDs with their provider) OR a collection (a pre-defined set of benchmarks), plus the model endpoint to evaluate. Returns the job ID and initial state for tracking.",
+		InputSchema:  submitIn,
+		OutputSchema: submitOut,
 	}, submitEvaluationHandler(client, logger))
 
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "cancel_job",
-		Description: "Cancel a running or pending evaluation job. The job will be stopped and its benchmarks marked as cancelled. Use get_job_status to verify the final state.",
+		Name:         "cancel_job",
+		Description:  "Cancel a running or pending evaluation job. The job will be stopped and its benchmarks marked as cancelled. Use get_job_status to verify the final state.",
+		InputSchema:  cancelIn,
+		OutputSchema: cancelOut,
 	}, cancelJobHandler(client, logger))
 
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "get_job_status",
-		Description: "Get the current status of an evaluation job including overall state, progress percentage, and per-benchmark status with timestamps. Designed for polling: call repeatedly to monitor a running evaluation.",
+		Name:         "get_job_status",
+		Description:  "Get the current status of an evaluation job including overall state, progress percentage, and per-benchmark status with timestamps. Designed for polling: call repeatedly to monitor a running evaluation.",
+		InputSchema:  statusIn,
+		OutputSchema: statusOut,
 	}, getJobStatusHandler(client, logger))
 
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "discover_providers",
-		Description: "Discover evaluation providers. Filter by target_type (model, agent, inference_server) and/or evaluates (e.g. safety, robustness) to find the right provider for your use case. Each result includes a summary, usage hints, result interpretation guidance, and complementary provider suggestions.",
+		Name:         "discover_providers",
+		Description:  "Discover evaluation providers. Filter by target_type (model, agent, inference_server) and/or evaluates (e.g. safety, robustness) to find the right provider for your use case. Each result includes a summary, usage hints, result interpretation guidance, and complementary provider suggestions.",
+		InputSchema:  discoverIn,
+		OutputSchema: discoverOut,
 	}, discoverProvidersHandler(client, logger))
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:         "create_collection",
+		Description:  "Create a new benchmark collection. Use after designing a collection (via the design_collection prompt or manually) to persist it in eval-hub. The collection can then be used with submit_evaluation to run evaluations.",
+		InputSchema:  collectionIn,
+		OutputSchema: collectionOut,
+	}, createCollectionHandler(client, logger))
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:         "search_benchmarks",
+		Description:  "Search the live benchmark catalog and return matching benchmarks with their id and provider_id. Filter by query (substring), labels (tags), category, and/or provider_id. Prefer this over discover_providers when you need actual benchmark IDs to build a collection or submit an evaluation — discover_providers returns provider-level metadata only, not benchmark IDs.",
+		InputSchema:  searchBenchmarksIn,
+		OutputSchema: searchBenchmarksOut,
+	}, searchBenchmarksHandler(client, logger))
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:         "get_benchmark",
+		Description:  "Look up a single benchmark by its ID. Returns full detail including the provider_id (required to run it), name, description, category, metrics, primary_score, and pass_criteria threshold. Use this to confirm a benchmark exists and to obtain the provider_id needed by submit_evaluation and create_collection.",
+		InputSchema:  getBenchmarkIn,
+		OutputSchema: getBenchmarkOut,
+	}, getBenchmarkToolHandler(client, logger))
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:         "design_collection",
+		Description:  "Design a benchmark collection from a natural-language evaluation goal. Fetches the live provider catalog and curated collection examples and returns guidance for benchmark selection, weight assignment, and threshold calibration. Returns guidance only — follow it up with create_collection to persist the design. This is the model-callable equivalent of the design_collection prompt.",
+		InputSchema:  designCollectionIn,
+		OutputSchema: designCollectionOut,
+	}, designCollectionToolHandler(ds, designPrompt.Result, logger))
+
+	return nil
 }
 
 // --- handlers ---
@@ -272,6 +459,283 @@ func discoverProvidersHandler(client EvalHubToolClient, logger *slog.Logger) mcp
 			},
 		}, out, nil
 	}
+}
+
+func createCollectionHandler(client EvalHubToolClient, logger *slog.Logger) mcp.ToolHandlerFor[CreateCollectionInput, CreateCollectionOutput] {
+	return func(ctx context.Context, req *mcp.CallToolRequest, input CreateCollectionInput) (*mcp.CallToolResult, CreateCollectionOutput, error) {
+		log := requestLogger(ctx, logger)
+		client := evalHubToolClientForRequest(ctx, client, logger)
+		log.Debug("create_collection called", "name", input.Name)
+
+		if input.Name == "" {
+			return errorResult("validation error: 'name' is required"), CreateCollectionOutput{}, nil
+		}
+		// Collections are classified by domains only. category is the deprecated
+		// predecessor (#1028) and is intentionally not exposed by this tool.
+		if len(input.Domains) == 0 {
+			return errorResult("validation error: at least one domain is required"), CreateCollectionOutput{}, nil
+		}
+		if len(input.Benchmarks) == 0 {
+			return errorResult("validation error: at least one benchmark is required"), CreateCollectionOutput{}, nil
+		}
+
+		config := api.CollectionConfig{
+			Name:         input.Name,
+			Description:  input.Description,
+			Domains:      input.Domains,
+			Tags:         input.Tags,
+			PassCriteria: input.PassCriteria,
+			Benchmarks:   input.Benchmarks,
+		}
+
+		collection, err := client.CreateCollection(config)
+		if err != nil {
+			log.Error("create_collection failed", "error", err)
+			return errorResult(fmt.Sprintf("failed to create collection: %v", err)), CreateCollectionOutput{}, nil
+		}
+
+		out := CreateCollectionOutput{
+			ID:        collection.Resource.ID,
+			Name:      collection.Name,
+			Owner:     string(collection.Resource.Owner),
+			CreatedAt: collection.Resource.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Collection created: %s (id: %s)", out.Name, out.ID)},
+			},
+		}, out, nil
+	}
+}
+
+// defaultSearchBenchmarksLimit bounds search_benchmarks output when the caller
+// does not set an explicit limit.
+const defaultSearchBenchmarksLimit = 50
+
+func searchBenchmarksHandler(client EvalHubToolClient, logger *slog.Logger) mcp.ToolHandlerFor[SearchBenchmarksInput, SearchBenchmarksOutput] {
+	return func(ctx context.Context, req *mcp.CallToolRequest, input SearchBenchmarksInput) (*mcp.CallToolResult, SearchBenchmarksOutput, error) {
+		log := requestLogger(ctx, logger)
+		client := evalHubToolClientForRequest(ctx, client, logger)
+		log.Debug("search_benchmarks called",
+			"query", input.Query, "labels", input.Labels, "category", input.Category, "provider_id", input.ProviderID)
+
+		benchmarks, err := collectBenchmarks(client)
+		if err != nil {
+			log.Error("search_benchmarks failed", "error", err)
+			return errorResult(fmt.Sprintf("failed to list benchmarks: %v", err)), SearchBenchmarksOutput{}, nil
+		}
+
+		query := strings.ToLower(strings.TrimSpace(input.Query))
+		category := strings.ToLower(strings.TrimSpace(input.Category))
+		providerID := strings.TrimSpace(input.ProviderID)
+		labels := make([]string, 0, len(input.Labels))
+		for _, l := range input.Labels {
+			if l = strings.ToLower(strings.TrimSpace(l)); l != "" {
+				labels = append(labels, l)
+			}
+		}
+
+		matched := make([]BenchmarkOutput, 0)
+		for _, b := range benchmarks {
+			if providerID != "" && b.ProviderID != providerID {
+				continue
+			}
+			if category != "" && strings.ToLower(b.Category) != category {
+				continue
+			}
+			if len(labels) > 0 && !benchmarkHasAllLabels(b, labels) {
+				continue
+			}
+			if query != "" && !benchmarkMatchesQuery(b, query) {
+				continue
+			}
+			matched = append(matched, b)
+		}
+
+		total := len(matched)
+		limit := input.Limit
+		if limit <= 0 {
+			limit = defaultSearchBenchmarksLimit
+		}
+		if len(matched) > limit {
+			matched = matched[:limit]
+		}
+
+		out := SearchBenchmarksOutput{Benchmarks: matched, Total: total}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Found %d benchmarks (returning %d)", total, len(matched))},
+			},
+		}, out, nil
+	}
+}
+
+func getBenchmarkToolHandler(client EvalHubToolClient, logger *slog.Logger) mcp.ToolHandlerFor[GetBenchmarkInput, BenchmarkOutput] {
+	return func(ctx context.Context, req *mcp.CallToolRequest, input GetBenchmarkInput) (*mcp.CallToolResult, BenchmarkOutput, error) {
+		log := requestLogger(ctx, logger)
+		client := evalHubToolClientForRequest(ctx, client, logger)
+		id := strings.TrimSpace(input.BenchmarkID)
+		providerID := strings.TrimSpace(input.ProviderID)
+		log.Debug("get_benchmark called", "benchmark_id", id, "provider_id", providerID)
+
+		if id == "" {
+			return errorResult("validation error: 'benchmark_id' is required"), BenchmarkOutput{}, nil
+		}
+
+		benchmarks, err := collectBenchmarks(client)
+		if err != nil {
+			log.Error("get_benchmark failed", "error", err)
+			return errorResult(fmt.Sprintf("failed to list benchmarks: %v", err)), BenchmarkOutput{}, nil
+		}
+
+		var matches []BenchmarkOutput
+		for _, b := range benchmarks {
+			if b.ID != id {
+				continue
+			}
+			if providerID != "" && b.ProviderID != providerID {
+				continue
+			}
+			matches = append(matches, b)
+		}
+
+		switch len(matches) {
+		case 0:
+			if providerID != "" {
+				return errorResult(fmt.Sprintf("benchmark %q not found for provider %q; use search_benchmarks to find valid benchmark ids", id, providerID)), BenchmarkOutput{}, nil
+			}
+			return errorResult(fmt.Sprintf("benchmark %q not found; use search_benchmarks to find valid benchmark ids", id)), BenchmarkOutput{}, nil
+		case 1:
+			b := matches[0]
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					&mcp.TextContent{Text: fmt.Sprintf("Benchmark %s (provider: %s)", b.ID, b.ProviderID)},
+				},
+			}, b, nil
+		default:
+			providers := make([]string, 0, len(matches))
+			for _, b := range matches {
+				providers = append(providers, b.ProviderID)
+			}
+			return errorResult(fmt.Sprintf("benchmark %q is offered by multiple providers (%s); set 'provider_id' to disambiguate", id, strings.Join(providers, ", "))), BenchmarkOutput{}, nil
+		}
+	}
+}
+
+// designCollectionToolHandler is the model-callable equivalent of the
+// design_collection prompt. It shares gatherDesignCollection with the prompt so
+// the calibration guidance stays identical, but returns the benchmark catalog and
+// reference collections as structured fields (rather than embedded JSON) so the
+// caller can consume them directly instead of re-querying search_benchmarks.
+func designCollectionToolHandler(ds EvalHubDiscovery, result *promptResultConfig, logger *slog.Logger) mcp.ToolHandlerFor[DesignCollectionInput, DesignCollectionOutput] {
+	return func(ctx context.Context, req *mcp.CallToolRequest, input DesignCollectionInput) (*mcp.CallToolResult, DesignCollectionOutput, error) {
+		log := requestLogger(ctx, logger)
+		ds := evalHubDiscoveryForRequest(ctx, ds, logger)
+
+		maxBenchmarksRaw := ""
+		if input.MaxBenchmarks != nil {
+			maxBenchmarksRaw = strconv.Itoa(*input.MaxBenchmarks)
+		}
+
+		log.Debug("design_collection tool called",
+			ArgNameEvaluationGoal, input.EvaluationGoal,
+			ArgNameProviderFilter, input.ProviderFilter,
+			ArgNameMaxBenchmarks, maxBenchmarksRaw,
+			ArgNameStrictness, input.Strictness,
+		)
+
+		data, err := gatherDesignCollection(ds, result, input.EvaluationGoal, input.ProviderFilter, maxBenchmarksRaw, input.Strictness)
+		if err != nil {
+			log.Error("design_collection tool failed", "error", err)
+			return errorResult(err.Error()), DesignCollectionOutput{}, nil
+		}
+
+		// The catalog and examples travel in the structured output fields, so the
+		// guidance text points at them instead of embedding the full JSON.
+		messages, err := renderDesignCollectionMessages(result, data,
+			"(provided as the structured `benchmarks` field of this tool result)",
+			"(provided as the structured `collection_examples` field of this tool result)",
+		)
+		if err != nil {
+			log.Error("design_collection tool failed", "error", err)
+			return errorResult(err.Error()), DesignCollectionOutput{}, nil
+		}
+
+		guidance := promptMessagesText(messages)
+		out := DesignCollectionOutput{
+			Guidance:           guidance,
+			Benchmarks:         data.Benchmarks,
+			CollectionExamples: data.Examples,
+		}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: guidance},
+			},
+		}, out, nil
+	}
+}
+
+// collectBenchmarks flattens every provider's benchmarks into BenchmarkOutput
+// entries, attaching the owning provider_id to each (which the raw benchmark
+// resource does not carry). It paginates through all provider pages so the
+// catalog is complete even when the provider list exceeds a single page.
+func collectBenchmarks(client EvalHubToolClient) ([]BenchmarkOutput, error) {
+	providers, err := allProviders(client)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]BenchmarkOutput, 0)
+	for _, p := range providers {
+		for _, b := range p.Benchmarks {
+			out = append(out, toBenchmarkOutput(b, p.Resource.ID))
+		}
+	}
+	return out, nil
+}
+
+func toBenchmarkOutput(b api.BenchmarkResource, providerID string) BenchmarkOutput {
+	return BenchmarkOutput{
+		ID:           b.ID,
+		ProviderID:   providerID,
+		Name:         b.Name,
+		Description:  b.Description,
+		Category:     b.Category,
+		Metrics:      b.Metrics,
+		Tags:         b.Tags,
+		NumFewShot:   b.NumFewShot,
+		DatasetSize:  b.DatasetSize,
+		PrimaryScore: b.PrimaryScore,
+		PassCriteria: b.PassCriteria,
+		Domains:      b.Domains,
+		Tasks:        b.Tasks,
+	}
+}
+
+func benchmarkHasAllLabels(b BenchmarkOutput, labels []string) bool {
+	tagset := make(map[string]struct{}, len(b.Tags))
+	for _, t := range b.Tags {
+		tagset[strings.ToLower(t)] = struct{}{}
+	}
+	for _, l := range labels {
+		if _, ok := tagset[l]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func benchmarkMatchesQuery(b BenchmarkOutput, query string) bool {
+	if strings.Contains(strings.ToLower(b.ID), query) ||
+		strings.Contains(strings.ToLower(b.Name), query) ||
+		strings.Contains(strings.ToLower(b.Description), query) {
+		return true
+	}
+	for _, t := range b.Tags {
+		if strings.Contains(strings.ToLower(t), query) {
+			return true
+		}
+	}
+	return false
 }
 
 func toProviderSummary(p api.ProviderResource) ProviderSummaryOutput {
