@@ -539,9 +539,9 @@ func testDesignCollectionDS() *mockDataSource {
 			{
 				Resource: api.Resource{ID: "safety-v1", Owner: "system"},
 				CollectionConfig: api.CollectionConfig{
-					Name:     "Safety Suite v1",
-					Category: "safety",
-					Tags:     []string{"safety"},
+					Name:    "Safety Suite v1",
+					Domains: []string{"safety"},
+					Tags:    []string{"safety"},
 					Benchmarks: []api.CollectionBenchmarkConfig{
 						{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness", Weight: 3},
 					},
@@ -649,8 +649,8 @@ func TestDesignCollectionOnlySystemCollections(t *testing.T) {
 	ds.collections = append(ds.collections, api.CollectionResource{
 		Resource: api.Resource{ID: "tenant-col", Owner: "my-tenant"},
 		CollectionConfig: api.CollectionConfig{
-			Name:     "Tenant Collection",
-			Category: "general",
+			Name:    "Tenant Collection",
+			Domains: []string{"general"},
 			Benchmarks: []api.CollectionBenchmarkConfig{
 				{Ref: api.Ref{ID: "gsm8k"}, ProviderID: "lm_evaluation_harness"},
 			},

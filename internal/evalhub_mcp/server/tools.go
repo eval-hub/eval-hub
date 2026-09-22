@@ -60,8 +60,7 @@ type GetJobStatusInput struct {
 type CreateCollectionInput struct {
 	Name         string                          `json:"name" jsonschema:"Collection name"`
 	Description  string                          `json:"description,omitempty" jsonschema:"Human-readable description of what this collection evaluates"`
-	Category     string                          `json:"category,omitempty" jsonschema:"Deprecated: use domains instead. Legacy collection category (e.g. general, safety, code, reasoning). Provide either category or a non-empty domains array."`
-	Domains      []string                        `json:"domains,omitempty" jsonschema:"High-level evaluation domains in snake_case (e.g. safety, instruction_following, long_context). Supersedes category. Provide either domains or a category."`
+	Domains      []string                        `json:"domains" jsonschema:"High-level evaluation domains in snake_case (e.g. safety, instruction_following, long_context). At least one domain is required."`
 	Tags         []string                        `json:"tags,omitempty" jsonschema:"Tags for categorizing the collection"`
 	PassCriteria *api.PassCriteria               `json:"pass_criteria,omitempty" jsonschema:"Collection-level pass/fail threshold (weighted average of benchmark thresholds)"`
 	Benchmarks   []api.CollectionBenchmarkConfig `json:"benchmarks" jsonschema:"List of benchmarks with weights, metrics, thresholds, and parameters"`
@@ -470,11 +469,10 @@ func createCollectionHandler(client EvalHubToolClient, logger *slog.Logger) mcp.
 		if input.Name == "" {
 			return errorResult("validation error: 'name' is required"), CreateCollectionOutput{}, nil
 		}
-		// Mirror the eval-hub handler rule (#1028): category is deprecated and
-		// optional, but a collection must be classified by either a category or a
-		// non-empty domains array.
-		if input.Category == "" && len(input.Domains) == 0 {
-			return errorResult("validation error: either category or a non-empty domains array must be provided"), CreateCollectionOutput{}, nil
+		// Collections are classified by domains only. category is the deprecated
+		// predecessor (#1028) and is intentionally not exposed by this tool.
+		if len(input.Domains) == 0 {
+			return errorResult("validation error: at least one domain is required"), CreateCollectionOutput{}, nil
 		}
 		if len(input.Benchmarks) == 0 {
 			return errorResult("validation error: at least one benchmark is required"), CreateCollectionOutput{}, nil
@@ -483,7 +481,6 @@ func createCollectionHandler(client EvalHubToolClient, logger *slog.Logger) mcp.
 		config := api.CollectionConfig{
 			Name:         input.Name,
 			Description:  input.Description,
-			Category:     input.Category,
 			Domains:      input.Domains,
 			Tags:         input.Tags,
 			PassCriteria: input.PassCriteria,

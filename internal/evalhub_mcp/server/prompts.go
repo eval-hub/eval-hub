@@ -526,7 +526,7 @@ func collectBenchmarkCatalog(ds EvalHubDiscovery, providerFilter string) ([]benc
 type collectionExample struct {
 	ID           string                          `json:"id"`
 	Name         string                          `json:"name"`
-	Category     string                          `json:"category,omitempty"`
+	Domains      []string                        `json:"domains,omitempty"`
 	Description  string                          `json:"description,omitempty"`
 	Tags         []string                        `json:"tags,omitempty"`
 	PassCriteria *api.PassCriteria               `json:"pass_criteria,omitempty"`
@@ -565,7 +565,7 @@ func collectCollectionExamples(ds EvalHubDiscovery, providerFilter string) ([]co
 		examples = append(examples, collectionExample{
 			ID:           c.Resource.ID,
 			Name:         c.Name,
-			Category:     c.Category,
+			Domains:      c.Domains,
 			Description:  c.Description,
 			Tags:         c.Tags,
 			PassCriteria: c.PassCriteria,

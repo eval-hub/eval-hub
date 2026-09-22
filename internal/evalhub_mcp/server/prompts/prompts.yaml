@@ -116,7 +116,7 @@ design_collection:
           2. Sets appropriate weights (higher = more important to the use-case)
           3. Sets per-benchmark pass_criteria thresholds calibrated to domain norms
           4. Sets a collection-level pass_criteria threshold (weighted average of benchmark thresholds)
-          5. Fills in name, description, category, and tags
+          5. Fills in name, description, domains, and tags
 
           ### Sourcing benchmarks
 
@@ -175,7 +175,7 @@ design_collection:
           Produce a JSON object matching the `CollectionConfig` schema with these fields:
           - `name` (string, required)
           - `description` (string)
-          - `category` (string: general, safety, code, reasoning, telecom, long_context, instruction_following)
+          - `domains` (array of strings in snake_case, e.g. general, safety, code, reasoning, telecom, long_context, instruction_following; at least one required)
           - `tags` (array of strings)
           - `pass_criteria` with `threshold` (number 0-1)
           - `benchmarks` array, each with: `id`, `provider_id`, `weight`, `primary_score` (`metric`, `lower_is_better`), `pass_criteria` (`threshold`), `parameters`

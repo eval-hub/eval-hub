@@ -1311,8 +1311,8 @@ func TestCreateCollectionSuccess(t *testing.T) {
 	ctx, cs := connectWithTools(t, &mockToolClient{})
 
 	out := callToolJSON[CreateCollectionOutput](t, ctx, cs, "create_collection", CreateCollectionInput{
-		Name:     "test-collection",
-		Category: "safety",
+		Name:    "test-collection",
+		Domains: []string{"safety"},
 		Benchmarks: []api.CollectionBenchmarkConfig{
 			{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness", Weight: 3},
 		},
@@ -1331,7 +1331,7 @@ func TestCreateCollectionMissingName(t *testing.T) {
 	ctx, cs := connectWithTools(t, &mockToolClient{})
 
 	errMsg := callToolExpectError(t, ctx, cs, "create_collection", CreateCollectionInput{
-		Category: "safety",
+		Domains: []string{"safety"},
 		Benchmarks: []api.CollectionBenchmarkConfig{
 			{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness"},
 		},
@@ -1341,24 +1341,24 @@ func TestCreateCollectionMissingName(t *testing.T) {
 	}
 }
 
-func TestCreateCollectionMissingClassification(t *testing.T) {
+func TestCreateCollectionMissingDomains(t *testing.T) {
 	t.Parallel()
 	ctx, cs := connectWithTools(t, &mockToolClient{})
 
-	// Neither category nor domains provided: must be rejected with the same rule
-	// the eval-hub handler enforces (#1028).
+	// Collections are classified by domains only; an empty domains array must be
+	// rejected.
 	errMsg := callToolExpectError(t, ctx, cs, "create_collection", CreateCollectionInput{
 		Name: "test",
 		Benchmarks: []api.CollectionBenchmarkConfig{
 			{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness"},
 		},
 	})
-	if !strings.Contains(errMsg, "category or a non-empty domains array") {
-		t.Errorf("error should mention category-or-domains rule, got: %s", errMsg)
+	if !strings.Contains(errMsg, "at least one domain is required") {
+		t.Errorf("error should mention the domains requirement, got: %s", errMsg)
 	}
 }
 
-func TestCreateCollectionDomainsWithoutCategory(t *testing.T) {
+func TestCreateCollectionDomains(t *testing.T) {
 	t.Parallel()
 	var captured api.CollectionConfig
 	client := &mockToolClient{
@@ -1396,8 +1396,8 @@ func TestCreateCollectionMissingBenchmarks(t *testing.T) {
 	ctx, cs := connectWithTools(t, &mockToolClient{})
 
 	errMsg := callToolExpectError(t, ctx, cs, "create_collection", CreateCollectionInput{
-		Name:     "test",
-		Category: "safety",
+		Name:    "test",
+		Domains: []string{"safety"},
 	})
 	if !strings.Contains(errMsg, "benchmark") {
 		t.Errorf("error should mention benchmark, got: %s", errMsg)
@@ -1417,8 +1417,8 @@ func TestCreateCollectionAPIError(t *testing.T) {
 	ctx, cs := connectWithTools(t, client)
 
 	errMsg := callToolExpectError(t, ctx, cs, "create_collection", CreateCollectionInput{
-		Name:     "test",
-		Category: "safety",
+		Name:    "test",
+		Domains: []string{"safety"},
 		Benchmarks: []api.CollectionBenchmarkConfig{
 			{Ref: api.Ref{ID: "toxigen"}, ProviderID: "lm_evaluation_harness"},
 		},
