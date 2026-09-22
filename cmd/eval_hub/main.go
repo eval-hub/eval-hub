@@ -142,7 +142,7 @@ func main() {
 	logger.Info("Runtime created", "runtime", runtime.Name())
 
 	// setup mlflow client if there is a tracking URI set
-	mlflowClient, mlflowTrackingURI, mlflowServerVersion, err := mlflow.SetupMLFlowClient(serviceConfig, logger)
+	mlflowClient, mlflowWorkspaceSupport, mlflowTrackingURI, mlflowServerVersion, err := mlflow.SetupMLFlowClient(serviceConfig, logger)
 	if err != nil {
 		startUpFailed(serviceConfig, err, "Failed to create MLFlow client", logger)
 	}
@@ -153,7 +153,8 @@ func main() {
 		storage,
 		validate,
 		runtime,
-		mlflowClient)
+		mlflowClient,
+		mlflowWorkspaceSupport)
 
 	if err != nil {
 		// we do this as no point trying to continue

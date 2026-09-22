@@ -65,6 +65,7 @@ func TestUploadArtifactToExperimentWithArtifactLocation(t *testing.T) {
 	client := mlflowclient.NewClient(srv.URL).WithContext(t.Context())
 	_, err := UploadArtifactToExperiment(
 		client,
+		nil,
 		"8",
 		"run-1",
 		"evaluation-card.json",
@@ -103,7 +104,7 @@ func TestPersistEvalCard(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	client := mlflowclient.NewClient(srv.URL).WithContext(t.Context())
-	url, err := PersistEvalCard(client, "exp-1", "job-1", "demo-job", "", []byte(`{"card_version":"1.0"}`))
+	url, err := PersistEvalCard(client, nil, "exp-1", "job-1", "demo-job", "", []byte(`{"card_version":"1.0"}`))
 	if err != nil {
 		t.Fatalf("PersistEvalCard() err = %v", err)
 	}
@@ -112,6 +113,56 @@ func TestPersistEvalCard(t *testing.T) {
 	}
 	if !strings.Contains(uploadedPath, "exp-1/run-1/artifacts/evaluation-card.json") {
 		t.Fatalf("uploaded path = %q", uploadedPath)
+	}
+	if !strings.Contains(url, "exp-1/run-1/artifacts/evaluation-card.json") {
+		t.Fatalf("artifact url = %q", url)
+	}
+}
+
+func TestPersistEvalCardWithWorkspaceSupport(t *testing.T) {
+	t.Parallel()
+
+	const tenant = "tenant-a"
+	var createWS, uploadWS string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/3.0/mlflow/server-info":
+			if got := r.Header.Get("X-MLFLOW-WORKSPACE"); got != "" {
+				t.Errorf("server-info must not send workspace header, got %q", got)
+			}
+			_ = json.NewEncoder(w).Encode(mlflowclient.ServerInfoResponse{WorkspacesEnabled: true})
+		case r.Method == http.MethodGet && r.URL.Path == "/api/3.0/mlflow/workspaces/"+tenant:
+			_ = json.NewEncoder(w).Encode(mlflowclient.GetWorkspaceResponse{
+				Workspace: mlflowclient.Workspace{Name: tenant},
+			})
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/runs/create"):
+			createWS = r.Header.Get("X-MLFLOW-WORKSPACE")
+			_ = json.NewEncoder(w).Encode(mlflowclient.CreateRunResponse{
+				Run: mlflowclient.Run{Info: mlflowclient.RunInfo{RunID: "run-1"}},
+			})
+		case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/mlflow-artifacts/artifacts/"):
+			uploadWS = r.Header.Get("X-MLFLOW-WORKSPACE")
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	support := NewWorkspaceSupport()
+	client := mlflowclient.NewClient(srv.URL).WithContext(t.Context()).WithWorkspace(tenant)
+	url, err := PersistEvalCard(client, support, "exp-1", "job-1", "demo-job", "", []byte(`{"card_version":"1.0"}`))
+	if err != nil {
+		t.Fatalf("PersistEvalCard() err = %v", err)
+	}
+	if !support.Enabled() || !support.Resolved() {
+		t.Fatal("expected workspace support resolved and enabled after PersistEvalCard")
+	}
+	if createWS != tenant {
+		t.Fatalf("create-run X-MLFLOW-WORKSPACE = %q, want %q", createWS, tenant)
+	}
+	if uploadWS != tenant {
+		t.Fatalf("artifact-upload X-MLFLOW-WORKSPACE = %q, want %q", uploadWS, tenant)
 	}
 	if !strings.Contains(url, "exp-1/run-1/artifacts/evaluation-card.json") {
 		t.Fatalf("artifact url = %q", url)
@@ -139,7 +190,7 @@ func TestPersistEvalCardWithArtifactLocation(t *testing.T) {
 
 	client := mlflowclient.NewClient(srv.URL).WithContext(t.Context())
 	artifactLocation := "/mlflow/artifacts/workspaces/sagar/8"
-	_, err := PersistEvalCard(client, "8", "job-1", "demo-job", artifactLocation, []byte(`{"card_version":"1.0"}`))
+	_, err := PersistEvalCard(client, nil, "8", "job-1", "demo-job", artifactLocation, []byte(`{"card_version":"1.0"}`))
 	if err != nil {
 		t.Fatalf("PersistEvalCard() err = %v", err)
 	}
@@ -167,7 +218,7 @@ func TestCreateEvaluationCardRunAlwaysCreates(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	client := mlflowclient.NewClient(srv.URL).WithContext(t.Context())
-	runID, err := CreateEvaluationCardRun(client, "exp-1", "job-1", "demo-job")
+	runID, err := CreateEvaluationCardRun(client, nil, "exp-1", "job-1", "demo-job")
 	if err != nil {
 		t.Fatalf("CreateEvaluationCardRun() err = %v", err)
 	}
@@ -182,14 +233,14 @@ func TestCreateEvaluationCardRunAlwaysCreates(t *testing.T) {
 func TestUploadArtifactToExperimentValidationErrors(t *testing.T) {
 	t.Parallel()
 
-	if _, err := UploadArtifactToExperiment(nil, "8", "run-1", "file.json", "", nil, ""); err == nil {
+	if _, err := UploadArtifactToExperiment(nil, nil, "8", "run-1", "file.json", "", nil, ""); err == nil {
 		t.Fatal("expected error for nil client")
 	}
 	client := mlflowclient.NewClient("http://example.com").WithContext(t.Context())
-	if _, err := UploadArtifactToExperiment(client, "", "run-1", "file.json", "", nil, ""); err == nil {
+	if _, err := UploadArtifactToExperiment(client, nil, "", "run-1", "file.json", "", nil, ""); err == nil {
 		t.Fatal("expected error for empty experiment id")
 	}
-	if _, err := UploadArtifactToExperiment(client, "8", "", "file.json", "", nil, ""); err == nil {
+	if _, err := UploadArtifactToExperiment(client, nil, "8", "", "file.json", "", nil, ""); err == nil {
 		t.Fatal("expected error for empty run id")
 	}
 }
@@ -197,14 +248,14 @@ func TestUploadArtifactToExperimentValidationErrors(t *testing.T) {
 func TestCreateEvaluationCardRunValidationErrors(t *testing.T) {
 	t.Parallel()
 
-	if _, err := CreateEvaluationCardRun(nil, "exp-1", "job-1", "demo"); err == nil {
+	if _, err := CreateEvaluationCardRun(nil, nil, "exp-1", "job-1", "demo"); err == nil {
 		t.Fatal("expected error for nil client")
 	}
 	client := mlflowclient.NewClient("http://example.com").WithContext(t.Context())
-	if _, err := CreateEvaluationCardRun(client, "", "job-1", "demo"); err == nil {
+	if _, err := CreateEvaluationCardRun(client, nil, "", "job-1", "demo"); err == nil {
 		t.Fatal("expected error for empty experiment id")
 	}
-	if _, err := CreateEvaluationCardRun(client, "exp-1", "", "demo"); err == nil {
+	if _, err := CreateEvaluationCardRun(client, nil, "exp-1", "", "demo"); err == nil {
 		t.Fatal("expected error for empty job id")
 	}
 }
@@ -224,7 +275,7 @@ func TestCreateEvaluationCardRunMissingRunID(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	client := mlflowclient.NewClient(srv.URL).WithContext(t.Context())
-	_, err := CreateEvaluationCardRun(client, "exp-1", "job-1", "")
+	_, err := CreateEvaluationCardRun(client, nil, "exp-1", "job-1", "")
 	if err == nil {
 		t.Fatal("expected error when create run response has no run id")
 	}
@@ -249,7 +300,7 @@ func TestCreateEvaluationCardRunDefaultRunName(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	client := mlflowclient.NewClient(srv.URL).WithContext(t.Context())
-	runID, err := CreateEvaluationCardRun(client, "exp-1", "job-1", "")
+	runID, err := CreateEvaluationCardRun(client, nil, "exp-1", "job-1", "")
 	if err != nil {
 		t.Fatalf("CreateEvaluationCardRun() err = %v", err)
 	}

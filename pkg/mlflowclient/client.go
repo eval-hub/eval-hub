@@ -10,43 +10,9 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 )
-
-// workspaceSupportKind is the result of probing MLflow server-info for workspace APIs.
-// Unknown means the probe has not succeeded yet (for example MLflow was unreachable);
-// Enabled/Disabled are set only after a definitive probe response and kept for the process lifetime.
-type workspaceSupportKind int32
-
-const (
-	workspaceSupportUnknown workspaceSupportKind = iota
-	workspaceSupportEnabled
-	workspaceSupportDisabled
-)
-
-// workspaceCapability is shared across Client copies so a successful probe on a
-// WithContext()/WithLogger() copy still updates process-wide capability state.
-// Workspace names stay on each Client (not shared) for tenant isolation.
-type workspaceCapability struct {
-	support atomic.Int32 // workspaceSupportKind
-
-	mu       sync.Mutex
-	inflight *workspaceProbeCall // non-nil while a probe is in progress
-
-	// onJoinWait is invoked when a caller begins waiting on an in-flight probe.
-	// Tests set this for explicit synchronization; production leaves it nil.
-	onJoinWait func()
-}
-
-// workspaceProbeCall lets concurrent ResolveWorkspaceSupport callers share one
-// in-flight probe (including its failure). After inflight clears, a later call
-// may probe again while support is still unknown.
-type workspaceProbeCall struct {
-	done chan struct{}
-	err  error
-}
 
 // API endpoint constants
 const (
@@ -66,7 +32,9 @@ const (
 	endpointExperimentsDeleteBase    = experimentsBaseURL + "/delete"
 )
 
-// Client represents an MLflow API client
+// Client represents an MLflow API client.
+// Workspace capability probing lives in the eval-hub service layer so this client
+// stays a thin HTTP wrapper (easier to replace with another MLflow client later).
 type Client struct {
 	ctx                        context.Context
 	baseURL                    string
@@ -74,8 +42,8 @@ type Client struct {
 	authToken                  string
 	authTokenPath              string
 	authTokenPathWarningLogged atomic.Bool
-	ws                         *workspaceCapability
-	workspace                  string // per-client; not shared across copies
+	workspace                  string
+	workspacesEnabled          bool
 	logger                     *slog.Logger
 }
 
@@ -84,14 +52,14 @@ func (c *Client) copy() *Client {
 		return nil
 	}
 	cp := &Client{
-		ctx:           c.ctx,
-		baseURL:       c.baseURL,
-		httpClient:    c.httpClient,
-		authToken:     c.authToken,
-		authTokenPath: c.authTokenPath,
-		ws:            c.ws, // shared capability/probe state only
-		workspace:     c.workspace,
-		logger:        c.logger,
+		ctx:               c.ctx,
+		baseURL:           c.baseURL,
+		httpClient:        c.httpClient,
+		authToken:         c.authToken,
+		authTokenPath:     c.authTokenPath,
+		workspace:         c.workspace,
+		workspacesEnabled: c.workspacesEnabled,
+		logger:            c.logger,
 	}
 	cp.authTokenPathWarningLogged.Store(c.authTokenPathWarningLogged.Load())
 	return cp
@@ -110,7 +78,6 @@ func NewClient(baseURL string) *Client {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		ws:     &workspaceCapability{},
 		logger: slog.New(slog.DiscardHandler),
 	}
 }
@@ -165,23 +132,18 @@ func (c *Client) WithTokenPath(authTokenPath string) *Client {
 }
 
 // WithWorkspacesSupport records whether the server supports X-MLFLOW-WORKSPACE headers.
-// Prefer ResolveWorkspaceSupport during setup; this setter remains for tests and callers
-// that already know the server capability.
+// Call ProbeWorkspacesEnabled (or the service-layer WorkspaceSupport.Resolve) during
+// setup, then pass the result here.
 func (c *Client) WithWorkspacesSupport(enabled bool) *Client {
 	if c == nil {
 		return nil
 	}
 	cp := c.copy()
-	if enabled {
-		cp.ws.support.Store(int32(workspaceSupportEnabled))
-	} else {
-		cp.ws.support.Store(int32(workspaceSupportDisabled))
-	}
+	cp.workspacesEnabled = enabled
 	return cp
 }
 
 // WithWorkspace sets the workspace name sent as X-MLFLOW-WORKSPACE when workspaces are enabled.
-// The name is private to this client copy (tenant isolation); capability state remains shared.
 func (c *Client) WithWorkspace(workspace string) *Client {
 	if c == nil {
 		return nil
@@ -192,13 +154,22 @@ func (c *Client) WithWorkspace(workspace string) *Client {
 }
 
 func (c *Client) workspaceHeaderValue() string {
-	if c == nil || c.ws == nil {
-		return ""
-	}
-	if workspaceSupportKind(c.ws.support.Load()) != workspaceSupportEnabled {
+	if c == nil || !c.workspacesEnabled {
 		return ""
 	}
 	return c.workspace
+}
+
+// applyWorkspaceHeaders sets X-MLFLOW-WORKSPACE on headers when workspaces are enabled
+// and a workspace name is configured. Additional workspace-related headers can be
+// added here later without updating each call site.
+func (c *Client) applyWorkspaceHeaders(headers http.Header) {
+	if headers == nil {
+		return
+	}
+	if ws := c.workspaceHeaderValue(); ws != "" {
+		headers.Set("X-MLFLOW-WORKSPACE", ws)
+	}
 }
 
 func (c *Client) configuredWorkspaceName() string {
@@ -225,23 +196,27 @@ func (c *Client) GetBaseURL() string {
 	return c.baseURL
 }
 
+// Context returns the request context associated with this client copy.
+func (c *Client) Context() context.Context {
+	if c == nil || c.ctx == nil {
+		return context.Background()
+	}
+	return c.ctx
+}
+
 func (c *Client) GetExperimentsURL() string {
 	return c.baseURL + experimentsBaseURL
 }
 
-// resolveAuthToken returns the auth token to use for a request.
-// Token file (authTokenPath) takes precedence over a static token, supporting
-// Kubernetes projected SA tokens that are rotated on disk by the kubelet.
-// Falls back to the static authToken for local development.
 func (c *Client) resolveAuthToken() string {
 	if c.authTokenPath != "" {
-		tokenData, err := os.ReadFile(c.authTokenPath)
+		data, err := os.ReadFile(c.authTokenPath)
 		if err != nil {
-			if !c.authTokenPathWarningLogged.Load() {
-				c.authTokenPathWarningLogged.Store(true)
-				c.logger.Warn("Failed to read auth token file, falling back to static token", "path", c.authTokenPath, "error", err)
+			if !c.authTokenPathWarningLogged.Swap(true) {
+				c.logger.Warn("failed to read MLflow auth token file; falling back to static token if set",
+					"path", c.authTokenPath, "error", err.Error())
 			}
-		} else if token := strings.TrimSpace(string(tokenData)); token != "" {
+		} else if token := strings.TrimSpace(string(data)); token != "" {
 			return token
 		}
 	}
@@ -260,12 +235,10 @@ func (c *Client) applyAuthHeader(req *http.Request) {
 	req.Header.Set("Authorization", "Bearer "+token)
 }
 
-// doRequest performs an HTTP request to the MLflow API, including X-MLFLOW-WORKSPACE when configured.
 func (c *Client) doRequest(method, endpoint string, body any) ([]byte, error) {
 	return c.doRequestInternal(method, endpoint, body, true)
 }
 
-// doRequestWithoutWorkspace performs an MLflow API request without the X-MLFLOW-WORKSPACE header.
 func (c *Client) doRequestWithoutWorkspace(method, endpoint string, body any) ([]byte, error) {
 	return c.doRequestInternal(method, endpoint, body, false)
 }
@@ -301,9 +274,7 @@ func (c *Client) doRequestInternal(method, endpoint string, body any, includeWor
 	// --enable-workspaces (MLflow 3.10+). Sending it when workspaces are disabled
 	// returns FEATURE_DISABLED from MLflow 3.13+.
 	if includeWorkspaceHeader {
-		if ws := c.workspaceHeaderValue(); ws != "" {
-			req.Header.Set("X-MLFLOW-WORKSPACE", ws)
-		}
+		c.applyWorkspaceHeaders(req.Header)
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -329,29 +300,24 @@ func (c *Client) doRequestInternal(method, endpoint string, body any, includeWor
 			c.logger.Info("MLFlow request failed", "method", method, "endpoint", endpoint, "status", resp.StatusCode, "error_code", mlflowError.ErrorCode, "message", mlflowError.Message)
 			return nil, apiErr
 		}
-		apiErr := &APIError{
+		c.logger.Info("MLFlow request failed", "method", method, "endpoint", endpoint, "status", resp.StatusCode, "response", string(respBody))
+		return nil, &APIError{
 			StatusCode:   resp.StatusCode,
 			ResponseBody: string(respBody),
-			MLFlowError:  nil,
 		}
-		c.logger.Info("MLFlow request failed", "method", method, "endpoint", endpoint, "status", apiErr.StatusCode, "response", apiErr.ResponseBody)
-		return nil, apiErr
 	}
 
-	c.logger.Info("MLFlow request successful", "method", method, "endpoint", endpoint, "status", resp.StatusCode, "response", string(respBody))
+	c.logger.Info("MLFlow request successful", "method", method, "endpoint", endpoint, "status", resp.StatusCode)
 	return respBody, nil
 }
 
-// unmarshalResponse unmarshals JSON response body into a struct of type T
 func unmarshalResponse[T any](respBody []byte) (*T, error) {
-	var response T
-	if err := json.Unmarshal(respBody, &response); err != nil {
+	var result T
+	if err := json.Unmarshal(respBody, &result); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
-	return &response, nil
+	return &result, nil
 }
-
-// Version API
 
 // GetVersion returns the version of the MLflow server, or an error if it does not exist.
 func (c *Client) GetVersion() (string, error) {
@@ -365,8 +331,6 @@ func (c *Client) GetVersion() (string, error) {
 	}
 	return string(respBody), nil
 }
-
-// Experiments API
 
 // CreateExperiment creates a new experiment
 func (c *Client) CreateExperiment(req *CreateExperimentRequest) (*CreateExperimentResponse, error) {

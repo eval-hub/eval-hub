@@ -45,7 +45,7 @@ func TestNewMLFlowClient(t *testing.T) {
 
 	t.Run("no tracking URI", func(t *testing.T) {
 		t.Parallel()
-		client, err := NewMLFlowClient(&config.Config{MLFlow: &config.MLFlowConfig{}}, logger)
+		client, _, err := NewMLFlowClient(&config.Config{MLFlow: &config.MLFlowConfig{}}, logger)
 		if err != nil {
 			t.Fatalf("NewMLFlowClient() err = %v", err)
 		}
@@ -71,14 +71,14 @@ func TestNewMLFlowClient(t *testing.T) {
 			m.Workspace = "prod-ws"
 			m.Token = "static-token"
 		})
-		client, err := NewMLFlowClient(cfg, logger)
+		client, workspaceSupport, err := NewMLFlowClient(cfg, logger)
 		if err != nil {
 			t.Fatalf("NewMLFlowClient() err = %v", err)
 		}
 		if probes.Load() != 1 {
 			t.Fatalf("startup probes = %d, want 1", probes.Load())
 		}
-		if !client.WorkspacesEnabled() || !client.WorkspaceSupportResolved() {
+		if !client.WorkspacesEnabled() || !workspaceSupport.Resolved() {
 			t.Fatal("expected workspaces enabled after startup probe")
 		}
 		if client.WorkspaceName() != "prod-ws" {
@@ -103,7 +103,7 @@ func TestNewMLFlowClient(t *testing.T) {
 		t.Cleanup(srv.Close)
 
 		cfg := mlflowServiceConfig(t, srv.URL, nil)
-		client, uri, version, err := SetupMLFlowClient(cfg, logger)
+		client, _, uri, version, err := SetupMLFlowClient(cfg, logger)
 		if err != nil {
 			t.Fatalf("SetupMLFlowClient() err = %v", err)
 		}
@@ -139,7 +139,7 @@ func TestNewMLFlowClient(t *testing.T) {
 		cfg := mlflowServiceConfig(t, srv.URL, func(m *config.MLFlowConfig) {
 			m.Workspace = "prod-ws"
 		})
-		client, err := NewMLFlowClient(cfg, logger)
+		client, _, err := NewMLFlowClient(cfg, logger)
 		if err != nil {
 			t.Fatalf("NewMLFlowClient() err = %v", err)
 		}
@@ -157,7 +157,7 @@ func TestNewMLFlowClient(t *testing.T) {
 		}
 	})
 
-	t.Run("failed startup probe leaves unknown and retries on EnsureWorkspace", func(t *testing.T) {
+	t.Run("failed startup probe leaves unknown and retries via PrepareClient", func(t *testing.T) {
 		t.Parallel()
 		var probes atomic.Int32
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -174,26 +174,33 @@ func TestNewMLFlowClient(t *testing.T) {
 		}))
 		t.Cleanup(srv.Close)
 
-		// No workspace name: EnsureWorkspace only re-resolves capability.
 		cfg := mlflowServiceConfig(t, srv.URL, nil)
-		client, err := NewMLFlowClient(cfg, logger)
+		client, workspaceSupport, err := NewMLFlowClient(cfg, logger)
 		if err != nil {
 			t.Fatalf("NewMLFlowClient() err = %v", err)
 		}
 		if probes.Load() != 1 {
 			t.Fatalf("startup probes = %d, want 1 (no startup retries)", probes.Load())
 		}
-		if client.WorkspacesEnabled() || client.WorkspaceSupportResolved() {
+		if client.WorkspacesEnabled() || workspaceSupport.Resolved() {
 			t.Fatal("expected unknown support after failed startup probe")
 		}
+		// EnsureWorkspace no longer probes; service PrepareClient retries resolution.
 		if err := client.EnsureWorkspace(); err != nil {
 			t.Fatalf("EnsureWorkspace() = %v", err)
 		}
-		if !client.WorkspacesEnabled() {
-			t.Fatal("expected workspaces enabled after job-time retry")
+		if probes.Load() != 1 {
+			t.Fatalf("probes after EnsureWorkspace = %d, want 1 (no client-side re-probe)", probes.Load())
+		}
+		prepared, err := workspaceSupport.PrepareClient(t.Context(), client)
+		if err != nil {
+			t.Fatalf("PrepareClient() = %v", err)
+		}
+		if !prepared.WorkspacesEnabled() || !workspaceSupport.Enabled() {
+			t.Fatal("expected workspaces enabled after PrepareClient retry")
 		}
 		if probes.Load() < 2 {
-			t.Fatalf("probes = %d, want at least 2 after EnsureWorkspace retry", probes.Load())
+			t.Fatalf("probes = %d, want at least 2 after PrepareClient retry", probes.Load())
 		}
 	})
 
@@ -202,14 +209,14 @@ func TestNewMLFlowClient(t *testing.T) {
 		cfg := mlflowServiceConfig(t, "http://127.0.0.1:1", func(m *config.MLFlowConfig) {
 			m.Workspace = "pending-ws"
 		})
-		client, err := NewMLFlowClient(cfg, logger)
+		client, workspaceSupport, err := NewMLFlowClient(cfg, logger)
 		if err != nil {
 			t.Fatalf("NewMLFlowClient() err = %v", err)
 		}
 		if client == nil {
 			t.Fatal("expected client")
 		}
-		if client.WorkspacesEnabled() || client.WorkspaceSupportResolved() {
+		if client.WorkspacesEnabled() || workspaceSupport.Resolved() {
 			t.Fatal("expected unknown support after failed startup probe")
 		}
 	})
@@ -224,11 +231,11 @@ func TestNewMLFlowClient(t *testing.T) {
 		cfg := mlflowServiceConfig(t, srv.URL, func(m *config.MLFlowConfig) {
 			m.Workspace = "ignored-ws"
 		})
-		client, err := NewMLFlowClient(cfg, logger)
+		client, workspaceSupport, err := NewMLFlowClient(cfg, logger)
 		if err != nil {
 			t.Fatalf("NewMLFlowClient() err = %v", err)
 		}
-		if !client.WorkspaceSupportResolved() {
+		if !workspaceSupport.Resolved() {
 			t.Fatal("expected resolved after definitive startup probe")
 		}
 		if client.WorkspacesEnabled() {
@@ -241,7 +248,7 @@ func TestNewMLFlowClient(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 		defer cancel()
 		client := mlflowclient.NewClient("http://127.0.0.1:1").WithContext(ctx)
-		_, _, err := GetOrCreateExperimentID(client, &api.EvaluationJobConfig{
+		_, _, err := GetOrCreateExperimentID(client, nil, &api.EvaluationJobConfig{
 			Experiment: &api.ExperimentConfig{Name: "demo"},
 		}, "job-1")
 		assertServiceErrorCode(t, err, messages.MLFlowRequestFailed)
@@ -252,7 +259,7 @@ func TestNewMLFlowClient(t *testing.T) {
 		cfg := mlflowServiceConfig(t, "http://localhost:5000", func(m *config.MLFlowConfig) {
 			m.CACertPath = filepath.Join(t.TempDir(), "missing-ca.pem")
 		})
-		_, err := NewMLFlowClient(cfg, logger)
+		_, _, err := NewMLFlowClient(cfg, logger)
 		if err == nil {
 			t.Fatal("expected error for missing CA file")
 		}
@@ -270,7 +277,7 @@ func TestNewMLFlowClient(t *testing.T) {
 		cfg := mlflowServiceConfig(t, "http://localhost:5000", func(m *config.MLFlowConfig) {
 			m.CACertPath = caPath
 		})
-		_, err := NewMLFlowClient(cfg, logger)
+		_, _, err := NewMLFlowClient(cfg, logger)
 		if err == nil {
 			t.Fatal("expected error for invalid CA PEM")
 		}
@@ -333,7 +340,7 @@ func TestGetOrCreateExperimentID(t *testing.T) {
 
 	t.Run("no experiment name", func(t *testing.T) {
 		t.Parallel()
-		id, url, err := GetOrCreateExperimentID(mlflowclient.NewClient("http://example"), &api.EvaluationJobConfig{}, "job-1")
+		id, url, err := GetOrCreateExperimentID(mlflowclient.NewClient("http://example"), nil, &api.EvaluationJobConfig{}, "job-1")
 		if err != nil || id != "" || url != "" {
 			t.Fatalf("got id=%q url=%q err=%v", id, url, err)
 		}
@@ -341,7 +348,7 @@ func TestGetOrCreateExperimentID(t *testing.T) {
 
 	t.Run("nil client", func(t *testing.T) {
 		t.Parallel()
-		_, _, err := GetOrCreateExperimentID(nil, &api.EvaluationJobConfig{
+		_, _, err := GetOrCreateExperimentID(nil, nil, &api.EvaluationJobConfig{
 			Experiment: &api.ExperimentConfig{Name: "demo"},
 		}, "job-1")
 		assertServiceErrorCode(t, err, messages.MLFlowRequiredForExperiment)
@@ -365,7 +372,7 @@ func TestGetOrCreateExperimentID(t *testing.T) {
 		t.Cleanup(srv.Close)
 
 		client := mlflowclient.NewClient(srv.URL).WithContext(t.Context()).WithLogger(logger)
-		id, url, err := GetOrCreateExperimentID(client, &api.EvaluationJobConfig{
+		id, url, err := GetOrCreateExperimentID(client, nil, &api.EvaluationJobConfig{
 			Experiment: &api.ExperimentConfig{Name: "demo"},
 		}, "job-1")
 		if err != nil {
@@ -410,7 +417,7 @@ func TestGetOrCreateExperimentID(t *testing.T) {
 		t.Cleanup(srv.Close)
 
 		client := mlflowclient.NewClient(srv.URL).WithContext(t.Context()).WithLogger(logger)
-		id, _, err := GetOrCreateExperimentID(client, &api.EvaluationJobConfig{
+		id, _, err := GetOrCreateExperimentID(client, nil, &api.EvaluationJobConfig{
 			Name:       "eval",
 			Experiment: &api.ExperimentConfig{Name: "demo"},
 		}, "job-99")
@@ -449,7 +456,7 @@ func TestGetOrCreateExperimentID(t *testing.T) {
 		t.Cleanup(srv.Close)
 
 		client := mlflowclient.NewClient(srv.URL).WithContext(t.Context()).WithLogger(logger)
-		_, _, err := GetOrCreateExperimentID(client, &api.EvaluationJobConfig{
+		_, _, err := GetOrCreateExperimentID(client, nil, &api.EvaluationJobConfig{
 			Experiment: &api.ExperimentConfig{Name: "demo"},
 		}, "job-1")
 		assertServiceErrorCode(t, err, messages.MLFlowRequestFailed)

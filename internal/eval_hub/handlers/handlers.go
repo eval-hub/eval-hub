@@ -4,18 +4,20 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/evalcards"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 	"github.com/go-playground/validator/v10"
 )
 
 // Contains the service state information that handlers can access
 type Handlers struct {
-	storage         abstractions.Storage
-	validate        *validator.Validate
-	runtime         abstractions.Runtime
-	mlflowClient    *mlflowclient.Client
-	resultsExporter evalcards.ResultsExporter
-	serviceConfig   *config.Config
+	storage                abstractions.Storage
+	validate               *validator.Validate
+	runtime                abstractions.Runtime
+	mlflowClient           *mlflowclient.Client
+	mlflowWorkspaceSupport *mlflow.WorkspaceSupport
+	resultsExporter        evalcards.ResultsExporter
+	serviceConfig          *config.Config
 }
 
 func New(
@@ -23,15 +25,17 @@ func New(
 	validate *validator.Validate,
 	runtime abstractions.Runtime,
 	mlflowClient *mlflowclient.Client,
+	mlflowWorkspaceSupport *mlflow.WorkspaceSupport,
 	serviceConfig *config.Config,
 	resultsExporter evalcards.ResultsExporter,
 ) *Handlers {
 	return &Handlers{
-		storage:         storage,
-		validate:        validate,
-		runtime:         runtime,
-		mlflowClient:    mlflowClient,
-		resultsExporter: resultsExporter,
-		serviceConfig:   serviceConfig,
+		storage:                storage,
+		validate:               validate,
+		runtime:                runtime,
+		mlflowClient:           mlflowClient,
+		mlflowWorkspaceSupport: mlflowWorkspaceSupport,
+		resultsExporter:        resultsExporter,
+		serviceConfig:          serviceConfig,
 	}
 }

@@ -218,19 +218,22 @@ Trace archival settings accepted by workspace APIs and returned in workspace met
 
 ## Usage in eval-hub
 
-The eval-hub MLflow client (`pkg/mlflowclient/workspaces.go`) uses these endpoints as follows:
+Capability probing lives in the service layer (`internal/eval_hub/mlflow.WorkspaceSupport`).
+The HTTP client (`pkg/mlflowclient`) stays a thin transport wrapper.
 
-1. **`ResolveWorkspaceSupport(ctx)`** — probes workspace capability once (5s timeout)
-   via `server-info`. Concurrent callers share one in-flight probe. On success the
-   result is cached for the process lifetime (`enabled` or `disabled`). On failure
-   support stays **unknown** so a later call (for example from `EnsureWorkspace` on
-   the next MLflow-dependent job) can try again. Returns immediately when capability
-   is already known, even if `ctx` is cancelled. A nil `ctx` is rejected.
+1. **`WorkspaceSupport.Resolve(ctx, client)`** — probes workspace capability once
+   (5s timeout) via `server-info`. Concurrent callers share one in-flight probe.
+   On success the result is cached for the process lifetime (`enabled` or
+   `disabled`). On failure support stays **unknown** so a later call (for example
+   from `PrepareClient` on the next MLflow-dependent job) can try again. Returns
+   immediately when capability is already known, even if `ctx` is cancelled.
+   A nil `ctx` is rejected. Use `Apply` / `PrepareClient` to copy the result onto
+   a client via `WithWorkspacesSupport`.
 
 2. **`ProbeWorkspacesEnabled()`** — calls `GET /api/3.0/mlflow/server-info` to check
    whether the connected MLflow server supports workspaces. Returns `false` for
-   older servers that respond with `404`. Prefer `ResolveWorkspaceSupport` so
-   results are shared and cached.
+   older servers that respond with `404`. Prefer `WorkspaceSupport.Resolve` so
+   results are shared and cached outside the client.
 
 3. **`GetWorkspace(name)`** — calls `GET /api/3.0/mlflow/workspaces/{name}` to
    retrieve a single workspace.
@@ -238,9 +241,10 @@ The eval-hub MLflow client (`pkg/mlflowclient/workspaces.go`) uses these endpoin
 4. **`CreateWorkspace(req)`** — calls `POST /api/3.0/mlflow/workspaces` (without the
    `X-MLFLOW-WORKSPACE` header) to create a new workspace.
 
-5. **`EnsureWorkspace()`** — resolves workspace support if still unknown, then
-   creates the client's active workspace when workspaces are enabled. Skips
-   creation for the reserved `default` workspace. Handles the
-   `RESOURCE_ALREADY_EXISTS` race condition from concurrent creators.
+5. **`EnsureWorkspace()`** — creates the client's active workspace when
+   `WithWorkspacesSupport(true)` is set. Does **not** probe capability; callers
+   must resolve first (`WorkspaceSupport.PrepareClient` or startup
+   `NewMLFlowClient`). Skips creation for the reserved `default` workspace.
+   Handles the `RESOURCE_ALREADY_EXISTS` race from concurrent creators.
    Workspace **names** are per client copy (tenant isolation); capability state
-   is shared across copies.
+   lives on the shared `WorkspaceSupport` instance.

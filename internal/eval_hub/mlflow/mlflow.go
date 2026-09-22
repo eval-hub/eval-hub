@@ -19,14 +19,14 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-func SetupMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.Client, string, string, error) {
-	mlflowClient, err := NewMLFlowClient(config, logger)
+func SetupMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.Client, *WorkspaceSupport, string, string, error) {
+	mlflowClient, workspaceSupport, err := NewMLFlowClient(config, logger)
 	if err != nil {
-		return nil, "", "", err
+		return nil, nil, "", "", err
 	}
 	if mlflowClient == nil {
 		// this is the case when no tracking URI is set
-		return nil, "", "", nil
+		return nil, nil, "", "", nil
 	}
 	serverVersion, err := mlflowClient.GetVersion()
 	if err != nil {
@@ -35,10 +35,10 @@ func SetupMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclien
 		logger.Warn("Failed to get MLFlow server version", "error", err.Error())
 	}
 	// if we get here then we have a valid tracking URI
-	return mlflowClient, config.MLFlow.TrackingURI, serverVersion, nil
+	return mlflowClient, workspaceSupport, config.MLFlow.TrackingURI, serverVersion, nil
 }
 
-func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.Client, error) {
+func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.Client, *WorkspaceSupport, error) {
 	url := ""
 	if config.MLFlow != nil && config.MLFlow.TrackingURI != "" {
 		url = config.MLFlow.TrackingURI
@@ -46,7 +46,7 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.
 
 	if url == "" {
 		logger.Warn("MLFlow tracking URI is not set, skipping MLFlow client creation")
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	if config.MLFlow.HTTPTimeout == 0 {
@@ -64,11 +64,11 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.
 		if config.MLFlow.CACertPath != "" {
 			caCert, err := os.ReadFile(config.MLFlow.CACertPath)
 			if err != nil {
-				return nil, fmt.Errorf("failed to read MLflow CA certificate at %s: %w", config.MLFlow.CACertPath, err)
+				return nil, nil, fmt.Errorf("failed to read MLflow CA certificate at %s: %w", config.MLFlow.CACertPath, err)
 			}
 			caCertPool := x509.NewCertPool()
 			if !caCertPool.AppendCertsFromPEM(caCert) {
-				return nil, fmt.Errorf("failed to parse MLflow CA certificate at %s: file contains no valid PEM certificates", config.MLFlow.CACertPath)
+				return nil, nil, fmt.Errorf("failed to parse MLflow CA certificate at %s: file contains no valid PEM certificates", config.MLFlow.CACertPath)
 			}
 			tlsConfig.RootCAs = caCertPool
 			logger.Info("Loaded MLflow CA certificate", "path", config.MLFlow.CACertPath)
@@ -115,27 +115,31 @@ func NewMLFlowClient(config *config.Config, logger *slog.Logger) (*mlflowclient.
 		logger.Info("Enabled OTEL transport for MLFlow client")
 	}
 
-	// Retain the configured workspace name even if the probe fails; EnsureWorkspace
+	// Retain the configured workspace name even if the probe fails; PrepareClient
 	// re-probes later when support is still unknown.
 	if config.MLFlow.Workspace != "" {
 		client = client.WithWorkspace(config.MLFlow.Workspace)
 	}
 
+	workspaceSupport := NewWorkspaceSupport()
 	// Single probe at startup. A definitive enabled/disabled result is cached;
 	// failure leaves support unknown for the next MLflow-dependent job to retry.
-	if err := client.ResolveWorkspaceSupport(context.Background()); err != nil {
+	if err := workspaceSupport.Resolve(context.Background(), client); err != nil {
 		logger.Warn(
 			"Could not probe MLflow workspace support during startup; will retry on the next MLflow-dependent job",
 			"error", err.Error(),
 			"workspace", config.MLFlow.Workspace,
 		)
-	} else if client.WorkspacesEnabled() && config.MLFlow.Workspace != "" {
-		logger.Info("MLflow workspace configured", "workspace", config.MLFlow.Workspace)
+	} else {
+		client = workspaceSupport.Apply(client)
+		if workspaceSupport.Enabled() && config.MLFlow.Workspace != "" {
+			logger.Info("MLflow workspace configured", "workspace", config.MLFlow.Workspace)
+		}
 	}
 
 	logger.Info("MLFlow tracking enabled", "mlflow_experiment_url", client.GetExperimentsURL())
 
-	return client, nil
+	return client, workspaceSupport, nil
 }
 
 func injectEvaluationJobTags(jobID string, evaluation *api.EvaluationJobConfig) []api.ExperimentTag {
@@ -176,7 +180,7 @@ func HasExperimentName(jobConfig *api.EvaluationJobConfig) bool {
 	return jobConfig.Experiment != nil && strings.TrimSpace(jobConfig.Experiment.Name) != ""
 }
 
-func GetOrCreateExperimentID(mlflowClient *mlflowclient.Client, jobConfig *api.EvaluationJobConfig, jobID string) (experimentID string, experimentURL string, err error) {
+func GetOrCreateExperimentID(mlflowClient *mlflowclient.Client, workspaceSupport *WorkspaceSupport, jobConfig *api.EvaluationJobConfig, jobID string) (experimentID string, experimentURL string, err error) {
 	if !HasExperimentName(jobConfig) {
 		return "", "", nil
 	}
@@ -187,7 +191,11 @@ func GetOrCreateExperimentID(mlflowClient *mlflowclient.Client, jobConfig *api.E
 		return "", "", serviceerrors.NewServiceError(messages.MLFlowRequiredForExperiment)
 	}
 
-	if err := mlflowClient.EnsureWorkspace(); err != nil {
+	prepared, err := prepareMLFlowClient(mlflowClient, workspaceSupport)
+	if err != nil {
+		return "", "", serviceerrors.NewServiceError(messages.MLFlowRequestFailed, "Error", err.Error())
+	}
+	if err := prepared.EnsureWorkspace(); err != nil {
 		return "", "", serviceerrors.NewServiceError(messages.MLFlowRequestFailed, "Error", err.Error())
 	}
 
@@ -197,11 +205,21 @@ func GetOrCreateExperimentID(mlflowClient *mlflowclient.Client, jobConfig *api.E
 		ArtifactLocation: jobConfig.Experiment.ArtifactLocation,
 		Tags:             tags,
 	}
-	mlflowExperiment, err := mlflowClient.GetOrCreateExperiment(&req)
+	mlflowExperiment, err := prepared.GetOrCreateExperiment(&req)
 	if err != nil {
 		return "", "", serviceerrors.NewServiceError(messages.MLFlowRequestFailed, "Error", err.Error())
 	}
 
-	mlflowClient.GetLogger().Info("Resolved experiment", "experiment_name", jobConfig.Experiment.Name, "experiment_id", mlflowExperiment.Experiment.ExperimentID)
-	return mlflowExperiment.Experiment.ExperimentID, mlflowClient.GetExperimentsURL(), nil
+	prepared.GetLogger().Info("Resolved experiment", "experiment_name", jobConfig.Experiment.Name, "experiment_id", mlflowExperiment.Experiment.ExperimentID)
+	return mlflowExperiment.Experiment.ExperimentID, prepared.GetExperimentsURL(), nil
+}
+
+func prepareMLFlowClient(client *mlflowclient.Client, workspaceSupport *WorkspaceSupport) (*mlflowclient.Client, error) {
+	if client == nil {
+		return nil, fmt.Errorf("mlflow client does not exist")
+	}
+	if workspaceSupport == nil {
+		return client, nil
+	}
+	return workspaceSupport.PrepareClient(client.Context(), client)
 }

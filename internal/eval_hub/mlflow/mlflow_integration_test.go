@@ -90,14 +90,14 @@ func TestMLFlowIntegration(t *testing.T) {
 						m.Workspace = "integration-workspace"
 					}
 				})
-				client, err := NewMLFlowClient(cfg, logger)
+				client, workspaceSupport, err := NewMLFlowClient(cfg, logger)
 				if err != nil {
 					t.Fatalf("NewMLFlowClient() err = %v", err)
 				}
 				if client == nil {
 					t.Fatal("expected non-nil client")
 				}
-				if !client.WorkspaceSupportResolved() {
+				if !workspaceSupport.Resolved() {
 					t.Fatal("expected workspace support resolved by startup probe")
 				}
 				if client.WorkspacesEnabled() != tc.enableWorkspaces {
@@ -121,7 +121,7 @@ func TestMLFlowIntegration(t *testing.T) {
 				client = client.WithWorkspacesSupport(workspacesEnabled)
 
 				expName := fmt.Sprintf("test-exp-no-ws-%s-%s", tc.name, uuid.New().String())
-				id, url, err := GetOrCreateExperimentID(client, &api.EvaluationJobConfig{
+				id, url, err := GetOrCreateExperimentID(client, nil, &api.EvaluationJobConfig{
 					Name:       "eval-job",
 					Experiment: &api.ExperimentConfig{Name: expName},
 				}, "job-1")
@@ -146,7 +146,7 @@ func TestMLFlowIntegration(t *testing.T) {
 					client = client.WithWorkspacesSupport(true).WithWorkspace("integration-workspace")
 
 					expName := fmt.Sprintf("test-exp-ws-%s-%s", tc.name, uuid.New().String())
-					id, url, err := GetOrCreateExperimentID(client, &api.EvaluationJobConfig{
+					id, url, err := GetOrCreateExperimentID(client, nil, &api.EvaluationJobConfig{
 						Name:       "eval-job-ws",
 						Experiment: &api.ExperimentConfig{Name: expName},
 					}, "job-2")
