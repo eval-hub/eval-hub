@@ -1143,6 +1143,69 @@ func TestGetBenchmarkToolFound(t *testing.T) {
 	}
 }
 
+func testProvidersWithSharedBenchmarkID() []api.ProviderResource {
+	return []api.ProviderResource{
+		{
+			Resource: api.Resource{ID: "lm_evaluation_harness"},
+			ProviderConfig: api.ProviderConfig{
+				Name:       "lm_evaluation_harness",
+				Benchmarks: []api.BenchmarkResource{{ID: "mmlu", Name: "MMLU (harness)"}},
+			},
+		},
+		{
+			Resource: api.Resource{ID: "lighteval"},
+			ProviderConfig: api.ProviderConfig{
+				Name:       "lighteval",
+				Benchmarks: []api.BenchmarkResource{{ID: "mmlu", Name: "MMLU (lighteval)"}},
+			},
+		},
+	}
+}
+
+func TestGetBenchmarkToolAmbiguous(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithSharedBenchmarkID())
+	ctx, cs := connectWithTools(t, client)
+
+	errMsg := callToolExpectError(t, ctx, cs, "get_benchmark", map[string]any{"benchmark_id": "mmlu"})
+	if !strings.Contains(errMsg, "multiple providers") {
+		t.Errorf("expected ambiguity error, got %q", errMsg)
+	}
+	for _, p := range []string{"lm_evaluation_harness", "lighteval"} {
+		if !strings.Contains(errMsg, p) {
+			t.Errorf("ambiguity error should list provider %q, got %q", p, errMsg)
+		}
+	}
+}
+
+func TestGetBenchmarkToolDisambiguatedByProvider(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithSharedBenchmarkID())
+	ctx, cs := connectWithTools(t, client)
+
+	out := callToolJSON[BenchmarkOutput](t, ctx, cs, "get_benchmark", map[string]any{
+		"benchmark_id": "mmlu",
+		"provider_id":  "lighteval",
+	})
+	if out.ID != "mmlu" || out.ProviderID != "lighteval" {
+		t.Errorf("expected mmlu@lighteval, got %q@%q", out.ID, out.ProviderID)
+	}
+}
+
+func TestGetBenchmarkToolProviderMismatch(t *testing.T) {
+	t.Parallel()
+	client := mockWithProviders(testProvidersWithBenchmarks())
+	ctx, cs := connectWithTools(t, client)
+
+	errMsg := callToolExpectError(t, ctx, cs, "get_benchmark", map[string]any{
+		"benchmark_id": "toxigen",
+		"provider_id":  "garak",
+	})
+	if !strings.Contains(errMsg, "not found") || !strings.Contains(errMsg, "garak") {
+		t.Errorf("expected not-found-for-provider error, got %q", errMsg)
+	}
+}
+
 func TestGetBenchmarkToolNotFound(t *testing.T) {
 	t.Parallel()
 	client := mockWithProviders(testProvidersWithBenchmarks())

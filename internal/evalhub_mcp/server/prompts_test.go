@@ -619,6 +619,21 @@ func TestDesignCollectionStrictnessValidation(t *testing.T) {
 	}
 }
 
+func TestDesignCollectionMaxBenchmarksValidation(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithPromptsAndDS(t, testDesignCollectionDS())
+
+	for _, bad := range []string{"abc", "0", "-3"} {
+		errMsg := getPromptExpectError(t, ctx, cs, "design_collection", map[string]string{
+			"evaluation_goal": "test",
+			"max_benchmarks":  bad,
+		})
+		if !strings.Contains(errMsg, "max_benchmarks") {
+			t.Errorf("max_benchmarks=%q: error should mention max_benchmarks, got: %s", bad, errMsg)
+		}
+	}
+}
+
 func TestDesignCollectionMissingGoal(t *testing.T) {
 	t.Parallel()
 	ctx, cs := connectWithPromptsAndDS(t, testDesignCollectionDS())

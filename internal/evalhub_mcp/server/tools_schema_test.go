@@ -327,7 +327,7 @@ func findTypeArrays(path string, node map[string]any) []string {
 	if items, ok := node["items"].(map[string]any); ok {
 		violations = append(violations, findTypeArrays(path+"items.", items)...)
 	}
-	for _, key := range []string{"anyOf", "allOf", "oneOf"} {
+	for _, key := range []string{"anyOf", "allOf", "oneOf", "prefixItems"} {
 		if arr, ok := node[key].([]any); ok {
 			for i, v := range arr {
 				if m, ok := v.(map[string]any); ok {
@@ -338,6 +338,13 @@ func findTypeArrays(path string, node map[string]any) []string {
 	}
 	if ap, ok := node["additionalProperties"].(map[string]any); ok {
 		violations = append(violations, findTypeArrays(path+"additionalProperties.", ap)...)
+	}
+	if defs, ok := node["$defs"].(map[string]any); ok {
+		for k, v := range defs {
+			if m, ok := v.(map[string]any); ok {
+				violations = append(violations, findTypeArrays(fmt.Sprintf("%s$defs.%s.", path, k), m)...)
+			}
+		}
 	}
 	return violations
 }

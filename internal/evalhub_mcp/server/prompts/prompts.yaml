@@ -167,8 +167,8 @@ design_collection:
           | red team, vulnerability | garak intents | lower_is_better, ceiling 0.15-0.25 |
 
           These are illustrative signal→benchmark hints, not IDs; always confirm the
-          exact `id` and `provider_id` against the AVAILABLE BENCHMARKS catalog or
-          `discover_providers` before using them.
+          exact `id` and `provider_id` against the AVAILABLE BENCHMARKS catalog,
+          `search_benchmarks`, or `get_benchmark` before using them.
 
           ### Output Format
 

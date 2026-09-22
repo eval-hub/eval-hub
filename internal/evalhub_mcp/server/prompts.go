@@ -378,9 +378,11 @@ func gatherDesignCollection(ds EvalHubDiscovery, result *promptResultConfig, goa
 
 	maxBenchmarks := defaultMaxBenchmarks
 	if maxBenchmarksRaw != "" {
-		if n, err := strconv.Atoi(maxBenchmarksRaw); err == nil && n > 0 {
-			maxBenchmarks = n
+		n, err := strconv.Atoi(maxBenchmarksRaw)
+		if err != nil || n <= 0 {
+			return nil, fmt.Errorf("invalid %s %q; must be a positive integer", ArgNameMaxBenchmarks, maxBenchmarksRaw)
 		}
+		maxBenchmarks = n
 	}
 
 	if strictness == "" {
@@ -661,8 +663,12 @@ func parseJobIDs(raw string) []string {
 }
 
 func replaceTemplateVariables(s string, variables ...string) string {
+	// Build all {name}->value pairs and substitute in a single pass so that a
+	// value inserted for one placeholder is never re-scanned as another
+	// placeholder (e.g. untrusted goal text containing "{benchmark_catalog}").
+	pairs := make([]string, 0, len(variables))
 	for i := 0; i+1 < len(variables); i += 2 {
-		s = strings.ReplaceAll(s, "{"+variables[i]+"}", variables[i+1])
+		pairs = append(pairs, "{"+variables[i]+"}", variables[i+1])
 	}
-	return s
+	return strings.NewReplacer(pairs...).Replace(s)
 }

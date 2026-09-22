@@ -68,6 +68,7 @@ type CreateCollectionInput struct {
 
 type GetBenchmarkInput struct {
 	BenchmarkID string `json:"benchmark_id" jsonschema:"ID of the benchmark to look up (e.g. ifeval, toxigen, mmlu)"`
+	ProviderID  string `json:"provider_id,omitempty" jsonschema:"Optional owning provider ID to disambiguate when the same benchmark ID is offered by multiple providers"`
 }
 
 type DesignCollectionInput struct {
@@ -574,7 +575,8 @@ func getBenchmarkToolHandler(client EvalHubToolClient, logger *slog.Logger) mcp.
 		log := requestLogger(ctx, logger)
 		client := evalHubToolClientForRequest(ctx, client, logger)
 		id := strings.TrimSpace(input.BenchmarkID)
-		log.Debug("get_benchmark called", "benchmark_id", id)
+		providerID := strings.TrimSpace(input.ProviderID)
+		log.Debug("get_benchmark called", "benchmark_id", id, "provider_id", providerID)
 
 		if id == "" {
 			return errorResult("validation error: 'benchmark_id' is required"), BenchmarkOutput{}, nil
@@ -586,16 +588,37 @@ func getBenchmarkToolHandler(client EvalHubToolClient, logger *slog.Logger) mcp.
 			return errorResult(fmt.Sprintf("failed to list benchmarks: %v", err)), BenchmarkOutput{}, nil
 		}
 
+		var matches []BenchmarkOutput
 		for _, b := range benchmarks {
-			if b.ID == id {
-				return &mcp.CallToolResult{
-					Content: []mcp.Content{
-						&mcp.TextContent{Text: fmt.Sprintf("Benchmark %s (provider: %s)", b.ID, b.ProviderID)},
-					},
-				}, b, nil
+			if b.ID != id {
+				continue
 			}
+			if providerID != "" && b.ProviderID != providerID {
+				continue
+			}
+			matches = append(matches, b)
 		}
-		return errorResult(fmt.Sprintf("benchmark %q not found; use search_benchmarks to find valid benchmark ids", id)), BenchmarkOutput{}, nil
+
+		switch len(matches) {
+		case 0:
+			if providerID != "" {
+				return errorResult(fmt.Sprintf("benchmark %q not found for provider %q; use search_benchmarks to find valid benchmark ids", id, providerID)), BenchmarkOutput{}, nil
+			}
+			return errorResult(fmt.Sprintf("benchmark %q not found; use search_benchmarks to find valid benchmark ids", id)), BenchmarkOutput{}, nil
+		case 1:
+			b := matches[0]
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					&mcp.TextContent{Text: fmt.Sprintf("Benchmark %s (provider: %s)", b.ID, b.ProviderID)},
+				},
+			}, b, nil
+		default:
+			providers := make([]string, 0, len(matches))
+			for _, b := range matches {
+				providers = append(providers, b.ProviderID)
+			}
+			return errorResult(fmt.Sprintf("benchmark %q is offered by multiple providers (%s); set 'provider_id' to disambiguate", id, strings.Join(providers, ", "))), BenchmarkOutput{}, nil
+		}
 	}
 }
 
