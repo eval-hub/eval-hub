@@ -642,15 +642,16 @@ func designCollectionToolHandler(ds EvalHubDiscovery, result *promptResultConfig
 		}
 
 		guidance := promptMessagesText(messages)
+		out := DesignCollectionOutput{
+			Guidance:           guidance,
+			Benchmarks:         data.Benchmarks,
+			CollectionExamples: data.Examples,
+		}
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: guidance},
 			},
-		}, DesignCollectionOutput{
-			Guidance:           guidance,
-			Benchmarks:         data.Benchmarks,
-			CollectionExamples: data.Examples,
-		}, nil
+		}, out, nil
 	}
 }
 
