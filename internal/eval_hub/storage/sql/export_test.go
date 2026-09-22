@@ -4,3 +4,5 @@ var ApplyPatches = applyPatches
 var GetPassCriteriaThreshold = getPassCriteriaThreshold
 var GetIsolationLevel = getIsolationLevel
 var SetEvaluationJobUpdateAfterLockedReadHook = setEvaluationJobUpdateAfterLockedReadHook
+var SetCollectionPatchBeforeLockedReadHook = setCollectionPatchBeforeLockedReadHook
+var SetCollectionPatchAfterLockedReadHook = setCollectionPatchAfterLockedReadHook
