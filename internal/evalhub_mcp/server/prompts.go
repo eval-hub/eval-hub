@@ -320,31 +320,60 @@ func designCollectionHandler(result *promptResultConfig, ds EvalHubDiscovery, lo
 			ArgNameStrictness, strictness,
 		)
 
-		description, messages, err := buildDesignCollection(ds, result, goal, providerFilter, maxBenchmarksRaw, strictness)
+		data, err := gatherDesignCollection(ds, result, goal, providerFilter, maxBenchmarksRaw, strictness)
+		if err != nil {
+			return nil, err
+		}
+
+		// The prompt embeds the full catalog and examples inline as JSON, since a
+		// prompt's whole purpose is to load that context into the conversation.
+		catalogJSON, err := marshalIndentJSON(data.Benchmarks)
+		if err != nil {
+			return nil, err
+		}
+		examplesJSON, err := marshalIndentJSON(data.Examples)
+		if err != nil {
+			return nil, err
+		}
+
+		messages, err := renderDesignCollectionMessages(result, data, catalogJSON, examplesJSON)
 		if err != nil {
 			return nil, err
 		}
 
 		return &mcp.GetPromptResult{
-			Description: description,
+			Description: data.Description,
 			Messages:    messages,
 		}, nil
 	}
 }
 
-// buildDesignCollection validates the design inputs and assembles the benchmark
-// catalog and calibration guidance shared by the design_collection prompt and
-// tool. It returns the (templated) description and the prompt messages, or an
-// error for invalid input or an empty catalog. maxBenchmarksRaw is accepted as a
-// string so both callers (prompt arguments and tool input) can share parsing.
-func buildDesignCollection(ds EvalHubDiscovery, result *promptResultConfig, goal, providerFilter, maxBenchmarksRaw, strictness string) (string, []*mcp.PromptMessage, error) {
+// designCollectionData is the validated, structured result of a design_collection
+// request. It holds the calibration inputs plus the benchmark catalog and
+// reference collections as typed slices, so callers can either render them inline
+// (the prompt) or return them as structured tool output (the tool).
+type designCollectionData struct {
+	Description    string
+	Goal           string
+	Strictness     string
+	OptionsSummary string
+	Benchmarks     []benchmarkCatalogEntry
+	Examples       []collectionExample
+}
+
+// gatherDesignCollection validates the design inputs and collects the benchmark
+// catalog and reference collections shared by the design_collection prompt and
+// tool. It returns structured data, or an error for invalid input or an empty
+// catalog. maxBenchmarksRaw is accepted as a string so both callers (prompt
+// arguments and tool input) can share parsing.
+func gatherDesignCollection(ds EvalHubDiscovery, result *promptResultConfig, goal, providerFilter, maxBenchmarksRaw, strictness string) (*designCollectionData, error) {
 	goal = strings.TrimSpace(goal)
 	providerFilter = strings.TrimSpace(providerFilter)
 	maxBenchmarksRaw = strings.TrimSpace(maxBenchmarksRaw)
 	strictness = strings.TrimSpace(strictness)
 
 	if goal == "" {
-		return "", nil, fmt.Errorf("%s is required", ArgNameEvaluationGoal)
+		return nil, fmt.Errorf("%s is required", ArgNameEvaluationGoal)
 	}
 
 	maxBenchmarks := defaultMaxBenchmarks
@@ -357,23 +386,23 @@ func buildDesignCollection(ds EvalHubDiscovery, result *promptResultConfig, goal
 	if strictness == "" {
 		strictness = defaultStrictness
 	} else if !isValidStrictness(strictness) {
-		return "", nil, fmt.Errorf("invalid %s %q; valid values: %s", ArgNameStrictness, strictness, strings.Join(validStrictness, ", "))
+		return nil, fmt.Errorf("invalid %s %q; valid values: %s", ArgNameStrictness, strictness, strings.Join(validStrictness, ", "))
 	}
 
-	benchmarkCatalog, benchmarkCount, err := buildBenchmarkCatalog(ds, providerFilter)
+	benchmarks, err := collectBenchmarkCatalog(ds, providerFilter)
 	if err != nil {
-		return "", nil, fmt.Errorf("fetching benchmark catalog: %w", err)
+		return nil, fmt.Errorf("fetching benchmark catalog: %w", err)
 	}
-	if benchmarkCount == 0 {
+	if len(benchmarks) == 0 {
 		if providerFilter != "" {
-			return "", nil, fmt.Errorf("benchmark catalog is empty for provider filter %q; check that the eval-hub service has these providers loaded", providerFilter)
+			return nil, fmt.Errorf("benchmark catalog is empty for provider filter %q; check that the eval-hub service has these providers loaded", providerFilter)
 		}
-		return "", nil, fmt.Errorf("benchmark catalog is empty; check that the eval-hub service has providers loaded")
+		return nil, fmt.Errorf("benchmark catalog is empty; check that the eval-hub service has providers loaded")
 	}
 
-	collectionExamples, err := buildCollectionExamples(ds, providerFilter)
+	examples, err := collectCollectionExamples(ds, providerFilter)
 	if err != nil {
-		return "", nil, fmt.Errorf("fetching collection examples: %w", err)
+		return nil, fmt.Errorf("fetching collection examples: %w", err)
 	}
 
 	var optionsParts []string
@@ -382,22 +411,44 @@ func buildDesignCollection(ds EvalHubDiscovery, result *promptResultConfig, goal
 	}
 	optionsParts = append(optionsParts, fmt.Sprintf("Max benchmarks: %s", strconv.Itoa(maxBenchmarks)))
 	optionsParts = append(optionsParts, fmt.Sprintf("Strictness: %s", strictness))
-	optionsSummary := strings.Join(optionsParts, " | ")
 
+	return &designCollectionData{
+		Description:    replaceTemplateVariables(result.Description, ArgNameEvaluationGoal, goal),
+		Goal:           goal,
+		Strictness:     strictness,
+		OptionsSummary: strings.Join(optionsParts, " | "),
+		Benchmarks:     benchmarks,
+		Examples:       examples,
+	}, nil
+}
+
+// renderDesignCollectionMessages templates the design_collection result messages
+// from the gathered data. benchmarkCatalog and collectionExamples are the textual
+// forms to substitute for the {benchmark_catalog} and {collection_examples}
+// placeholders: the prompt passes the full JSON, while the tool passes short
+// pointers to its structured output fields.
+func renderDesignCollectionMessages(result *promptResultConfig, d *designCollectionData, benchmarkCatalog, collectionExamples string) ([]*mcp.PromptMessage, error) {
 	messages := result.ToMCPPromptMessages(
 		"",
-		ArgNameEvaluationGoal, goal,
-		"options_summary", optionsSummary,
-		ArgNameStrictness, strictness,
+		ArgNameEvaluationGoal, d.Goal,
+		"options_summary", d.OptionsSummary,
+		ArgNameStrictness, d.Strictness,
 		"benchmark_catalog", benchmarkCatalog,
 		"collection_examples", collectionExamples,
 	)
 	if messages == nil {
-		return "", nil, fmt.Errorf("no messages found for design_collection prompt")
+		return nil, fmt.Errorf("no messages found for design_collection prompt")
 	}
+	return messages, nil
+}
 
-	description := replaceTemplateVariables(result.Description, ArgNameEvaluationGoal, goal)
-	return description, messages, nil
+// marshalIndentJSON renders a value as indented JSON text.
+func marshalIndentJSON(v any) (string, error) {
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("marshalling JSON: %w", err)
+	}
+	return string(data), nil
 }
 
 // promptMessagesText joins the text content of prompt messages into a single
@@ -430,7 +481,7 @@ type benchmarkCatalogEntry struct {
 	Metrics     []string `json:"metrics,omitempty"`
 }
 
-func buildBenchmarkCatalog(ds EvalHubDiscovery, providerFilter string) (string, int, error) {
+func collectBenchmarkCatalog(ds EvalHubDiscovery, providerFilter string) ([]benchmarkCatalogEntry, error) {
 	var allowedProviders map[string]struct{}
 	if providerFilter != "" {
 		allowedProviders = make(map[string]struct{})
@@ -444,7 +495,7 @@ func buildBenchmarkCatalog(ds EvalHubDiscovery, providerFilter string) (string, 
 
 	providers, err := allProviders(ds)
 	if err != nil {
-		return "", 0, err
+		return nil, err
 	}
 
 	entries := make([]benchmarkCatalogEntry, 0)
@@ -469,11 +520,7 @@ func buildBenchmarkCatalog(ds EvalHubDiscovery, providerFilter string) (string, 
 		}
 	}
 
-	data, err := json.MarshalIndent(entries, "", "  ")
-	if err != nil {
-		return "", 0, fmt.Errorf("marshalling benchmark catalog: %w", err)
-	}
-	return string(data), len(entries), nil
+	return entries, nil
 }
 
 type collectionExample struct {
@@ -486,7 +533,7 @@ type collectionExample struct {
 	Benchmarks   []api.CollectionBenchmarkConfig `json:"benchmarks"`
 }
 
-func buildCollectionExamples(ds EvalHubDiscovery, providerFilter string) (string, error) {
+func collectCollectionExamples(ds EvalHubDiscovery, providerFilter string) ([]collectionExample, error) {
 	var allowedProviders map[string]struct{}
 	if providerFilter != "" {
 		allowedProviders = make(map[string]struct{})
@@ -500,7 +547,7 @@ func buildCollectionExamples(ds EvalHubDiscovery, providerFilter string) (string
 
 	collections, err := allCollections(ds)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	examples := make([]collectionExample, 0)
@@ -526,11 +573,7 @@ func buildCollectionExamples(ds EvalHubDiscovery, providerFilter string) (string
 		})
 	}
 
-	data, err := json.MarshalIndent(examples, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("marshalling collection examples: %w", err)
-	}
-	return string(data), nil
+	return examples, nil
 }
 
 func filterBenchmarksByProvider(benchmarks []api.CollectionBenchmarkConfig, allowed map[string]struct{}) []api.CollectionBenchmarkConfig {

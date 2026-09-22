@@ -165,7 +165,14 @@ type SearchBenchmarksOutput struct {
 }
 
 type DesignCollectionOutput struct {
-	Guidance string `json:"guidance"`
+	// Guidance holds the calibration instructions only (benchmark selection,
+	// weighting, and threshold guidance). The benchmark catalog and reference
+	// collections are returned as the structured Benchmarks and CollectionExamples
+	// fields rather than embedded in the guidance text, so callers can consume them
+	// directly instead of re-querying search_benchmarks.
+	Guidance           string                  `json:"guidance"`
+	Benchmarks         []benchmarkCatalogEntry `json:"benchmarks"`
+	CollectionExamples []collectionExample     `json:"collection_examples"`
 }
 
 // --- registration ---
@@ -591,9 +598,10 @@ func getBenchmarkToolHandler(client EvalHubToolClient, logger *slog.Logger) mcp.
 }
 
 // designCollectionToolHandler is the model-callable equivalent of the
-// design_collection prompt. It shares buildDesignCollection with the prompt so
-// the guidance (benchmark catalog + calibration instructions) stays identical,
-// and returns that guidance as text without persisting anything.
+// design_collection prompt. It shares gatherDesignCollection with the prompt so
+// the calibration guidance stays identical, but returns the benchmark catalog and
+// reference collections as structured fields (rather than embedded JSON) so the
+// caller can consume them directly instead of re-querying search_benchmarks.
 func designCollectionToolHandler(ds EvalHubDiscovery, result *promptResultConfig, logger *slog.Logger) mcp.ToolHandlerFor[DesignCollectionInput, DesignCollectionOutput] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input DesignCollectionInput) (*mcp.CallToolResult, DesignCollectionOutput, error) {
 		log := requestLogger(ctx, logger)
@@ -611,7 +619,18 @@ func designCollectionToolHandler(ds EvalHubDiscovery, result *promptResultConfig
 			ArgNameStrictness, input.Strictness,
 		)
 
-		_, messages, err := buildDesignCollection(ds, result, input.EvaluationGoal, input.ProviderFilter, maxBenchmarksRaw, input.Strictness)
+		data, err := gatherDesignCollection(ds, result, input.EvaluationGoal, input.ProviderFilter, maxBenchmarksRaw, input.Strictness)
+		if err != nil {
+			log.Error("design_collection tool failed", "error", err)
+			return errorResult(err.Error()), DesignCollectionOutput{}, nil
+		}
+
+		// The catalog and examples travel in the structured output fields, so the
+		// guidance text points at them instead of embedding the full JSON.
+		messages, err := renderDesignCollectionMessages(result, data,
+			"(provided as the structured `benchmarks` field of this tool result)",
+			"(provided as the structured `collection_examples` field of this tool result)",
+		)
 		if err != nil {
 			log.Error("design_collection tool failed", "error", err)
 			return errorResult(err.Error()), DesignCollectionOutput{}, nil
@@ -622,7 +641,11 @@ func designCollectionToolHandler(ds EvalHubDiscovery, result *promptResultConfig
 			Content: []mcp.Content{
 				&mcp.TextContent{Text: guidance},
 			},
-		}, DesignCollectionOutput{Guidance: guidance}, nil
+		}, DesignCollectionOutput{
+			Guidance:           guidance,
+			Benchmarks:         data.Benchmarks,
+			CollectionExamples: data.Examples,
+		}, nil
 	}
 }
 

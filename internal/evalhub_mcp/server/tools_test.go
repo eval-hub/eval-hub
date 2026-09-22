@@ -1324,11 +1324,40 @@ func TestDesignCollectionToolBasic(t *testing.T) {
 		"evaluation_goal": "enterprise safety deployment",
 	})
 
-	for _, keyword := range []string{"enterprise safety deployment", "toxigen", "gsm8k", "Safety Suite v1", "Threshold"} {
+	// The guidance carries the echoed goal and calibration instructions; the
+	// catalog and reference collections travel in the structured fields.
+	for _, keyword := range []string{"enterprise safety deployment", "Threshold"} {
 		if !containsCI(out.Guidance, keyword) {
 			t.Errorf("design_collection tool guidance missing keyword %q", keyword)
 		}
 	}
+
+	for _, id := range []string{"toxigen", "gsm8k"} {
+		if !hasBenchmarkID(out.Benchmarks, id) {
+			t.Errorf("design_collection tool benchmarks missing %q; got %+v", id, out.Benchmarks)
+		}
+	}
+	if !hasCollectionExampleName(out.CollectionExamples, "Safety Suite v1") {
+		t.Errorf("design_collection tool collection_examples missing %q; got %+v", "Safety Suite v1", out.CollectionExamples)
+	}
+}
+
+func hasBenchmarkID(entries []benchmarkCatalogEntry, id string) bool {
+	for _, e := range entries {
+		if e.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func hasCollectionExampleName(examples []collectionExample, name string) bool {
+	for _, e := range examples {
+		if e.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func TestDesignCollectionToolProviderFilter(t *testing.T) {
@@ -1340,14 +1369,12 @@ func TestDesignCollectionToolProviderFilter(t *testing.T) {
 		"provider_filter": "lighteval",
 	})
 
-	if !containsCI(out.Guidance, "ifeval") {
-		t.Errorf("design_collection tool guidance should include lighteval benchmark ifeval")
+	if !hasBenchmarkID(out.Benchmarks, "ifeval") {
+		t.Errorf("design_collection tool benchmarks should include lighteval benchmark ifeval; got %+v", out.Benchmarks)
 	}
-	// Check the marshaled benchmark catalog (not the static reference table, which
-	// mentions Toxigen regardless of filter): the lm_evaluation_harness entry must
-	// be filtered out of the catalog.
-	if strings.Contains(out.Guidance, `"name": "Toxigen"`) {
-		t.Errorf("design_collection tool catalog should exclude filtered-out benchmark Toxigen")
+	// The lm_evaluation_harness benchmark must be filtered out of the catalog.
+	if hasBenchmarkID(out.Benchmarks, "toxigen") {
+		t.Errorf("design_collection tool benchmarks should exclude filtered-out benchmark toxigen; got %+v", out.Benchmarks)
 	}
 }
 
