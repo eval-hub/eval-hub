@@ -44,8 +44,13 @@ func createApiFeature() (*apiFeature, error) {
 			timeout = time.Duration(eTimeout) * time.Second
 		}
 	}
+	// Avoid reusing idle connections that the ingress router may have closed.
+	// Clone to preserve the suite's TLS settings without changing other clients.
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DisableKeepAlives = true
 	client := &http.Client{
-		Timeout: timeout,
+		Timeout:   timeout,
+		Transport: transport,
 	}
 
 	if serverURL := os.Getenv("SERVER_URL"); serverURL != "" {
