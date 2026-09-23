@@ -206,7 +206,7 @@ Configuration is loaded from `config/config.yaml`, overridden by environment var
 | `LOG_LEVEL` | Logging level | `INFO` |
 | `EVALHUB_HARDWARE_PROFILES_NAMESPACE` | Platform namespace where OpenDataHub `HardwareProfile` CRs are fetched (Kubernetes runtime). Required for `hardware_config.hardware_profile_name` evaluations; typically `opendatahub` or `redhat-ods-applications`. Set by the TrustyAI Service Operator deployment. | _(unset — hardware profile lookups fail)_ |
 
-Provider configurations live in `config/providers/` as YAML files. The default set includes lm-evaluation-harness (167 benchmarks), RAGAS, Garak, GuideLLM, LightEval, and MTEB.
+Provider configurations live in [`config/providers/`](config/providers/) as YAML files. The default set includes lm-evaluation-harness (167 benchmarks), RAGAS, Garak, GuideLLM, LightEval, and [MTEB](config/providers/mteb.yaml), which provides five embedding benchmark suites covering semantic similarity, retrieval, classification, clustering, and reranking.
 
 ### Syncing providers and collections to the TrustyAI operator
 
