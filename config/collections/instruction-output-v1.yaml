@@ -37,3 +37,13 @@ benchmarks:
       lower_is_better: false
     pass_criteria:
       threshold: 0.05
+
+
+  - id: followbench
+    provider_id: followbench
+    weight: 1
+    primary_score:
+      metric: hsr
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.20

@@ -1,0 +1,91 @@
+# FollowBench provider definition for EvalHub.
+#
+# Upstream:
+# https://github.com/YJiangcm/FollowBench
+#
+# Revision:
+# 6278f4c1377b4eafab737267b8b21acd52ea0e52
+
+id: followbench
+name: FollowBench
+description: >
+  FollowBench evaluates multi-level, fine-grained constraint following across
+  content, situation, style, format, mixed, and example constraints. It reports
+  Hard Satisfaction Rate (HSR), Soft Satisfaction Rate (SSR), and Consistent
+  Satisfaction Levels (CSL) using rule-based checks and a configurable
+  external judge.
+type: community
+
+runtime:
+  k8s:
+    image: quay.io/evalhub/community-followbench:latest
+    image_pull_policy: always
+    entrypoint:
+      - python
+      - main.py
+    cpu_request: 500m
+    memory_request: 1Gi
+    cpu_limit: 2000m
+    memory_limit: 4Gi
+  local: null
+
+benchmarks:
+  - id: followbench
+    name: FollowBench
+    description: >
+      Multi-level instruction-following evaluation with HSR and SSR normalized
+      to 0.0–1.0 and CSL reported on a 0–5 scale.
+    category: instruction_following
+    metrics:
+      - hsr
+      - ssr
+      - csl
+      - n_evaluated
+    primary_score:
+      metric: hsr
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.20
+    tags:
+      - instruction-following
+      - constraints
+      - hsr
+      - ssr
+      - csl
+      - followbench
+      - curated
+
+parameters:
+  - name: judge_model
+    type: string
+    description: External judge model identifier.
+
+  - name: judge_url
+    type: string
+    description: OpenAI-compatible external judge endpoint.
+
+  - name: judge_api_key
+    type: string
+    description: >
+      Optional external judge credential. Prefer injecting
+      FOLLOWBENCH_JUDGE_API_KEY from a Secret.
+
+  - name: num_examples
+    type: integer
+    description: >
+      Optional number of complete FollowBench example groups to evaluate.
+
+  - name: max_tokens
+    type: integer
+    default: 2048
+    description: Maximum tokens for model and judge responses.
+
+  - name: temperature
+    type: number
+    default: 0.0
+    description: Model and judge sampling temperature.
+
+  - name: request_timeout
+    type: integer
+    default: 120
+    description: API request timeout in seconds.
