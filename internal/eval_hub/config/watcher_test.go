@@ -46,6 +46,12 @@ func (m *mockStorage) getLastProviders() map[string]api.ProviderResource {
 	return m.lastProviders
 }
 
+func (m *mockStorage) getLastCollections() map[string]api.CollectionResource {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.lastCollections
+}
+
 func TestWatcher_ReloadsOnFileChange(t *testing.T) {
 	dir := t.TempDir()
 	provDir := filepath.Join(dir, "providers")
@@ -319,5 +325,58 @@ func writeTestProvider(t *testing.T, dir, id, name string) {
 	content := "id: " + id + "\nname: " + name + "\ndescription: test provider\n"
 	if err := os.WriteFile(filepath.Join(dir, id+".yaml"), []byte(content), 0600); err != nil {
 		t.Fatalf("Failed to write test provider: %v", err)
+	}
+}
+
+func TestWatcher_ReloadsCollectionCurationOrder(t *testing.T) {
+	dir := t.TempDir()
+	collDir := filepath.Join(dir, "collections")
+	if err := os.MkdirAll(collDir, 0755); err != nil {
+		t.Fatalf("MkdirAll collections: %v", err)
+	}
+	writeTestCollection(t, collDir, "curated", "1")
+
+	logger := logging.FallbackLogger()
+	store := &mockStorage{}
+	validate := testhelpers.NewValidator(t)
+	w := NewWatcher(logger, validate, store, dir)
+	w.debounce = 100 * time.Millisecond
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = w.Watch(ctx) }()
+	time.Sleep(200 * time.Millisecond)
+
+	writeTestCollection(t, collDir, "curated", "3")
+	deadline := time.After(3 * time.Second)
+	for store.getLoadCalls() == 0 {
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for collection config reload")
+		default:
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+
+	collection, ok := store.getLastCollections()["curated"]
+	if !ok {
+		t.Fatal("expected curated collection in reloaded configuration")
+	}
+	if collection.CurationOrder != 3 {
+		t.Fatalf("curation_order = %d, want 3", collection.CurationOrder)
+	}
+}
+
+func writeTestCollection(t *testing.T, dir, id, curationOrder string) {
+	t.Helper()
+	content := "id: " + id + "\n" +
+		"name: Curated Collection\n" +
+		"category: test\n" +
+		"curation_order: " + curationOrder + "\n" +
+		"benchmarks:\n" +
+		"  - id: benchmark\n" +
+		"    provider_id: provider\n"
+	if err := os.WriteFile(filepath.Join(dir, id+".yaml"), []byte(content), 0600); err != nil {
+		t.Fatalf("write collection config: %v", err)
 	}
 }

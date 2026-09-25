@@ -170,9 +170,13 @@ func (s *sqliteStatementsFactory) CreateCountEntitiesStatement(tenant api.Tenant
 	return query, args
 }
 
-func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant, tableName string, limit, offset int, filter map[string]any) (string, []any) {
+func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant, tableName string, limit, offset int, filter map[string]any, sortBy string) (string, []any) {
 	where, whereArgs := s.getWhereStatement(tenant, "") // we don't need to filter by id as we want to count all entities
-	filterClause, args := shared.CreateFilterStatement(s, where, whereArgs, filter, "id DESC", limit, offset, tableName)
+	orderBy := "id DESC"
+	if tableName == shared.TableCollections && sortBy == "curation_order" {
+		orderBy = "CASE WHEN json_extract(entity, '$.curation_order') > 0 THEN 0 ELSE 1 END, CASE WHEN json_extract(entity, '$.curation_order') > 0 THEN json_extract(entity, '$.curation_order') END ASC, id DESC"
+	}
+	filterClause, args := shared.CreateFilterStatement(s, where, whereArgs, filter, orderBy, limit, offset, tableName)
 
 	var query string
 	switch tableName {
