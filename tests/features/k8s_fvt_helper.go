@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -11,12 +12,14 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/remotecommand"
 )
 
 // fvtK8sClient talks to the cluster selected by KUBECONFIG (pipeline oc login),
 // not the Jenkins agent's in-cluster API credentials.
 type fvtK8sClient struct {
 	clientset kubernetes.Interface
+	config    *rest.Config
 }
 
 func newFVTK8sClient() (*fvtK8sClient, error) {
@@ -28,7 +31,7 @@ func newFVTK8sClient() (*fvtK8sClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create kubernetes clientset: %w", err)
 	}
-	return &fvtK8sClient{clientset: clientset}, nil
+	return &fvtK8sClient{clientset: clientset, config: config}, nil
 }
 
 // loadFVTKubeConfig prefers kubeconfig (KUBECONFIG or ~/.kube/config) over in-cluster
@@ -67,6 +70,45 @@ func (c *fvtK8sClient) listJobs(ctx context.Context, namespace, labelSelector st
 		return nil, err
 	}
 	return list.Items, nil
+}
+
+func (c *fvtK8sClient) execInPod(ctx context.Context, namespace, pod, container string, command []string) (string, string, error) {
+	if c.config == nil {
+		return "", "", fmt.Errorf("kubernetes REST config is not available")
+	}
+	req := c.clientset.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(pod).
+		Namespace(namespace).
+		SubResource("exec")
+	req = req.Param("container", container)
+	for _, value := range command {
+		req = req.Param("command", value)
+	}
+	req = req.Param("stdin", "false").Param("stdout", "true").Param("stderr", "true").Param("tty", "false")
+
+	websocketExecutor, err := remotecommand.NewWebSocketExecutor(c.config, "POST", req.URL().String())
+	if err != nil {
+		return "", "", fmt.Errorf("create WebSocket pod exec executor: %w", err)
+	}
+	spdyExecutor, err := remotecommand.NewSPDYExecutor(c.config, "POST", req.URL())
+	if err != nil {
+		return "", "", fmt.Errorf("create SPDY pod exec fallback: %w", err)
+	}
+	executor, err := remotecommand.NewFallbackExecutor(
+		websocketExecutor,
+		spdyExecutor,
+		func(error) bool { return true },
+	)
+	if err != nil {
+		return "", "", fmt.Errorf("create pod exec fallback executor: %w", err)
+	}
+	var stdout, stderr strings.Builder
+	err = executor.StreamWithContext(ctx, remotecommand.StreamOptions{
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+	return stdout.String(), stderr.String(), err
 }
 
 // getJobNameForEvalJob returns the name of the Kubernetes Job backing the given eval-hub job ID.
