@@ -698,9 +698,9 @@ benchmarks:
     name: MMLU
     description: Massive Multitask Language Understanding — 57 academic subjects.
     category: knowledge
-    metrics: [accuracy/accuracy, accuracy/stderr]
+    metrics: [choice/accuracy, choice/stderr]
     primary_score:
-      metric: accuracy/accuracy
+      metric: choice/accuracy
       lower_is_better: false
     tags: [knowledge, academic, inspect-evals]
 
