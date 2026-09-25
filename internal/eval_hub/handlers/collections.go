@@ -96,6 +96,15 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 			if err = CheckScope(filter); err != nil {
 				return err
 			}
+			sortBy, err := GetParam(req, "sort_by", true, "")
+			if err != nil {
+				return err
+			}
+			if sortBy != "" && sortBy != "curation_order" {
+				return serviceerrors.NewServiceError(messages.QueryParameterValueInvalid,
+					"ParameterName", "sort_by", "AllowedValues", "curation_order")
+			}
+			filter.SortBy = sortBy
 
 			allowedParams := []string{"limit", "offset", "name", "category", "tags", "owner", "scope",
 				"domains", "tasks", "modalities", "industries", "evaluation_targets", "sort_by"}

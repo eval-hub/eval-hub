@@ -149,9 +149,14 @@ func TestCreateCountEntitiesStatement(t *testing.T) {
 
 func TestCreateListEntitiesStatement(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
-	stmt, _ := f.CreateListEntitiesStatement("t1", shared.TableCollections, 10, 0, map[string]any{})
-	if !strings.Contains(stmt, "SELECT") {
-		t.Errorf("expected SELECT, got: %s", stmt)
+	stmt, _ := f.CreateListEntitiesStatement("t1", shared.TableCollections, 10, 0, map[string]any{}, "")
+	if !strings.Contains(stmt, "ORDER BY id DESC") {
+		t.Errorf("default statement should preserve id ordering, got: %s", stmt)
+	}
+
+	curatedStmt, _ := f.CreateListEntitiesStatement("t1", shared.TableCollections, 10, 0, map[string]any{}, "curation_order")
+	if !strings.Contains(curatedStmt, "CASE WHEN json_extract(entity, '$.curation_order') > 0 THEN 0 ELSE 1 END") {
+		t.Errorf("expected JSON curation order, got: %s", curatedStmt)
 	}
 }
 

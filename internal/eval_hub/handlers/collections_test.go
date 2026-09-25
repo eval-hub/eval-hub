@@ -54,6 +54,7 @@ type listCollectionsStorage struct {
 	*fakeStorage
 	collections []api.CollectionResource
 	err         error
+	lastSortBy  *string
 }
 
 func (s *listCollectionsStorage) WithLogger(_ *slog.Logger) abstractions.Storage {
@@ -73,7 +74,10 @@ func (s *listCollectionsStorage) WithOwner(_ api.User) abstractions.Storage {
 	return &copy
 }
 
-func (s *listCollectionsStorage) GetCollections(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
+func (s *listCollectionsStorage) GetCollections(filter *abstractions.QueryFilter) (*abstractions.QueryResults[api.CollectionResource], error) {
+	if s.lastSortBy != nil {
+		*s.lastSortBy = filter.SortBy
+	}
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -1770,5 +1774,44 @@ func TestApplyOverrides_AllFields(t *testing.T) {
 	}
 	if result.Agent == nil || result.Agent.Summary != "override-agent" {
 		t.Errorf("Agent: expected override, got %v", result.Agent)
+	}
+}
+
+func TestHandleListCollections_CurationOrderSort(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	validator := testhelpers.NewValidator(t)
+	sortBy := ""
+	storage := &listCollectionsStorage{
+		fakeStorage: &fakeStorage{},
+		collections: []api.CollectionResource{},
+		lastSortBy:  &sortBy,
+	}
+	h := handlers.New(storage, validator, &fakeRuntime{}, nil, nil, nil, nil)
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user1", "tenant1")
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("GET", "/api/v1/evaluations/collections?sort_by=curation_order"),
+		queryValues: map[string][]string{"sort_by": {"curation_order"}},
+		pathValues:  map[string]string{},
+	}
+	recorder := httptest.NewRecorder()
+	h.HandleListCollections(ctx, req, MockResponseWrapper{recorder: recorder})
+	if recorder.Code != 200 {
+		t.Fatalf("expected 200 for curation_order sort, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if sortBy != "curation_order" {
+		t.Fatalf("storage sort_by = %q, want curation_order", sortBy)
+	}
+
+	invalidReq := &providersRequest{
+		MockRequest: createMockRequest("GET", "/api/v1/evaluations/collections?sort_by=name"),
+		queryValues: map[string][]string{"sort_by": {"name"}},
+		pathValues:  map[string]string{},
+	}
+	invalidRecorder := httptest.NewRecorder()
+	h.HandleListCollections(ctx, invalidReq, MockResponseWrapper{recorder: invalidRecorder})
+	if invalidRecorder.Code != 400 {
+		t.Errorf("expected 400 for unsupported sort_by, got %d: %s", invalidRecorder.Code, invalidRecorder.Body.String())
 	}
 }

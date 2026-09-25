@@ -183,9 +183,17 @@ func TestCreateCountEntitiesStatement(t *testing.T) {
 
 func TestCreateListEntitiesStatement(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
-	stmt, _ := f.CreateListEntitiesStatement("t1", shared.TableCollections, 10, 0, map[string]any{})
-	if !strings.Contains(stmt, "SELECT") {
-		t.Errorf("expected SELECT, got: %s", stmt)
+	stmt, _ := f.CreateListEntitiesStatement("t1", shared.TableCollections, 10, 0, map[string]any{}, "")
+	if !strings.Contains(stmt, "ORDER BY id DESC") {
+		t.Errorf("default statement should preserve id ordering, got: %s", stmt)
+	}
+
+	curatedStmt, _ := f.CreateListEntitiesStatement("t1", shared.TableCollections, 10, 0, map[string]any{}, "curation_order")
+	if !strings.Contains(curatedStmt, "NULLIF((entity->>'curation_order')::integer, 0) ASC NULLS LAST, id DESC") {
+		t.Errorf("expected JSONB curation order, got: %s", curatedStmt)
+	}
+	if !strings.Contains(f.GetTablesSchema(), "idx_collections_curation_order_json") {
+		t.Error("expected JSONB curation-order expression index in schema")
 	}
 }
 
