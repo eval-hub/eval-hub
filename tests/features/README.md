@@ -128,13 +128,13 @@ These scenarios validate that evaluation job APIs accept and persist `hardware_c
 2. Ensure the EvalHub deployment sets `EVALHUB_HARDWARE_PROFILES_NAMESPACE` to the platform namespace that holds HardwareProfiles (typically `opendatahub` or `redhat-ods-applications`), and that a `HardwareProfile` exists there.
 3. Export its name and expected adapter resources (must match the profile's `defaultCount` / `maxCount` for CPU and memory):
 
-```bash
-export TEST_HARDWARE_PROFILE="your-profile-name"
-export TEST_HARDWARE_PROFILE_CPU_REQUEST="1"
-export TEST_HARDWARE_PROFILE_MEMORY_REQUEST="1Gi"
-export TEST_HARDWARE_PROFILE_CPU_LIMIT="2"
-export TEST_HARDWARE_PROFILE_MEMORY_LIMIT="2Gi"
-```
+   ```bash
+   export TEST_HARDWARE_PROFILE="your-profile-name"
+   export TEST_HARDWARE_PROFILE_CPU_REQUEST="1"
+   export TEST_HARDWARE_PROFILE_MEMORY_REQUEST="1Gi"
+   export TEST_HARDWARE_PROFILE_CPU_LIMIT="2"
+   export TEST_HARDWARE_PROFILE_MEMORY_LIMIT="2Gi"
+   ```
 
 4. Grant the FVT test runner **`get`/`list` on `jobs`** in the tenant namespace (to inspect the adapter container). Hardware profile steps use a FVT Kubernetes client that **prefers `KUBECONFIG`** (pipeline `oc login`) over in-cluster credentials, then falls back to in-cluster config for local runs inside the cluster. The test process does not read `HardwareProfile` CRs or cluster-scoped CRDs.
 
