@@ -21,10 +21,12 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
+	"github.com/eval-hub/eval-hub/internal/otel/oteltest"
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 
 	"github.com/cucumber/godog"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	logspb "go.opentelemetry.io/proto/otlp/logs/v1"
 )
 
 const (
@@ -78,6 +80,10 @@ type apiFeature struct {
 	mcpServer        *mcp.Server
 	mcpClientSession *mcp.ClientSession
 	mcpServerSession *mcp.ServerSession
+	// otelLogsCollector captures OTLP log records exported by adapter
+	// subprocesses in local-runtime mode. Nil when running against a remote
+	// SERVER_URL (no embedded server is started).
+	otelLogsCollector *oteltest.GRPCLogsCollector
 }
 
 // this is used for a scenario to ensure that scenarios do not overwrite
@@ -119,6 +125,11 @@ type scenarioConfig struct {
 
 	waitDeadline time.Duration
 	waitInterval time.Duration
+
+	// matchedLogRecord holds the OTLP log record captured by the most recent
+	// "the OTEL collector should have received a log record" step, so that
+	// follow-up steps can assert on its attributes, severity, and trace context.
+	matchedLogRecord *logspb.LogRecord
 
 	// MLflow artifact fetching
 	mlflowArtifactBody  []byte

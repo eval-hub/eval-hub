@@ -93,6 +93,7 @@ When running in local server mode, the tests will:
 | `@hardware_profile` | Hardware profile API and Kubernetes Job adapter resource tests in `evaluation_jobs.feature`; require pipeline env vars (see below). |
 | `@metrics` | Prometheus `/metrics` scrape tests in `metrics.feature`; in cluster/remote mode require `METRICS_URL` (see below). |
 | `@logs` | Evaluation job log collection scenarios in `evaluation_local_jobs.feature` and `evaluation_jobs.feature` |
+| `@otel` | Verifies adapter log records are exported to an in-process OTLP collector (`evaluation_local_jobs.feature`). The embedded local-runtime server points `OTEL_EXPORTER_OTLP_ENDPOINT` at a test `GRPCLogsCollector`, and the scenario asserts the adapter's log records (including `EVALUATION COMPLETE`) arrive with `INFO` severity, `evalhub.job_id` / `evalhub.benchmark_id` attributes, and trace/span correlation. Requires `@local_runtime` (excluded by default; opt in via `GODOG_TAGS`). |
 | `@pvc` | Evaluation jobs that mount offline test data from a PersistentVolumeClaim (`evaluation_jobs.feature`). Defaults: claim `evalhub-offline-test-data`, `sub_path` `staging`. Override with `TEST_DATA_PVC_CLAIM_NAME` / `TEST_DATA_PVC_SUB_PATH`. Missing-PVC negative case uses `TEST_DATA_PVC_MISSING_CLAIM_NAME` (default `evalhub-offline-test-data-does-not-exist`) and waits up to 5m for operator failure sync. Opt in with `GODOG_TAGS="@pvc"`. |
 | `@git` | Evaluation jobs that clone offline test data from a git repository (`evaluation_jobs.feature`). Defaults: `TEST_DATA_GIT_URL`=`https://github.com/eval-hub/eval-hub`, `TEST_DATA_GIT_REF`=`main`, `TEST_DATA_GIT_SUB_PATH`=`tests/git-testdata` (`arc_easy` + tokenizer; see `tests/git-testdata/README.md`). The main happy-path job runs two git benchmarks (`arc_easy` + nested `truthfulqa_mc1` via `TEST_DATA_GIT_NESTED_SUB_PATH`, default `tests/git-testdata/staging_sub_path`) and asserts `resolved_sha` is absent on create then populated after completion. Optional: `TEST_DATA_GIT_TAG_REF`; `TEST_DATA_GIT_SHA_REF` / `TEST_DATA_GIT_SHA_URL` (SHA scenario defaults to `TEST_DATA_GIT_REF`/`main`; set `TEST_DATA_GIT_SHA_REF` to a real hex commit SHA for commit-checkout coverage), blocked-host via `TEST_DATA_GIT_BLOCKED_URL`, bad-ref via `TEST_DATA_GIT_BAD_REF`, http+secret_ref negative via `TEST_DATA_GIT_HTTP_URL`, missing sub_path via `TEST_DATA_GIT_BAD_SUB_PATH`. Job-wait negatives (bad ref, missing sub_path) poll every 10s for up to 5m (same as missing-PVC); API-only negatives return 400 immediately. Requires cluster egress to the git host (or an internal mirror). Until `tests/git-testdata` is on the target ref, set `TEST_DATA_GIT_REF` accordingly. Opt in with `GODOG_TAGS="@git"`. |
 | `@hf` | Evaluation jobs that download offline test data from Hugging Face Hub (`evaluation_jobs.feature`). Defaults: `TEST_DATA_HF_REPO_ID`=`eval-hub-test/evalhub-offline-testdata`, `TEST_DATA_HF_REVISION`=`main`, nested `truthfulqa_mc1` via `TEST_DATA_HF_NESTED_SUB_PATH`=`staging_sub_path` (public mirror of `tests/git-testdata` on HF). One happy-path job runs `arc_easy` (full repo, branch revision) + `truthfulqa_mc1` (nested `sub_path`) and asserts `resolved_sha` is absent on create then populated after completion; set `TEST_DATA_HF_SHA_REVISION` to a real hex commit SHA to exercise pinned revision on `arc_easy` without a separate scenario. Runtime failures: one job covers invalid `repo_id` + bad `revision`; missing `sub_path` stays a separate job. Optional env: `TEST_DATA_HF_BAD_REPO_ID` (default `eval-hub-test/invalid-db`), `TEST_DATA_HF_BAD_REVISION`, `TEST_DATA_HF_BAD_SUB_PATH`. Job-wait negatives poll every 10s for up to 5m; API-only negatives return 400 immediately. Requires cluster egress to huggingface.co (or configure the init image with `HF_ENDPOINT` for a mirror). Opt in with `GODOG_TAGS="@hf"`. |
@@ -127,13 +128,13 @@ These scenarios validate that evaluation job APIs accept and persist `hardware_c
 2. Ensure the EvalHub deployment sets `EVALHUB_HARDWARE_PROFILES_NAMESPACE` to the platform namespace that holds HardwareProfiles (typically `opendatahub` or `redhat-ods-applications`), and that a `HardwareProfile` exists there.
 3. Export its name and expected adapter resources (must match the profile's `defaultCount` / `maxCount` for CPU and memory):
 
-```bash
-export TEST_HARDWARE_PROFILE="your-profile-name"
-export TEST_HARDWARE_PROFILE_CPU_REQUEST="1"
-export TEST_HARDWARE_PROFILE_MEMORY_REQUEST="1Gi"
-export TEST_HARDWARE_PROFILE_CPU_LIMIT="2"
-export TEST_HARDWARE_PROFILE_MEMORY_LIMIT="2Gi"
-```
+   ```bash
+   export TEST_HARDWARE_PROFILE="your-profile-name"
+   export TEST_HARDWARE_PROFILE_CPU_REQUEST="1"
+   export TEST_HARDWARE_PROFILE_MEMORY_REQUEST="1Gi"
+   export TEST_HARDWARE_PROFILE_CPU_LIMIT="2"
+   export TEST_HARDWARE_PROFILE_MEMORY_LIMIT="2Gi"
+   ```
 
 4. Grant the FVT test runner **`get`/`list` on `jobs`** in the tenant namespace (to inspect the adapter container). Hardware profile steps use a FVT Kubernetes client that **prefers `KUBECONFIG`** (pipeline `oc login`) over in-cluster credentials, then falls back to in-cluster config for local runs inside the cluster. The test process does not read `HardwareProfile` CRs or cluster-scoped CRDs.
 
