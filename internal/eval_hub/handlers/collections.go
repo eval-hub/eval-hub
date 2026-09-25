@@ -96,10 +96,7 @@ func (h *Handlers) HandleListCollections(ctx *executioncontext.ExecutionContext,
 			if err = CheckScope(filter); err != nil {
 				return err
 			}
-			sortBy, err := GetParam(req, "sort_by", true, "")
-			if err != nil {
-				return err
-			}
+			sortBy, _ := GetParam(req, "sort_by", true, "")
 			if sortBy != "" && sortBy != "curation_order" {
 				return serviceerrors.NewServiceError(messages.QueryParameterValueInvalid,
 					"ParameterName", "sort_by", "AllowedValues", "curation_order")

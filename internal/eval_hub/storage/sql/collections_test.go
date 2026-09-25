@@ -837,6 +837,44 @@ func TestCollections_SortByCurationOrderPostgres(t *testing.T) {
 	testCollectionsSortByCurationOrder(t, "postgres", databaseName)
 }
 
+func TestStorageRejectsUnsupportedSortBy(t *testing.T) {
+	store, err := getTestStorage(t, "sqlite", getDBName())
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	for _, tc := range []struct {
+		name   string
+		sortBy string
+		list   func(*abstractions.QueryFilter) error
+	}{
+		{
+			name:   "collections reject unsupported sort value",
+			sortBy: "name",
+			list: func(filter *abstractions.QueryFilter) error {
+				_, err := store.GetCollections(filter)
+				return err
+			},
+		},
+		{
+			name:   "providers reject collection sort",
+			sortBy: "curation_order",
+			list: func(filter *abstractions.QueryFilter) error {
+				_, err := store.GetProviders(filter)
+				return err
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.list(&abstractions.QueryFilter{Limit: 10, Params: map[string]any{}, SortBy: tc.sortBy})
+			if err == nil {
+				t.Fatal("expected unsupported sort_by error")
+			}
+		})
+	}
+}
+
 func testCollectionsSortByCurationOrder(t *testing.T, driver, databaseName string) {
 	store, err := getTestStorage(t, driver, databaseName)
 	if err != nil {
