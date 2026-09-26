@@ -400,6 +400,49 @@ func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLength(jsonPath stri
 	return nil
 }
 
+func (tc *scenarioConfig) theStringAtPathInResponseShouldHaveLength(jsonPath string, lengthStr string) error {
+	value, add, err := tc.getValueExpression(lengthStr)
+	if err != nil {
+		return err
+	}
+	value, err = tc.getValue(value)
+	if err != nil {
+		return tc.logError(err)
+	}
+	length, err := strconv.Atoi(value)
+	if err != nil {
+		return tc.logError(fmt.Errorf("expected integer length, got %q: %w", value, err))
+	}
+	length += add
+	raw, err := tc.getJsonPathValue(jsonPath)
+	if err != nil {
+		return err
+	}
+	actual, ok := raw.(string)
+	if !ok {
+		return tc.logError(fmt.Errorf("value at path %s is not a string, got %T", jsonPath, raw))
+	}
+	if len(actual) != length {
+		return tc.logError(fmt.Errorf("expected string at path %s to have length %d, got %d in %s", jsonPath, length, len(actual), asPrettyJson(string(tc.body))))
+	}
+	return nil
+}
+
+func (tc *scenarioConfig) theValueIsNotEmpty(jsonPath string) error {
+	raw, err := tc.getJsonPathValue(jsonPath)
+	if err != nil {
+		return err
+	}
+	value, ok := raw.(string)
+	if !ok {
+		return tc.logError(fmt.Errorf("value at path %s is not a string, got %T", jsonPath, raw))
+	}
+	if value == "" {
+		return tc.logError(fmt.Errorf("value at path %s is empty", jsonPath))
+	}
+	return nil
+}
+
 func (tc *scenarioConfig) theArrayAtPathInResponseShouldHaveLengthAtLeast(jsonPath string, minLengthStr string) error {
 	value, add, err := tc.getValueExpression(minLengthStr)
 	if err != nil {
