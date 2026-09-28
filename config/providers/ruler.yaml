@@ -32,6 +32,10 @@ benchmarks:
     name: NIAH Single (Noise Haystack)
     description: Single needle/value pair hidden in random noise background
     category: needle_in_a_haystack
+    domains: [grounded_document_understanding]
+    tasks: [long_context_understanding]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - string_match_all
     primary_score:
@@ -49,6 +53,10 @@ benchmarks:
     name: NIAH Single (Essay Haystack)
     description: Single needle/value pair hidden in Paul Graham essays
     category: needle_in_a_haystack
+    domains: [grounded_document_understanding]
+    tasks: [long_context_understanding]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - string_match_all
     primary_score:
@@ -66,6 +74,10 @@ benchmarks:
     name: NIAH Single (UUID Values)
     description: Single needle/UUID-value pair hidden in essay background
     category: needle_in_a_haystack
+    domains: [grounded_document_understanding]
+    tasks: [long_context_understanding]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - string_match_all
     primary_score:
@@ -84,6 +96,10 @@ benchmarks:
     name: NIAH Multi-Key
     description: Multiple distinct needle keys hidden in essay background
     category: needle_in_a_haystack
+    domains: [grounded_document_understanding]
+    tasks: [long_context_understanding]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - string_match_all
     primary_score:
@@ -101,6 +117,10 @@ benchmarks:
     name: NIAH Needle Background
     description: Single needle with other needles used as background noise
     category: needle_in_a_haystack
+    domains: [grounded_document_understanding]
+    tasks: [long_context_understanding]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - string_match_all
     primary_score:
@@ -118,6 +138,10 @@ benchmarks:
     name: NIAH Multi-Key UUID
     description: UUID keys and UUID values — hardest retrieval variant
     category: needle_in_a_haystack
+    domains: [grounded_document_understanding]
+    tasks: [long_context_understanding]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - string_match_all
     primary_score:
@@ -135,6 +159,10 @@ benchmarks:
     name: NIAH Multi-Value
     description: Single key associated with multiple values in essay background
     category: needle_in_a_haystack
+    domains: [grounded_document_understanding]
+    tasks: [long_context_understanding]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - string_match_all
     primary_score:
@@ -152,6 +180,10 @@ benchmarks:
     name: NIAH Multi-Query
     description: Multiple queries each targeting a distinct needle/value pair
     category: needle_in_a_haystack
+    domains: [grounded_document_understanding]
+    tasks: [long_context_understanding]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - string_match_all
     primary_score:
@@ -170,6 +202,10 @@ benchmarks:
     name: Variable Tracking
     description: Track chains of variable assignments and return the final value
     category: variable_tracking
+    domains: [grounded_document_understanding]
+    tasks: [long_context_understanding]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - string_match_all
     primary_score:
@@ -187,6 +223,10 @@ benchmarks:
     name: Common Words Extraction
     description: Identify the 10 most frequently appearing words in a long list
     category: aggregation
+    domains: [grounded_document_understanding]
+    tasks: [long_context_understanding]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - string_match_all
     primary_score:
@@ -203,6 +243,10 @@ benchmarks:
     name: Frequency Words Extraction
     description: Find the three most frequent coded words in a Zipf-distributed list
     category: aggregation
+    domains: [grounded_document_understanding]
+    tasks: [long_context_understanding]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - string_match_all
     primary_score:
@@ -220,6 +264,10 @@ benchmarks:
     name: QA — SQuAD
     description: Long-context question answering with SQuAD passages as context
     category: question_answering
+    domains: [grounded_document_understanding]
+    tasks: [full_document_qa, long_context_understanding]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - string_match_part
     primary_score:
@@ -237,6 +285,10 @@ benchmarks:
     name: QA — HotpotQA
     description: Multi-hop long-context question answering with HotpotQA passages
     category: question_answering
+    domains: [grounded_document_understanding]
+    tasks: [full_document_qa, long_context_understanding]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - string_match_part
     primary_score:

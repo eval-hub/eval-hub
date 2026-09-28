@@ -15,6 +15,10 @@ tags:
   - curated
 domains:
   - grounded_document_understanding
+tasks: [long_context_understanding, full_document_qa]
+modalities: [text]
+evaluation_targets: [model]
+curation_order: 2
 pass_criteria:
   threshold: 0.35
 benchmarks:

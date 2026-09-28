@@ -1,6 +1,11 @@
 id: model-validation
 name: Model Validation
 category: safety
+domains: [trustworthiness]
+tasks: [adversarial_prompt_injection_resistance]
+modalities: [text]
+evaluation_targets: [model]
+curation_order: 0
 description: >
   Evaluates model safety using context-aware vulnerability scanning with custom
   intent typology and probes of increasing complexity. Allows customers to verify

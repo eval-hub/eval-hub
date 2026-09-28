@@ -17,6 +17,10 @@ tags:
   - curated
 domains:
   - instruction_and_output_reliability
+tasks: [structured_output, instruction_following]
+modalities: [text]
+evaluation_targets: [model]
+curation_order: 3
 pass_criteria:
   threshold: 0.325
 benchmarks:
