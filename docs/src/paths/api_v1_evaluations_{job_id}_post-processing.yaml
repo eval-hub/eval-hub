@@ -1,9 +1,9 @@
-put:
+post:
   tags:
     - Evaluations
-  summary: Configure Confidence Interval Post-Processing
+  summary: Create Confidence Interval Post-Processing
   description: |
-    Configure confidence interval computation for the benchmarks in an existing
+    Create confidence interval computation for the benchmarks in an existing
     evaluation job. The operation is idempotent: if the same job already has a
     confidence interval computation, the existing post-processing reference is
     returned.
@@ -11,7 +11,7 @@ put:
     The computation runs independently for each benchmark. When
     `process_benchmarks_in_parallel` is `true`, benchmark computations may run
     in parallel; otherwise they are processed sequentially.
-  operationId: put_evaluations_jobs_job_id_post_processing
+  operationId: post_evaluations_jobs_job_id_post_processing
   parameters:
     - name: job_id
       in: path

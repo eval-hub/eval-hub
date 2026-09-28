@@ -827,12 +827,12 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
   /api/v1/evaluations/jobs/{job_id}/post-processing:
-    put:
+    post:
       tags:
         - Evaluations
-      summary: Configure Confidence Interval Post-Processing
+      summary: Create Confidence Interval Post-Processing
       description: |
-        Configure confidence interval computation for the benchmarks in an existing
+        Create confidence interval computation for the benchmarks in an existing
         evaluation job. The operation is idempotent: if the same job already has a
         confidence interval computation, the existing post-processing reference is
         returned.
@@ -840,7 +840,7 @@ paths:
         The computation runs independently for each benchmark. When
         `process_benchmarks_in_parallel` is `true`, benchmark computations may run
         in parallel; otherwise they are processed sequentially.
-      operationId: put_evaluations_jobs_job_id_post_processing
+      operationId: post_evaluations_jobs_job_id_post_processing
       parameters:
         - name: job_id
           in: path
@@ -896,6 +896,97 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/v1/evaluations/jobs/{job_id}/post-processing/{post_processing_id}:
+    get:
+      tags:
+        - Evaluations
+      summary: Get Job Post-Processing Computation
+      description: Get a confidence interval computation associated with an evaluation job.
+      operationId: get_evaluations_jobs_job_id_post_processing_post_processing_id
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Job Id
+        - name: post_processing_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Post Processing Id
+      responses:
+        '200':
+          description: Job-scoped post-processing computation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobPostProcessingResource'
+              example:
+                resource:
+                  id: pp-1234567890ab
+                  tenant: sagar
+                  created_at: '2026-09-21T05:57:34.477263Z'
+                  updated_at: '2026-09-21T05:58:29.768663Z'
+                  owner: nbs
+                confidence_interval_config:
+                  process_benchmarks_in_parallel: true
+                  calibration_data_ref:
+                    s3:
+                      bucket: evaluation-data
+                      key: calibration/accuracy
+                      secret_ref: evaluation-s3
+                  significance_level: 0.7
+                status:
+                  state: completed
+                  benchmarks:
+                    - id: accuracy-benchmark
+                      provider_id: inspect
+                      benchmark_index: 0
+                      status: completed
+                results:
+                  benchmarks:
+                    - id: accuracy-benchmark
+                      provider_id: inspect
+                      benchmark_index: 0
+                      confidence_interval:
+                        lower: 0.75
+                        upper: 0.85
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Evaluations
+      summary: Delete Job Post-Processing Computation
+      description: Delete a confidence interval computation associated with an evaluation job.
+      operationId: delete_evaluations_jobs_job_id_post_processing_post_processing_id
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Job Id
+        - name: post_processing_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Post Processing Id
+      responses:
+        '204':
+          description: Job-scoped post-processing computation deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/evaluations/providers:
     get:
       tags:
@@ -3623,6 +3714,24 @@ components:
           $ref: '#/components/schemas/ConfidenceIntervalConfig'
       required:
         - confidence_interval_config
+      additionalProperties: false
+    JobPostProcessingResource:
+      type: object
+      title: JobPostProcessingResource
+      description: Confidence interval post-processing resource associated with an evaluation job.
+      properties:
+        resource:
+          $ref: '#/components/schemas/Resource'
+        confidence_interval_config:
+          $ref: '#/components/schemas/ConfidenceIntervalConfig'
+        status:
+          $ref: '#/components/schemas/PostProcessingStatus'
+        results:
+          $ref: '#/components/schemas/PostProcessingResultsEvalJob'
+      required:
+        - resource
+        - confidence_interval_config
+        - status
       additionalProperties: false
     AgentMetadata:
       type: object
