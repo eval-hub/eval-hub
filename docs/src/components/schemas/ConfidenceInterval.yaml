@@ -1,0 +1,16 @@
+type: object
+title: ConfidenceInterval
+description: Confidence interval for a computed result.
+properties:
+  lower:
+    type: number
+    format: float
+    description: Lower confidence interval bound.
+  upper:
+    type: number
+    format: float
+    description: Upper confidence interval bound.
+required:
+  - lower
+  - upper
+additionalProperties: false

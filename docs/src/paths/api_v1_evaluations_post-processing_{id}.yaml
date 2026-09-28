@@ -1,0 +1,108 @@
+get:
+  tags:
+    - Evaluations
+  summary: Get Post-Processing Computation
+  description: Get a standalone confidence interval post-processing resource.
+  operationId: get_evaluations_post_processing_id
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    '200':
+      description: Post-processing computation resource.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/PostProcessingResource.yaml
+          examples:
+            eval_job:
+              summary: Evaluation-job result shape
+              value:
+                resource:
+                  id: 4b6510bd-cee3-4a80-8028-4a6cb60ae1cc
+                  tenant: sagar
+                  created_at: '2026-09-21T05:57:34.477263Z'
+                  updated_at: '2026-09-21T05:58:29.768663Z'
+                  owner: nbs
+                confidence_interval_config:
+                  results_data_ref:
+                    eval_job:
+                      id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
+                  calibration_data_ref:
+                    s3:
+                      bucket: evaluation-data
+                      key: calibration/accuracy
+                      secret_ref: evaluation-s3
+                  significance_level: 0.7
+                status:
+                  state: completed
+                  benchmarks:
+                    - id: accuracy-benchmark
+                      provider_id: inspect
+                      benchmark_index: 0
+                      status: completed
+                results:
+                  benchmarks:
+                    - id: accuracy-benchmark
+                      provider_id: inspect
+                      benchmark_index: 0
+                      confidence_interval:
+                        lower: 0.75
+                        upper: 0.85
+            external:
+              summary: External-result shape
+              value:
+                resource:
+                  id: 4b6510bd-cee3-4a80-8028-4a6cb60ae1cc
+                  tenant: sagar
+                  created_at: '2026-09-21T05:57:34.477263Z'
+                  updated_at: '2026-09-21T05:58:29.768663Z'
+                  owner: nbs
+                confidence_interval_config:
+                  results_data_ref:
+                    s3:
+                      bucket: evaluation-data
+                      key: results/accuracy
+                      secret_ref: evaluation-s3
+                  calibration_data_ref:
+                    s3:
+                      bucket: evaluation-data
+                      key: calibration/accuracy
+                      secret_ref: evaluation-s3
+                  significance_level: 0.7
+                status:
+                  state: completed
+                results:
+                  confidence_interval:
+                    lower: 0.75
+                    upper: 0.85
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml
+delete:
+  tags:
+    - Evaluations
+  summary: Delete Post-Processing Computation
+  description: Delete a standalone confidence interval post-processing resource.
+  operationId: delete_evaluations_post_processing_id
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    '204':
+      description: Post-processing computation deleted.
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml

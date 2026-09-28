@@ -1,13 +1,11 @@
 type: object
 title: ConfidenceIntervalConfig
-description: Configuration for confidence interval post-processing.
+description: Configuration for confidence interval post-processing on an evaluation job.
 properties:
   process_benchmarks_in_parallel:
     type: boolean
     default: false
-    description: |
-      Whether confidence intervals for the job's benchmarks may be computed in
-      parallel. The default is false.
+    description: Whether confidence intervals for the job's benchmarks may be computed in parallel.
   hardware_config:
     $ref: ./BenchmarkHardwareConfig.yaml
     description: Optional hardware override for confidence interval computation.
@@ -19,9 +17,7 @@ properties:
     format: float
     exclusiveMinimum: 0
     exclusiveMaximum: 1
-    description: |
-      Significance level alpha. For example, 0.7 requests a 30% confidence
-      interval.
+    description: Significance level alpha. For example, 0.7 requests a 30% confidence interval.
 required:
   - calibration_data_ref
   - significance_level

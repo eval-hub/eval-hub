@@ -1,0 +1,9 @@
+type: object
+title: StandalonePostProcessingRequest
+description: Request to create a confidence interval post-processing resource.
+properties:
+  confidence_interval_config:
+    $ref: ./StandaloneConfidenceIntervalConfig.yaml
+required:
+  - confidence_interval_config
+additionalProperties: false
