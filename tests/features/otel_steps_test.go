@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/cucumber/godog"
-	logspb "go.opentelemetry.io/proto/otlp/logs/v1"
 
 	"github.com/eval-hub/eval-hub/internal/otel/oteltest"
 )
@@ -55,16 +54,14 @@ func (tc *scenarioConfig) theOTELCollectorShouldHaveReceivedLogContaining(substr
 	if jobID == "" {
 		jobID = tc.values["id"]
 	}
+	if jobID == "" {
+		return tc.logError(fmt.Errorf("cannot match an exported log record without the current evaluation job id"))
+	}
 
 	deadline := time.Now().Add(otelLogWaitTimeout)
 	for {
 		records := collector.LogRecords()
-		var record *logspb.LogRecord
-		if jobID != "" {
-			record = oteltest.FindLogRecordByBodyAndAttribute(records, substr, jobIDAttribute, jobID)
-		} else {
-			record = oteltest.FindLogRecordByBody(records, substr)
-		}
+		record := oteltest.FindLogRecordByBodyAndAttribute(records, substr, jobIDAttribute, jobID)
 		if record != nil {
 			tc.matchedLogRecord = record
 			return nil
@@ -74,10 +71,7 @@ func (tc *scenarioConfig) theOTELCollectorShouldHaveReceivedLogContaining(substr
 		}
 		time.Sleep(otelLogWaitInterval)
 	}
-	if jobID != "" {
-		return tc.logError(fmt.Errorf("timed out after %v waiting for an exported log record containing %q with %s=%q", otelLogWaitTimeout, substr, jobIDAttribute, jobID))
-	}
-	return tc.logError(fmt.Errorf("timed out after %v waiting for an exported log record containing %q", otelLogWaitTimeout, substr))
+	return tc.logError(fmt.Errorf("timed out after %v waiting for an exported log record containing %q with %s=%q", otelLogWaitTimeout, substr, jobIDAttribute, jobID))
 }
 
 func (tc *scenarioConfig) requireMatchedLogRecord() error {
