@@ -93,9 +93,9 @@ func (s *postgresStatementsFactory) GetAllowedFilterColumns(tableName string) []
 	case shared.TableEvaluations:
 		return append(allColumns, "status", "experiment_id", "collection_id")
 	case shared.TableProviders:
-		return append(allColumns, "scope") // "benchmarks" is not an allowed database filter for providers
+		return allColumns // "benchmarks" and "scope" are not allowed filters for providers from the database
 	case shared.TableCollections:
-		return append(allColumns, "scope", "category", "domains", "tasks", "modalities", "industries", "evaluation_targets")
+		return append(allColumns, "category", "domains", "tasks", "modalities", "industries", "evaluation_targets")
 	default:
 		return nil
 	}
@@ -107,15 +107,6 @@ func (s *postgresStatementsFactory) GetAllowedFilterColumns(tableName string) []
 // The arrow-text operator ->> returns the object field as plain text.
 func (s *postgresStatementsFactory) CreateEntityFilterCondition(key string, value any, index int, tableName string) (condition string, args []any) {
 	switch key {
-	case "scope":
-		switch value {
-		case abstractions.ScopeSystem:
-			return fmt.Sprintf("owner = $%d", index), []any{abstractions.OwnerSystem}
-		case abstractions.ScopeTenant:
-			return fmt.Sprintf("owner <> $%d", index), []any{abstractions.OwnerSystem}
-		default:
-			return "", []any{}
-		}
 	case "name":
 		// evaluations: name at config.name; providers and collections: name at entity root
 		namePath := "entity->>'name'"

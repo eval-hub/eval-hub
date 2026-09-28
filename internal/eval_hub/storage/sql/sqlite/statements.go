@@ -85,9 +85,9 @@ func (s *sqliteStatementsFactory) GetAllowedFilterColumns(tableName string) []st
 	case shared.TableEvaluations:
 		return append(allColumns, "status", "experiment_id", "collection_id")
 	case shared.TableProviders:
-		return append(allColumns, "scope") // "benchmarks" is not an allowed database filter for providers
+		return allColumns // "benchmarks" and "scope" are not allowed filters for providers from the database
 	case shared.TableCollections:
-		return append(allColumns, "scope", "category", "domains", "tasks", "modalities", "industries", "evaluation_targets")
+		return append(allColumns, "category", "domains", "tasks", "modalities", "industries", "evaluation_targets")
 	default:
 		return nil
 	}
@@ -110,15 +110,6 @@ func (s *sqliteStatementsFactory) CreateEvaluationGetEntityForUpdateStatement(qu
 // entityFilterCondition returns the SQL condition and args for a filter key.
 func (s *sqliteStatementsFactory) CreateEntityFilterCondition(key string, value any, index int, tableName string) (condition string, args []any) {
 	switch key {
-	case "scope":
-		switch value {
-		case abstractions.ScopeSystem:
-			return "owner = ?", []any{abstractions.OwnerSystem}
-		case abstractions.ScopeTenant:
-			return "owner <> ?", []any{abstractions.OwnerSystem}
-		default:
-			return "", []any{}
-		}
 	case "name":
 		// evaluations: name at config.name; providers and collections: name at entity root
 		namePath := "$.name"
