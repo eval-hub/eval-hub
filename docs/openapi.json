@@ -4564,15 +4564,6 @@
               "artifact_path": {
                 "type": "string",
                 "description": "File or directory path within the MLflow run artifacts."
-              },
-              "tracking_uri": {
-                "type": "string",
-                "format": "uri",
-                "description": "Optional MLflow tracking URI; the service default is used when omitted."
-              },
-              "secret_ref": {
-                "type": "string",
-                "description": "Optional Kubernetes Secret containing MLflow credentials."
               }
             },
             "required": [
