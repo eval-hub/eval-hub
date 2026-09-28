@@ -11,8 +11,8 @@ properties:
       - $ref: ./ExternalResultsDataRef.yaml
     description: Result data reference. An evaluation job is supported only for result data.
   calibration_data_ref:
-    $ref: ./ExternalResultsDataRef.yaml
-    description: Reference to labeled calibration data; eval_job is not supported here.
+    $ref: ./TestDataRef.yaml
+    description: Reference to labeled calibration data using the same sources as test_data_ref.
   significance_level:
     type: number
     format: float
