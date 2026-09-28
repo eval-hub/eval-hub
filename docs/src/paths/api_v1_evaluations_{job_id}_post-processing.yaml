@@ -8,9 +8,9 @@ post:
     confidence interval computation, the existing post-processing reference is
     returned.
 
-    The computation runs independently for each benchmark. When
-    `process_benchmarks_in_parallel` is `true`, benchmark computations may run
-    in parallel; otherwise they are processed sequentially.
+    The computation runs independently for each benchmark. `num_parallel_threads`
+    controls how many benchmark computations may run in parallel; a value of 1
+    processes them sequentially.
   operationId: post_evaluations_jobs_job_id_post_processing
   parameters:
     - name: job_id
@@ -30,7 +30,7 @@ post:
             summary: Configure confidence interval computation
             value:
               confidence_interval_config:
-                process_benchmarks_in_parallel: true
+                num_parallel_threads: 2
                 hardware_config:
                   cpu:
                     request: 500m

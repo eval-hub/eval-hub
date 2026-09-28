@@ -31,7 +31,7 @@ get:
                   results_data_ref:
                     eval_job:
                       id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
-                      process_benchmarks_in_parallel: true
+                      num_parallel_threads: 2
                   calibration_data_ref:
                     s3:
                       bucket: evaluation-data

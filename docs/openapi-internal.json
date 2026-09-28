@@ -1172,7 +1172,7 @@
                       "results_data_ref": {
                         "eval_job": {
                           "id": "8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7",
-                          "process_benchmarks_in_parallel": true
+                          "num_parallel_threads": 2
                         }
                       },
                       "calibration_data_ref": {
@@ -1257,7 +1257,7 @@
                         "results_data_ref": {
                           "eval_job": {
                             "id": "8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7",
-                            "process_benchmarks_in_parallel": true
+                            "num_parallel_threads": 2
                           }
                         },
                         "calibration_data_ref": {
@@ -1387,7 +1387,7 @@
           "Evaluations"
         ],
         "summary": "Create Confidence Interval Post-Processing",
-        "description": "Create confidence interval computation for the benchmarks in an existing\nevaluation job. The operation is idempotent: if the same job already has a\nconfidence interval computation, the existing post-processing reference is\nreturned.\n\nThe computation runs independently for each benchmark. When\n`process_benchmarks_in_parallel` is `true`, benchmark computations may run\nin parallel; otherwise they are processed sequentially.\n",
+        "description": "Create confidence interval computation for the benchmarks in an existing\nevaluation job. The operation is idempotent: if the same job already has a\nconfidence interval computation, the existing post-processing reference is\nreturned.\n\nThe computation runs independently for each benchmark. `num_parallel_threads`\ncontrols how many benchmark computations may run in parallel; a value of 1\nprocesses them sequentially.\n",
         "operationId": "post_evaluations_jobs_job_id_post_processing",
         "parameters": [
           {
@@ -1412,7 +1412,7 @@
                   "summary": "Configure confidence interval computation",
                   "value": {
                     "confidence_interval_config": {
-                      "process_benchmarks_in_parallel": true,
+                      "num_parallel_threads": 2,
                       "hardware_config": {
                         "cpu": {
                           "request": "500m",
@@ -1522,7 +1522,7 @@
                     "owner": "nbs"
                   },
                   "confidence_interval_config": {
-                    "process_benchmarks_in_parallel": true,
+                    "num_parallel_threads": 2,
                     "calibration_data_ref": {
                       "s3": {
                         "bucket": "evaluation-data",
@@ -4999,10 +4999,11 @@
                 "type": "string",
                 "description": "Evaluation job identifier."
               },
-              "process_benchmarks_in_parallel": {
-                "type": "boolean",
-                "default": false,
-                "description": "Whether confidence intervals for the job's benchmarks may run in parallel."
+              "num_parallel_threads": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 1,
+                "description": "Number of benchmark confidence interval computations to run in parallel; 1 runs them sequentially."
               }
             },
             "required": [
@@ -5308,10 +5309,11 @@
         "title": "ConfidenceIntervalConfig",
         "description": "Configuration for confidence interval post-processing on an evaluation job.",
         "properties": {
-          "process_benchmarks_in_parallel": {
-            "type": "boolean",
-            "default": false,
-            "description": "Whether confidence intervals for the job's benchmarks may be computed in parallel."
+          "num_parallel_threads": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Number of benchmark confidence interval computations to run in parallel; 1 runs them sequentially."
           },
           "hardware_config": {
             "$ref": "#/components/schemas/BenchmarkHardwareConfig",

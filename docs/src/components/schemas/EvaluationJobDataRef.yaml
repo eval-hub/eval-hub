@@ -9,10 +9,11 @@ properties:
       id:
         type: string
         description: Evaluation job identifier.
-      process_benchmarks_in_parallel:
-        type: boolean
-        default: false
-        description: Whether confidence intervals for the job's benchmarks may run in parallel.
+      num_parallel_threads:
+        type: integer
+        minimum: 1
+        default: 1
+        description: Number of benchmark confidence interval computations to run in parallel; 1 runs them sequentially.
     required:
       - id
     additionalProperties: false

@@ -2,10 +2,11 @@ type: object
 title: ConfidenceIntervalConfig
 description: Configuration for confidence interval post-processing on an evaluation job.
 properties:
-  process_benchmarks_in_parallel:
-    type: boolean
-    default: false
-    description: Whether confidence intervals for the job's benchmarks may be computed in parallel.
+  num_parallel_threads:
+    type: integer
+    minimum: 1
+    default: 1
+    description: Number of benchmark confidence interval computations to run in parallel; 1 runs them sequentially.
   hardware_config:
     $ref: ./BenchmarkHardwareConfig.yaml
     description: Optional hardware override for confidence interval computation.

@@ -694,7 +694,7 @@ paths:
                     results_data_ref:
                       eval_job:
                         id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
-                        process_benchmarks_in_parallel: true
+                        num_parallel_threads: 2
                     calibration_data_ref:
                       s3:
                         bucket: evaluation-data
@@ -750,7 +750,7 @@ paths:
                       results_data_ref:
                         eval_job:
                           id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
-                          process_benchmarks_in_parallel: true
+                          num_parallel_threads: 2
                       calibration_data_ref:
                         s3:
                           bucket: evaluation-data
@@ -837,9 +837,9 @@ paths:
         confidence interval computation, the existing post-processing reference is
         returned.
 
-        The computation runs independently for each benchmark. When
-        `process_benchmarks_in_parallel` is `true`, benchmark computations may run
-        in parallel; otherwise they are processed sequentially.
+        The computation runs independently for each benchmark. `num_parallel_threads`
+        controls how many benchmark computations may run in parallel; a value of 1
+        processes them sequentially.
       operationId: post_evaluations_jobs_job_id_post_processing
       parameters:
         - name: job_id
@@ -859,7 +859,7 @@ paths:
                 summary: Configure confidence interval computation
                 value:
                   confidence_interval_config:
-                    process_benchmarks_in_parallel: true
+                    num_parallel_threads: 2
                     hardware_config:
                       cpu:
                         request: 500m
@@ -931,7 +931,7 @@ paths:
                   updated_at: '2026-09-21T05:58:29.768663Z'
                   owner: nbs
                 confidence_interval_config:
-                  process_benchmarks_in_parallel: true
+                  num_parallel_threads: 2
                   calibration_data_ref:
                     s3:
                       bucket: evaluation-data
@@ -3468,10 +3468,11 @@ components:
             id:
               type: string
               description: Evaluation job identifier.
-            process_benchmarks_in_parallel:
-              type: boolean
-              default: false
-              description: Whether confidence intervals for the job's benchmarks may run in parallel.
+            num_parallel_threads:
+              type: integer
+              minimum: 1
+              default: 1
+              description: Number of benchmark confidence interval computations to run in parallel; 1 runs them sequentially.
           required:
             - id
           additionalProperties: false
@@ -3685,10 +3686,11 @@ components:
       title: ConfidenceIntervalConfig
       description: Configuration for confidence interval post-processing on an evaluation job.
       properties:
-        process_benchmarks_in_parallel:
-          type: boolean
-          default: false
-          description: Whether confidence intervals for the job's benchmarks may be computed in parallel.
+        num_parallel_threads:
+          type: integer
+          minimum: 1
+          default: 1
+          description: Number of benchmark confidence interval computations to run in parallel; 1 runs them sequentially.
         hardware_config:
           $ref: '#/components/schemas/BenchmarkHardwareConfig'
           description: Optional hardware override for confidence interval computation.
