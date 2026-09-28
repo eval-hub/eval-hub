@@ -189,11 +189,15 @@ func TestCreateListEntitiesStatement(t *testing.T) {
 	}
 
 	curatedStmt, _ := f.CreateListEntitiesStatement("t1", shared.TableCollections, 10, 0, map[string]any{}, "curation_order")
-	if !strings.Contains(curatedStmt, "NULLIF((entity->>'curation_order')::integer, 0) ASC NULLS LAST, id DESC") {
+	if !strings.Contains(curatedStmt, "NULLIF((entity->>'curation_order')::bigint, 0) ASC NULLS LAST, id DESC") {
 		t.Errorf("expected JSONB curation order, got: %s", curatedStmt)
 	}
-	if !strings.Contains(f.GetTablesSchema(), "idx_collections_curation_order_json") {
+	schema := f.GetTablesSchema()
+	if !strings.Contains(schema, "idx_collections_curation_order_json") {
 		t.Error("expected JSONB curation-order expression index in schema")
+	}
+	if !strings.Contains(schema, "NULLIF((entity->>'curation_order')::bigint, 0)) ASC NULLS LAST, id DESC") {
+		t.Errorf("expected bigint curation-order index expression, got: %s", schema)
 	}
 }
 

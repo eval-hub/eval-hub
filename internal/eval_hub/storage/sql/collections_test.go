@@ -848,9 +848,11 @@ func testCollectionsSortByCurationOrder(t *testing.T, driver, databaseName strin
 		testSystemCollection("z-uncurated", "Uncurated", "uncurated"),
 		testSystemCollection("b-curated-second", "Second", "second curated"),
 		testSystemCollection("a-curated-first", "First", "first curated"),
+		testSystemCollection("c-curated-large", "Large", "large curated"),
 	}
 	collections[1].CurationOrder = 2
 	collections[2].CurationOrder = 1
+	collections[3].CurationOrder = math.MaxInt32 + 1
 	for i := range collections {
 		if err := store.CreateCollection(&collections[i]); err != nil {
 			t.Fatalf("CreateCollection(%s): %v", collections[i].Resource.ID, err)
@@ -873,11 +875,11 @@ func testCollectionsSortByCurationOrder(t *testing.T, driver, databaseName strin
 	if err != nil {
 		t.Fatalf("GetCollections sorted by curation_order: %v", err)
 	}
-	assertIDs(sorted.Items, []string{"a-curated-first", "b-curated-second", "z-uncurated"})
+	assertIDs(sorted.Items, []string{"a-curated-first", "b-curated-second", "c-curated-large", "z-uncurated"})
 
 	defaultOrder, err := store.GetCollections(&abstractions.QueryFilter{Limit: 10, Params: map[string]any{}})
 	if err != nil {
 		t.Fatalf("GetCollections with default ordering: %v", err)
 	}
-	assertIDs(defaultOrder.Items, []string{"z-uncurated", "b-curated-second", "a-curated-first"})
+	assertIDs(defaultOrder.Items, []string{"z-uncurated", "c-curated-large", "b-curated-second", "a-curated-first"})
 }

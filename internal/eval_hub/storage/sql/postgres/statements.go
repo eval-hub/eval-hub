@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS collections (
 );
 
 CREATE INDEX IF NOT EXISTS idx_collections_curation_order_json
-ON collections ((NULLIF((entity->>'curation_order')::integer, 0)) ASC NULLS LAST, id DESC);
+ON collections ((NULLIF((entity->>'curation_order')::bigint, 0)) ASC NULLS LAST, id DESC);
 
 CREATE TABLE IF NOT EXISTS providers (
     id VARCHAR(36) NOT NULL,
@@ -173,7 +173,7 @@ func (s *postgresStatementsFactory) CreateListEntitiesStatement(tenant api.Tenan
 	where, whereArgs := s.getWhereStatement(tenant, "", 1) // we don't need to filter by id as we want to list all entities
 	orderBy := "id DESC"
 	if tableName == shared.TableCollections && sortBy == "curation_order" {
-		orderBy = "NULLIF((entity->>'curation_order')::integer, 0) ASC NULLS LAST, id DESC"
+		orderBy = "NULLIF((entity->>'curation_order')::bigint, 0) ASC NULLS LAST, id DESC"
 	}
 	filterClause, args := shared.CreateFilterStatement(s, where, whereArgs, filter, orderBy, limit, offset, tableName)
 
