@@ -20,10 +20,10 @@ post:
                     id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
                     num_parallel_threads: 2
                 calibration_data_ref:
-                  s3:
-                    bucket: evaluation-data
-                    key: calibration/accuracy
-                    secret_ref: evaluation-s3
+                  - s3:
+                      bucket: evaluation-data
+                      key: calibration/accuracy
+                      secret_ref: evaluation-s3
                 significance_level: 0.7
   responses:
     '202':

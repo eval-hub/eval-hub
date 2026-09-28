@@ -1175,13 +1175,15 @@
                           "num_parallel_threads": 2
                         }
                       },
-                      "calibration_data_ref": {
-                        "s3": {
-                          "bucket": "evaluation-data",
-                          "key": "calibration/accuracy",
-                          "secret_ref": "evaluation-s3"
+                      "calibration_data_ref": [
+                        {
+                          "s3": {
+                            "bucket": "evaluation-data",
+                            "key": "calibration/accuracy",
+                            "secret_ref": "evaluation-s3"
+                          }
                         }
-                      },
+                      ],
                       "significance_level": 0.7
                     }
                   }
@@ -1260,13 +1262,15 @@
                             "num_parallel_threads": 2
                           }
                         },
-                        "calibration_data_ref": {
-                          "s3": {
-                            "bucket": "evaluation-data",
-                            "key": "calibration/accuracy",
-                            "secret_ref": "evaluation-s3"
+                        "calibration_data_ref": [
+                          {
+                            "s3": {
+                              "bucket": "evaluation-data",
+                              "key": "calibration/accuracy",
+                              "secret_ref": "evaluation-s3"
+                            }
                           }
-                        },
+                        ],
                         "significance_level": 0.7
                       },
                       "status": {
@@ -1313,13 +1317,15 @@
                             "secret_ref": "evaluation-s3"
                           }
                         },
-                        "calibration_data_ref": {
-                          "s3": {
-                            "bucket": "evaluation-data",
-                            "key": "calibration/accuracy",
-                            "secret_ref": "evaluation-s3"
+                        "calibration_data_ref": [
+                          {
+                            "s3": {
+                              "bucket": "evaluation-data",
+                              "key": "calibration/accuracy",
+                              "secret_ref": "evaluation-s3"
+                            }
                           }
-                        },
+                        ],
                         "significance_level": 0.7
                       },
                       "status": {
@@ -1423,13 +1429,15 @@
                           "limit": "4Gi"
                         }
                       },
-                      "calibration_data_ref": {
-                        "s3": {
-                          "bucket": "evaluation-data",
-                          "key": "calibration/accuracy",
-                          "secret_ref": "evaluation-s3"
+                      "calibration_data_ref": [
+                        {
+                          "s3": {
+                            "bucket": "evaluation-data",
+                            "key": "calibration/accuracy",
+                            "secret_ref": "evaluation-s3"
+                          }
                         }
-                      },
+                      ],
                       "significance_level": 0.7
                     }
                   }
@@ -1523,13 +1531,15 @@
                   },
                   "confidence_interval_config": {
                     "num_parallel_threads": 2,
-                    "calibration_data_ref": {
-                      "s3": {
-                        "bucket": "evaluation-data",
-                        "key": "calibration/accuracy",
-                        "secret_ref": "evaluation-s3"
+                    "calibration_data_ref": [
+                      {
+                        "s3": {
+                          "bucket": "evaluation-data",
+                          "key": "calibration/accuracy",
+                          "secret_ref": "evaluation-s3"
+                        }
                       }
-                    },
+                    ],
                     "significance_level": 0.7
                   },
                   "status": {
@@ -5120,8 +5130,12 @@
             "description": "Result data reference. An evaluation job is supported only for result data."
           },
           "calibration_data_ref": {
-            "$ref": "#/components/schemas/TestDataRef",
-            "description": "Reference to labeled calibration data using the same sources as test_data_ref."
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/TestDataRef"
+            },
+            "description": "References to the labeled calibration data used by the computation."
           },
           "significance_level": {
             "type": "number",
@@ -5320,8 +5334,12 @@
             "description": "Optional hardware override for confidence interval computation."
           },
           "calibration_data_ref": {
-            "$ref": "#/components/schemas/TestDataRef",
-            "description": "Reference to the labeled calibration data used by the computation."
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/TestDataRef"
+            },
+            "description": "References to the labeled calibration data used by the computation."
           },
           "significance_level": {
             "type": "number",

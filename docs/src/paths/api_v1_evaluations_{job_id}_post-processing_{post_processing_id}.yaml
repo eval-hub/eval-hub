@@ -34,10 +34,10 @@ get:
             confidence_interval_config:
               num_parallel_threads: 2
               calibration_data_ref:
-                s3:
-                  bucket: evaluation-data
-                  key: calibration/accuracy
-                  secret_ref: evaluation-s3
+                - s3:
+                    bucket: evaluation-data
+                    key: calibration/accuracy
+                    secret_ref: evaluation-s3
               significance_level: 0.7
             status:
               state: completed

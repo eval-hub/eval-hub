@@ -826,10 +826,10 @@ paths:
                         id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
                         num_parallel_threads: 2
                     calibration_data_ref:
-                      s3:
-                        bucket: evaluation-data
-                        key: calibration/accuracy
-                        secret_ref: evaluation-s3
+                      - s3:
+                          bucket: evaluation-data
+                          key: calibration/accuracy
+                          secret_ref: evaluation-s3
                     significance_level: 0.7
       responses:
         '202':
@@ -882,10 +882,10 @@ paths:
                           id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
                           num_parallel_threads: 2
                       calibration_data_ref:
-                        s3:
-                          bucket: evaluation-data
-                          key: calibration/accuracy
-                          secret_ref: evaluation-s3
+                        - s3:
+                            bucket: evaluation-data
+                            key: calibration/accuracy
+                            secret_ref: evaluation-s3
                       significance_level: 0.7
                     status:
                       state: completed
@@ -918,10 +918,10 @@ paths:
                           key: results/accuracy
                           secret_ref: evaluation-s3
                       calibration_data_ref:
-                        s3:
-                          bucket: evaluation-data
-                          key: calibration/accuracy
-                          secret_ref: evaluation-s3
+                        - s3:
+                            bucket: evaluation-data
+                            key: calibration/accuracy
+                            secret_ref: evaluation-s3
                       significance_level: 0.7
                     status:
                       state: completed
@@ -998,10 +998,10 @@ paths:
                         request: 1Gi
                         limit: 4Gi
                     calibration_data_ref:
-                      s3:
-                        bucket: evaluation-data
-                        key: calibration/accuracy
-                        secret_ref: evaluation-s3
+                      - s3:
+                          bucket: evaluation-data
+                          key: calibration/accuracy
+                          secret_ref: evaluation-s3
                     significance_level: 0.7
       responses:
         '200':
@@ -1063,10 +1063,10 @@ paths:
                 confidence_interval_config:
                   num_parallel_threads: 2
                   calibration_data_ref:
-                    s3:
-                      bucket: evaluation-data
-                      key: calibration/accuracy
-                      secret_ref: evaluation-s3
+                    - s3:
+                        bucket: evaluation-data
+                        key: calibration/accuracy
+                        secret_ref: evaluation-s3
                   significance_level: 0.7
                 status:
                   state: completed
@@ -3765,8 +3765,11 @@ components:
             - $ref: '#/components/schemas/ExternalResultsDataRef'
           description: Result data reference. An evaluation job is supported only for result data.
         calibration_data_ref:
-          $ref: '#/components/schemas/TestDataRef'
-          description: Reference to labeled calibration data using the same sources as test_data_ref.
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/TestDataRef'
+          description: References to the labeled calibration data used by the computation.
         significance_level:
           type: number
           format: float
@@ -3911,8 +3914,11 @@ components:
           $ref: '#/components/schemas/BenchmarkHardwareConfig'
           description: Optional hardware override for confidence interval computation.
         calibration_data_ref:
-          $ref: '#/components/schemas/TestDataRef'
-          description: Reference to the labeled calibration data used by the computation.
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/TestDataRef'
+          description: References to the labeled calibration data used by the computation.
         significance_level:
           type: number
           format: float

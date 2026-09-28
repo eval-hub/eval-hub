@@ -39,10 +39,10 @@ post:
                     request: 1Gi
                     limit: "4Gi"
                 calibration_data_ref:
-                  s3:
-                    bucket: evaluation-data
-                    key: calibration/accuracy
-                    secret_ref: evaluation-s3
+                  - s3:
+                      bucket: evaluation-data
+                      key: calibration/accuracy
+                      secret_ref: evaluation-s3
                 significance_level: 0.7
   responses:
     '200':
