@@ -2,10 +2,6 @@ type: object
 title: StandaloneConfidenceIntervalConfig
 description: Configuration for a standalone confidence interval computation.
 properties:
-  process_benchmarks_in_parallel:
-    type: boolean
-    default: false
-    description: Whether benchmark computations may run in parallel.
   hardware_config:
     $ref: ./BenchmarkHardwareConfig.yaml
     description: Optional hardware override for the computation.

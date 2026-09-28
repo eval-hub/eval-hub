@@ -1171,7 +1171,8 @@
                     "confidence_interval_config": {
                       "results_data_ref": {
                         "eval_job": {
-                          "id": "8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7"
+                          "id": "8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7",
+                          "process_benchmarks_in_parallel": true
                         }
                       },
                       "calibration_data_ref": {
@@ -1255,7 +1256,8 @@
                       "confidence_interval_config": {
                         "results_data_ref": {
                           "eval_job": {
-                            "id": "8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7"
+                            "id": "8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7",
+                            "process_benchmarks_in_parallel": true
                           }
                         },
                         "calibration_data_ref": {
@@ -4853,8 +4855,23 @@
         "description": "Reference to a completed evaluation job whose stored results are consumed.",
         "properties": {
           "eval_job": {
-            "$ref": "#/components/schemas/Ref",
-            "description": "Evaluation job identifier."
+            "type": "object",
+            "description": "Evaluation job identifier and benchmark processing options.",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Evaluation job identifier."
+              },
+              "process_benchmarks_in_parallel": {
+                "type": "boolean",
+                "default": false,
+                "description": "Whether confidence intervals for the job's benchmarks may run in parallel."
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -4949,11 +4966,6 @@
         "title": "StandaloneConfidenceIntervalConfig",
         "description": "Configuration for a standalone confidence interval computation.",
         "properties": {
-          "process_benchmarks_in_parallel": {
-            "type": "boolean",
-            "default": false,
-            "description": "Whether benchmark computations may run in parallel."
-          },
           "hardware_config": {
             "$ref": "#/components/schemas/BenchmarkHardwareConfig",
             "description": "Optional hardware override for the computation."
