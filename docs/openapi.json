@@ -622,6 +622,9 @@
                           "score": 0.85,
                           "threshold": 0.5,
                           "pass": true
+                        },
+                        "post_processing_ref": {
+                          "id": "pp-1234567890ab"
                         }
                       },
                       "name": "granite-3.1-8b-safety-eval",
@@ -948,6 +951,102 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/v1/evaluations/jobs/{job_id}/post-processing": {
+      "put": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Configure Confidence Interval Post-Processing",
+        "description": "Configure confidence interval computation for the benchmarks in an existing\nevaluation job. The operation is idempotent: if the same job already has a\nconfidence interval computation, the existing post-processing reference is\nreturned.\n\nThe computation runs independently for each benchmark. When\n`process_benchmarks_in_parallel` is `true`, benchmark computations may run\nin parallel; otherwise they are processed sequentially.\n",
+        "operationId": "put_evaluations_jobs_job_id_post_processing",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfidenceIntervalPostProcessingRequest"
+              },
+              "examples": {
+                "request": {
+                  "summary": "Configure confidence interval computation",
+                  "value": {
+                    "confidence_interval_config": {
+                      "process_benchmarks_in_parallel": true,
+                      "hardware_config": {
+                        "cpu": {
+                          "request": "500m",
+                          "limit": "2"
+                        },
+                        "memory": {
+                          "request": "1Gi",
+                          "limit": "4Gi"
+                        }
+                      },
+                      "calibration_data_ref": {
+                        "s3": {
+                          "bucket": "evaluation-data",
+                          "key": "calibration/accuracy",
+                          "secret_ref": "evaluation-s3"
+                        }
+                      },
+                      "significance_level": 0.7
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Existing post-processing reference returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluationJobResource"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Confidence interval computation accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvaluationJobResource"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
           }
         }
       }
@@ -3348,6 +3447,21 @@
           }
         }
       },
+      "PostProcessingRef": {
+        "type": "object",
+        "title": "PostProcessingRef",
+        "description": "Reference to post-processing associated with an evaluation job.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Identifier of the post-processing resource."
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
       "EvaluationJobResults": {
         "type": "object",
         "description": "Results section for an evaluation job",
@@ -3366,6 +3480,10 @@
           "test": {
             "$ref": "#/components/schemas/EvaluationTest",
             "description": "Test result"
+          },
+          "post_processing_ref": {
+            "$ref": "#/components/schemas/PostProcessingRef",
+            "description": "Reference to the post-processing resource for this evaluation job"
           }
         }
       },
@@ -4185,6 +4303,52 @@
             }
           }
         ]
+      },
+      "ConfidenceIntervalConfig": {
+        "type": "object",
+        "title": "ConfidenceIntervalConfig",
+        "description": "Configuration for confidence interval post-processing.",
+        "properties": {
+          "process_benchmarks_in_parallel": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether confidence intervals for the job's benchmarks may be computed in\nparallel. The default is false.\n"
+          },
+          "hardware_config": {
+            "$ref": "#/components/schemas/BenchmarkHardwareConfig",
+            "description": "Optional hardware override for confidence interval computation."
+          },
+          "calibration_data_ref": {
+            "$ref": "#/components/schemas/TestDataRef",
+            "description": "Reference to the labeled calibration data used by the computation."
+          },
+          "significance_level": {
+            "type": "number",
+            "format": "float",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "description": "Significance level alpha. For example, 0.7 requests a 30% confidence\ninterval.\n"
+          }
+        },
+        "required": [
+          "calibration_data_ref",
+          "significance_level"
+        ],
+        "additionalProperties": false
+      },
+      "ConfidenceIntervalPostProcessingRequest": {
+        "type": "object",
+        "title": "ConfidenceIntervalPostProcessingRequest",
+        "description": "Request to configure confidence interval post-processing.",
+        "properties": {
+          "confidence_interval_config": {
+            "$ref": "#/components/schemas/ConfidenceIntervalConfig"
+          }
+        },
+        "required": [
+          "confidence_interval_config"
+        ],
+        "additionalProperties": false
       },
       "AgentMetadata": {
         "type": "object",
