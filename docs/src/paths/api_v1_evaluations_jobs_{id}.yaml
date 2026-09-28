@@ -75,6 +75,8 @@ get:
                     score: 0.85
                     threshold: 0.5
                     pass: true
+                  post_processing_ref:
+                    id: "pp-1234567890ab"
                 name: "granite-3.1-8b-safety-eval"
                 description: "Safety and reasoning evaluation for Granite 3.1 8B Instruct"
                 tags:

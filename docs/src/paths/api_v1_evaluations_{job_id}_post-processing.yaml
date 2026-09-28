@@ -1,0 +1,69 @@
+put:
+  tags:
+    - Evaluations
+  summary: Configure Confidence Interval Post-Processing
+  description: |
+    Configure confidence interval computation for the benchmarks in an existing
+    evaluation job. The operation is idempotent: if the same job already has a
+    confidence interval computation, the existing post-processing reference is
+    returned.
+
+    The computation runs independently for each benchmark. When
+    `process_benchmarks_in_parallel` is `true`, benchmark computations may run
+    in parallel; otherwise they are processed sequentially.
+  operationId: put_evaluations_jobs_job_id_post_processing
+  parameters:
+    - name: job_id
+      in: path
+      required: true
+      schema:
+        type: string
+        title: Job Id
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/ConfidenceIntervalPostProcessingRequest.yaml
+        examples:
+          request:
+            summary: Configure confidence interval computation
+            value:
+              confidence_interval_config:
+                process_benchmarks_in_parallel: true
+                hardware_config:
+                  cpu:
+                    request: 500m
+                    limit: "2"
+                  memory:
+                    request: 1Gi
+                    limit: "4Gi"
+                calibration_data_ref:
+                  s3:
+                    bucket: evaluation-data
+                    key: calibration/accuracy
+                    secret_ref: evaluation-s3
+                significance_level: 0.7
+  responses:
+    '200':
+      description: Existing post-processing reference returned
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/EvaluationJobResource.yaml
+    '202':
+      description: Confidence interval computation accepted
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/EvaluationJobResource.yaml
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml
+    '409':
+      $ref: ../components/responses/Conflict.yaml

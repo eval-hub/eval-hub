@@ -12,3 +12,6 @@ properties:
   test:
     $ref: ./EvaluationTest.yaml
     description: Test result
+  post_processing_ref:
+    $ref: ./PostProcessingRef.yaml
+    description: Reference to the post-processing resource for this evaluation job
