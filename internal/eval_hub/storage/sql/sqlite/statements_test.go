@@ -51,7 +51,7 @@ func TestCreateProviderAddEntityStatementIncludesTimestamps(t *testing.T) {
 func TestGetAllowedFilterColumns_IncludesCollectionFilters(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
 	cols := f.GetAllowedFilterColumns(shared.TableCollections)
-	required := []string{"domains", "tasks", "modalities", "industries", "evaluation_targets"}
+	required := []string{"scope", "domains", "tasks", "modalities", "industries", "evaluation_targets"}
 	colSet := make(map[string]struct{}, len(cols))
 	for _, c := range cols {
 		colSet[c] = struct{}{}
@@ -59,6 +59,12 @@ func TestGetAllowedFilterColumns_IncludesCollectionFilters(t *testing.T) {
 	for _, r := range required {
 		if _, ok := colSet[r]; !ok {
 			t.Errorf("GetAllowedFilterColumns missing %q for collections", r)
+		}
+	}
+	for _, scope := range []string{abstractions.ScopeSystem, abstractions.ScopeTenant} {
+		cond, args := f.CreateEntityFilterCondition("scope", scope, 1, shared.TableCollections)
+		if cond == "" || len(args) != 1 || args[0] != abstractions.OwnerSystem {
+			t.Errorf("scope=%q condition = %q, args=%v", scope, cond, args)
 		}
 	}
 }
