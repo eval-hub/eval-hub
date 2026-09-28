@@ -1,0 +1,27 @@
+type: object
+title: OCIDataRef
+description: Reference to a result artifact stored in an OCI registry.
+properties:
+  oci:
+    type: object
+    properties:
+      coordinates:
+        $ref: ./OCICoordinates.yaml
+        description: OCI registry and repository coordinates.
+      digest:
+        type: string
+        pattern: '^sha256:[a-f0-9]{64}$'
+        description: Optional immutable manifest digest.
+      artifact_path:
+        type: string
+        description: File or layer path within the OCI artifact to consume.
+      k8s:
+        $ref: ./OCIConnectionConfig.yaml
+        description: Optional Kubernetes Secret reference for registry authentication.
+    required:
+      - coordinates
+      - artifact_path
+    additionalProperties: false
+required:
+  - oci
+additionalProperties: false

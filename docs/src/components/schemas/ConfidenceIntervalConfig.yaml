@@ -1,0 +1,30 @@
+type: object
+title: ConfidenceIntervalConfig
+description: Configuration for confidence interval post-processing.
+properties:
+  process_benchmarks_in_parallel:
+    type: boolean
+    default: false
+    description: Whether benchmark computations may run in parallel.
+  hardware_config:
+    $ref: ./BenchmarkHardwareConfig.yaml
+    description: Optional hardware override for the computation.
+  results_data_ref:
+    oneOf:
+      - $ref: ./EvaluationJobDataRef.yaml
+      - $ref: ./ExternalResultsDataRef.yaml
+    description: Result data reference. An evaluation job is supported only for result data.
+  calibration_data_ref:
+    $ref: ./ExternalResultsDataRef.yaml
+    description: Reference to labeled calibration data; eval_job is not supported here.
+  significance_level:
+    type: number
+    format: float
+    exclusiveMinimum: 0
+    exclusiveMaximum: 1
+    description: Significance level alpha; 0.7 produces a 30% confidence interval.
+required:
+  - results_data_ref
+  - calibration_data_ref
+  - significance_level
+additionalProperties: false

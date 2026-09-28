@@ -1,0 +1,11 @@
+type: object
+title: PostProcessingResultsEvalJob
+description: Per-benchmark confidence interval results for an evaluation-job reference.
+properties:
+  benchmarks:
+    type: array
+    items:
+      $ref: ./PostProcessingBenchmarkResult.yaml
+required:
+  - benchmarks
+additionalProperties: false

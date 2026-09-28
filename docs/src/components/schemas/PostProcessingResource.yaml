@@ -1,0 +1,20 @@
+type: object
+title: PostProcessingResource
+description: Standalone confidence interval post-processing resource.
+properties:
+  resource:
+    $ref: ./Resource.yaml
+  confidence_interval_config:
+    $ref: ./ConfidenceIntervalConfig.yaml
+  status:
+    $ref: ./PostProcessingStatus.yaml
+  results:
+    oneOf:
+      - $ref: ./PostProcessingResultsEvalJob.yaml
+      - $ref: ./PostProcessingResultsExternal.yaml
+    description: Use benchmark results for eval_job data and aggregate results otherwise.
+required:
+  - resource
+  - confidence_interval_config
+  - status
+additionalProperties: false

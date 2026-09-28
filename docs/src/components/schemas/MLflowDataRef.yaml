@@ -1,0 +1,27 @@
+type: object
+title: MLflowDataRef
+description: Reference to a result artifact stored in MLflow.
+properties:
+  mlflow:
+    type: object
+    properties:
+      run_id:
+        type: string
+        description: MLflow run containing the artifact.
+      artifact_path:
+        type: string
+        description: File or directory path within the MLflow run artifacts.
+      tracking_uri:
+        type: string
+        format: uri
+        description: Optional MLflow tracking URI; the service default is used when omitted.
+      secret_ref:
+        type: string
+        description: Optional Kubernetes Secret containing MLflow credentials.
+    required:
+      - run_id
+      - artifact_path
+    additionalProperties: false
+required:
+  - mlflow
+additionalProperties: false

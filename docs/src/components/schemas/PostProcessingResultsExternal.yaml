@@ -1,0 +1,9 @@
+type: object
+title: PostProcessingResultsExternal
+description: Aggregate confidence interval result for external result data.
+properties:
+  confidence_interval:
+    $ref: ./ConfidenceInterval.yaml
+required:
+  - confidence_interval
+additionalProperties: false
