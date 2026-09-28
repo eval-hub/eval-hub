@@ -6,7 +6,7 @@ test.mergeOptional(
     name: 'test-evaluation-job-hf-credential-isolation',
     benchmarks: [
       test.hfArcEasyBenchmark({}, {
-        secret_ref: test.env('HF_SECRET_REF', 'hftoken'),
+        secret_ref: test.env('TEST_DATA_HF_SECRET_REF', 'hftoken'),
       }),
     ],
     tags: ['environment', 'hf', 'security'],

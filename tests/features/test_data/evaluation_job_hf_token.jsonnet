@@ -12,13 +12,13 @@ test.mergeOptional(
           test_data_ref: {
             hf: {
               repo_id: test.env(
-                'HF_GATED_REPO_ID',
+                'TEST_DATA_HF_GATED_REPO_ID',
                 'gated_repo',
               ),
-              revision: test.env('HF_TEST_REVISION', 'main'),
-              sub_path: test.env('HF_TEST_SUB_PATH', 'data'),
+              revision: test.env('TEST_DATA_HF_REVISION', 'main'),
+              sub_path: test.env('TEST_DATA_HF_SUB_PATH', 'data'),
               secret_ref: test.env(
-                'HF_SECRET_REF',
+                'TEST_DATA_HF_SECRET_REF',
                 'hftoken',
               ),
             },
