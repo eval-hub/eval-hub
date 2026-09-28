@@ -507,6 +507,8 @@ paths:
                         score: 0.85
                         threshold: 0.5
                         pass: true
+                      post_processing_ref:
+                        id: pp-1234567890ab
                     name: granite-3.1-8b-safety-eval
                     description: Safety and reasoning evaluation for Granite 3.1 8B Instruct
                     tags:
@@ -952,6 +954,76 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/v1/evaluations/jobs/{job_id}/post-processing:
+    put:
+      tags:
+        - Evaluations
+      summary: Configure Confidence Interval Post-Processing
+      description: |
+        Configure confidence interval computation for the benchmarks in an existing
+        evaluation job. The operation is idempotent: if the same job already has a
+        confidence interval computation, the existing post-processing reference is
+        returned.
+
+        The computation runs independently for each benchmark. When
+        `process_benchmarks_in_parallel` is `true`, benchmark computations may run
+        in parallel; otherwise they are processed sequentially.
+      operationId: put_evaluations_jobs_job_id_post_processing
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            title: Job Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfidenceIntervalPostProcessingRequest'
+            examples:
+              request:
+                summary: Configure confidence interval computation
+                value:
+                  confidence_interval_config:
+                    process_benchmarks_in_parallel: true
+                    hardware_config:
+                      cpu:
+                        request: 500m
+                        limit: '2'
+                      memory:
+                        request: 1Gi
+                        limit: 4Gi
+                    calibration_data_ref:
+                      s3:
+                        bucket: evaluation-data
+                        key: calibration/accuracy
+                        secret_ref: evaluation-s3
+                    significance_level: 0.7
+      responses:
+        '200':
+          description: Existing post-processing reference returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationJobResource'
+        '202':
+          description: Confidence interval computation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationJobResource'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /api/v1/evaluations/providers:
     get:
       tags:
@@ -2605,6 +2677,17 @@ components:
         pass:
           type: boolean
           description: Whether the entire evaluation passed
+    PostProcessingRef:
+      type: object
+      title: PostProcessingRef
+      description: Reference to post-processing associated with an evaluation job.
+      properties:
+        id:
+          type: string
+          description: Identifier of the post-processing resource.
+      required:
+        - id
+      additionalProperties: false
     EvaluationJobResults:
       type: object
       description: Results section for an evaluation job
@@ -2620,6 +2703,9 @@ components:
         test:
           $ref: '#/components/schemas/EvaluationTest'
           description: Test result
+        post_processing_ref:
+          $ref: '#/components/schemas/PostProcessingRef'
+          description: Reference to the post-processing resource for this evaluation job
     ModelAuth:
       type: object
       description: The model authentication configuration
@@ -3567,10 +3653,10 @@ components:
         - $ref: '#/components/schemas/OCIDataRef'
       title: ExternalResultsDataRef
       description: Reference to result data outside an evaluation job.
-    ConfidenceIntervalConfig:
+    StandaloneConfidenceIntervalConfig:
       type: object
-      title: ConfidenceIntervalConfig
-      description: Configuration for confidence interval post-processing.
+      title: StandaloneConfidenceIntervalConfig
+      description: Configuration for a standalone confidence interval computation.
       properties:
         process_benchmarks_in_parallel:
           type: boolean
@@ -3604,7 +3690,7 @@ components:
       description: Request to create a confidence interval post-processing resource.
       properties:
         confidence_interval_config:
-          $ref: '#/components/schemas/ConfidenceIntervalConfig'
+          $ref: '#/components/schemas/StandaloneConfidenceIntervalConfig'
       required:
         - confidence_interval_config
       additionalProperties: false
@@ -3704,7 +3790,7 @@ components:
         resource:
           $ref: '#/components/schemas/Resource'
         confidence_interval_config:
-          $ref: '#/components/schemas/ConfidenceIntervalConfig'
+          $ref: '#/components/schemas/StandaloneConfidenceIntervalConfig'
         status:
           $ref: '#/components/schemas/PostProcessingStatus'
         results:
@@ -3716,6 +3802,41 @@ components:
         - resource
         - confidence_interval_config
         - status
+      additionalProperties: false
+    ConfidenceIntervalConfig:
+      type: object
+      title: ConfidenceIntervalConfig
+      description: Configuration for confidence interval post-processing on an evaluation job.
+      properties:
+        process_benchmarks_in_parallel:
+          type: boolean
+          default: false
+          description: Whether confidence intervals for the job's benchmarks may be computed in parallel.
+        hardware_config:
+          $ref: '#/components/schemas/BenchmarkHardwareConfig'
+          description: Optional hardware override for confidence interval computation.
+        calibration_data_ref:
+          $ref: '#/components/schemas/TestDataRef'
+          description: Reference to the labeled calibration data used by the computation.
+        significance_level:
+          type: number
+          format: float
+          exclusiveMinimum: 0
+          exclusiveMaximum: 1
+          description: Significance level alpha. For example, 0.7 requests a 30% confidence interval.
+      required:
+        - calibration_data_ref
+        - significance_level
+      additionalProperties: false
+    ConfidenceIntervalPostProcessingRequest:
+      type: object
+      title: ConfidenceIntervalPostProcessingRequest
+      description: Request to configure confidence interval post-processing.
+      properties:
+        confidence_interval_config:
+          $ref: '#/components/schemas/ConfidenceIntervalConfig'
+      required:
+        - confidence_interval_config
       additionalProperties: false
     AgentMetadata:
       type: object
