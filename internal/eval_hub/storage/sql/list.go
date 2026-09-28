@@ -50,10 +50,6 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 	if err := shared.ValidateFilter(slices.Collect(maps.Keys(params)), s.statementsFactory.GetAllowedFilterColumns(tableName)); err != nil {
 		return nil, err
 	}
-	if filter.SortBy != "" && (tableName != shared.TableCollections || filter.SortBy != "curation_order") {
-		return nil, serviceerrors.NewServiceError(messages.QueryParameterValueInvalid,
-			"ParameterName", "sort_by", "AllowedValues", "curation_order")
-	}
 
 	typeName := getTypeFromTableName(tableName)
 
