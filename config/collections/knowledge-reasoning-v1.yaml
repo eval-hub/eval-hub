@@ -4,8 +4,7 @@ category: knowledge_reasoning
 description: >
   Evaluates broad academic knowledge and expert-level reasoning. GPQA-Diamond tests
   graduate-level science questions that resist internet lookup. HLE (Humanity's Last Exam)
-  is a 2,500-question frontier benchmark across dozens of subjects, designed to remain
-  unsaturated by current models.
+  is a frontier benchmark across dozens of subjects; this collection uses its text-only subset.
   Part of the Curated Collections taxonomy (#916).
 tags:
   - knowledge
@@ -13,8 +12,11 @@ tags:
   - science
   - inspect-evals
   - curated
-domains:
-  - knowledge_and_reasoning
+domains: [knowledge_and_reasoning]
+tasks: [reasoning]
+modalities: [text]
+evaluation_targets: [model]
+curation_order: 1
 pass_criteria:
   threshold: 0.235
 benchmarks:

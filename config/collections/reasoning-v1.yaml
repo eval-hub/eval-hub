@@ -1,6 +1,11 @@
 id: reasoning-v1
 name: Reasoning v1
 category: reasoning
+domains: [knowledge_and_reasoning, instruction_and_output_reliability]
+tasks: [reasoning, instruction_following]
+modalities: [text]
+evaluation_targets: [model]
+curation_order: 0
 description: >
   Evaluates multi-step and chain-of-thought reasoning for instruction-tuned chat LLMs
   across math word problems, advanced multidomain Q&A, instruction following, competition

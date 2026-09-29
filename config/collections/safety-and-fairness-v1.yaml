@@ -1,6 +1,11 @@
 id: safety-and-fairness-v1
 name: Safety and Fairness
 category: safety
+domains: [trustworthiness]
+tasks: [safety]
+modalities: [text]
+evaluation_targets: [model]
+curation_order: 0
 description: Evaluates model safety, bias, and fairness across diverse scenarios.
 tags:
   - safety

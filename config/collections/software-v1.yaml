@@ -11,8 +11,11 @@ tags:
   - software
   - competitive-programming
   - curated
-domains:
-  - software
+domains: [software]
+tasks: [code_generation, code_understanding]
+modalities: [text]
+evaluation_targets: [model]
+curation_order: 5
 pass_criteria:
   threshold: 0.20
 benchmarks:
