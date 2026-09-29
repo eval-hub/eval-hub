@@ -46,6 +46,14 @@ paths:
     $ref: paths/api_v1_evaluations_jobs_{id}_logs.yaml
   /api/v1/evaluations/jobs/{id}/benchmarks/{benchmark_index}/logs:
     $ref: paths/api_v1_evaluations_jobs_{id}_benchmarks_{benchmark_index}_logs.yaml
+  /api/v1/evaluations/post-processing:
+    $ref: paths/api_v1_evaluations_post-processing.yaml
+  /api/v1/evaluations/post-processing/{id}:
+    $ref: paths/api_v1_evaluations_post-processing_{id}.yaml
+  /api/v1/evaluations/jobs/{job_id}/post-processing:
+    $ref: paths/api_v1_evaluations_{job_id}_post-processing.yaml
+  /api/v1/evaluations/jobs/{job_id}/post-processing/{post_processing_id}:
+    $ref: paths/api_v1_evaluations_{job_id}_post-processing_{post_processing_id}.yaml
   /api/v1/evaluations/providers:
     $ref: paths/api_v1_evaluations_providers.yaml
   /api/v1/evaluations/providers/{id}:

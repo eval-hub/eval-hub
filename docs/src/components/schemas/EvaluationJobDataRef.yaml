@@ -1,0 +1,19 @@
+type: object
+title: EvaluationJobDataRef
+description: Reference to a completed evaluation job whose stored results are consumed.
+properties:
+  eval_job:
+    type: object
+    description: Evaluation job identifier and benchmark processing options.
+    properties:
+      id:
+        type: string
+        description: Evaluation job identifier.
+      num_parallel_threads:
+        $ref: ./NumParallelThreads.yaml
+    required:
+      - id
+    additionalProperties: false
+required:
+  - eval_job
+additionalProperties: false

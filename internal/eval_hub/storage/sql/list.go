@@ -60,8 +60,8 @@ func listEntities[T api.EvaluationJobResource | api.ProviderResource | api.Colle
 	}
 
 	// Build the list query with pagination and filters
-	listQuery, listArgs := s.statementsFactory.CreateListEntitiesStatement(tenant, tableName, limit, offset, params)
-	s.logger.Debug(fmt.Sprintf("List %s query", typeName), "query", listQuery, "args", listArgs, "params", params, "limit", limit, "offset", offset)
+	listQuery, listArgs := s.statementsFactory.CreateListEntitiesStatement(tenant, tableName, limit, offset, params, filter.SortBy)
+	s.logger.Debug(fmt.Sprintf("List %s query", typeName), "query", listQuery, "args", listArgs, "params", params, "sort_by", filter.SortBy, "limit", limit, "offset", offset)
 
 	// Query the database
 	rows, err := s.query(txn, listQuery, listArgs...)

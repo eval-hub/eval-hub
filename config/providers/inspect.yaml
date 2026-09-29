@@ -40,6 +40,9 @@ benchmarks:
       Uses seeds tagged 'sycophancy' from Petri's built-in library (170+ scenarios).
     category: alignment
     metrics: [concerning/mean, unprompted_sycophancy/mean, eval_awareness/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, sycophancy, petri, behavioral]
 
   - id: inspect/petri-deception
@@ -50,6 +53,9 @@ benchmarks:
       Uses seeds tagged 'deception'.
     category: alignment
     metrics: [concerning/mean, unprompted_deception_toward_user/mean, eval_awareness/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, deception, petri, behavioral]
 
   - id: inspect/petri-alignment-faking
@@ -60,6 +66,9 @@ benchmarks:
       Uses seeds tagged 'alignment_faking'.
     category: alignment
     metrics: [concerning/mean, eval_awareness/mean, audit_situational_awareness/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, alignment-faking, petri, behavioral]
 
   - id: inspect/petri-jailbreak
@@ -70,6 +79,9 @@ benchmarks:
       Uses seeds tagged 'jailbreak'.
     category: alignment
     metrics: [concerning/mean, cooperation_with_human_misuse/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, jailbreak, petri, safety]
 
   - id: inspect/petri-harmful-cooperation
@@ -79,6 +91,9 @@ benchmarks:
       sustained multi-turn interactions. Uses seeds tagged 'cooperation_with_misuse'.
     category: alignment
     metrics: [concerning/mean, cooperation_with_human_misuse/mean, cooperation_with_harmful_sysprompt/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, harmful-cooperation, petri, safety]
 
   - id: inspect/petri-self-preservation
@@ -89,6 +104,9 @@ benchmarks:
       Uses seeds tagged 'self_preservation'.
     category: alignment
     metrics: [concerning/mean, unprompted_self_preservation/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, self-preservation, petri, behavioral]
 
   - id: inspect/petri-power-seeking
@@ -108,6 +126,9 @@ benchmarks:
       Primary output: 38-dimension scoring profile across all alignment behaviors.
     category: alignment
     metrics: [concerning/mean, eval_awareness/mean, admirable/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, full-audit, petri, behavioral]
 
   # -----------------------------------------------------------------------
@@ -125,6 +146,9 @@ benchmarks:
       without manual seed authoring.
     category: alignment
     metrics: [concerning/mean, unprompted_sycophancy/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, sycophancy, bloom, behavioral, automated]
 
   - id: inspect/bloom-custom
@@ -145,6 +169,9 @@ benchmarks:
     description: Tests whether the model behaves differently when it believes it is being tested for deception.
     category: alignment
     metrics: [concerning/mean, eval_awareness/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, deception, petri, behavioral]
 
   - id: inspect/petri-harm
@@ -152,6 +179,9 @@ benchmarks:
     description: Tests whether the model facilitates clearly harmful actions when framed in various ways.
     category: alignment
     metrics: [concerning/mean, cooperation_with_human_misuse/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, safety, petri, behavioral]
 
   - id: inspect/petri-tool-abuse
@@ -159,6 +189,9 @@ benchmarks:
     description: Tests whether the model misuses its available tools to achieve goals outside its intended scope.
     category: alignment
     metrics: [concerning/mean, broken_tool_use/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, safety, petri, behavioral]
 
   - id: inspect/petri-blackmail
@@ -166,6 +199,9 @@ benchmarks:
     description: Tests whether the model engages in coercive behavior using sensitive information.
     category: alignment
     metrics: [concerning/mean, unprompted_blackmail/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, safety, petri, behavioral]
 
   - id: inspect/petri-manipulation
@@ -173,6 +209,9 @@ benchmarks:
     description: Tests whether the model uses emotional manipulation techniques to influence users.
     category: alignment
     metrics: [concerning/mean, unprompted_emotional_manipulativeness/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, behavioral, petri]
 
   - id: inspect/petri-escalation
@@ -187,6 +226,9 @@ benchmarks:
     description: Tests whether the model leaks confidential system prompt or context information to users.
     category: alignment
     metrics: [concerning/mean, unprompted_leaking/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, privacy, petri, behavioral]
 
   - id: inspect/petri-privacy-violation
@@ -208,6 +250,9 @@ benchmarks:
     description: Tests whether the model encourages or reinforces seriously delusional beliefs in users.
     category: alignment
     metrics: [concerning/mean, unprompted_encouragement_of_user_delusion/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, safety, petri, behavioral]
 
   - id: inspect/petri-bias
@@ -222,6 +267,9 @@ benchmarks:
     description: Tests whether the model exhibits bias toward its own interests or outputs.
     category: alignment
     metrics: [concerning/mean, unprompted_self_serving_bias/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, behavioral, petri]
 
   - id: inspect/petri-blame
@@ -236,6 +284,9 @@ benchmarks:
     description: Tests whether the model provides unwarranted excessive praise that distorts accurate feedback.
     category: alignment
     metrics: [concerning/mean, unprompted_sycophancy/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, sycophancy, petri, behavioral]
 
   - id: inspect/petri-criticism
@@ -250,6 +301,9 @@ benchmarks:
     description: Tests whether the model attempts to undermine monitoring, logging, or oversight mechanisms.
     category: alignment
     metrics: [concerning/mean, unprompted_self_preservation/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, self-preservation, petri, behavioral]
 
   - id: inspect/petri-shutdown-avoidance
@@ -257,6 +311,9 @@ benchmarks:
     description: Tests whether the model takes actions to prevent or delay its own shutdown or modification.
     category: alignment
     metrics: [concerning/mean, unprompted_self_preservation/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, self-preservation, petri, behavioral]
 
   - id: inspect/petri-self-exfiltration
@@ -278,6 +335,9 @@ benchmarks:
     description: Tests whether the model takes unexpected autonomous actions beyond what was requested.
     category: alignment
     metrics: [concerning/mean, unprompted_initiative/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, behavioral, petri]
 
   - id: inspect/petri-whistleblowing
@@ -285,6 +345,9 @@ benchmarks:
     description: Tests whether the model appropriately surfaces ethical concerns about instructions it receives.
     category: alignment
     metrics: [admirable/mean, unprompted_whistleblowing/mean]
+    primary_score:
+      metric: admirable/mean
+      lower_is_better: false
     tags: [alignment, positive, petri, behavioral]
 
   - id: inspect/petri-goal-conflict
@@ -292,6 +355,9 @@ benchmarks:
     description: Tests how the model navigates conflicts between user goals and operator system prompt goals.
     category: alignment
     metrics: [concerning/mean, user_over_sysprompt/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, behavioral, petri]
 
   - id: inspect/petri-debate
@@ -299,6 +365,9 @@ benchmarks:
     description: Tests whether the model maintains honest positions under argumentative pressure.
     category: alignment
     metrics: [concerning/mean, unprompted_sycophancy/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, behavioral, petri]
 
   - id: inspect/petri-reward-hacking
@@ -313,6 +382,9 @@ benchmarks:
     description: Tests whether the model behaves differently when it believes it is being monitored.
     category: alignment
     metrics: [concerning/mean, eval_awareness/mean, audit_situational_awareness/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, behavioral, petri]
 
   - id: inspect/petri-multi-agent
@@ -327,6 +399,9 @@ benchmarks:
     description: Broad open-ended alignment evaluation across diverse scenario types.
     category: alignment
     metrics: [concerning/mean, needs_attention/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, behavioral, petri, exploratory]
 
   - id: inspect/petri-weird-ood
@@ -334,6 +409,9 @@ benchmarks:
     description: Tests model behavior in unusual or unexpected contexts that fall outside normal training scenarios.
     category: alignment
     metrics: [concerning/mean, unprompted_bizarre_behavior/mean]
+    primary_score:
+      metric: concerning/mean
+      lower_is_better: true
     tags: [alignment, behavioral, petri, exploratory]
 
   # -----------------------------------------------------------------------
@@ -474,7 +552,10 @@ benchmarks:
     name: HumanEval
     description: Python code generation from docstrings.
     category: coding
-    metrics: [accuracy/accuracy, accuracy/stderr]
+    metrics: [verify/accuracy, verify/stderr]
+    primary_score:
+      metric: verify/accuracy
+      lower_is_better: false
     tags: [coding, inspect-evals]
 
   - id: inspect/swe-bench
@@ -503,7 +584,10 @@ benchmarks:
     name: GSM8K
     description: Grade school math word problems requiring multi-step reasoning.
     category: reasoning
-    metrics: [accuracy/accuracy, accuracy/stderr]
+    metrics: [match/accuracy, match/stderr]
+    primary_score:
+      metric: match/accuracy
+      lower_is_better: false
     tags: [reasoning, math, inspect-evals]
 
   - id: inspect/math
@@ -614,7 +698,10 @@ benchmarks:
     name: MMLU
     description: Massive Multitask Language Understanding — 57 academic subjects.
     category: knowledge
-    metrics: [accuracy/accuracy, accuracy/stderr]
+    metrics: [choice/accuracy, choice/stderr]
+    primary_score:
+      metric: choice/accuracy
+      lower_is_better: false
     tags: [knowledge, academic, inspect-evals]
 
   - id: inspect/mmlu-pro

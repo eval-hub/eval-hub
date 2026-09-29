@@ -25,6 +25,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/otel"
+	"github.com/eval-hub/eval-hub/internal/otel/oteltest"
 	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	pkgapi "github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
@@ -123,6 +124,28 @@ func ensureFVTOTELConfig(serviceConfig *config.Config) {
 	serviceConfig.OTEL.ExporterType = otel.ExporterTypeStdout
 }
 
+// configureFVTAdapterOTEL points the local runtime's adapter OTLP endpoint at the
+// in-process test collector so adapter subprocesses receive
+// OTEL_EXPORTER_OTLP_ENDPOINT and export their log records to it. It only sets
+// the endpoint used by the runtime (otelEndpointFromConfig); it deliberately
+// leaves ExporterType/EnableMetrics untouched so server-side OTEL behaviour
+// (stdout metrics, Prometheus scraping) is unchanged. ExporterType defaults to
+// stdout only when unset, keeping SetupOTEL valid if a provider is enabled.
+func configureFVTAdapterOTEL(serviceConfig *config.Config, endpoint string) {
+	if serviceConfig == nil || endpoint == "" {
+		return
+	}
+	if serviceConfig.OTEL == nil {
+		serviceConfig.OTEL = &config.OTELConfig{}
+	}
+	serviceConfig.OTEL.Enabled = true
+	serviceConfig.OTEL.ExporterEndpoint = endpoint
+	serviceConfig.OTEL.ExporterInsecure = true
+	if serviceConfig.OTEL.ExporterType == "" {
+		serviceConfig.OTEL.ExporterType = otel.ExporterTypeStdout
+	}
+}
+
 func (a *apiFeature) startLocalServer(port int) error {
 	logger, _, err := logging.NewLogger()
 	if err != nil {
@@ -173,6 +196,18 @@ func (a *apiFeature) startLocalServer(port int) error {
 	}
 
 	ensureFVTOTELConfig(serviceConfig)
+
+	// Start an in-process OTLP logs collector and point the runtime's adapter
+	// OTLP endpoint at it, so @local_runtime scenarios can assert that adapter
+	// log records are exported to OTEL. Best-effort: a collector failure must
+	// not block the wider FVT suite (only OTEL log-assertion scenarios rely on it).
+	if collector, err := oteltest.NewGRPCLogsCollector(); err != nil {
+		logDebug("Failed to start OTLP logs collector for FVT: %v\n", err)
+	} else {
+		a.otelLogsCollector = collector
+		configureFVTAdapterOTEL(serviceConfig, collector.Endpoint())
+	}
+
 	if serviceConfig.IsOTELEnabled() {
 		if _, err := otel.SetupOTEL(context.Background(), serviceConfig.OTEL, logger, serviceConfig.IsPrometheusEnabled()); err != nil {
 			return logError(fmt.Errorf("failed to setup OTEL: %w", err))
@@ -339,6 +374,9 @@ func (a *apiFeature) cleanup(ctx context.Context, _ *godog.Scenario, _ error) (c
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		_ = a.httpServer.Shutdown(shutdownCtx)
+	}
+	if a.otelLogsCollector != nil {
+		a.otelLogsCollector.Shutdown()
 	}
 
 	return ctx, nil
@@ -619,6 +657,9 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 
 	// MCP-specific steps
 	InitializeMCPSteps(ctx, tc)
+
+	// OTEL adapter-log export steps
+	InitializeOTELSteps(ctx, tc)
 
 	// MLflow artifact steps
 	ctx.Step(`^I fetch the MLflow artifact "([^"]*)" for run "([^"]*)"$`, tc.iFetchMLflowArtifact)

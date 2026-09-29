@@ -1,0 +1,6 @@
+oneOf:
+  - $ref: ./TestDataRef.yaml
+  - $ref: ./MLflowDataRef.yaml
+  - $ref: ./OCIDataRef.yaml
+title: ExternalResultsDataRef
+description: Reference to result data outside an evaluation job.
