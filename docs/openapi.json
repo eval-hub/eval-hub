@@ -1258,7 +1258,7 @@
         },
         "responses": {
           "200": {
-            "description": "Existing post-processing reference returned",
+            "description": "The existing evaluation-job resource is returned. To find the post-processing job ID, read the value at `results.post_processing_ref.id` in the response.\n",
             "content": {
               "application/json": {
                 "schema": {
@@ -1268,7 +1268,7 @@
             }
           },
           "202": {
-            "description": "Confidence interval computation accepted",
+            "description": "The evaluation-job resource is returned after the computation is accepted. To find the post-processing job ID, read the value at `results.post_processing_ref.id` in the response.\n",
             "content": {
               "application/json": {
                 "schema": {

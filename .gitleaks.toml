@@ -5,6 +5,7 @@ useDefault = true
 
 [[allowlists]]
 description = "Documented placeholder secret reference in generated OpenAPI HTML"
+condition = "AND"
 paths = ['''(^|/)docs/index(-private|-public)?\.html$''']
-regexTarget = "line"
-regexes = ['''"secret_ref":"evaluation-s3"''']
+regexTarget = "secret"
+regexes = ['''^evaluation-s3$''']
