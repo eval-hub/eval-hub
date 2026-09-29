@@ -14,6 +14,7 @@ post:
           eval_job:
             summary: Compute confidence intervals from an evaluation job
             value:
+              name: inspect-accuracy-confidence-interval
               confidence_interval_config:
                 results_data_ref:
                   eval_job:

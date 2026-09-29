@@ -820,6 +820,7 @@ paths:
               eval_job:
                 summary: Compute confidence intervals from an evaluation job
                 value:
+                  name: inspect-accuracy-confidence-interval
                   confidence_interval_config:
                     results_data_ref:
                       eval_job:
@@ -876,6 +877,7 @@ paths:
                       created_at: '2026-09-21T05:57:34.477263Z'
                       updated_at: '2026-09-21T05:58:29.768663Z'
                       owner: nbs
+                    name: inspect-accuracy-confidence-interval
                     confidence_interval_config:
                       results_data_ref:
                         eval_job:
@@ -911,6 +913,7 @@ paths:
                       created_at: '2026-09-21T05:57:34.477263Z'
                       updated_at: '2026-09-21T05:58:29.768663Z'
                       owner: nbs
+                    name: external-accuracy-confidence-interval
                     confidence_interval_config:
                       results_data_ref:
                         s3:
@@ -988,6 +991,7 @@ paths:
               request:
                 summary: Configure confidence interval computation
                 value:
+                  name: inspect-accuracy-confidence-interval
                   confidence_interval_config:
                     num_parallel_threads: 2
                     hardware_config:
@@ -1060,6 +1064,7 @@ paths:
                   created_at: '2026-09-21T05:57:34.477263Z'
                   updated_at: '2026-09-21T05:58:29.768663Z'
                   owner: nbs
+                name: inspect-accuracy-confidence-interval
                 confidence_interval_config:
                   num_parallel_threads: 2
                   calibration_data_ref:
@@ -3669,6 +3674,35 @@ components:
       properties:
         benchmark_status_event:
           $ref: '#/components/schemas/BenchmarkStatusEvent'
+    ConfidenceIntervalConfigCommon:
+      type: object
+      title: ConfidenceIntervalConfigCommon
+      description: Common configuration for confidence interval post-processing.
+      properties:
+        hardware_config:
+          $ref: '#/components/schemas/BenchmarkHardwareConfig'
+          description: Optional hardware override for confidence interval computation.
+        calibration_data_ref:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/TestDataRef'
+          description: References to the labeled calibration data used by the computation.
+        significance_level:
+          type: number
+          format: float
+          exclusiveMinimum: 0
+          exclusiveMaximum: 1
+          description: Significance level alpha. For example, 0.7 requests a 30% confidence interval.
+      required:
+        - calibration_data_ref
+        - significance_level
+    NumParallelThreads:
+      type: integer
+      title: NumParallelThreads
+      minimum: 1
+      default: 1
+      description: Number of benchmark confidence interval computations to run in parallel; 1 runs them sequentially.
     EvaluationJobDataRef:
       type: object
       title: EvaluationJobDataRef
@@ -3682,10 +3716,7 @@ components:
               type: string
               description: Evaluation job identifier.
             num_parallel_threads:
-              type: integer
-              minimum: 1
-              default: 1
-              description: Number of benchmark confidence interval computations to run in parallel; 1 runs them sequentially.
+              $ref: '#/components/schemas/NumParallelThreads'
           required:
             - id
           additionalProperties: false
@@ -3752,40 +3783,30 @@ components:
       type: object
       title: StandaloneConfidenceIntervalConfig
       description: Configuration for a standalone confidence interval computation.
-      properties:
-        hardware_config:
-          $ref: '#/components/schemas/BenchmarkHardwareConfig'
-          description: Optional hardware override for the computation.
-        results_data_ref:
-          oneOf:
-            - $ref: '#/components/schemas/EvaluationJobDataRef'
-            - $ref: '#/components/schemas/ExternalResultsDataRef'
-          description: Result data reference. An evaluation job is supported only for result data.
-        calibration_data_ref:
-          type: array
-          minItems: 1
-          items:
-            $ref: '#/components/schemas/TestDataRef'
-          description: References to the labeled calibration data used by the computation.
-        significance_level:
-          type: number
-          format: float
-          exclusiveMinimum: 0
-          exclusiveMaximum: 1
-          description: Significance level alpha; 0.7 produces a 30% confidence interval.
-      required:
-        - results_data_ref
-        - calibration_data_ref
-        - significance_level
-      additionalProperties: false
+      allOf:
+        - $ref: '#/components/schemas/ConfidenceIntervalConfigCommon'
+        - type: object
+          properties:
+            results_data_ref:
+              oneOf:
+                - $ref: '#/components/schemas/EvaluationJobDataRef'
+                - $ref: '#/components/schemas/ExternalResultsDataRef'
+              description: Result data reference. An evaluation job is supported only for result data.
+          required:
+            - results_data_ref
+      unevaluatedProperties: false
     StandalonePostProcessingRequest:
       type: object
       title: StandalonePostProcessingRequest
       description: Request to create a confidence interval post-processing resource.
       properties:
+        name:
+          type: string
+          description: Name for the confidence interval post-processing computation.
         confidence_interval_config:
           $ref: '#/components/schemas/StandaloneConfidenceIntervalConfig'
       required:
+        - name
         - confidence_interval_config
       additionalProperties: false
     PostProcessingStatus:
@@ -3883,6 +3904,9 @@ components:
       properties:
         resource:
           $ref: '#/components/schemas/Resource'
+        name:
+          type: string
+          description: Name assigned to the confidence interval post-processing computation.
         confidence_interval_config:
           $ref: '#/components/schemas/StandaloneConfidenceIntervalConfig'
         status:
@@ -3894,6 +3918,7 @@ components:
           description: Use benchmark results for eval_job data and aggregate results otherwise.
       required:
         - resource
+        - name
         - confidence_interval_config
         - status
       additionalProperties: false
@@ -3901,39 +3926,25 @@ components:
       type: object
       title: ConfidenceIntervalConfig
       description: Configuration for confidence interval post-processing on an evaluation job.
-      properties:
-        num_parallel_threads:
-          type: integer
-          minimum: 1
-          default: 1
-          description: Number of benchmark confidence interval computations to run in parallel; 1 runs them sequentially.
-        hardware_config:
-          $ref: '#/components/schemas/BenchmarkHardwareConfig'
-          description: Optional hardware override for confidence interval computation.
-        calibration_data_ref:
-          type: array
-          minItems: 1
-          items:
-            $ref: '#/components/schemas/TestDataRef'
-          description: References to the labeled calibration data used by the computation.
-        significance_level:
-          type: number
-          format: float
-          exclusiveMinimum: 0
-          exclusiveMaximum: 1
-          description: Significance level alpha. For example, 0.7 requests a 30% confidence interval.
-      required:
-        - calibration_data_ref
-        - significance_level
-      additionalProperties: false
+      allOf:
+        - $ref: '#/components/schemas/ConfidenceIntervalConfigCommon'
+        - type: object
+          properties:
+            num_parallel_threads:
+              $ref: '#/components/schemas/NumParallelThreads'
+      unevaluatedProperties: false
     ConfidenceIntervalPostProcessingRequest:
       type: object
       title: ConfidenceIntervalPostProcessingRequest
       description: Request to configure confidence interval post-processing.
       properties:
+        name:
+          type: string
+          description: Name for the confidence interval post-processing computation.
         confidence_interval_config:
           $ref: '#/components/schemas/ConfidenceIntervalConfig'
       required:
+        - name
         - confidence_interval_config
       additionalProperties: false
     JobPostProcessingResource:
@@ -3943,6 +3954,9 @@ components:
       properties:
         resource:
           $ref: '#/components/schemas/Resource'
+        name:
+          type: string
+          description: Name assigned to the confidence interval post-processing computation.
         confidence_interval_config:
           $ref: '#/components/schemas/ConfidenceIntervalConfig'
         status:
@@ -3951,6 +3965,7 @@ components:
           $ref: '#/components/schemas/PostProcessingResultsEvalJob'
       required:
         - resource
+        - name
         - confidence_interval_config
         - status
       additionalProperties: false

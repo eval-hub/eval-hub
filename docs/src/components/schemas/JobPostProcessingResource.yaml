@@ -4,6 +4,9 @@ description: Confidence interval post-processing resource associated with an eva
 properties:
   resource:
     $ref: ./Resource.yaml
+  name:
+    type: string
+    description: Name assigned to the confidence interval post-processing computation.
   confidence_interval_config:
     $ref: ./ConfidenceIntervalConfig.yaml
   status:
@@ -12,6 +15,7 @@ properties:
     $ref: ./PostProcessingResultsEvalJob.yaml
 required:
   - resource
+  - name
   - confidence_interval_config
   - status
 additionalProperties: false

@@ -4,6 +4,9 @@ description: Standalone confidence interval post-processing resource.
 properties:
   resource:
     $ref: ./Resource.yaml
+  name:
+    type: string
+    description: Name assigned to the confidence interval post-processing computation.
   confidence_interval_config:
     $ref: ./StandaloneConfidenceIntervalConfig.yaml
   status:
@@ -15,6 +18,7 @@ properties:
     description: Use benchmark results for eval_job data and aggregate results otherwise.
 required:
   - resource
+  - name
   - confidence_interval_config
   - status
 additionalProperties: false

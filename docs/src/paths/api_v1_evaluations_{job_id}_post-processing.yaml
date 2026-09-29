@@ -29,6 +29,7 @@ post:
           request:
             summary: Configure confidence interval computation
             value:
+              name: inspect-accuracy-confidence-interval
               confidence_interval_config:
                 num_parallel_threads: 2
                 hardware_config:
