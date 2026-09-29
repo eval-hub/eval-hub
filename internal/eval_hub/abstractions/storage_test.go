@@ -10,6 +10,7 @@ func TestQueryFilter_ExtractQueryParams(t *testing.T) {
 	f := &abstractions.QueryFilter{
 		Limit:  10,
 		Offset: 5,
+		SortBy: "curation_order",
 		Params: map[string]any{
 			"a": "keep",
 			"b": "",
@@ -19,6 +20,9 @@ func TestQueryFilter_ExtractQueryParams(t *testing.T) {
 	out := f.ExtractQueryParams()
 	if out.Limit != 10 || out.Offset != 5 {
 		t.Fatalf("ExtractQueryParams() limit/offset = %d,%d, want 10,5", out.Limit, out.Offset)
+	}
+	if out.SortBy != "curation_order" {
+		t.Errorf("SortBy = %q, want curation_order", out.SortBy)
 	}
 	if _, ok := out.Params["b"]; ok {
 		t.Error("empty string param should be deleted")
@@ -50,7 +54,7 @@ func TestQueryFilter_HasParams(t *testing.T) {
 func TestQueryFilter_String(t *testing.T) {
 	f := &abstractions.QueryFilter{Limit: 3, Offset: 1, Params: map[string]any{"k": "v"}}
 	s := f.String()
-	want := `{"limit":3,"offset":1,"params":map[k:v]}`
+	want := `{"limit":3,"offset":1,"params":map[k:v],"sort_by":""}`
 	if s != want {
 		t.Errorf("String() = %q, want %q", s, want)
 	}

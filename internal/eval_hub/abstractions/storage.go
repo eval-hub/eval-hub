@@ -27,6 +27,9 @@ type QueryFilter struct {
 	Limit  int
 	Offset int
 	Params map[string]any
+	// SortBy is the optional server-supported sort order. It is kept separate
+	// from Params because it changes query ordering rather than filtering rows.
+	SortBy string
 }
 
 // ExtractQueryParams returns the limit, offset, and filtered params
@@ -40,6 +43,7 @@ func (filter *QueryFilter) ExtractQueryParams() *QueryFilter {
 		Limit:  filter.Limit,
 		Offset: filter.Offset,
 		Params: params,
+		SortBy: filter.SortBy,
 	}
 }
 
@@ -55,7 +59,7 @@ func (filter *QueryFilter) HasParams(params ...string) bool {
 }
 
 func (filter *QueryFilter) String() string {
-	return fmt.Sprintf(`{"limit":%d,"offset":%d,"params":%v}`, filter.Limit, filter.Offset, filter.Params)
+	return fmt.Sprintf(`{"limit":%d,"offset":%d,"params":%v,"sort_by":%q}`, filter.Limit, filter.Offset, filter.Params, filter.SortBy)
 }
 
 type Storage interface {
