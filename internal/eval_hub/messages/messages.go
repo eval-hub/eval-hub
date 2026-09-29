@@ -137,7 +137,7 @@ var (
 
 	// ReadOnlyCollection Collection '{{.CollectionID}}' cannot be modified or deleted.
 	ReadOnlyCollection = createMessage(
-		constants.HTTPCodeBadRequest,
+		constants.HTTPCodeForbidden,
 		"Collection '{{.CollectionID}}' cannot be modified or deleted.",
 		"read_only_collection",
 	)

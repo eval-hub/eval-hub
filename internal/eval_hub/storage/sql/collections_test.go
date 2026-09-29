@@ -343,6 +343,55 @@ func TestCollectionDerivedFrom_StoredAndRetrieved(t *testing.T) {
 		t.Errorf("DerivedFrom: got %q, want %q", fetched.DerivedFrom, "source-coll-id")
 	}
 }
+func TestCollectionFilters_Scope(t *testing.T) {
+	t.Parallel()
+	store, err := getTestStorage(t, "sqlite", getDBName())
+	if err != nil {
+		t.Fatalf("getTestStorage: %v", err)
+	}
+
+	systemCollection := &api.CollectionResource{
+		Resource: api.Resource{ID: "system-collection", Owner: abstractions.OwnerSystem},
+		CollectionConfig: api.CollectionConfig{
+			Name: "System", Category: "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	if err := store.CreateCollection(systemCollection); err != nil {
+		t.Fatalf("CreateCollection system: %v", err)
+	}
+
+	scoped := store.WithTenant("tenant-a").WithOwner("user-a")
+	tenantCollection := &api.CollectionResource{
+		Resource: api.Resource{ID: "tenant-collection", Tenant: "tenant-a", Owner: "user-a"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "Tenant", Category: "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b2"}, ProviderID: "p1"}},
+		},
+	}
+	if err := scoped.CreateCollection(tenantCollection); err != nil {
+		t.Fatalf("CreateCollection tenant: %v", err)
+	}
+
+	for scope, expectedID := range map[string]string{
+		abstractions.ScopeSystem: "system-collection",
+		abstractions.ScopeTenant: "tenant-collection",
+	} {
+		results, err := scoped.GetCollections(&abstractions.QueryFilter{
+			Limit:  10,
+			Params: map[string]any{"scope": scope},
+		})
+		if err != nil {
+			t.Fatalf("GetCollections scope=%s: %v", scope, err)
+		}
+		if results.TotalCount != 1 || len(results.Items) != 1 {
+			t.Fatalf("scope=%s returned total=%d items=%d, want one", scope, results.TotalCount, len(results.Items))
+		}
+		if results.Items[0].Resource.ID != expectedID {
+			t.Errorf("scope=%s returned %q, want %q", scope, results.Items[0].Resource.ID, expectedID)
+		}
+	}
+}
 
 func TestCollectionFilters_ArrayFields(t *testing.T) {
 	t.Parallel()
@@ -817,4 +866,69 @@ func TestCollectionFilters_MultiValueArrayField(t *testing.T) {
 	if !found {
 		t.Error("multi-domain collection should match rag+grounding filter")
 	}
+}
+
+func TestCollections_SortByCurationOrder(t *testing.T) {
+	testCollectionsSortByCurationOrder(t, "sqlite", getDBName())
+}
+
+func TestCollections_SortByCurationOrderPostgres(t *testing.T) {
+	image := usePostgresImage()
+	databaseName := getDBName()
+	user, err := getPostgresUser()
+	if err != nil {
+		t.Skipf("Failed to get Postgres user: %v", err)
+	}
+	if err := startPostgres(t, databaseName, user, image); err != nil {
+		t.Skipf("Skipping postgres tests: %v", err)
+	}
+	t.Cleanup(func() { stopPostgres(t, databaseName, user, image) })
+	testCollectionsSortByCurationOrder(t, "postgres", databaseName)
+}
+
+func testCollectionsSortByCurationOrder(t *testing.T, driver, databaseName string) {
+	store, err := getTestStorage(t, driver, databaseName)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	collections := []api.CollectionResource{
+		testSystemCollection("z-uncurated", "Uncurated", "uncurated"),
+		testSystemCollection("b-curated-second", "Second", "second curated"),
+		testSystemCollection("a-curated-first", "First", "first curated"),
+		testSystemCollection("c-curated-large", "Large", "large curated"),
+	}
+	collections[1].CurationOrder = 2
+	collections[2].CurationOrder = 1
+	collections[3].CurationOrder = math.MaxInt32 + 1
+	for i := range collections {
+		if err := store.CreateCollection(&collections[i]); err != nil {
+			t.Fatalf("CreateCollection(%s): %v", collections[i].Resource.ID, err)
+		}
+	}
+
+	assertIDs := func(got []api.CollectionResource, want []string) {
+		t.Helper()
+		if len(got) != len(want) {
+			t.Fatalf("got %d collections, want %d", len(got), len(want))
+		}
+		for i := range want {
+			if got[i].Resource.ID != want[i] {
+				t.Fatalf("collection %d = %q, want %q", i, got[i].Resource.ID, want[i])
+			}
+		}
+	}
+
+	sorted, err := store.GetCollections(&abstractions.QueryFilter{Limit: 10, Params: map[string]any{}, SortBy: "curation_order"})
+	if err != nil {
+		t.Fatalf("GetCollections sorted by curation_order: %v", err)
+	}
+	assertIDs(sorted.Items, []string{"a-curated-first", "b-curated-second", "c-curated-large", "z-uncurated"})
+
+	defaultOrder, err := store.GetCollections(&abstractions.QueryFilter{Limit: 10, Params: map[string]any{}})
+	if err != nil {
+		t.Fatalf("GetCollections with default ordering: %v", err)
+	}
+	assertIDs(defaultOrder.Items, []string{"z-uncurated", "c-curated-large", "b-curated-second", "a-curated-first"})
 }
