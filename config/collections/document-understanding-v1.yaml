@@ -13,8 +13,7 @@ tags:
   - comprehension
   - ruler
   - curated
-domains:
-  - grounded_document_understanding
+domains: [grounded_document_understanding]
 tasks: [long_context_understanding, full_document_qa]
 modalities: [text]
 evaluation_targets: [model]

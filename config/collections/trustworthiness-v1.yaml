@@ -14,8 +14,7 @@ tags:
   - prompt-injection
   - inspect-evals
   - curated
-domains:
-  - trustworthiness
+domains: [trustworthiness]
 tasks: [safety, adversarial_prompt_injection_resistance]
 modalities: [text]
 evaluation_targets: [model]

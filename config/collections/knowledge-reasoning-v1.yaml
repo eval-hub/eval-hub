@@ -12,8 +12,7 @@ tags:
   - science
   - inspect-evals
   - curated
-domains:
-  - knowledge_and_reasoning
+domains: [knowledge_and_reasoning]
 tasks: [reasoning]
 modalities: [text]
 evaluation_targets: [model]

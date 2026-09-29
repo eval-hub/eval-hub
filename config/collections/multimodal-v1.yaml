@@ -12,8 +12,7 @@ tags:
   - document-understanding
   - inspect-evals
   - curated
-domains:
-  - multimodal
+domains: [multimodal]
 tasks: [document_chart_vqa]
 modalities: [multimodal]
 evaluation_targets: [model]
