@@ -1389,13 +1389,10 @@ paths:
           schema:
             type: string
             enum:
-              - name
-              - created_at
               - curation_order
-            default: created_at
             title: Sort order
           description: |
-            Sort field for the result set. Applied server-side across all matching collections before pagination. curation_order sorts featured tiles ascending (0 last). Default: created_at descending.
+            Sort field for the result set. Applied server-side across all matching collections before pagination. curation_order sorts curated collections ascending (0 or absent last). When omitted, the existing default collection ordering is preserved.
       responses:
         '200':
           description: Successful Response

@@ -44,3 +44,21 @@ Feature: Evaluation Jobs
     And the response body should contain "EVALUATION COMPLETE"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
+
+  @otel
+  Scenario: Adapter logs are exported to the OTEL collector
+    Given the service is running
+    And I set the wait interval to "5s"
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    Then the response code should be 202
+    And I wait for the evaluation job status to be "completed"
+    # The adapter bridges Python logging to OTEL and flushes on exit, so its
+    # log records (including EVALUATION COMPLETE) arrive at the test collector
+    # with job attributes and trace/span correlation.
+    Then the OTEL collector should have received a log record containing "EVALUATION COMPLETE"
+    And the log record severity should be "INFO"
+    And the log record should have attribute "evalhub.job_id" with value "{{value:id}}"
+    And the log record should have attribute "evalhub.benchmark_id" with value "arc_easy"
+    And the log record should have a valid trace id and span id
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
