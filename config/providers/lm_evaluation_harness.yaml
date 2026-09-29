@@ -773,7 +773,7 @@ benchmarks:
   description: Compact boolean QA with Arabic machine translation.
   category: multilingual
   domains: [multilingual]
-  tasks: [translation]
+  tasks: [cross_lingual_understanding]
   modalities: [text]
   evaluation_targets: [model]
   metrics:

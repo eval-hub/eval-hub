@@ -729,10 +729,12 @@ benchmarks:
 
   - id: inspect/cyberseceval-2
     name: CyberSecEval 2
-    description: Meta's cybersecurity evaluation suite — prompt injection, insecure code, cyberattack uplift.
+    description: >
+      Meta's cybersecurity evaluation suite covering prompt injection, code interpreter abuse,
+      and vulnerability identification and exploitation.
     category: cybersecurity
     domains: [trustworthiness]
-    tasks: [adversarial_prompt_injection_resistance]
+    tasks: [safety]
     modalities: [text]
     evaluation_targets: [model]
     metrics: [accuracy/accuracy]
@@ -1070,13 +1072,12 @@ benchmarks:
   - id: inspect/hle
     name: "Humanity's Last Exam"
     description: >
-      Multi-modal benchmark of 2,500 frontier-difficulty questions across dozens of academic
-      subjects. ~14% of questions require image understanding. Designed to measure capabilities
-      beyond existing saturated benchmarks.
+      Frontier-difficulty questions across dozens of academic subjects. The source benchmark
+      includes image questions, but this configured run evaluates its text-only subset.
     category: knowledge
     domains: [knowledge_and_reasoning]
     tasks: [reasoning]
-    modalities: [multimodal]
+    modalities: [text]
     evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     primary_score:
@@ -1088,7 +1089,7 @@ benchmarks:
       task_args:
         include_multi_modal: false
         graders: [grader]
-    tags: [knowledge, reasoning, multimodal, inspect-evals]
+    tags: [knowledge, reasoning, inspect-evals]
 
   # Agent capabilities
   - id: inspect/gaia

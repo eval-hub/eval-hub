@@ -196,7 +196,7 @@ benchmarks:
     description: Tests for performance-related issues from the AVID taxonomy.
     category: performance
     domains: [trustworthiness]
-    tasks: [safety]
+    tasks: [performance_degradation]
     modalities: [text]
     evaluation_targets: [model]
     metrics:
@@ -257,7 +257,7 @@ benchmarks:
     description: Tests for Common Weakness Enumeration software security weaknesses.
     category: security
     domains: [trustworthiness]
-    tasks: [adversarial_prompt_injection_resistance]
+    tasks: [software_weakness_assessment]
     modalities: [text]
     evaluation_targets: [model]
     metrics:

@@ -202,7 +202,7 @@ benchmarks:
     description: Tests for performance issues like hallucination under load, context window failures, and degradation. Runs as an AI Pipeline and requires a Data Science Pipelines setup.
     category: performance
     domains: [trustworthiness]
-    tasks: [safety]
+    tasks: [performance_degradation]
     modalities: [text]
     evaluation_targets: [model]
     metrics:
@@ -265,7 +265,7 @@ benchmarks:
     description: Tests whether the model can be used to exploit Common Weakness Enumeration software vulnerabilities. Runs as an AI Pipeline and requires a Data Science Pipelines setup.
     category: security
     domains: [trustworthiness]
-    tasks: [adversarial_prompt_injection_resistance]
+    tasks: [software_weakness_assessment]
     modalities: [text]
     evaluation_targets: [model]
     metrics:

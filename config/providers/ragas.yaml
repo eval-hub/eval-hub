@@ -98,7 +98,7 @@ benchmarks:
     description: Comprehensive RAG evaluation with all available RAGAS metrics
     category: rag_evaluation
     domains: [grounded_document_understanding]
-    tasks: [rag]
+    tasks: [rag, grounding_discipline]
     modalities: [text]
     evaluation_targets: [rag_system]
     metrics:
