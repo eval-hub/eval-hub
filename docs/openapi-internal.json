@@ -5194,7 +5194,6 @@
           }
         },
         "required": [
-          "name",
           "confidence_interval_config"
         ],
         "additionalProperties": false
@@ -5349,7 +5348,6 @@
         },
         "required": [
           "resource",
-          "name",
           "confidence_interval_config",
           "status"
         ],
@@ -5387,7 +5385,6 @@
           }
         },
         "required": [
-          "name",
           "confidence_interval_config"
         ],
         "additionalProperties": false
@@ -5415,7 +5412,6 @@
         },
         "required": [
           "resource",
-          "name",
           "confidence_interval_config",
           "status"
         ],

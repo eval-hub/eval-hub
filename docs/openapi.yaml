@@ -3596,7 +3596,6 @@ components:
         confidence_interval_config:
           $ref: '#/components/schemas/StandaloneConfidenceIntervalConfig'
       required:
-        - name
         - confidence_interval_config
       additionalProperties: false
     PostProcessingStatus:
@@ -3707,7 +3706,6 @@ components:
           description: Use benchmark results for eval_job data and aggregate results otherwise.
       required:
         - resource
-        - name
         - confidence_interval_config
         - status
       additionalProperties: false
@@ -3732,7 +3730,6 @@ components:
         confidence_interval_config:
           $ref: '#/components/schemas/ConfidenceIntervalConfig'
       required:
-        - name
         - confidence_interval_config
       additionalProperties: false
     JobPostProcessingResource:
@@ -3752,7 +3749,6 @@ components:
           $ref: '#/components/schemas/PostProcessingResultsEvalJob'
       required:
         - resource
-        - name
         - confidence_interval_config
         - status
       additionalProperties: false

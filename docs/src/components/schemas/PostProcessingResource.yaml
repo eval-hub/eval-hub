@@ -17,7 +17,6 @@ properties:
     description: Use benchmark results for eval_job data and aggregate results otherwise.
 required:
   - resource
-  - name
   - confidence_interval_config
   - status
 additionalProperties: false
