@@ -1635,7 +1635,7 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain "card_version"
     And the MLflow artifact should contain "schema_version"
@@ -1654,7 +1654,7 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain "context.collection_id"
     And the MLflow artifact should contain the value "toxicity-and-ethical-principles" at path "$.context.collection_id"
@@ -1684,7 +1684,7 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
 
   @mlflow
@@ -1714,10 +1714,10 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{{value:job2_id}}"
     Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job1_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job1_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain the value "{{value:job1_id}}" at path "$.metadata.evaluation_job_id"
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job2_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job2_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain the value "{{value:job2_id}}" at path "$.metadata.evaluation_job_id"
     # Each job gets its own distinct EvalCard even in the same experiment
@@ -1732,7 +1732,7 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain the value "1.0" at path "$.card_version"
     And the MLflow artifact should contain the value "1.0" at path "$.schema_version"
@@ -1747,7 +1747,7 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain "metadata.created_at"
     And the MLflow artifact should contain "metadata.updated_at"
@@ -1764,7 +1764,7 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain "card_version"
     And the MLflow artifact should contain "schema_version"
@@ -1782,7 +1782,7 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain "context.model.url"
     And the MLflow artifact should contain "context.model.name"
@@ -1797,7 +1797,7 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain "context.benchmarks"
     And the MLflow artifact should contain "context.benchmarks[0].id"
@@ -1813,7 +1813,7 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain "results.benchmarks"
     And the MLflow artifact should contain "results.benchmarks[0].metrics"
@@ -1828,7 +1828,7 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain "results.benchmarks[0].mlflow_run_id"
 
@@ -1842,7 +1842,7 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain the value "completed" at path "$.results.status.state"
 
@@ -1857,7 +1857,7 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain "context.collection_id"
     And the MLflow artifact should contain the value "toxicity-and-ethical-principles" at path "$.context.collection_id"
@@ -1872,7 +1872,7 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain the value "arc_easy" at path "$.context.benchmarks[0].id"
     And the MLflow artifact should contain the value "lm_evaluation_harness" at path "$.context.benchmarks[0].provider_id"
@@ -1887,7 +1887,7 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain "results.benchmarks[0].id"
     And the MLflow artifact should contain "results.benchmarks[0].provider_id"
@@ -1904,7 +1904,7 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain the value "completed" at path "$.results.benchmarks[0].status"
 
@@ -1919,7 +1919,7 @@ Feature: Evaluation Jobs
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the "resource.mlflow_experiment_id" field in the response should be saved as "value:experiment_id"
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain "results.benchmarks[0].error_message"
     And the MLflow artifact should contain "results.benchmarks[0].error_message.message"
@@ -1937,7 +1937,7 @@ Feature: Evaluation Jobs
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the "resource.mlflow_experiment_id" field in the response should be saved as "value:experiment_id"
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should be valid JSON
 
@@ -1952,7 +1952,7 @@ Feature: Evaluation Jobs
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the "resource.mlflow_experiment_id" field in the response should be saved as "value:experiment_id"
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain "card_version"
     And the MLflow artifact should contain "results.benchmarks"
@@ -2098,7 +2098,7 @@ Feature: Evaluation Jobs
     And the OCI artifact should contain "results"
     And the OCI artifact should contain the value "{{value:job_id}}" at path "$.id"
     # Verify MLflow has the EvalCard
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain "card_version"
     And the MLflow artifact should contain "schema_version"
@@ -2127,10 +2127,10 @@ Feature: Evaluation Jobs
     And the response should equal the value "1" at path "$.collection.benchmarks[2].parameters.num_examples"
     And the response should equal the value "1" at path "$.collection.benchmarks[3].parameters.num_examples"
     And the response should contain "results"
-    And the response should contain the value "telemath_scorer/accuracy" at path "$.results.benchmarks[?(@.id=='telemath')].metrics[*].name"
-    And the response should contain the value "choice/accuracy" at path "$.results.benchmarks[?(@.id=='teleqna')].metrics[*].name"
-    And the response should contain the value "telelogs_scorer/accuracy" at path "$.results.benchmarks[?(@.id=='telelogs')].metrics[*].name"
-    And the response should contain the value "pattern/accuracy" at path "$.results.benchmarks[?(@.id=='3gpp-tsg')].metrics[*].name"
+    And the response should contain the value "telemath_scorer/accuracy" at path "$.results.benchmarks[?(@.id == &quot;telemath&quot;)].metrics_schema[*].name"
+    And the response should contain the value "choice/accuracy" at path "$.results.benchmarks[?(@.id == &quot;teleqna&quot;)].metrics_schema[*].name"
+    And the response should contain the value "telelogs_scorer/accuracy" at path "$.results.benchmarks[?(@.id == &quot;telelogs&quot;)].metrics_schema[*].name"
+    And the response should contain the value "pattern/accuracy" at path "$.results.benchmarks[?(@.id == &quot;3gpp-tsg&quot;)].metrics_schema[*].name"
     # TODO: Add metric value validations once a job completes successfully on a cluster with the telco inspect runner - https://redhat.atlassian.net/browse/RHOAIENG-87955
 
   @kueue
@@ -2172,7 +2172,7 @@ Feature: Evaluation Jobs
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    When I fetch the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
+    When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
     And the MLflow artifact should contain "context.collection_id"
     And the MLflow artifact should contain the value "open-telco-v1" at path "$.context.collection_id"
