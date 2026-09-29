@@ -1,0 +1,21 @@
+type: object
+title: PostProcessingBenchmarkResult
+description: Confidence interval result associated with one evaluation benchmark.
+properties:
+  id:
+    type: string
+    description: Benchmark identifier.
+  provider_id:
+    type: string
+    description: Provider identifier.
+  benchmark_index:
+    type: integer
+    description: Benchmark index in the referenced evaluation job.
+  confidence_interval:
+    $ref: ./ConfidenceInterval.yaml
+required:
+  - id
+  - provider_id
+  - benchmark_index
+  - confidence_interval
+additionalProperties: false

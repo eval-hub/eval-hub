@@ -1,0 +1,4 @@
+type: string
+title: PostProcessingName
+minLength: 1
+description: Name of the confidence interval post-processing computation.

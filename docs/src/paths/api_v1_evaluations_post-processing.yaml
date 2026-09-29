@@ -1,0 +1,43 @@
+post:
+  tags:
+    - Evaluations
+  summary: Create Post-Processing Computation
+  description: Create an asynchronous confidence interval post-processing computation.
+  operationId: create_evaluations_post_processing
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/StandalonePostProcessingRequest.yaml
+        examples:
+          eval_job:
+            summary: Compute confidence intervals from an evaluation job
+            value:
+              name: inspect-accuracy-confidence-interval
+              confidence_interval_config:
+                results_data_ref:
+                  eval_job:
+                    id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
+                    num_parallel_threads: 2
+                calibration_data_ref:
+                  - s3:
+                      bucket: evaluation-data
+                      key: calibration/accuracy
+                      secret_ref: evaluation-s3
+                significance_level: 0.7
+  responses:
+    '202':
+      description: Post-processing computation accepted.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/PostProcessingResource.yaml
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '409':
+      $ref: ../components/responses/Conflict.yaml

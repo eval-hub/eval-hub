@@ -1,0 +1,26 @@
+type: object
+title: PostProcessingStatus
+description: Status of a standalone post-processing computation.
+properties:
+  state:
+    $ref: ./State.yaml
+  error_message:
+    $ref: ./MessageInfo.yaml
+  warning_message:
+    $ref: ./MessageInfo.yaml
+  started_at:
+    type: string
+    format: date-time
+    description: RFC3339 start time.
+  completed_at:
+    type: string
+    format: date-time
+    description: RFC3339 completion time.
+  benchmarks:
+    type: array
+    items:
+      $ref: ./BenchmarkStatus.yaml
+    description: Per-benchmark status when benchmark metadata is available.
+required:
+  - state
+additionalProperties: false

@@ -1,0 +1,91 @@
+get:
+  tags:
+    - Evaluations
+  summary: Get Job Post-Processing Computation
+  description: Get a confidence interval computation associated with an evaluation job.
+  operationId: get_evaluations_jobs_job_id_post_processing_post_processing_id
+  parameters:
+    - name: job_id
+      in: path
+      required: true
+      schema:
+        type: string
+        title: Job Id
+    - name: post_processing_id
+      in: path
+      required: true
+      schema:
+        type: string
+        title: Post Processing Id
+  responses:
+    '200':
+      description: Job-scoped post-processing computation.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/JobPostProcessingResource.yaml
+          example:
+            resource:
+              id: pp-1234567890ab
+              tenant: sagar
+              created_at: '2026-09-21T05:57:34.477263Z'
+              updated_at: '2026-09-21T05:58:29.768663Z'
+              owner: nbs
+            name: inspect-accuracy-confidence-interval
+            confidence_interval_config:
+              num_parallel_threads: 2
+              calibration_data_ref:
+                - s3:
+                    bucket: evaluation-data
+                    key: calibration/accuracy
+                    secret_ref: evaluation-s3
+              significance_level: 0.7
+            status:
+              state: completed
+              benchmarks:
+                - id: accuracy-benchmark
+                  provider_id: inspect
+                  benchmark_index: 0
+                  status: completed
+            results:
+              benchmarks:
+                - id: accuracy-benchmark
+                  provider_id: inspect
+                  benchmark_index: 0
+                  confidence_interval:
+                    lower: 0.75
+                    upper: 0.85
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml
+delete:
+  tags:
+    - Evaluations
+  summary: Delete Job Post-Processing Computation
+  description: Delete a confidence interval computation associated with an evaluation job.
+  operationId: delete_evaluations_jobs_job_id_post_processing_post_processing_id
+  parameters:
+    - name: job_id
+      in: path
+      required: true
+      schema:
+        type: string
+        title: Job Id
+    - name: post_processing_id
+      in: path
+      required: true
+      schema:
+        type: string
+        title: Post Processing Id
+  responses:
+    '204':
+      description: Job-scoped post-processing computation deleted.
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml

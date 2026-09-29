@@ -1,0 +1,76 @@
+post:
+  tags:
+    - Evaluations
+  summary: Create Confidence Interval Post-Processing
+  description: |
+    Create confidence interval computation for the benchmarks in an existing
+    evaluation job. The operation is idempotent: if the same job already has a
+    confidence interval computation, the existing post-processing reference is
+    returned.
+
+    The computation runs independently for each benchmark. `num_parallel_threads`
+    controls how many benchmark computations may run in parallel; a value of 1
+    processes them sequentially.
+  operationId: post_evaluations_jobs_job_id_post_processing
+  parameters:
+    - name: job_id
+      in: path
+      required: true
+      schema:
+        type: string
+        title: Job Id
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/ConfidenceIntervalPostProcessingRequest.yaml
+        examples:
+          request:
+            summary: Configure confidence interval computation
+            value:
+              name: inspect-accuracy-confidence-interval
+              confidence_interval_config:
+                num_parallel_threads: 2
+                hardware_config:
+                  cpu:
+                    request: 500m
+                    limit: "2"
+                  memory:
+                    request: 1Gi
+                    limit: "4Gi"
+                calibration_data_ref:
+                  - s3:
+                      bucket: evaluation-data
+                      key: calibration/accuracy
+                      secret_ref: evaluation-s3
+                significance_level: 0.7
+  responses:
+    '200':
+      description: >
+        The existing evaluation-job resource is returned. To find the
+        post-processing job ID, read the value at
+        `results.post_processing_ref.id` in the response.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/EvaluationJobResource.yaml
+    '202':
+      description: >
+        The evaluation-job resource is returned after the computation is
+        accepted. To find the post-processing job ID, read the value at
+        `results.post_processing_ref.id` in the response.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/EvaluationJobResource.yaml
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml
+    '409':
+      $ref: ../components/responses/Conflict.yaml
