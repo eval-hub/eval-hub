@@ -249,12 +249,17 @@ Feature: Collections Endpoint
     Then the response code should be 201
     When I send a GET request to "/api/v1/evaluations/collections?limit=2&offset=0"
     Then the response code should be 200
+    And the "total_count" field in the response should be saved as "value:collection_total"
     And the array at path "items" in the response should have length 2
     And the response should contain "next"
     And the "next.href" field in the response should be saved as "value:next_url"
     When I send a GET request to "{{value:next_url}}"
     Then the response code should be 200
     And the array at path "items" in the response should have length at least 1
+    When I send a GET request to "/api/v1/evaluations/collections?limit=2&offset={{value:collection_total}}"
+    Then the response code should be 200
+    And the array at path "items" in the response should have length 0
+    And the response should contain the value "{{value:collection_total}}" at path "$.total_count"
     When I send a DELETE request to "/api/v1/evaluations/collections/{{value:first_id}}?hard_delete=true"
     Then the response code should be 204
     When I send a DELETE request to "/api/v1/evaluations/collections/{{value:second_id}}?hard_delete=true"
