@@ -2125,10 +2125,10 @@ Feature: Evaluation Jobs
     And the response should equal the value "1" at path "$.collection.benchmarks[2].parameters.num_examples"
     And the response should equal the value "1" at path "$.collection.benchmarks[3].parameters.num_examples"
     And the response should contain "results"
-    And the response should contain the value "telemath_scorer/accuracy" at path "$.results.benchmarks[?(@.id=='telemath')].metrics[*].name"
-    And the response should contain the value "choice/accuracy" at path "$.results.benchmarks[?(@.id=='teleqna')].metrics[*].name"
-    And the response should contain the value "telelogs_scorer/accuracy" at path "$.results.benchmarks[?(@.id=='telelogs')].metrics[*].name"
-    And the response should contain the value "pattern/accuracy" at path "$.results.benchmarks[?(@.id=='3gpp-tsg')].metrics[*].name"
+    And the response should contain the value "telemath_scorer/accuracy" at path "$.results.benchmarks[?(@.id == &quot;telemath&quot;)].metrics_schema[*].name"
+    And the response should contain the value "choice/accuracy" at path "$.results.benchmarks[?(@.id == &quot;teleqna&quot;)].metrics_schema[*].name"
+    And the response should contain the value "telelogs_scorer/accuracy" at path "$.results.benchmarks[?(@.id == &quot;telelogs&quot;)].metrics_schema[*].name"
+    And the response should contain the value "pattern/accuracy" at path "$.results.benchmarks[?(@.id == &quot;3gpp-tsg&quot;)].metrics_schema[*].name"
     # TODO: Add metric value validations once a job completes successfully on a cluster with the telco inspect runner - https://redhat.atlassian.net/browse/RHOAIENG-87955
 
   @kueue
