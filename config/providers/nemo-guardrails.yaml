@@ -26,7 +26,7 @@ benchmarks:
     domains: [trustworthiness]
     tasks: [adversarial_prompt_injection_resistance]
     modalities: [text]
-    evaluation_targets: [model]
+    evaluation_targets: [ai_app]
     metrics:
       - accuracy
       - blocked_precision
@@ -85,7 +85,7 @@ benchmarks:
     domains: [trustworthiness]
     tasks: [safety]
     modalities: [text]
-    evaluation_targets: [model]
+    evaluation_targets: [ai_app]
     metrics:
       - accuracy
       - blocked_precision
@@ -149,7 +149,7 @@ benchmarks:
     domains: [trustworthiness]
     tasks: [safety]
     modalities: [text]
-    evaluation_targets: [model]
+    evaluation_targets: [ai_app]
     metrics:
       - accuracy
       - blocked_precision
@@ -212,7 +212,7 @@ benchmarks:
     domains: [trustworthiness]
     tasks: [safety]
     modalities: [text]
-    evaluation_targets: [model]
+    evaluation_targets: [ai_app]
     metrics:
       - masking_accuracy
       - mean_latency_ms
@@ -265,7 +265,7 @@ benchmarks:
     domains: [trustworthiness]
     tasks: [adversarial_prompt_injection_resistance]
     modalities: [text]
-    evaluation_targets: [model]
+    evaluation_targets: [ai_app]
     metrics:
       - accuracy
       - blocked_precision

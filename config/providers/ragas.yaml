@@ -77,7 +77,7 @@ benchmarks:
     domains: [grounded_document_understanding]
     tasks: [rag, grounding_discipline]
     modalities: [text]
-    evaluation_targets: [model]
+    evaluation_targets: [rag_system]
     metrics:
       - answer_relevancy
       - context_precision
@@ -100,7 +100,7 @@ benchmarks:
     domains: [grounded_document_understanding]
     tasks: [rag]
     modalities: [text]
-    evaluation_targets: [model]
+    evaluation_targets: [rag_system]
     metrics:
       - answer_relevancy
       - answer_similarity
