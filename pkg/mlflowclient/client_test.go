@@ -4,66 +4,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
-func TestResolveAuthToken(t *testing.T) {
-	t.Parallel()
-
-	t.Run("static token", func(t *testing.T) {
-		t.Parallel()
-		c := NewClient("http://example").WithToken("secret")
-		if got := c.resolveAuthToken(); got != "secret" {
-			t.Fatalf("token = %q", got)
-		}
-	})
-
-	t.Run("token file takes precedence", func(t *testing.T) {
-		t.Parallel()
-		path := filepath.Join(t.TempDir(), "token")
-		if err := os.WriteFile(path, []byte("from-file\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		c := NewClient("http://example").WithToken("static").WithTokenPath(path)
-		if got := c.resolveAuthToken(); got != "from-file" {
-			t.Fatalf("token = %q, want from-file", got)
-		}
-	})
-
-	t.Run("falls back when file missing", func(t *testing.T) {
-		t.Parallel()
-		c := NewClient("http://example").
-			WithToken("fallback").
-			WithTokenPath(filepath.Join(t.TempDir(), "missing"))
-		if got := c.resolveAuthToken(); got != "fallback" {
-			t.Fatalf("token = %q, want fallback", got)
-		}
-	})
-}
-
-func TestApplyAuthHeader(t *testing.T) {
-	t.Parallel()
-
-	t.Run("adds Bearer prefix", func(t *testing.T) {
-		t.Parallel()
-		req, _ := http.NewRequest(http.MethodGet, "http://example", nil)
-		NewClient("http://example").WithToken("abc").applyAuthHeader(req)
-		if got := req.Header.Get("Authorization"); got != "Bearer abc" {
-			t.Fatalf("Authorization = %q", got)
-		}
-	})
-
-	t.Run("preserves existing scheme", func(t *testing.T) {
-		t.Parallel()
-		req, _ := http.NewRequest(http.MethodGet, "http://example", nil)
-		NewClient("http://example").WithToken("Bearer preset").applyAuthHeader(req)
-		if got := req.Header.Get("Authorization"); got != "Bearer preset" {
-			t.Fatalf("Authorization = %q", got)
-		}
-	})
-}
+// MLflow REST wire paths issued by mlflow-go, used to route the httptest servers.
+const (
+	endpointExperimentsCreate     = "/api/2.0/mlflow/experiments/create"
+	endpointExperimentsGetBase    = "/api/2.0/mlflow/experiments/get"
+	endpointExperimentsDeleteBase = "/api/2.0/mlflow/experiments/delete"
+)
 
 func TestCreateExperiment(t *testing.T) {
 	t.Parallel()

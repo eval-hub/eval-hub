@@ -15,7 +15,7 @@ func TestGetOrCreateExperiment(t *testing.T) {
 		var createCalls int
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
-			case endpointExperimentsGetByNameBase:
+			case "/api/2.0/mlflow/experiments/get-by-name":
 				_ = json.NewEncoder(w).Encode(GetExperimentResponse{
 					Experiment: Experiment{
 						ExperimentID:   "exp-1",
@@ -23,7 +23,7 @@ func TestGetOrCreateExperiment(t *testing.T) {
 						LifecycleStage: "active",
 					},
 				})
-			case endpointExperimentsCreate:
+			case "/api/2.0/mlflow/experiments/create":
 				createCalls++
 				http.NotFound(w, r)
 			default:
@@ -50,7 +50,7 @@ func TestGetOrCreateExperiment(t *testing.T) {
 		var getCalls int
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
-			case endpointExperimentsGetByNameBase:
+			case "/api/2.0/mlflow/experiments/get-by-name":
 				getCalls++
 				if getCalls == 1 {
 					http.Error(w, `{"error_code":"RESOURCE_DOES_NOT_EXIST"}`, http.StatusNotFound)
@@ -63,7 +63,7 @@ func TestGetOrCreateExperiment(t *testing.T) {
 						LifecycleStage: "active",
 					},
 				})
-			case endpointExperimentsCreate:
+			case "/api/2.0/mlflow/experiments/create":
 				_ = json.NewEncoder(w).Encode(CreateExperimentResponse{ExperimentID: "new-exp"})
 			default:
 				http.NotFound(w, r)
@@ -86,7 +86,7 @@ func TestGetOrCreateExperiment(t *testing.T) {
 		var getCalls int
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
-			case endpointExperimentsGetByNameBase:
+			case "/api/2.0/mlflow/experiments/get-by-name":
 				getCalls++
 				if getCalls == 1 {
 					http.Error(w, `{"error_code":"RESOURCE_DOES_NOT_EXIST"}`, http.StatusNotFound)
@@ -99,7 +99,7 @@ func TestGetOrCreateExperiment(t *testing.T) {
 						LifecycleStage: "active",
 					},
 				})
-			case endpointExperimentsCreate:
+			case "/api/2.0/mlflow/experiments/create":
 				http.Error(w, `{"error_code":"RESOURCE_ALREADY_EXISTS"}`, http.StatusBadRequest)
 			default:
 				http.NotFound(w, r)
