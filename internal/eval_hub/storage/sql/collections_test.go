@@ -343,6 +343,55 @@ func TestCollectionDerivedFrom_StoredAndRetrieved(t *testing.T) {
 		t.Errorf("DerivedFrom: got %q, want %q", fetched.DerivedFrom, "source-coll-id")
 	}
 }
+func TestCollectionFilters_Scope(t *testing.T) {
+	t.Parallel()
+	store, err := getTestStorage(t, "sqlite", getDBName())
+	if err != nil {
+		t.Fatalf("getTestStorage: %v", err)
+	}
+
+	systemCollection := &api.CollectionResource{
+		Resource: api.Resource{ID: "system-collection", Owner: abstractions.OwnerSystem},
+		CollectionConfig: api.CollectionConfig{
+			Name: "System", Category: "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	if err := store.CreateCollection(systemCollection); err != nil {
+		t.Fatalf("CreateCollection system: %v", err)
+	}
+
+	scoped := store.WithTenant("tenant-a").WithOwner("user-a")
+	tenantCollection := &api.CollectionResource{
+		Resource: api.Resource{ID: "tenant-collection", Tenant: "tenant-a", Owner: "user-a"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "Tenant", Category: "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b2"}, ProviderID: "p1"}},
+		},
+	}
+	if err := scoped.CreateCollection(tenantCollection); err != nil {
+		t.Fatalf("CreateCollection tenant: %v", err)
+	}
+
+	for scope, expectedID := range map[string]string{
+		abstractions.ScopeSystem: "system-collection",
+		abstractions.ScopeTenant: "tenant-collection",
+	} {
+		results, err := scoped.GetCollections(&abstractions.QueryFilter{
+			Limit:  10,
+			Params: map[string]any{"scope": scope},
+		})
+		if err != nil {
+			t.Fatalf("GetCollections scope=%s: %v", scope, err)
+		}
+		if results.TotalCount != 1 || len(results.Items) != 1 {
+			t.Fatalf("scope=%s returned total=%d items=%d, want one", scope, results.TotalCount, len(results.Items))
+		}
+		if results.Items[0].Resource.ID != expectedID {
+			t.Errorf("scope=%s returned %q, want %q", scope, results.Items[0].Resource.ID, expectedID)
+		}
+	}
+}
 
 func TestCollectionFilters_ArrayFields(t *testing.T) {
 	t.Parallel()

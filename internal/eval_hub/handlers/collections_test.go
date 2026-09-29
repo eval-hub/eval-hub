@@ -1195,8 +1195,8 @@ func TestHandleUpdateCollection_CuratedCollectionReturns403(t *testing.T) {
 
 	h.HandleUpdateCollection(ctx, req, resp)
 
-	if recorder.Code != 400 {
-		t.Errorf("expected 400 (ReadOnlyCollection) for curated collection, got %d: %s", recorder.Code, recorder.Body.String())
+	if recorder.Code != 403 {
+		t.Errorf("expected 403 (ReadOnlyCollection) for curated collection, got %d: %s", recorder.Code, recorder.Body.String())
 	}
 }
 
@@ -1280,7 +1280,7 @@ func TestHandleCloneCollection_CopiesToTenantScope(t *testing.T) {
 	}
 }
 
-func TestHandlePatchCollection_CuratedReturns400(t *testing.T) {
+func TestHandlePatchCollection_CuratedReturns403(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	validator := testhelpers.NewValidator(t)
@@ -1307,12 +1307,12 @@ func TestHandlePatchCollection_CuratedReturns400(t *testing.T) {
 
 	h.HandlePatchCollection(ctx, req, resp)
 
-	if recorder.Code != 400 {
-		t.Errorf("expected 400 (ReadOnlyCollection) for curated collection, got %d: %s", recorder.Code, recorder.Body.String())
+	if recorder.Code != 403 {
+		t.Errorf("expected 403 (ReadOnlyCollection) for curated collection, got %d: %s", recorder.Code, recorder.Body.String())
 	}
 }
 
-func TestHandleUpdateCollection_SystemCollectionReturns400(t *testing.T) {
+func TestHandleUpdateCollection_SystemCollectionReturns403(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	validator := testhelpers.NewValidator(t)
@@ -1340,8 +1340,39 @@ func TestHandleUpdateCollection_SystemCollectionReturns400(t *testing.T) {
 
 	h.HandleUpdateCollection(ctx, req, resp)
 
-	if recorder.Code != 400 {
-		t.Errorf("expected 400 for system collection, got %d: %s", recorder.Code, recorder.Body.String())
+	if recorder.Code != 403 {
+		t.Errorf("expected 403 for system collection, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+func TestHandlePatchCollection_SystemCollectionReturns403(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	validator := testhelpers.NewValidator(t)
+
+	sysColl := &api.CollectionResource{
+		Resource: api.Resource{ID: "sys-patch", Owner: "system"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "System", Category: "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}},
+		},
+	}
+	storage := &updatePatchDeleteCollectionStorage{fakeStorage: &fakeStorage{}, collection: sysColl}
+	h := handlers.New(storage, validator, &fakeRuntime{}, nil, nil, nil, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("PATCH", "/api/v1/evaluations/collections/sys-patch"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{constants.PathParameterCollectionID: "sys-patch"},
+	}
+	req.SetBody([]byte(`[{"op":"replace","path":"/name","value":"new"}]`))
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user1", "tenant1")
+
+	h.HandlePatchCollection(ctx, req, resp)
+
+	if recorder.Code != 403 {
+		t.Errorf("expected 403 for system collection, got %d: %s", recorder.Code, recorder.Body.String())
 	}
 }
 
@@ -1467,6 +1498,33 @@ func TestHandleDeleteCollection_Success(t *testing.T) {
 
 	if recorder.Code != 204 {
 		t.Errorf("expected 204, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+func TestHandleDeleteCollection_SystemCollectionReturns403(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	validator := testhelpers.NewValidator(t)
+
+	storage := &updatePatchDeleteCollectionStorage{
+		fakeStorage: &fakeStorage{},
+		collection:  &api.CollectionResource{Resource: api.Resource{ID: "sys-delete", Owner: "system"}},
+		deleteErr:   serviceerrors.NewServiceError(messages.ReadOnlyCollection, "CollectionID", "sys-delete"),
+	}
+	h := handlers.New(storage, validator, &fakeRuntime{}, nil, nil, nil, nil)
+
+	req := &providersRequest{
+		MockRequest: createMockRequest("DELETE", "/api/v1/evaluations/collections/sys-delete"),
+		queryValues: map[string][]string{},
+		pathValues:  map[string]string{constants.PathParameterCollectionID: "sys-delete"},
+	}
+	recorder := httptest.NewRecorder()
+	resp := MockResponseWrapper{recorder: recorder}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "user1", "tenant1")
+
+	h.HandleDeleteCollection(ctx, req, resp)
+
+	if recorder.Code != 403 {
+		t.Errorf("expected 403 for system collection, got %d: %s", recorder.Code, recorder.Body.String())
 	}
 }
 

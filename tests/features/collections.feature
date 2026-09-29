@@ -665,7 +665,7 @@ Feature: Collections Endpoint
     Given the service is running
     And there are system collections
     When I send a DELETE request to "/api/v1/evaluations/collections/{{value:collection0:id}}?hard_delete=true"
-    Then the response code should be 400
+    Then the response code should be 403
     And the response should contain the value "read_only_collection" at path "$.message_code"
     And the response should contain the value "cannot be modified or deleted." at path "$.message"
 
