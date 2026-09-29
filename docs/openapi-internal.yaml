@@ -3674,6 +3674,11 @@ components:
       properties:
         benchmark_status_event:
           $ref: '#/components/schemas/BenchmarkStatusEvent'
+    PostProcessingName:
+      type: string
+      title: PostProcessingName
+      minLength: 1
+      description: Name of the confidence interval post-processing computation.
     ConfidenceIntervalConfigCommon:
       type: object
       title: ConfidenceIntervalConfigCommon
@@ -3801,8 +3806,7 @@ components:
       description: Request to create a confidence interval post-processing resource.
       properties:
         name:
-          type: string
-          description: Name for the confidence interval post-processing computation.
+          $ref: '#/components/schemas/PostProcessingName'
         confidence_interval_config:
           $ref: '#/components/schemas/StandaloneConfidenceIntervalConfig'
       required:
@@ -3905,8 +3909,7 @@ components:
         resource:
           $ref: '#/components/schemas/Resource'
         name:
-          type: string
-          description: Name assigned to the confidence interval post-processing computation.
+          $ref: '#/components/schemas/PostProcessingName'
         confidence_interval_config:
           $ref: '#/components/schemas/StandaloneConfidenceIntervalConfig'
         status:
@@ -3939,8 +3942,7 @@ components:
       description: Request to configure confidence interval post-processing.
       properties:
         name:
-          type: string
-          description: Name for the confidence interval post-processing computation.
+          $ref: '#/components/schemas/PostProcessingName'
         confidence_interval_config:
           $ref: '#/components/schemas/ConfidenceIntervalConfig'
       required:
@@ -3955,8 +3957,7 @@ components:
         resource:
           $ref: '#/components/schemas/Resource'
         name:
-          type: string
-          description: Name assigned to the confidence interval post-processing computation.
+          $ref: '#/components/schemas/PostProcessingName'
         confidence_interval_config:
           $ref: '#/components/schemas/ConfidenceIntervalConfig'
         status:

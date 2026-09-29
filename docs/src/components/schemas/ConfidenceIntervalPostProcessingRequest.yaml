@@ -3,8 +3,7 @@ title: ConfidenceIntervalPostProcessingRequest
 description: Request to configure confidence interval post-processing.
 properties:
   name:
-    type: string
-    description: Name for the confidence interval post-processing computation.
+    $ref: ./PostProcessingName.yaml
   confidence_interval_config:
     $ref: ./ConfidenceIntervalConfig.yaml
 required:

@@ -5,8 +5,7 @@ properties:
   resource:
     $ref: ./Resource.yaml
   name:
-    type: string
-    description: Name assigned to the confidence interval post-processing computation.
+    $ref: ./PostProcessingName.yaml
   confidence_interval_config:
     $ref: ./ConfidenceIntervalConfig.yaml
   status:
