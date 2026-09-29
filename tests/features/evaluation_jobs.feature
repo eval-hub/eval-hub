@@ -1512,7 +1512,7 @@ Feature: Evaluation Jobs
     And the response should contain the value "{{env:TEST_DATA_HF_REPO_ID|eval-hub-test/evalhub-offline-testdata}}" at path "$.benchmarks[0].test_data_ref.hf.repo_id"
     And the response should contain the value "{{env:TEST_DATA_HF_SHA_REVISION,TEST_DATA_HF_REVISION|main}}" at path "$.benchmarks[0].test_data_ref.hf.revision"
     And the response should contain the value "truthfulqa_mc1" at path "$.benchmarks[1].id"
-    And the response should contain the value "{{env:TEST_DATA_HF_NESTED_REVISION|main}}" at path "$.benchmarks[1].test_data_ref.hf.revision"
+    And the response should contain the value "{{env:TEST_DATA_HF_REVISION|main}}" at path "$.benchmarks[1].test_data_ref.hf.revision"
     And the response should contain the value "{{env:TEST_DATA_HF_NESTED_SUB_PATH|staging_sub_path}}" at path "$.benchmarks[1].test_data_ref.hf.sub_path"
     And the response should not contain the value "resolved_sha" at path "$.benchmarks[0].test_data_ref"
     And the response should not contain the value "resolved_sha" at path "$.benchmarks[1].test_data_ref"
@@ -1532,7 +1532,7 @@ Feature: Evaluation Jobs
     And the response should contain at least the value "0.2" at path "$.results.benchmarks[?(@.id == &quot;arc_easy&quot;)].metrics.acc_norm"
     And the response should contain the value "{{env:TEST_DATA_HF_REPO_ID|eval-hub-test/evalhub-offline-testdata}}" at path "$.benchmarks[0].test_data_ref.hf.repo_id"
     And the response should contain the value "{{env:TEST_DATA_HF_SHA_REVISION,TEST_DATA_HF_REVISION|main}}" at path "$.benchmarks[0].test_data_ref.hf.revision"
-    And the response should contain the value "{{env:TEST_DATA_HF_NESTED_REVISION|main}}" at path "$.benchmarks[1].test_data_ref.hf.revision"
+    And the response should contain the value "{{env:TEST_DATA_HF_REVISION|main}}" at path "$.benchmarks[1].test_data_ref.hf.revision"
     And the response should contain the value "{{env:TEST_DATA_HF_NESTED_SUB_PATH|staging_sub_path}}" at path "$.benchmarks[1].test_data_ref.hf.sub_path"
     And the response should match the value "[0-9a-fA-F]{7,40}" at path "$.benchmarks[0].test_data_ref.resolved_sha"
     And the response should match the value "[0-9a-fA-F]{7,40}" at path "$.benchmarks[1].test_data_ref.resolved_sha"
@@ -2187,6 +2187,8 @@ Feature: Evaluation Jobs
     And the response should contain the value "pending" at path "$.status.state"
     And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
     And the response should contain the value "{{env:TEST_DATA_HF_SECRET_REF|hftoken}}" at path "$.benchmarks[0].test_data_ref.hf.secret_ref"
+    And I wait for the Kubernetes evaluation Job to be created
+    And the HF Secret "{{env:TEST_DATA_HF_SECRET_REF|hftoken}}" should be mounted only in the HF init container
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
@@ -2236,22 +2238,6 @@ Feature: Evaluation Jobs
 
   @connected
   @hf
-  @ignore # https://gitlab.cee.redhat.com/atris/shepard/-/work_items/274
-  # This verifies Kubernetes Job volume isolation: the HF Secret is mounted only by init,
-  # while the adapter and sidecar receive shared test data without that Secret.
-  Scenario: HF credentials are isolated to the init container
-    Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_hf_isolation.json"
-    Then the response code should be 202
-    And the response should contain the value "pending" at path "$.status.state"
-    And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
-    And the response should contain the value "{{env:TEST_DATA_HF_SECRET_REF|hftoken}}" at path "$.benchmarks[0].test_data_ref.hf.secret_ref"
-    And I wait for the Kubernetes evaluation Job to be created
-    And the HF Secret "{{env:TEST_DATA_HF_SECRET_REF|hftoken}}" should be mounted only in the HF init container
-    And I wait for the evaluation job status to be "completed"
-
-  @connected
-  @hf
   @ignore  #https://redhat.atlassian.net/browse/RHOAIENG-96323
   @negative
   # https://gitlab.cee.redhat.com/atris/shepard/-/work_items/274 and requires Jenkins variables TEST_DATA_HF_GATED_REPO_ID, TEST_DATA_HF_REVISION, and TEST_DATA_HF_SUB_PATH
@@ -2271,15 +2257,9 @@ Feature: Evaluation Jobs
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_hf.json"
     Then the response code should be 202
-    And the response should contain the value "pending" at path "$.status.state"
-    And the response should contain the value "evaluation_job_created" at path "$.status.message.message_code"
     And I wait for the Kubernetes evaluation Job to be created
     And the HF sub-path benchmark should contain file "tokenizer/tokenizer.json" and not contain path "allenai--ai2_arc--ARC-Easy" under "/test_data"
     And I wait for the evaluation job status to be "completed"
-    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
-    Then the response code should be 200
-    And the response should contain the value "completed" at path "$.status.state"
-    And the response should contain the value "{{env:TEST_DATA_HF_NESTED_SUB_PATH|staging_sub_path}}" at path "$.benchmarks[1].test_data_ref.hf.sub_path"
 
   @connected
   @hf
