@@ -1,0 +1,20 @@
+type: object
+title: MLflowDataRef
+description: Reference to a result artifact stored in MLflow.
+properties:
+  mlflow:
+    type: object
+    properties:
+      run_id:
+        type: string
+        description: MLflow run containing the artifact.
+      artifact_path:
+        type: string
+        description: File or directory path within the MLflow run artifacts.
+    required:
+      - run_id
+      - artifact_path
+    additionalProperties: false
+required:
+  - mlflow
+additionalProperties: false

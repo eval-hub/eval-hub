@@ -1,0 +1,5 @@
+type: integer
+title: NumParallelThreads
+minimum: 1
+default: 1
+description: Number of benchmark confidence interval computations to run in parallel; 1 runs them sequentially.

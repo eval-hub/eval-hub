@@ -1,0 +1,10 @@
+type: object
+title: ConfidenceIntervalConfig
+description: Configuration for confidence interval post-processing on an evaluation job.
+allOf:
+  - $ref: ./ConfidenceIntervalConfigCommon.yaml
+  - type: object
+    properties:
+      num_parallel_threads:
+        $ref: ./NumParallelThreads.yaml
+unevaluatedProperties: false
