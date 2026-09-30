@@ -1,0 +1,8 @@
+type: object
+title: PostProcessingCommon
+description: Common request and resource fields for post-processing jobs.
+properties:
+  name:
+    $ref: ./PostProcessingName.yaml
+  hardware_config:
+    $ref: ./PostProcessingHardwareConfig.yaml

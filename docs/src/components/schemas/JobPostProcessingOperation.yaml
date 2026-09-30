@@ -4,6 +4,4 @@ description: Confidence interval operation executed for an evaluation job.
 properties:
   confidence_interval_config:
     $ref: ./ConfidenceIntervalConfig.yaml
-required:
-  - confidence_interval_config
 additionalProperties: false

@@ -4955,6 +4955,19 @@
           }
         ]
       },
+      "PostProcessingCommon": {
+        "type": "object",
+        "title": "PostProcessingCommon",
+        "description": "Common request and resource fields for post-processing jobs.",
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/PostProcessingName"
+          },
+          "hardware_config": {
+            "$ref": "#/components/schemas/PostProcessingHardwareConfig"
+          }
+        }
+      },
       "CalibrationDataConfig": {
         "type": "object",
         "title": "CalibrationDataConfig",
@@ -5276,34 +5289,37 @@
             "$ref": "#/components/schemas/StandaloneConfidenceIntervalConfig"
           }
         },
-        "required": [
-          "confidence_interval_config"
-        ],
         "additionalProperties": false
       },
+      "StandalonePostProcessingOperations": {
+        "type": "array",
+        "title": "StandalonePostProcessingOperations",
+        "description": "Post-processing operations executed by a standalone resource.",
+        "minItems": 1,
+        "items": {
+          "$ref": "#/components/schemas/StandalonePostProcessingOperation"
+        }
+      },
       "StandalonePostProcessingRequest": {
-        "type": "object",
         "title": "StandalonePostProcessingRequest",
         "description": "Request to create post-processing operations.",
-        "properties": {
-          "name": {
-            "$ref": "#/components/schemas/PostProcessingName"
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PostProcessingCommon"
           },
-          "hardware_config": {
-            "$ref": "#/components/schemas/PostProcessingHardwareConfig"
-          },
-          "operations": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-              "$ref": "#/components/schemas/StandalonePostProcessingOperation"
-            }
+          {
+            "type": "object",
+            "properties": {
+              "operations": {
+                "$ref": "#/components/schemas/StandalonePostProcessingOperations"
+              }
+            },
+            "required": [
+              "operations"
+            ]
           }
-        },
-        "required": [
-          "operations"
         ],
-        "additionalProperties": false
+        "unevaluatedProperties": false
       },
       "PostProcessingStatus": {
         "type": "object",
@@ -5425,46 +5441,44 @@
         "additionalProperties": false
       },
       "PostProcessingResource": {
-        "type": "object",
         "title": "PostProcessingResource",
         "description": "Standalone confidence interval post-processing resource.",
-        "properties": {
-          "resource": {
-            "$ref": "#/components/schemas/Resource"
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PostProcessingCommon"
           },
-          "name": {
-            "$ref": "#/components/schemas/PostProcessingName"
-          },
-          "hardware_config": {
-            "$ref": "#/components/schemas/PostProcessingHardwareConfig"
-          },
-          "operations": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/StandalonePostProcessingOperation"
-            }
-          },
-          "status": {
-            "$ref": "#/components/schemas/PostProcessingStatus"
-          },
-          "results": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PostProcessingResultsEvalJob"
+          {
+            "type": "object",
+            "properties": {
+              "resource": {
+                "$ref": "#/components/schemas/Resource"
               },
-              {
-                "$ref": "#/components/schemas/PostProcessingResultsExternal"
+              "operations": {
+                "$ref": "#/components/schemas/StandalonePostProcessingOperations"
+              },
+              "status": {
+                "$ref": "#/components/schemas/PostProcessingStatus"
+              },
+              "results": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/PostProcessingResultsEvalJob"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PostProcessingResultsExternal"
+                  }
+                ],
+                "description": "Use benchmark results for eval_job data and aggregate results otherwise."
               }
-            ],
-            "description": "Use benchmark results for eval_job data and aggregate results otherwise."
+            },
+            "required": [
+              "resource",
+              "operations",
+              "status"
+            ]
           }
-        },
-        "required": [
-          "resource",
-          "operations",
-          "status"
         ],
-        "additionalProperties": false
+        "unevaluatedProperties": false
       },
       "ConfidenceIntervalConfig": {
         "type": "object",
@@ -5494,68 +5508,69 @@
             "$ref": "#/components/schemas/ConfidenceIntervalConfig"
           }
         },
-        "required": [
-          "confidence_interval_config"
-        ],
         "additionalProperties": false
+      },
+      "JobPostProcessingOperations": {
+        "type": "array",
+        "title": "JobPostProcessingOperations",
+        "description": "Post-processing operations associated with an evaluation job.",
+        "minItems": 1,
+        "items": {
+          "$ref": "#/components/schemas/JobPostProcessingOperation"
+        }
       },
       "ConfidenceIntervalPostProcessingRequest": {
-        "type": "object",
         "title": "ConfidenceIntervalPostProcessingRequest",
         "description": "Request to configure post-processing operations for an evaluation job.",
-        "properties": {
-          "name": {
-            "$ref": "#/components/schemas/PostProcessingName"
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PostProcessingCommon"
           },
-          "hardware_config": {
-            "$ref": "#/components/schemas/PostProcessingHardwareConfig"
-          },
-          "operations": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-              "$ref": "#/components/schemas/JobPostProcessingOperation"
-            }
+          {
+            "type": "object",
+            "properties": {
+              "operations": {
+                "$ref": "#/components/schemas/JobPostProcessingOperations"
+              }
+            },
+            "required": [
+              "operations"
+            ]
           }
-        },
-        "required": [
-          "operations"
         ],
-        "additionalProperties": false
+        "unevaluatedProperties": false
       },
       "JobPostProcessingResource": {
-        "type": "object",
         "title": "JobPostProcessingResource",
         "description": "Confidence interval post-processing resource associated with an evaluation job.",
-        "properties": {
-          "resource": {
-            "$ref": "#/components/schemas/Resource"
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PostProcessingCommon"
           },
-          "name": {
-            "$ref": "#/components/schemas/PostProcessingName"
-          },
-          "hardware_config": {
-            "$ref": "#/components/schemas/PostProcessingHardwareConfig"
-          },
-          "operations": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/JobPostProcessingOperation"
-            }
-          },
-          "status": {
-            "$ref": "#/components/schemas/PostProcessingStatus"
-          },
-          "results": {
-            "$ref": "#/components/schemas/PostProcessingResultsEvalJob"
+          {
+            "type": "object",
+            "properties": {
+              "resource": {
+                "$ref": "#/components/schemas/Resource"
+              },
+              "operations": {
+                "$ref": "#/components/schemas/JobPostProcessingOperations"
+              },
+              "status": {
+                "$ref": "#/components/schemas/PostProcessingStatus"
+              },
+              "results": {
+                "$ref": "#/components/schemas/PostProcessingResultsEvalJob"
+              }
+            },
+            "required": [
+              "resource",
+              "operations",
+              "status"
+            ]
           }
-        },
-        "required": [
-          "resource",
-          "operations",
-          "status"
         ],
-        "additionalProperties": false
+        "unevaluatedProperties": false
       },
       "AgentMetadata": {
         "type": "object",

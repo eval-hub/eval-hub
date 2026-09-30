@@ -3854,6 +3854,15 @@ components:
       description: Optional hardware override for the post-processing job.
       allOf:
         - $ref: '#/components/schemas/BenchmarkHardwareConfig'
+    PostProcessingCommon:
+      type: object
+      title: PostProcessingCommon
+      description: Common request and resource fields for post-processing jobs.
+      properties:
+        name:
+          $ref: '#/components/schemas/PostProcessingName'
+        hardware_config:
+          $ref: '#/components/schemas/PostProcessingHardwareConfig'
     CalibrationDataConfig:
       type: object
       title: CalibrationDataConfig
@@ -4069,26 +4078,26 @@ components:
       properties:
         confidence_interval_config:
           $ref: '#/components/schemas/StandaloneConfidenceIntervalConfig'
-      required:
-        - confidence_interval_config
       additionalProperties: false
+    StandalonePostProcessingOperations:
+      type: array
+      title: StandalonePostProcessingOperations
+      description: Post-processing operations executed by a standalone resource.
+      minItems: 1
+      items:
+        $ref: '#/components/schemas/StandalonePostProcessingOperation'
     StandalonePostProcessingRequest:
-      type: object
       title: StandalonePostProcessingRequest
       description: Request to create post-processing operations.
-      properties:
-        name:
-          $ref: '#/components/schemas/PostProcessingName'
-        hardware_config:
-          $ref: '#/components/schemas/PostProcessingHardwareConfig'
-        operations:
-          type: array
-          minItems: 1
-          items:
-            $ref: '#/components/schemas/StandalonePostProcessingOperation'
-      required:
-        - operations
-      additionalProperties: false
+      allOf:
+        - $ref: '#/components/schemas/PostProcessingCommon'
+        - type: object
+          properties:
+            operations:
+              $ref: '#/components/schemas/StandalonePostProcessingOperations'
+          required:
+            - operations
+      unevaluatedProperties: false
     PostProcessingStatus:
       type: object
       title: PostProcessingStatus
@@ -4178,32 +4187,28 @@ components:
         - confidence_interval
       additionalProperties: false
     PostProcessingResource:
-      type: object
       title: PostProcessingResource
       description: Standalone confidence interval post-processing resource.
-      properties:
-        resource:
-          $ref: '#/components/schemas/Resource'
-        name:
-          $ref: '#/components/schemas/PostProcessingName'
-        hardware_config:
-          $ref: '#/components/schemas/PostProcessingHardwareConfig'
-        operations:
-          type: array
-          items:
-            $ref: '#/components/schemas/StandalonePostProcessingOperation'
-        status:
-          $ref: '#/components/schemas/PostProcessingStatus'
-        results:
-          oneOf:
-            - $ref: '#/components/schemas/PostProcessingResultsEvalJob'
-            - $ref: '#/components/schemas/PostProcessingResultsExternal'
-          description: Use benchmark results for eval_job data and aggregate results otherwise.
-      required:
-        - resource
-        - operations
-        - status
-      additionalProperties: false
+      allOf:
+        - $ref: '#/components/schemas/PostProcessingCommon'
+        - type: object
+          properties:
+            resource:
+              $ref: '#/components/schemas/Resource'
+            operations:
+              $ref: '#/components/schemas/StandalonePostProcessingOperations'
+            status:
+              $ref: '#/components/schemas/PostProcessingStatus'
+            results:
+              oneOf:
+                - $ref: '#/components/schemas/PostProcessingResultsEvalJob'
+                - $ref: '#/components/schemas/PostProcessingResultsExternal'
+              description: Use benchmark results for eval_job data and aggregate results otherwise.
+          required:
+            - resource
+            - operations
+            - status
+      unevaluatedProperties: false
     ConfidenceIntervalConfig:
       type: object
       title: ConfidenceIntervalConfig
@@ -4222,50 +4227,46 @@ components:
       properties:
         confidence_interval_config:
           $ref: '#/components/schemas/ConfidenceIntervalConfig'
-      required:
-        - confidence_interval_config
       additionalProperties: false
+    JobPostProcessingOperations:
+      type: array
+      title: JobPostProcessingOperations
+      description: Post-processing operations associated with an evaluation job.
+      minItems: 1
+      items:
+        $ref: '#/components/schemas/JobPostProcessingOperation'
     ConfidenceIntervalPostProcessingRequest:
-      type: object
       title: ConfidenceIntervalPostProcessingRequest
       description: Request to configure post-processing operations for an evaluation job.
-      properties:
-        name:
-          $ref: '#/components/schemas/PostProcessingName'
-        hardware_config:
-          $ref: '#/components/schemas/PostProcessingHardwareConfig'
-        operations:
-          type: array
-          minItems: 1
-          items:
-            $ref: '#/components/schemas/JobPostProcessingOperation'
-      required:
-        - operations
-      additionalProperties: false
+      allOf:
+        - $ref: '#/components/schemas/PostProcessingCommon'
+        - type: object
+          properties:
+            operations:
+              $ref: '#/components/schemas/JobPostProcessingOperations'
+          required:
+            - operations
+      unevaluatedProperties: false
     JobPostProcessingResource:
-      type: object
       title: JobPostProcessingResource
       description: Confidence interval post-processing resource associated with an evaluation job.
-      properties:
-        resource:
-          $ref: '#/components/schemas/Resource'
-        name:
-          $ref: '#/components/schemas/PostProcessingName'
-        hardware_config:
-          $ref: '#/components/schemas/PostProcessingHardwareConfig'
-        operations:
-          type: array
-          items:
-            $ref: '#/components/schemas/JobPostProcessingOperation'
-        status:
-          $ref: '#/components/schemas/PostProcessingStatus'
-        results:
-          $ref: '#/components/schemas/PostProcessingResultsEvalJob'
-      required:
-        - resource
-        - operations
-        - status
-      additionalProperties: false
+      allOf:
+        - $ref: '#/components/schemas/PostProcessingCommon'
+        - type: object
+          properties:
+            resource:
+              $ref: '#/components/schemas/Resource'
+            operations:
+              $ref: '#/components/schemas/JobPostProcessingOperations'
+            status:
+              $ref: '#/components/schemas/PostProcessingStatus'
+            results:
+              $ref: '#/components/schemas/PostProcessingResultsEvalJob'
+          required:
+            - resource
+            - operations
+            - status
+      unevaluatedProperties: false
     AgentMetadata:
       type: object
       description: Metadata for AI agent discoverability and operational guidance
