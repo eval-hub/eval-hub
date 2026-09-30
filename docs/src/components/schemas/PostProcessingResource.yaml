@@ -6,8 +6,12 @@ properties:
     $ref: ./Resource.yaml
   name:
     $ref: ./PostProcessingName.yaml
-  confidence_interval_config:
-    $ref: ./StandaloneConfidenceIntervalConfig.yaml
+  hardware_config:
+    $ref: ./PostProcessingHardwareConfig.yaml
+  operations:
+    type: array
+    items:
+      $ref: ./StandalonePostProcessingOperation.yaml
   status:
     $ref: ./PostProcessingStatus.yaml
   results:
@@ -17,6 +21,6 @@ properties:
     description: Use benchmark results for eval_job data and aggregate results otherwise.
 required:
   - resource
-  - confidence_interval_config
+  - operations
   - status
 additionalProperties: false

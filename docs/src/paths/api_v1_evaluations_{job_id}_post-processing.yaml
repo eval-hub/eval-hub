@@ -8,9 +8,9 @@ post:
     confidence interval computation, the existing post-processing reference is
     returned.
 
-    The computation runs independently for each benchmark. `num_parallel_threads`
-    controls how many benchmark computations may run in parallel; a value of 1
-    processes them sequentially.
+    The computation runs independently for each benchmark. Each item in
+    `operations` describes one post-processing operation. `hardware_config`
+    applies to the post-processing job as a whole.
   operationId: post_evaluations_jobs_job_id_post_processing
   parameters:
     - name: job_id
@@ -30,21 +30,32 @@ post:
             summary: Configure confidence interval computation
             value:
               name: inspect-accuracy-confidence-interval
-              confidence_interval_config:
-                num_parallel_threads: 2
-                hardware_config:
-                  cpu:
-                    request: 500m
-                    limit: "2"
-                  memory:
-                    request: 1Gi
-                    limit: "4Gi"
-                calibration_data_ref:
-                  - s3:
-                      bucket: evaluation-data
-                      key: calibration/accuracy
-                      secret_ref: evaluation-s3
-                significance_level: 0.7
+              hardware_config:
+                cpu:
+                  request: 500m
+                  limit: "2"
+                memory:
+                  request: 1Gi
+                  limit: "4Gi"
+              operations:
+                - confidence_interval_config:
+                    num_parallel_threads: 2
+                    calibration_data_ref:
+                      - s3:
+                          bucket: evaluation-data
+                          key: calibration/accuracy
+                          secret_ref: my-s3-connection-secret
+                        data_config:
+                          format: jsonl
+                          columns:
+                            sample_id: example_id
+                            label: human_score
+                            prediction: judge_score
+                            benchmark_id: benchmark_id
+                            provider_id: provider_id
+                          selection:
+                            metric: accuracy
+                    significance_level: 0.7
   responses:
     '200':
       description: >

@@ -961,7 +961,7 @@
           "Evaluations"
         ],
         "summary": "Create Post-Processing Computation",
-        "description": "Create an asynchronous confidence interval post-processing computation.",
+        "description": "Create an asynchronous post-processing computation.",
         "operationId": "create_evaluations_post_processing",
         "requestBody": {
           "required": true,
@@ -975,24 +975,51 @@
                   "summary": "Compute confidence intervals from an evaluation job",
                   "value": {
                     "name": "inspect-accuracy-confidence-interval",
-                    "confidence_interval_config": {
-                      "results_data_ref": {
-                        "eval_job": {
-                          "id": "8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7",
-                          "num_parallel_threads": 2
-                        }
+                    "hardware_config": {
+                      "cpu": {
+                        "request": "500m",
+                        "limit": "2"
                       },
-                      "calibration_data_ref": [
-                        {
-                          "s3": {
-                            "bucket": "evaluation-data",
-                            "key": "calibration/accuracy",
-                            "secret_ref": "evaluation-s3"
-                          }
+                      "memory": {
+                        "request": "1Gi",
+                        "limit": "4Gi"
+                      }
+                    },
+                    "operations": [
+                      {
+                        "confidence_interval_config": {
+                          "results_data_ref": {
+                            "eval_job": {
+                              "id": "8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7",
+                              "num_parallel_threads": 2
+                            }
+                          },
+                          "calibration_data_ref": [
+                            {
+                              "s3": {
+                                "bucket": "evaluation-data",
+                                "key": "calibration/accuracy",
+                                "secret_ref": "my-s3-connection-secret"
+                              },
+                              "data_config": {
+                                "format": "jsonl",
+                                "columns": {
+                                  "sample_id": "example_id",
+                                  "label": "human_score",
+                                  "prediction": "judge_score",
+                                  "benchmark_id": "benchmark_id",
+                                  "provider_id": "provider_id"
+                                },
+                                "selection": {
+                                  "metric": "accuracy"
+                                }
+                              }
+                            }
+                          ],
+                          "significance_level": 0.7
                         }
-                      ],
-                      "significance_level": 0.7
-                    }
+                      }
+                    ]
                   }
                 }
               }
@@ -1063,24 +1090,51 @@
                         "owner": "nbs"
                       },
                       "name": "inspect-accuracy-confidence-interval",
-                      "confidence_interval_config": {
-                        "results_data_ref": {
-                          "eval_job": {
-                            "id": "8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7",
-                            "num_parallel_threads": 2
-                          }
+                      "hardware_config": {
+                        "cpu": {
+                          "request": "500m",
+                          "limit": "2"
                         },
-                        "calibration_data_ref": [
-                          {
-                            "s3": {
-                              "bucket": "evaluation-data",
-                              "key": "calibration/accuracy",
-                              "secret_ref": "evaluation-s3"
-                            }
-                          }
-                        ],
-                        "significance_level": 0.7
+                        "memory": {
+                          "request": "1Gi",
+                          "limit": "4Gi"
+                        }
                       },
+                      "operations": [
+                        {
+                          "confidence_interval_config": {
+                            "results_data_ref": {
+                              "eval_job": {
+                                "id": "8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7",
+                                "num_parallel_threads": 2
+                              }
+                            },
+                            "calibration_data_ref": [
+                              {
+                                "s3": {
+                                  "bucket": "evaluation-data",
+                                  "key": "calibration/accuracy",
+                                  "secret_ref": "my-s3-connection-secret"
+                                },
+                                "data_config": {
+                                  "format": "jsonl",
+                                  "columns": {
+                                    "sample_id": "example_id",
+                                    "label": "human_score",
+                                    "prediction": "judge_score",
+                                    "benchmark_id": "benchmark_id",
+                                    "provider_id": "provider_id"
+                                  },
+                                  "selection": {
+                                    "metric": "accuracy"
+                                  }
+                                }
+                              }
+                            ],
+                            "significance_level": 0.7
+                          }
+                        }
+                      ],
                       "status": {
                         "state": "completed",
                         "benchmarks": [
@@ -1118,25 +1172,55 @@
                         "owner": "nbs"
                       },
                       "name": "external-accuracy-confidence-interval",
-                      "confidence_interval_config": {
-                        "results_data_ref": {
-                          "s3": {
-                            "bucket": "evaluation-data",
-                            "key": "results/accuracy",
-                            "secret_ref": "evaluation-s3"
-                          }
+                      "hardware_config": {
+                        "cpu": {
+                          "request": "500m",
+                          "limit": "2"
                         },
-                        "calibration_data_ref": [
-                          {
-                            "s3": {
-                              "bucket": "evaluation-data",
-                              "key": "calibration/accuracy",
-                              "secret_ref": "evaluation-s3"
-                            }
-                          }
-                        ],
-                        "significance_level": 0.7
+                        "memory": {
+                          "request": "1Gi",
+                          "limit": "4Gi"
+                        }
                       },
+                      "operations": [
+                        {
+                          "confidence_interval_config": {
+                            "results_data_ref": {
+                              "s3": {
+                                "bucket": "evaluation-data",
+                                "key": "results/accuracy",
+                                "secret_ref": "my-s3-connection-secret"
+                              }
+                            },
+                            "primary_score": {
+                              "metric": "accuracy"
+                            },
+                            "calibration_data_ref": [
+                              {
+                                "s3": {
+                                  "bucket": "evaluation-data",
+                                  "key": "calibration/accuracy",
+                                  "secret_ref": "my-s3-connection-secret"
+                                },
+                                "data_config": {
+                                  "format": "jsonl",
+                                  "columns": {
+                                    "sample_id": "example_id",
+                                    "label": "human_score",
+                                    "prediction": "judge_score",
+                                    "benchmark_id": "benchmark_id",
+                                    "provider_id": "provider_id"
+                                  },
+                                  "selection": {
+                                    "metric": "accuracy"
+                                  }
+                                }
+                              }
+                            ],
+                            "significance_level": 0.7
+                          }
+                        }
+                      ],
                       "status": {
                         "state": "completed"
                       },
@@ -1202,7 +1286,7 @@
           "Evaluations"
         ],
         "summary": "Create Confidence Interval Post-Processing",
-        "description": "Create confidence interval computation for the benchmarks in an existing\nevaluation job. The operation is idempotent: if the same job already has a\nconfidence interval computation, the existing post-processing reference is\nreturned.\n\nThe computation runs independently for each benchmark. `num_parallel_threads`\ncontrols how many benchmark computations may run in parallel; a value of 1\nprocesses them sequentially.\n",
+        "description": "Create confidence interval computation for the benchmarks in an existing\nevaluation job. The operation is idempotent: if the same job already has a\nconfidence interval computation, the existing post-processing reference is\nreturned.\n\nThe computation runs independently for each benchmark. Each item in\n`operations` describes one post-processing operation. `hardware_config`\napplies to the post-processing job as a whole.\n",
         "operationId": "post_evaluations_jobs_job_id_post_processing",
         "parameters": [
           {
@@ -1227,29 +1311,46 @@
                   "summary": "Configure confidence interval computation",
                   "value": {
                     "name": "inspect-accuracy-confidence-interval",
-                    "confidence_interval_config": {
-                      "num_parallel_threads": 2,
-                      "hardware_config": {
-                        "cpu": {
-                          "request": "500m",
-                          "limit": "2"
-                        },
-                        "memory": {
-                          "request": "1Gi",
-                          "limit": "4Gi"
-                        }
+                    "hardware_config": {
+                      "cpu": {
+                        "request": "500m",
+                        "limit": "2"
                       },
-                      "calibration_data_ref": [
-                        {
-                          "s3": {
-                            "bucket": "evaluation-data",
-                            "key": "calibration/accuracy",
-                            "secret_ref": "evaluation-s3"
-                          }
+                      "memory": {
+                        "request": "1Gi",
+                        "limit": "4Gi"
+                      }
+                    },
+                    "operations": [
+                      {
+                        "confidence_interval_config": {
+                          "num_parallel_threads": 2,
+                          "calibration_data_ref": [
+                            {
+                              "s3": {
+                                "bucket": "evaluation-data",
+                                "key": "calibration/accuracy",
+                                "secret_ref": "my-s3-connection-secret"
+                              },
+                              "data_config": {
+                                "format": "jsonl",
+                                "columns": {
+                                  "sample_id": "example_id",
+                                  "label": "human_score",
+                                  "prediction": "judge_score",
+                                  "benchmark_id": "benchmark_id",
+                                  "provider_id": "provider_id"
+                                },
+                                "selection": {
+                                  "metric": "accuracy"
+                                }
+                              }
+                            }
+                          ],
+                          "significance_level": 0.7
                         }
-                      ],
-                      "significance_level": 0.7
-                    }
+                      }
+                    ]
                   }
                 }
               }
@@ -1340,19 +1441,46 @@
                     "owner": "nbs"
                   },
                   "name": "inspect-accuracy-confidence-interval",
-                  "confidence_interval_config": {
-                    "num_parallel_threads": 2,
-                    "calibration_data_ref": [
-                      {
-                        "s3": {
-                          "bucket": "evaluation-data",
-                          "key": "calibration/accuracy",
-                          "secret_ref": "evaluation-s3"
-                        }
-                      }
-                    ],
-                    "significance_level": 0.7
+                  "hardware_config": {
+                    "cpu": {
+                      "request": "500m",
+                      "limit": "2"
+                    },
+                    "memory": {
+                      "request": "1Gi",
+                      "limit": "4Gi"
+                    }
                   },
+                  "operations": [
+                    {
+                      "confidence_interval_config": {
+                        "num_parallel_threads": 2,
+                        "calibration_data_ref": [
+                          {
+                            "s3": {
+                              "bucket": "evaluation-data",
+                              "key": "calibration/accuracy",
+                              "secret_ref": "my-s3-connection-secret"
+                            },
+                            "data_config": {
+                              "format": "jsonl",
+                              "columns": {
+                                "sample_id": "example_id",
+                                "label": "human_score",
+                                "prediction": "judge_score",
+                                "benchmark_id": "benchmark_id",
+                                "provider_id": "provider_id"
+                              },
+                              "selection": {
+                                "metric": "accuracy"
+                              }
+                            }
+                          }
+                        ],
+                        "significance_level": 0.7
+                      }
+                    }
+                  ],
                   "status": {
                     "state": "completed",
                     "benchmarks": [
@@ -4691,20 +4819,140 @@
         "minLength": 1,
         "description": "Name of the confidence interval post-processing computation."
       },
+      "PostProcessingHardwareConfig": {
+        "title": "PostProcessingHardwareConfig",
+        "description": "Optional hardware override for the post-processing job.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BenchmarkHardwareConfig"
+          }
+        ]
+      },
+      "CalibrationDataConfig": {
+        "type": "object",
+        "title": "CalibrationDataConfig",
+        "description": "Description of the calibration dataset format and column mappings.",
+        "properties": {
+          "format": {
+            "type": "string",
+            "description": "Serialization format of the calibration dataset, for example `jsonl`."
+          },
+          "columns": {
+            "type": "object",
+            "description": "Mapping from logical calibration fields to physical dataset column names.",
+            "properties": {
+              "sample_id": {
+                "type": "string",
+                "description": "Dataset column containing the sample identifier."
+              },
+              "label": {
+                "type": "string",
+                "description": "Dataset column containing the observed or human label."
+              },
+              "prediction": {
+                "type": "string",
+                "description": "Dataset column containing the model or judge prediction."
+              },
+              "benchmark_id": {
+                "type": "string",
+                "description": "Dataset column containing the benchmark identifier."
+              },
+              "provider_id": {
+                "type": "string",
+                "description": "Dataset column containing the provider identifier."
+              }
+            },
+            "required": [
+              "label",
+              "prediction"
+            ],
+            "additionalProperties": false
+          },
+          "selection": {
+            "type": "object",
+            "description": "Optional selection criteria when the calibration data contains multiple metrics.",
+            "properties": {
+              "metric": {
+                "type": "string",
+                "description": "Metric to use from the calibration dataset."
+              }
+            },
+            "required": [
+              "metric"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "format",
+          "columns"
+        ],
+        "additionalProperties": false
+      },
+      "CalibrationDataRef": {
+        "type": "object",
+        "title": "CalibrationDataRef",
+        "description": "External calibration data reference together with its dataset description.",
+        "properties": {
+          "s3": {
+            "$ref": "#/components/schemas/TestDataRefS3"
+          },
+          "pvc": {
+            "$ref": "#/components/schemas/TestDataRefPVC"
+          },
+          "git": {
+            "$ref": "#/components/schemas/TestDataRefGit"
+          },
+          "hf": {
+            "$ref": "#/components/schemas/TestDataRefHF"
+          },
+          "resolved_sha": {
+            "$ref": "#/components/schemas/TestDataRefResolvedSHA"
+          },
+          "type": {
+            "$ref": "#/components/schemas/TestDataRefType"
+          },
+          "data_config": {
+            "$ref": "#/components/schemas/CalibrationDataConfig"
+          }
+        },
+        "required": [
+          "data_config"
+        ],
+        "oneOf": [
+          {
+            "required": [
+              "s3"
+            ]
+          },
+          {
+            "required": [
+              "pvc"
+            ]
+          },
+          {
+            "required": [
+              "git"
+            ]
+          },
+          {
+            "required": [
+              "hf"
+            ]
+          }
+        ],
+        "additionalProperties": false
+      },
       "ConfidenceIntervalConfigCommon": {
         "type": "object",
         "title": "ConfidenceIntervalConfigCommon",
         "description": "Common configuration for confidence interval post-processing.",
         "properties": {
-          "hardware_config": {
-            "$ref": "#/components/schemas/BenchmarkHardwareConfig",
-            "description": "Optional hardware override for confidence interval computation."
-          },
           "calibration_data_ref": {
             "type": "array",
             "minItems": 1,
             "items": {
-              "$ref": "#/components/schemas/TestDataRef"
+              "$ref": "#/components/schemas/CalibrationDataRef"
             },
             "description": "References to the labeled calibration data used by the computation."
           },
@@ -4848,40 +5096,85 @@
           },
           {
             "type": "object",
-            "properties": {
-              "results_data_ref": {
-                "oneOf": [
-                  {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "results_data_ref": {
                     "$ref": "#/components/schemas/EvaluationJobDataRef"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ExternalResultsDataRef"
                   }
+                },
+                "required": [
+                  "results_data_ref"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "results_data_ref": {
+                    "$ref": "#/components/schemas/ExternalResultsDataRef"
+                  },
+                  "primary_score": {
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/PrimaryScore"
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "metric"
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "results_data_ref",
+                  "primary_score"
                 ],
-                "description": "Result data reference. An evaluation job is supported only for result data."
+                "description": "Direct external result references must identify the primary score metric."
               }
-            },
-            "required": [
-              "results_data_ref"
-            ]
+            ],
+            "description": "Result data reference. An evaluation job is supported only for result data."
           }
         ],
         "unevaluatedProperties": false
       },
-      "StandalonePostProcessingRequest": {
+      "StandalonePostProcessingOperation": {
         "type": "object",
-        "title": "StandalonePostProcessingRequest",
-        "description": "Request to create a confidence interval post-processing resource.",
+        "title": "StandalonePostProcessingOperation",
+        "description": "Confidence interval operation executed by standalone post-processing.",
         "properties": {
-          "name": {
-            "$ref": "#/components/schemas/PostProcessingName"
-          },
           "confidence_interval_config": {
             "$ref": "#/components/schemas/StandaloneConfidenceIntervalConfig"
           }
         },
         "required": [
           "confidence_interval_config"
+        ],
+        "additionalProperties": false
+      },
+      "StandalonePostProcessingRequest": {
+        "type": "object",
+        "title": "StandalonePostProcessingRequest",
+        "description": "Request to create post-processing operations.",
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/PostProcessingName"
+          },
+          "hardware_config": {
+            "$ref": "#/components/schemas/PostProcessingHardwareConfig"
+          },
+          "operations": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/StandalonePostProcessingOperation"
+            }
+          }
+        },
+        "required": [
+          "operations"
         ],
         "additionalProperties": false
       },
@@ -5015,8 +5308,14 @@
           "name": {
             "$ref": "#/components/schemas/PostProcessingName"
           },
-          "confidence_interval_config": {
-            "$ref": "#/components/schemas/StandaloneConfidenceIntervalConfig"
+          "hardware_config": {
+            "$ref": "#/components/schemas/PostProcessingHardwareConfig"
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StandalonePostProcessingOperation"
+            }
           },
           "status": {
             "$ref": "#/components/schemas/PostProcessingStatus"
@@ -5035,7 +5334,7 @@
         },
         "required": [
           "resource",
-          "confidence_interval_config",
+          "operations",
           "status"
         ],
         "additionalProperties": false
@@ -5059,20 +5358,41 @@
         ],
         "unevaluatedProperties": false
       },
-      "ConfidenceIntervalPostProcessingRequest": {
+      "JobPostProcessingOperation": {
         "type": "object",
-        "title": "ConfidenceIntervalPostProcessingRequest",
-        "description": "Request to configure confidence interval post-processing.",
+        "title": "JobPostProcessingOperation",
+        "description": "Confidence interval operation executed for an evaluation job.",
         "properties": {
-          "name": {
-            "$ref": "#/components/schemas/PostProcessingName"
-          },
           "confidence_interval_config": {
             "$ref": "#/components/schemas/ConfidenceIntervalConfig"
           }
         },
         "required": [
           "confidence_interval_config"
+        ],
+        "additionalProperties": false
+      },
+      "ConfidenceIntervalPostProcessingRequest": {
+        "type": "object",
+        "title": "ConfidenceIntervalPostProcessingRequest",
+        "description": "Request to configure post-processing operations for an evaluation job.",
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/PostProcessingName"
+          },
+          "hardware_config": {
+            "$ref": "#/components/schemas/PostProcessingHardwareConfig"
+          },
+          "operations": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/JobPostProcessingOperation"
+            }
+          }
+        },
+        "required": [
+          "operations"
         ],
         "additionalProperties": false
       },
@@ -5087,8 +5407,14 @@
           "name": {
             "$ref": "#/components/schemas/PostProcessingName"
           },
-          "confidence_interval_config": {
-            "$ref": "#/components/schemas/ConfidenceIntervalConfig"
+          "hardware_config": {
+            "$ref": "#/components/schemas/PostProcessingHardwareConfig"
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JobPostProcessingOperation"
+            }
           },
           "status": {
             "$ref": "#/components/schemas/PostProcessingStatus"
@@ -5099,7 +5425,7 @@
         },
         "required": [
           "resource",
-          "confidence_interval_config",
+          "operations",
           "status"
         ],
         "additionalProperties": false

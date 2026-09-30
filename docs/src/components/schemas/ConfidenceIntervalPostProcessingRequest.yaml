@@ -1,11 +1,16 @@
 type: object
 title: ConfidenceIntervalPostProcessingRequest
-description: Request to configure confidence interval post-processing.
+description: Request to configure post-processing operations for an evaluation job.
 properties:
   name:
     $ref: ./PostProcessingName.yaml
-  confidence_interval_config:
-    $ref: ./ConfidenceIntervalConfig.yaml
+  hardware_config:
+    $ref: ./PostProcessingHardwareConfig.yaml
+  operations:
+    type: array
+    minItems: 1
+    items:
+      $ref: ./JobPostProcessingOperation.yaml
 required:
-  - confidence_interval_config
+  - operations
 additionalProperties: false

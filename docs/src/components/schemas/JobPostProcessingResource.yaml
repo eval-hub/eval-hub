@@ -6,14 +6,18 @@ properties:
     $ref: ./Resource.yaml
   name:
     $ref: ./PostProcessingName.yaml
-  confidence_interval_config:
-    $ref: ./ConfidenceIntervalConfig.yaml
+  hardware_config:
+    $ref: ./PostProcessingHardwareConfig.yaml
+  operations:
+    type: array
+    items:
+      $ref: ./JobPostProcessingOperation.yaml
   status:
     $ref: ./PostProcessingStatus.yaml
   results:
     $ref: ./PostProcessingResultsEvalJob.yaml
 required:
   - resource
-  - confidence_interval_config
+  - operations
   - status
 additionalProperties: false
