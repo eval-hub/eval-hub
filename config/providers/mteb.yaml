@@ -27,6 +27,10 @@ benchmarks:
     name: Semantic Textual Similarity Suite
     description: STS benchmark suite covering STS12-17, STSBenchmark, and SICK-R
     category: semantic_similarity
+    domains: [knowledge_and_reasoning]
+    tasks: [semantic_similarity]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - main_score
       - cosine_spearman
@@ -45,6 +49,10 @@ benchmarks:
     name: Retrieval Suite
     description: Information retrieval benchmark suite with NFCorpus, SciFact, ArguAna, TRECCOVID, and Touche2020
     category: retrieval
+    domains: [knowledge_and_reasoning]
+    tasks: [information_retrieval]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - main_score
       - ndcg_at_10
@@ -63,6 +71,10 @@ benchmarks:
     name: Classification Suite
     description: Text classification benchmark suite with AmazonReviewsClassification, Banking77Classification, and EmotionClassification
     category: classification
+    domains: [knowledge_and_reasoning]
+    tasks: [classification]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - main_score
       - accuracy
@@ -79,6 +91,10 @@ benchmarks:
     name: Clustering Suite
     description: Document clustering benchmark suite with ArxivClusteringP2P, ArxivClusteringS2S, and BiorxivClusteringP2P
     category: clustering
+    domains: [knowledge_and_reasoning]
+    tasks: [clustering]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - main_score
       - v_measure
@@ -95,6 +111,10 @@ benchmarks:
     name: Reranking Suite
     description: Passage reranking benchmark suite with AskUbuntuDupQuestions, MindSmallReranking, and SciDocsRR
     category: reranking
+    domains: [knowledge_and_reasoning]
+    tasks: [reranking]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - main_score
       - map
