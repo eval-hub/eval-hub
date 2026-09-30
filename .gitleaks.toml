@@ -1,0 +1,15 @@
+title = "Eval Hub gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Documented placeholder secret reference in API documentation"
+condition = "AND"
+paths = [
+  '''(^|/)docs/index(-private|-public)?\.html$''',
+  '''(^|/)docs/openapi(-internal)?\.(yaml|json)$''',
+  '''(^|/)docs/src/components/schemas/TestDataRefS3\.yaml$'''
+]
+regexTarget = "secret"
+regexes = ['''^my-s3-connection-secret$''']

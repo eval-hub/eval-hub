@@ -44,7 +44,7 @@ post:
                       - s3:
                           bucket: evaluation-data
                           key: calibration/accuracy
-                          secret_ref: my-s3-connection-secret
+                          secret_ref: s3-secret
                         data_config:
                           format: jsonl
                           columns:
@@ -85,7 +85,7 @@ post:
                     - s3:
                         bucket: evaluation-data
                         key: calibration/accuracy
-                        secret_ref: my-s3-connection-secret
+                        secret_ref: s3-secret
                       data_config:
                         format: jsonl
                         columns:
@@ -140,7 +140,7 @@ post:
                     - s3:
                         bucket: evaluation-data
                         key: calibration/accuracy
-                        secret_ref: my-s3-connection-secret
+                        secret_ref: s3-secret
                       data_config:
                         format: jsonl
                         columns:
