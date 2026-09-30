@@ -1,0 +1,6 @@
+type: array
+title: StandalonePostProcessingOperations
+description: Post-processing operations executed by a standalone resource.
+minItems: 1
+items:
+  $ref: ./StandalonePostProcessingOperation.yaml

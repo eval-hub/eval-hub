@@ -2,7 +2,7 @@ post:
   tags:
     - Evaluations
   summary: Create Post-Processing Computation
-  description: Create an asynchronous confidence interval post-processing computation.
+  description: Create an asynchronous post-processing computation.
   operationId: create_evaluations_post_processing
   requestBody:
     required: true
@@ -15,17 +15,35 @@ post:
             summary: Compute confidence intervals from an evaluation job
             value:
               name: inspect-accuracy-confidence-interval
-              confidence_interval_config:
-                results_data_ref:
-                  eval_job:
-                    id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
-                    num_parallel_threads: 2
-                calibration_data_ref:
-                  - s3:
-                      bucket: evaluation-data
-                      key: calibration/accuracy
-                      secret_ref: evaluation-s3
-                significance_level: 0.7
+              hardware_config:
+                cpu:
+                  request: 500m
+                  limit: "2"
+                memory:
+                  request: 1Gi
+                  limit: "4Gi"
+              operations:
+                - confidence_interval_config:
+                    results_data_ref:
+                      eval_job:
+                        id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
+                        num_parallel_threads: 2
+                    calibration_data_ref:
+                      - s3:
+                          bucket: evaluation-data
+                          key: calibration/accuracy
+                          secret_ref: s3-secret
+                        data_config:
+                          format: jsonl
+                          columns:
+                            sample_id: example_id
+                            label: human_score
+                            prediction: judge_score
+                            benchmark_id: benchmark_id
+                            provider_id: provider_id
+                          selection:
+                            metric: accuracy
+                    significance_level: 0.7
   responses:
     '202':
       description: Post-processing computation accepted.

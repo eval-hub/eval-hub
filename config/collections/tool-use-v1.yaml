@@ -11,8 +11,11 @@ tags:
   - api
   - inspect-evals
   - curated
-domains:
-  - tool_use_and_function_calling
+domains: [tool_use_and_function_calling]
+tasks: [call_generation, parameter_type_correctness, relevance_no_call_detection]
+modalities: [text]
+evaluation_targets: [model]
+curation_order: 4
 pass_criteria:
   threshold: 0.60
 benchmarks:

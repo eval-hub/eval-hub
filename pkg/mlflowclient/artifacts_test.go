@@ -167,21 +167,6 @@ func TestDownloadArtifactWithWorkspaceHeader(t *testing.T) {
 	}
 }
 
-func TestReaderContentLength(t *testing.T) {
-	t.Parallel()
-
-	body := []byte("artifact-bytes")
-	if got := readerContentLength(bytes.NewReader(body)); got != int64(len(body)) {
-		t.Fatalf("bytes.Reader length = %d, want %d", got, len(body))
-	}
-	if got := readerContentLength(strings.NewReader("artifact-bytes")); got != int64(len(body)) {
-		t.Fatalf("strings.Reader length = %d, want %d", got, len(body))
-	}
-	if got := readerContentLength(io.NopCloser(strings.NewReader("x"))); got != -1 {
-		t.Fatalf("wrapped reader length = %d, want -1", got)
-	}
-}
-
 func TestUploadArtifactWithoutKnownContentLength(t *testing.T) {
 	t.Parallel()
 

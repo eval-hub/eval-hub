@@ -1,0 +1,4 @@
+title: PostProcessingHardwareConfig
+description: Optional hardware override for the post-processing job.
+allOf:
+  - $ref: ./BenchmarkHardwareConfig.yaml

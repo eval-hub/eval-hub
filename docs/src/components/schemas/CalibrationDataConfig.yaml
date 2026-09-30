@@ -1,0 +1,44 @@
+type: object
+title: CalibrationDataConfig
+description: Description of the calibration dataset format and column mappings.
+properties:
+  format:
+    type: string
+    description: Serialization format of the calibration dataset, for example `jsonl`.
+  columns:
+    type: object
+    description: Mapping from logical calibration fields to physical dataset column names.
+    properties:
+      sample_id:
+        type: string
+        description: Dataset column containing the sample identifier.
+      label:
+        type: string
+        description: Dataset column containing the observed or human label.
+      prediction:
+        type: string
+        description: Dataset column containing the model or judge prediction.
+      benchmark_id:
+        type: string
+        description: Dataset column containing the benchmark identifier.
+      provider_id:
+        type: string
+        description: Dataset column containing the provider identifier.
+    required:
+      - label
+      - prediction
+    additionalProperties: false
+  selection:
+    type: object
+    description: Optional selection criteria when the calibration data contains multiple metrics.
+    properties:
+      metric:
+        type: string
+        description: Metric to use from the calibration dataset.
+    required:
+      - metric
+    additionalProperties: false
+required:
+  - format
+  - columns
+additionalProperties: false

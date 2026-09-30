@@ -12,8 +12,11 @@ tags:
   - document-understanding
   - inspect-evals
   - curated
-domains:
-  - multimodal
+domains: [multimodal]
+tasks: [document_chart_vqa]
+modalities: [multimodal]
+evaluation_targets: [model]
+curation_order: 7
 pass_criteria:
   threshold: 0.50
 benchmarks:

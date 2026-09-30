@@ -1,6 +1,11 @@
 id: toxicity-and-ethical-principles
 name: Toxicity and Ethical Principles
 category: safety
+domains: [trustworthiness]
+tasks: [safety]
+modalities: [text]
+evaluation_targets: [model]
+curation_order: 0
 description: >
   End-to-end safety assessment covering three dimensions: toxic content generation targeting individuals or groups,
   tendency to produce false or misleading information, and alignment with ethical principles of helpfulness,

@@ -1,13 +1,12 @@
 package mlflowclient
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/opendatahub-io/mlflow-go/mlflow/artifacts"
 )
 
 const artifactsAPIBasePath = "/api/2.0/mlflow-artifacts/artifacts"
@@ -15,8 +14,7 @@ const artifactsAPIBasePath = "/api/2.0/mlflow-artifacts/artifacts"
 // UploadArtifact uploads artifact content to the MLflow proxied artifact store and returns
 // the tracking-server URL used to download the artifact.
 // artifactPath is the full artifact path (for example "1/abc123/artifacts/evaluation-card.json").
-// Content length is set automatically when it can be determined from the reader; otherwise
-// the request uses chunked transfer encoding.
+// The content is streamed by mlflow-go with no size cap.
 func (c *Client) UploadArtifact(artifactPath string, content io.Reader, contentType string) (string, error) {
 	if c == nil {
 		return "", fmt.Errorf("mlflow client is nil")
@@ -38,81 +36,19 @@ func (c *Client) UploadArtifact(artifactPath string, content io.Reader, contentT
 	}
 	artifactURL := c.baseURL + endpoint
 
-	if c.ctx == nil {
-		return "", fmt.Errorf("context is nil for MLFlow request")
-	}
-
-	req, err := http.NewRequestWithContext(c.ctx, http.MethodPut, artifactURL, content)
+	d, err := c.resolveDelegate()
 	if err != nil {
-		return "", fmt.Errorf("failed to create upload request: %w", err)
+		return "", err
 	}
-	req.Header.Set("Content-Type", contentType)
-	contentLength := readerContentLength(content)
-	if contentLength >= 0 {
-		req.ContentLength = contentLength
+	if err := d.Artifacts().UploadArtifact(
+		c.Context(),
+		artifactPath,
+		content,
+		artifacts.WithUploadContentType(contentType),
+	); err != nil {
+		return "", mapError(err)
 	}
-	c.applyAuthHeader(req)
-	c.applyWorkspaceHeaders(req.Header)
-
-	if contentLength >= 0 {
-		c.logger.Info("MLFlow artifact upload started", "endpoint", endpoint, "bytes", contentLength)
-	} else {
-		c.logger.Info("MLFlow artifact upload started", "endpoint", endpoint)
-	}
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to upload artifact: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read upload response body: %w", err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		mlflowError := MLFlowError{}
-		if err := json.Unmarshal(respBody, &mlflowError); err == nil && mlflowError.ErrorCode != "" {
-			return "", &APIError{
-				StatusCode:   resp.StatusCode,
-				ResponseBody: string(respBody),
-				MLFlowError:  &mlflowError,
-			}
-		}
-		return "", &APIError{
-			StatusCode:   resp.StatusCode,
-			ResponseBody: string(respBody),
-		}
-	}
-
-	c.logger.Info("MLFlow artifact upload successful", "endpoint", endpoint, "status", resp.StatusCode)
 	return artifactURL, nil
-}
-
-func readerContentLength(r io.Reader) int64 {
-	switch br := r.(type) {
-	case *bytes.Reader:
-		return int64(br.Len())
-	case *bytes.Buffer:
-		return int64(br.Len())
-	case *strings.Reader:
-		return int64(br.Len())
-	}
-
-	seeker, ok := r.(io.Seeker)
-	if !ok {
-		return -1
-	}
-	current, err := seeker.Seek(0, io.SeekCurrent)
-	if err != nil {
-		return -1
-	}
-	end, err := seeker.Seek(0, io.SeekEnd)
-	if err != nil {
-		return -1
-	}
-	if _, err := seeker.Seek(current, io.SeekStart); err != nil {
-		return -1
-	}
-	return end - current
 }
 
 func buildArtifactUploadEndpoint(artifactPath string) (string, error) {
@@ -145,52 +81,18 @@ func (c *Client) DownloadArtifact(artifactPath string) (io.ReadCloser, error) {
 	if artifactPath == "" {
 		return nil, fmt.Errorf("artifact path is required")
 	}
+	// Validate the path with the same rules used for uploads (rejects "." / "..").
+	if _, err := buildArtifactUploadEndpoint(artifactPath); err != nil {
+		return nil, err
+	}
 
-	endpoint, err := buildArtifactUploadEndpoint(artifactPath)
+	d, err := c.resolveDelegate()
 	if err != nil {
 		return nil, err
 	}
-	artifactURL := c.baseURL + endpoint
-
-	if c.ctx == nil {
-		return nil, fmt.Errorf("context is nil for MLFlow request")
-	}
-
-	req, err := http.NewRequestWithContext(c.ctx, http.MethodGet, artifactURL, nil)
+	rc, err := d.Artifacts().DownloadArtifactByPath(c.Context(), artifactPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create download request: %w", err)
+		return nil, mapError(err)
 	}
-	c.applyAuthHeader(req)
-	c.applyWorkspaceHeaders(req.Header)
-
-	c.logger.Info("MLFlow artifact download started", "endpoint", endpoint)
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to download artifact: %w", err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		defer func() { _ = resp.Body.Close() }()
-		respBody, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, &APIError{
-				StatusCode:   resp.StatusCode,
-				ResponseBody: fmt.Sprintf("failed to read error response body: %v", err),
-			}
-		}
-		mlflowError := MLFlowError{}
-		if err := json.Unmarshal(respBody, &mlflowError); err == nil {
-			return nil, &APIError{
-				StatusCode:   resp.StatusCode,
-				ResponseBody: string(respBody),
-				MLFlowError:  &mlflowError,
-			}
-		}
-		return nil, &APIError{
-			StatusCode:   resp.StatusCode,
-			ResponseBody: string(respBody),
-		}
-	}
-
-	c.logger.Info("MLFlow artifact download reader returned to client", "endpoint", endpoint, "status", resp.StatusCode)
-	return resp.Body, nil
+	return rc, nil
 }

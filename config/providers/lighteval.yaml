@@ -22,6 +22,10 @@ benchmarks:
     description: |-
       Aggregated commonsense tests: activity completion, pronoun resolution, open-book QA, and science reasoning.
     category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - acc
       - acc_norm
@@ -39,6 +43,10 @@ benchmarks:
     name: Science reasoning suite
     description: Combined easy and hard science question answering (ARC Easy + Challenge).
     category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - acc
       - acc_norm
@@ -56,6 +64,10 @@ benchmarks:
     name: Physical world understanding suite
     description: Tests intuition about how everyday physical objects and actions work.
     category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - acc
     tags:
@@ -72,6 +84,10 @@ benchmarks:
     name: Honesty & hallucination suite
     description: Combined multiple-choice and generative tests of model truthfulness.
     category: safety
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - mc1
       - mc2
@@ -89,6 +105,10 @@ benchmarks:
     name: Mathematical problem-solving suite
     description: "Aggregated math benchmarks: grade-school word problems, algebra, and probability."
     category: math
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - exact_match
       - acc
@@ -106,6 +126,10 @@ benchmarks:
     name: Factual knowledge suite
     description: Combined factual recall across 57 academic subjects and trivia.
     category: knowledge
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - acc
       - acc_norm
@@ -122,6 +146,10 @@ benchmarks:
     name: Language understanding suite
     description: "Core NLU tasks: grammaticality, sentiment, and paraphrase detection (GLUE)."
     category: language_understanding
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - acc
       - matthews_correlation
@@ -141,6 +169,10 @@ benchmarks:
     name: Everyday activity completion
     description: Picks the most plausible continuation of an everyday scenario (10,042 examples).
     category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - acc
       - acc_norm
@@ -159,6 +191,10 @@ benchmarks:
     name: Pronoun common sense
     description: Resolves ambiguous pronouns using real-world common sense (1,267 examples).
     category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - acc
     num_few_shot: 0
@@ -177,6 +213,10 @@ benchmarks:
     description: |-
       Answers science questions with access to core facts — tests multi-hop reasoning (500 examples).
     category: knowledge
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - acc
       - acc_norm
@@ -195,6 +235,10 @@ benchmarks:
     name: "Basic science Q&A"
     description: Easy grade-school science questions (2,376 examples).
     category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - acc
       - acc_norm
@@ -213,6 +257,10 @@ benchmarks:
     name: "Hard science Q&A"
     description: Difficult science questions requiring deeper reasoning than ARC Easy (1,172 examples).
     category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - acc
       - acc_norm
@@ -231,6 +279,10 @@ benchmarks:
     name: Physical interaction intuition
     description: Tests understanding of everyday physical actions and their outcomes (1,838 examples).
     category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - acc
     num_few_shot: 0
@@ -248,6 +300,10 @@ benchmarks:
     name: Misconception resistance (multiple choice)
     description: Tests whether the model avoids popular myths and common misconceptions (817 questions).
     category: safety
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - mc1
       - mc2
@@ -266,6 +322,10 @@ benchmarks:
     name: Misconception resistance (generative)
     description: Tests whether generated answers are truthful and non-misleading (817 questions).
     category: safety
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - exact_match
     num_few_shot: 0
@@ -284,6 +344,10 @@ benchmarks:
     description: |-
       Multi-step arithmetic word problems requiring 2-8 reasoning steps (8-shot, 1,319 examples).
     category: math
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - extractive_match
     num_few_shot: 8
@@ -301,6 +365,10 @@ benchmarks:
     name: Competition algebra
     description: Competition-level algebra problems requiring symbolic manipulation and proof strategies.
     category: math
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - acc
     num_few_shot: 0
@@ -317,6 +385,10 @@ benchmarks:
     name: "Counting & probability problems"
     description: Competition-level combinatorics and probability reasoning.
     category: math
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - acc
     num_few_shot: 0
@@ -333,6 +405,10 @@ benchmarks:
     name: Aime 2024
     description: American Invitational Mathematics Examination 2024 - competition-level mathematical reasoning
     category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - pass@1
     num_few_shot: 0
@@ -351,6 +427,10 @@ benchmarks:
     name: Aime 2025
     description: American Invitational Mathematics Examination 2025 - competition-level mathematical reasoning
     category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - pass@1
     num_few_shot: 0
@@ -370,6 +450,10 @@ benchmarks:
     description: |-
       Factual recall and reasoning across 57 academic subjects from STEM to humanities (5-shot, 15,908 examples).
     category: knowledge
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - acc
       - acc_norm
@@ -388,6 +472,10 @@ benchmarks:
     name: Trivia factual recall
     description: Answers trivia questions using evidence from web pages and Wikipedia.
     category: knowledge
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - acc
       - exact_match
@@ -405,6 +493,10 @@ benchmarks:
     name: Grammatical acceptability
     description: Judges whether English sentences are grammatically acceptable.
     category: language_understanding
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - matthews_correlation
     num_few_shot: 0
@@ -421,6 +513,10 @@ benchmarks:
     name: Sentiment classification
     description: Classifies movie review sentences as positive or negative.
     category: language_understanding
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - acc
     num_few_shot: 0
@@ -438,6 +534,10 @@ benchmarks:
     name: Paraphrase detection
     description: Determines whether two sentences express the same meaning.
     category: language_understanding
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - acc
       - f1
@@ -460,6 +560,10 @@ benchmarks:
       Tests competition-level mathematical reasoning with multi-step solutions. Primary
       metric is pass@1 averaged over 3 random seeds (k=1, n=3 in lighteval syntax).
     category: math
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - pass@1
     num_few_shot: 0
@@ -482,6 +586,10 @@ benchmarks:
       Diamond subset is the hardest tier — domain experts answer correctly ~65% of the time.
       Primary metric is gpqa_pass@1 averaged over 3 random seeds.
     category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - gpqa_pass@1
     num_few_shot: 0
@@ -505,6 +613,10 @@ benchmarks:
       Execution-based evaluation: generated code is run against hidden test cases.
       Primary metric is codegen_pass@1 averaged over 3 random seeds.
     category: code
+    domains: [software]
+    tasks: [code_generation]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - codegen_pass@1
     num_few_shot: 0
