@@ -235,6 +235,38 @@ func TestCreateWorkspace_validation(t *testing.T) {
 	}
 }
 
+func TestCreateWorkspaceErrorResponse(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/3.0/mlflow/workspaces" {
+			http.Error(w, `{"error_code":"INVALID_PARAMETER_VALUE","message":"bad name"}`, http.StatusBadRequest)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := NewClient(srv.URL).WithContext(t.Context())
+	if _, err := client.CreateWorkspace(&CreateWorkspaceRequest{Name: "tenant"}); err == nil {
+		t.Fatal("expected CreateWorkspace error")
+	}
+}
+
+func TestGetWorkspaceErrorResponse(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"error_code":"RESOURCE_DOES_NOT_EXIST","message":"nope"}`, http.StatusNotFound)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := NewClient(srv.URL).WithContext(t.Context())
+	if _, err := client.GetWorkspace("tenant"); err == nil {
+		t.Fatal("expected GetWorkspace error")
+	}
+}
+
 func TestWithWorkspaceRespectsServerSupport(t *testing.T) {
 	t.Parallel()
 

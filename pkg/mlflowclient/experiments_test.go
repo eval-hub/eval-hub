@@ -81,6 +81,19 @@ func TestGetOrCreateExperiment(t *testing.T) {
 		}
 	})
 
+	t.Run("propagates non-recoverable server error", func(t *testing.T) {
+		t.Parallel()
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, `{"error_code":"INTERNAL_ERROR","message":"boom"}`, http.StatusInternalServerError)
+		}))
+		t.Cleanup(srv.Close)
+
+		client := NewClient(srv.URL).WithContext(t.Context())
+		if _, err := client.GetOrCreateExperiment(&CreateExperimentRequest{Name: "demo"}); err == nil {
+			t.Fatal("expected error from GetOrCreateExperiment")
+		}
+	})
+
 	t.Run("create races with RESOURCE_ALREADY_EXISTS", func(t *testing.T) {
 		t.Parallel()
 		var getCalls int
