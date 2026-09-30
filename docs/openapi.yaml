@@ -893,7 +893,7 @@ paths:
       description: |
         Create confidence interval computation for the benchmarks in an existing
         evaluation job. The operation is idempotent: if the same job already has a
-        confidence interval computation, the existing post-processing reference is
+        confidence interval computation, the existing post-processing resource is
         returned.
 
         The computation runs independently for each benchmark. Each item in

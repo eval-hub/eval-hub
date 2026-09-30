@@ -1480,7 +1480,7 @@
           "Evaluations"
         ],
         "summary": "Create Confidence Interval Post-Processing",
-        "description": "Create confidence interval computation for the benchmarks in an existing\nevaluation job. The operation is idempotent: if the same job already has a\nconfidence interval computation, the existing post-processing reference is\nreturned.\n\nThe computation runs independently for each benchmark. Each item in\n`operations` describes one post-processing operation. `hardware_config`\napplies to the post-processing job as a whole.\n",
+        "description": "Create confidence interval computation for the benchmarks in an existing\nevaluation job. The operation is idempotent: if the same job already has a\nconfidence interval computation, the existing post-processing resource is\nreturned.\n\nThe computation runs independently for each benchmark. Each item in\n`operations` describes one post-processing operation. `hardware_config`\napplies to the post-processing job as a whole.\n",
         "operationId": "post_evaluations_jobs_job_id_post_processing",
         "parameters": [
           {
