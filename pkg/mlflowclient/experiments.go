@@ -6,7 +6,9 @@ import (
 )
 
 // GetOrCreateExperiment returns an active experiment by name, creating it when missing.
-// Idempotent when concurrent callers race to create the same experiment.
+// Idempotent when concurrent callers race to create the same experiment. Delegates to
+// mlflow-go's Tracking().GetOrCreateExperiment, which performs the get/create/get
+// sequence and handles the RESOURCE_ALREADY_EXISTS race.
 func (c *Client) GetOrCreateExperiment(req *CreateExperimentRequest) (*GetExperimentResponse, error) {
 	if c == nil {
 		return nil, fmt.Errorf("mlflow client is nil")
@@ -18,32 +20,13 @@ func (c *Client) GetOrCreateExperiment(req *CreateExperimentRequest) (*GetExperi
 	normalizedReq := *req
 	normalizedReq.Name = name
 
-	resp, err := c.GetExperimentByName(name)
-	if err == nil {
-		if isActiveExperiment(resp) {
-			return resp, nil
-		}
-	} else if !IsResourceDoesNotExistError(err) {
-		return nil, err
-	}
-
-	_, createErr := c.CreateExperiment(&normalizedReq)
-	if createErr != nil && !IsResourceAlreadyExistsError(createErr) {
-		return nil, createErr
-	}
-
-	resp, err = c.GetExperimentByName(name)
+	t, err := c.tracking()
 	if err != nil {
 		return nil, err
 	}
-	if !isActiveExperiment(resp) {
-		return nil, fmt.Errorf("experiment %q is not active after create", name)
+	exp, err := t.GetOrCreateExperiment(c.Context(), name, createExperimentOptions(&normalizedReq)...)
+	if err != nil {
+		return nil, mapError(err)
 	}
-	return resp, nil
-}
-
-func isActiveExperiment(resp *GetExperimentResponse) bool {
-	return resp != nil &&
-		resp.Experiment.LifecycleStage == "active" &&
-		resp.Experiment.ExperimentID != ""
+	return &GetExperimentResponse{Experiment: experimentFromSDK(exp)}, nil
 }

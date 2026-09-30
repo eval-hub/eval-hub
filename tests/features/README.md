@@ -189,6 +189,17 @@ which will be stored in the `bin` directory:
 make test-fvt-server
 ```
 
+Two convenience wrappers set `FVT_TAGS` for local runs against a started server:
+
+```bash
+make test-fvt-server-local          # excludes @mlflow (no MLflow server needed)
+make test-fvt-server-local-mlflow   # includes @mlflow; start MLflow first (see tests/mlflow)
+```
+
+`test-fvt-server-local-mlflow` needs a reachable MLflow tracking server; start one
+with `make start-mlflow` from `tests/mlflow/` (and set `MLFLOW_TRACKING_URI` if it
+is not the default).
+
 This runs the tests with verbose output enabled.
 
 ### Using Go Test Directly

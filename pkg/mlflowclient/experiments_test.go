@@ -15,7 +15,7 @@ func TestGetOrCreateExperiment(t *testing.T) {
 		var createCalls int
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
-			case endpointExperimentsGetByNameBase:
+			case "/api/2.0/mlflow/experiments/get-by-name":
 				_ = json.NewEncoder(w).Encode(GetExperimentResponse{
 					Experiment: Experiment{
 						ExperimentID:   "exp-1",
@@ -23,7 +23,7 @@ func TestGetOrCreateExperiment(t *testing.T) {
 						LifecycleStage: "active",
 					},
 				})
-			case endpointExperimentsCreate:
+			case "/api/2.0/mlflow/experiments/create":
 				createCalls++
 				http.NotFound(w, r)
 			default:
@@ -50,7 +50,7 @@ func TestGetOrCreateExperiment(t *testing.T) {
 		var getCalls int
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
-			case endpointExperimentsGetByNameBase:
+			case "/api/2.0/mlflow/experiments/get-by-name":
 				getCalls++
 				if getCalls == 1 {
 					http.Error(w, `{"error_code":"RESOURCE_DOES_NOT_EXIST"}`, http.StatusNotFound)
@@ -63,7 +63,7 @@ func TestGetOrCreateExperiment(t *testing.T) {
 						LifecycleStage: "active",
 					},
 				})
-			case endpointExperimentsCreate:
+			case "/api/2.0/mlflow/experiments/create":
 				_ = json.NewEncoder(w).Encode(CreateExperimentResponse{ExperimentID: "new-exp"})
 			default:
 				http.NotFound(w, r)
@@ -81,12 +81,25 @@ func TestGetOrCreateExperiment(t *testing.T) {
 		}
 	})
 
+	t.Run("propagates non-recoverable server error", func(t *testing.T) {
+		t.Parallel()
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, `{"error_code":"INTERNAL_ERROR","message":"boom"}`, http.StatusInternalServerError)
+		}))
+		t.Cleanup(srv.Close)
+
+		client := NewClient(srv.URL).WithContext(t.Context())
+		if _, err := client.GetOrCreateExperiment(&CreateExperimentRequest{Name: "demo"}); err == nil {
+			t.Fatal("expected error from GetOrCreateExperiment")
+		}
+	})
+
 	t.Run("create races with RESOURCE_ALREADY_EXISTS", func(t *testing.T) {
 		t.Parallel()
 		var getCalls int
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
-			case endpointExperimentsGetByNameBase:
+			case "/api/2.0/mlflow/experiments/get-by-name":
 				getCalls++
 				if getCalls == 1 {
 					http.Error(w, `{"error_code":"RESOURCE_DOES_NOT_EXIST"}`, http.StatusNotFound)
@@ -99,7 +112,7 @@ func TestGetOrCreateExperiment(t *testing.T) {
 						LifecycleStage: "active",
 					},
 				})
-			case endpointExperimentsCreate:
+			case "/api/2.0/mlflow/experiments/create":
 				http.Error(w, `{"error_code":"RESOURCE_ALREADY_EXISTS"}`, http.StatusBadRequest)
 			default:
 				http.NotFound(w, r)
