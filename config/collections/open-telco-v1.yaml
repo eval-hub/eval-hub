@@ -1,6 +1,12 @@
 id: open-telco-v1
 name: Open-Telco v1
 category: telecom
+domains: [knowledge_and_reasoning]
+tasks: [reasoning, data_analysis]
+modalities: [text]
+evaluation_targets: [model]
+industries: [telco]
+curation_order: 0
 description: >
   GSMA Open-Telco suite for evaluating LLMs on telecom-domain tasks. Includes
   TeleMath (numerical math), TeleQnA (domain MCQ), TeleLogs (5G RCA), and

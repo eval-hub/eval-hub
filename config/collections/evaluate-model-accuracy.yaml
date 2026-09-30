@@ -1,6 +1,11 @@
 id: evaluate-model-accuracy
 name: evaluate-model-accuracy
 category: model-validation
+domains: [knowledge_and_reasoning, grounded_document_understanding, instruction_and_output_reliability, tool_use_and_function_calling, software]
+tasks: [reasoning, long_context_understanding, instruction_following, call_generation, parameter_type_correctness, relevance_no_call_detection, code_generation]
+modalities: [text]
+evaluation_targets: [model]
+curation_order: 0
 description: >
   Evaluates model accuracy using standard industry research benchmarks
   in inspectai. Allows customers to verify or replicate Model Validation

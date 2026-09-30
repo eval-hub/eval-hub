@@ -1,6 +1,11 @@
 id: coding-v1
 name: Coding v1
 category: code
+domains: [software]
+tasks: [code_generation]
+modalities: [text]
+evaluation_targets: [model]
+curation_order: 0
 description: >
   Evaluates code generation capability of instruction-tuned chat LLMs on real-world
   competitive programming problems. LiveCodeBench v6 samples problems from Codeforces,

@@ -20,6 +20,10 @@ benchmarks:
     name: Agentic Evaluation
     description: Agentic evaluation that identifies error categories from agent traces and quantifies their frequencies
     category: error-analysis
+    domains: [instruction_and_output_reliability]
+    tasks: [error_analysis]
+    modalities: [text]
+    evaluation_targets: [agent]
     metrics:
       - total_interactions
       - total_issues

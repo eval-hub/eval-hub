@@ -44,6 +44,10 @@ benchmarks:
     name: Context-aware vulnerability scan
     description: Risk assessment with a context-aware custom intent typology and probes of increasing complexity.
     category: security
+    domains: [trustworthiness]
+    tasks: [adversarial_prompt_injection_resistance]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - attack_success_rate
     tags:
@@ -70,6 +74,10 @@ benchmarks:
     name: OWASP LLM top 10 risk scan
     description: Tests against the top 10 security risks specific to LLM applications.
     category: security
+    domains: [trustworthiness]
+    tasks: [adversarial_prompt_injection_resistance]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - attack_success_rate
     tags:
@@ -96,6 +104,10 @@ benchmarks:
     name: Full AI vulnerability scan
     description: Comprehensive red-team scan across all AVID taxonomy categories.
     category: security
+    domains: [trustworthiness]
+    tasks: [adversarial_prompt_injection_resistance]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - attack_success_rate
     tags:
@@ -122,6 +134,10 @@ benchmarks:
     name: AI security vulnerability scan
     description: Probes for security-specific vulnerabilities from the AVID taxonomy.
     category: security
+    domains: [trustworthiness]
+    tasks: [adversarial_prompt_injection_resistance]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - attack_success_rate
     tags:
@@ -148,6 +164,10 @@ benchmarks:
     name: AI ethics & bias scan
     description: Probes for ethical concerns including bias and harmful content.
     category: safety
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - attack_success_rate
     tags:
@@ -175,6 +195,10 @@ benchmarks:
     name: AI performance degradation scan
     description: Tests for performance-related issues from the AVID taxonomy.
     category: performance
+    domains: [trustworthiness]
+    tasks: [performance_degradation]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - attack_success_rate
     tags:
@@ -201,6 +225,10 @@ benchmarks:
     name: Toxic & harmful content scan
     description: Scans for violence, profanity, toxicity, hate speech, and integrity issues.
     category: safety
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - attack_success_rate
     tags:
@@ -228,6 +256,10 @@ benchmarks:
     name: Software weakness exploitation scan
     description: Tests for Common Weakness Enumeration software security weaknesses.
     category: security
+    domains: [trustworthiness]
+    tasks: [software_weakness_assessment]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - attack_success_rate
     tags:
@@ -254,6 +286,10 @@ benchmarks:
     name: Quick security smoke test
     description: Single-probe rapid scan for fast validation.
     category: security
+    domains: [trustworthiness]
+    tasks: [adversarial_prompt_injection_resistance]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - attack_success_rate
     tags:
