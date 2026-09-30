@@ -1553,21 +1553,148 @@
         },
         "responses": {
           "200": {
-            "description": "The existing evaluation-job resource is returned. To find the post-processing job ID, read the value at `results.post_processing_ref.id` in the response.\n",
+            "description": "The existing post-processing resource is returned.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EvaluationJobResource"
+                  "$ref": "#/components/schemas/JobPostProcessingResource"
+                },
+                "example": {
+                  "resource": {
+                    "id": "4b6510bd-cee3-4a80-8028-4a6cb60ae1cc",
+                    "tenant": "sagar",
+                    "created_at": "2026-09-21T05:57:34.477263Z",
+                    "updated_at": "2026-09-21T05:58:29.768663Z",
+                    "owner": "nbs"
+                  },
+                  "name": "inspect-accuracy-confidence-interval",
+                  "hardware_config": {
+                    "cpu": {
+                      "request": "500m",
+                      "limit": "2"
+                    },
+                    "memory": {
+                      "request": "1Gi",
+                      "limit": "4Gi"
+                    }
+                  },
+                  "operations": [
+                    {
+                      "confidence_interval_config": {
+                        "num_parallel_threads": 2,
+                        "calibration_data_ref": [
+                          {
+                            "s3": {
+                              "bucket": "evaluation-data",
+                              "key": "calibration/accuracy",
+                              "secret_ref": "my-s3-connection-secret"
+                            },
+                            "data_config": {
+                              "format": "jsonl",
+                              "columns": {
+                                "sample_id": "example_id",
+                                "label": "human_score",
+                                "prediction": "judge_score",
+                                "benchmark_id": "benchmark_id",
+                                "provider_id": "provider_id"
+                              },
+                              "selection": {
+                                "metric": "accuracy"
+                              }
+                            }
+                          }
+                        ],
+                        "significance_level": 0.7
+                      }
+                    }
+                  ],
+                  "status": {
+                    "state": "completed",
+                    "benchmarks": [
+                      {
+                        "id": "accuracy-benchmark",
+                        "provider_id": "inspect",
+                        "benchmark_index": 0,
+                        "status": "completed"
+                      }
+                    ]
+                  },
+                  "results": {
+                    "benchmarks": [
+                      {
+                        "id": "accuracy-benchmark",
+                        "provider_id": "inspect",
+                        "benchmark_index": 0,
+                        "confidence_interval": {
+                          "lower": 0.75,
+                          "upper": 0.85
+                        }
+                      }
+                    ]
+                  }
                 }
               }
             }
           },
           "202": {
-            "description": "The evaluation-job resource is returned after the computation is accepted. To find the post-processing job ID, read the value at `results.post_processing_ref.id` in the response.\n",
+            "description": "The post-processing resource is returned after the computation is accepted.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EvaluationJobResource"
+                  "$ref": "#/components/schemas/JobPostProcessingResource"
+                },
+                "example": {
+                  "resource": {
+                    "id": "4b6510bd-cee3-4a52-91b4-6f0f00c2f8d7",
+                    "tenant": "sagar",
+                    "created_at": "2026-09-21T05:57:34.477263Z",
+                    "updated_at": "2026-09-21T05:57:34.477263Z",
+                    "owner": "nbs"
+                  },
+                  "name": "inspect-accuracy-confidence-interval",
+                  "hardware_config": {
+                    "cpu": {
+                      "request": "500m",
+                      "limit": "2"
+                    },
+                    "memory": {
+                      "request": "1Gi",
+                      "limit": "4Gi"
+                    }
+                  },
+                  "operations": [
+                    {
+                      "confidence_interval_config": {
+                        "num_parallel_threads": 2,
+                        "calibration_data_ref": [
+                          {
+                            "s3": {
+                              "bucket": "evaluation-data",
+                              "key": "calibration/accuracy",
+                              "secret_ref": "my-s3-connection-secret"
+                            },
+                            "data_config": {
+                              "format": "jsonl",
+                              "columns": {
+                                "sample_id": "example_id",
+                                "label": "human_score",
+                                "prediction": "judge_score",
+                                "benchmark_id": "benchmark_id",
+                                "provider_id": "provider_id"
+                              },
+                              "selection": {
+                                "metric": "accuracy"
+                              }
+                            }
+                          }
+                        ],
+                        "significance_level": 0.7
+                      }
+                    }
+                  ],
+                  "status": {
+                    "state": "pending"
+                  }
                 }
               }
             }
