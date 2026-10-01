@@ -77,6 +77,7 @@ When running in local server mode, the tests will:
 | --- | :-- |
 | `@collections` | Used to run just the collections tests |
 | `@evaluations` | Used to run just the evaluations tests |
+| `@post_processing` | Standalone post-processing API scenarios in `standalone_post_processing.feature`; run with `GODOG_TAGS="@post_processing"` against the embedded local FVT server. |
 | `@providers` | Used to run just the providers tests |
 | `@mcp` | MCP tool and resource scenarios in `mcp.feature` |
 | `@cluster` | Tests that require the Kubernetes cluster runtime (default `make test-fvt` excludes them via `~@cluster` in `FVT_TAGS`) |

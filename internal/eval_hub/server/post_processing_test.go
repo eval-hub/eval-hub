@@ -155,8 +155,9 @@ func TestPostProcessingCreate(t *testing.T) {
 				t.Fatalf("unexpected backing job: %+v", stored.EvaluationJobConfig)
 			}
 			benchmark := stored.Benchmarks[0]
-			if len(benchmark.Parameters) != 1 || benchmark.HardwareConfig.CPU.Request != "500m" || benchmark.HardwareConfig.Queue.Kind != "kueue" || benchmark.TestDataRef != nil {
-				t.Fatalf("unexpected benchmark mapping: %+v", benchmark)
+			hardwareConfig := stored.HardwareConfig
+			if len(benchmark.Parameters) != 1 || hardwareConfig == nil || hardwareConfig.CPU == nil || hardwareConfig.CPU.Request != "500m" || hardwareConfig.Queue == nil || hardwareConfig.Queue.Kind != "kueue" || benchmark.TestDataRef != nil {
+				t.Fatalf("unexpected post-processing job configuration: hardware_config=%+v benchmark=%+v", hardwareConfig, benchmark)
 			}
 			operations, err := postprocessing.OperationsFromJob(&stored.EvaluationJobConfig)
 			if err != nil || !reflect.DeepEqual(operations, result.Operations) {
