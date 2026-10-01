@@ -281,4 +281,4 @@ present a controlled, simulated egress environment.
 
 - Plan: [EvalHub-Agent-Sandbox-Plan-v3.md](../../EvalHub-Agent-Sandbox-Plan-v3.md)
 - Architecture: [EvalHub architecture](https://github.com/opendatahub-io/architecture-context/blob/main/architecture/rhoai.next/eval-hub.md)
-- Future layer: [RHAISTRAT-2289](hhttps://redhat.atlassian.net/browse/RHAISTRAT-2289) (label-based simulated internet, M6)
+- Future layer: [RHAISTRAT-2289](https://redhat.atlassian.net/browse/RHAISTRAT-2289) (label-based simulated internet, M6)
