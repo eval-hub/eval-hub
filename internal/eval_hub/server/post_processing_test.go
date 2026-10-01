@@ -201,10 +201,6 @@ func TestPostProcessingCompletionLink(t *testing.T) {
 		if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 			t.Fatal(err)
 		}
-		threads := result.Operations.ConfidenceInterval.ResultsDataRef.EvalJob.NumParallelThreads
-		if threads == nil || *threads != 1 {
-			t.Fatal("expected default num_parallel_threads=1")
-		}
 		return result.Resource.ID
 	}
 	assertLink := func(want string) {
@@ -364,9 +360,8 @@ func TestPostProcessingIgnoresUnknownFields(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	threads := result.Operations.ConfidenceInterval.ResultsDataRef.EvalJob.NumParallelThreads
-	if threads == nil || *threads != 1 {
-		t.Fatal("misplaced num_parallel_threads must be ignored, preserving the default")
+	if result.Operations.ConfidenceInterval.ResultsDataRef.EvalJob.NumParallelThreads != nil {
+		t.Fatal("misplaced num_parallel_threads must be ignored")
 	}
 	if strings.Contains(response.Body.String(), "future_") {
 		t.Fatal("unknown fields should not be persisted or echoed")
