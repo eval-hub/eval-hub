@@ -247,7 +247,7 @@ Feature: Collections Endpoint
     And the "resource.id" field in the response should be saved as "value:second_id"
     When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_pagination.json"
     Then the response code should be 201
-    When I send a GET request to "/api/v1/evaluations/collections?name=fvt-pagination-collection&limit=2&offset=0"
+    When I send a GET request to "/api/v1/evaluations/collections?name=fvt-pagination-collection-{{value:scenario_id}}&limit=2&offset=0"
     Then the response code should be 200
     And the "total_count" field in the response should be saved as "value:collection_total"
     And the response should contain the value "3" at path "$.total_count"
@@ -257,7 +257,7 @@ Feature: Collections Endpoint
     When I send a GET request to "{{value:next_url}}"
     Then the response code should be 200
     And the array at path "items" in the response should have length 1
-    When I send a GET request to "/api/v1/evaluations/collections?name=fvt-pagination-collection&limit=2&offset={{value:collection_total}}"
+    When I send a GET request to "/api/v1/evaluations/collections?name=fvt-pagination-collection-{{value:scenario_id}}&limit=2&offset={{value:collection_total}}"
     Then the response code should be 200
     And the array at path "items" in the response should have length 0
     And the response should contain the value "{{value:collection_total}}" at path "$.total_count"

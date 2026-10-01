@@ -1,5 +1,5 @@
 {
-  "name": "fvt-pagination-collection",
+  "name": "fvt-pagination-collection-{{value:scenario_id}}",
   "description": "Collection used to verify isolated pagination",
   "category": "test",
   "benchmarks": [
