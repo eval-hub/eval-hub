@@ -64,12 +64,6 @@ parameters:
     type: string
     description: OpenAI-compatible external judge endpoint.
 
-  - name: judge_api_key
-    type: string
-    description: >
-      Optional external judge credential. Prefer injecting
-      FOLLOWBENCH_JUDGE_API_KEY from a Secret.
-
   - name: num_examples
     type: integer
     description: >
