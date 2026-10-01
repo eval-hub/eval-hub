@@ -1498,6 +1498,7 @@ Feature: Evaluation Jobs
   # real hex commit SHA to exercise pinned revision download on arc_easy without a separate job.
   # Cluster needs egress to huggingface.co (or set HF_ENDPOINT on init image for a mirror).
   # Opt in: GODOG_TAGS="@hf".
+  @connected
   @hf
   Scenario: Evaluation job with Hugging Face test data completes successfully
     Given the service is running
@@ -1516,6 +1517,8 @@ Feature: Evaluation Jobs
     And the response should contain the value "{{env:TEST_DATA_HF_NESTED_SUB_PATH|staging_sub_path}}" at path "$.benchmarks[1].test_data_ref.hf.sub_path"
     And the response should not contain the value "resolved_sha" at path "$.benchmarks[0].test_data_ref"
     And the response should not contain the value "resolved_sha" at path "$.benchmarks[1].test_data_ref"
+    And I wait for the Kubernetes evaluation Job to be created
+    And the HF sub-path benchmark should contain file "tokenizer/tokenizer.json" and not contain path "allenai--ai2_arc--ARC-Easy" under "/test_data"
     And I wait for the evaluation job status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
@@ -2250,16 +2253,6 @@ Feature: Evaluation Jobs
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "failed" at path "$.status.state"
-
-  @connected
-  @hf
-  Scenario: Hugging Face sub-path stages only the selected files
-    Given the service is running
-    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_hf.json"
-    Then the response code should be 202
-    And I wait for the Kubernetes evaluation Job to be created
-    And the HF sub-path benchmark should contain file "tokenizer/tokenizer.json" and not contain path "allenai--ai2_arc--ARC-Easy" under "/test_data"
-    And I wait for the evaluation job status to be "completed"
 
   @connected
   @hf
