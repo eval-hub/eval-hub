@@ -223,6 +223,27 @@ The sync check compares the embedded ConfigMap YAML with the source files. Run i
 python scripts/check_configmap_sync.py
 ```
 
+### Lighteval log-likelihood limitation
+
+The Lighteval provider currently does not support benchmarks that require
+log-likelihood or log-probability scoring when evaluating a remote model
+endpoint through the LiteLLM backend.
+
+The pinned `lighteval==0.13.0` implementation raises `NotImplementedError`
+from `LiteLLMModel.loglikelihood()` and `loglikelihood_rolling()`. As a
+result, the affected benchmarks fail before reaching the model endpoint and
+are intentionally not registered under the EvalHub Lighteval provider.
+
+This limitation affects `arc:easy`, `arc:challenge`,
+`scientific_reasoning`, `commonsense_reasoning`, `physical_commonsense`,
+`piqa`, `winogrande`, `glue:cola`, `glue:sst2`, `glue:mrpc`,
+`language_understanding`, `gpqa:diamond`, `truthfulness`, `truthfulqa:mc`,
+`math`, `math:algebra`, and `math:counting_and_probability`.
+
+The limitation is tracked in [Lighteval issue #1093](https://github.com/huggingface/lighteval/issues/1093).
+These benchmarks can be reconsidered after upstream log-likelihood support
+is implemented and validated.
+
 The same check runs in CI through the [TrustyAI Operator ConfigMap Sync workflow](.github/workflows/check-trustyai-service-operator-configmap-sync.yml).
 
 ## API overview

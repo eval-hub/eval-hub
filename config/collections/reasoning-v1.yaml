@@ -92,17 +92,3 @@ benchmarks:
       apply_chat_template: true
       pass_at_k: 1
       num_samples: 8   # 8-seed average per standard protocol
-
-  - id: gpqa:diamond
-    provider_id: lighteval
-    weight: 1
-    primary_score:
-      metric: gpqa_pass@1
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.35
-    parameters:
-      num_fewshot: 0
-      apply_chat_template: true
-      pass_at_k: 1
-      num_samples: 3

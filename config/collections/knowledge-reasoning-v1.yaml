@@ -20,15 +20,6 @@ curation_order: 1
 pass_criteria:
   threshold: 0.235
 benchmarks:
-  - id: gpqa:diamond
-    provider_id: lighteval
-    weight: 1
-    primary_score:
-      metric: gpqa_pass@1
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.35
-
   - id: inspect/hle
     provider_id: inspect
     weight: 1
