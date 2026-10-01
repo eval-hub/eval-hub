@@ -1,0 +1,166 @@
+# MTEB Provider Configuration
+# Massive Text Embedding Benchmark - comprehensive evaluation for text embedding models
+
+id: mteb
+name: MTEB
+description: Massive Text Embedding Benchmark - comprehensive evaluation for text embedding models
+type: builtin
+
+runtime:
+  k8s:
+    image: quay.io/evalhub/community-mteb:latest
+    image_pull_policy: always
+    entrypoint:
+      - python
+      - main.py
+    cpu_request: 100m
+    memory_request: 128Mi
+    cpu_limit: 1000m
+    memory_limit: 2Gi
+  local:
+    # Reserved for local runtime configuration
+    command: python main.py
+
+benchmarks:
+  # Preset benchmark suites
+  - id: mteb_sts
+    name: Semantic Textual Similarity Suite
+    description: STS benchmark suite covering STS12-17, STSBenchmark, and SICK-R
+    category: semantic_similarity
+    domains: [knowledge_and_reasoning]
+    tasks: [semantic_similarity]
+    modalities: [text]
+    evaluation_targets: [model]
+    metrics:
+      - main_score
+      - cosine_spearman
+      - cosine_pearson
+    tags:
+      - embedding
+      - sts
+      - similarity
+      - mteb
+      - suite
+    primary_score:
+      metric: main_score
+      lower_is_better: false
+
+  - id: mteb_retrieval
+    name: Retrieval Suite
+    description: Information retrieval benchmark suite with NFCorpus, SciFact, ArguAna, TRECCOVID, and Touche2020
+    category: retrieval
+    domains: [knowledge_and_reasoning]
+    tasks: [information_retrieval]
+    modalities: [text]
+    evaluation_targets: [model]
+    metrics:
+      - main_score
+      - ndcg_at_10
+      - map_at_10
+    tags:
+      - embedding
+      - retrieval
+      - search
+      - mteb
+      - suite
+    primary_score:
+      metric: main_score
+      lower_is_better: false
+
+  - id: mteb_classification
+    name: Classification Suite
+    description: Text classification benchmark suite with AmazonReviewsClassification, Banking77Classification, and EmotionClassification
+    category: classification
+    domains: [knowledge_and_reasoning]
+    tasks: [classification]
+    modalities: [text]
+    evaluation_targets: [model]
+    metrics:
+      - main_score
+      - accuracy
+    tags:
+      - embedding
+      - classification
+      - mteb
+      - suite
+    primary_score:
+      metric: main_score
+      lower_is_better: false
+
+  - id: mteb_clustering
+    name: Clustering Suite
+    description: Document clustering benchmark suite with ArxivClusteringP2P, ArxivClusteringS2S, and BiorxivClusteringP2P
+    category: clustering
+    domains: [knowledge_and_reasoning]
+    tasks: [clustering]
+    modalities: [text]
+    evaluation_targets: [model]
+    metrics:
+      - main_score
+      - v_measure
+    tags:
+      - embedding
+      - clustering
+      - mteb
+      - suite
+    primary_score:
+      metric: main_score
+      lower_is_better: false
+
+  - id: mteb_reranking
+    name: Reranking Suite
+    description: Passage reranking benchmark suite with AskUbuntuDupQuestions, MindSmallReranking, and SciDocsRR
+    category: reranking
+    domains: [knowledge_and_reasoning]
+    tasks: [reranking]
+    modalities: [text]
+    evaluation_targets: [model]
+    metrics:
+      - main_score
+      - map
+    tags:
+      - embedding
+      - reranking
+      - mteb
+      - suite
+    primary_score:
+      metric: main_score
+      lower_is_better: false
+
+parameters:
+  # Common parameters for all benchmarks
+  - name: batch_size
+    type: integer
+    default: 32
+    description: Batch size for encoding
+
+  - name: device
+    type: string
+    default: null
+    description: Device override (cuda, cpu, mps, cuda:0)
+
+  - name: languages
+    type: array
+    default:
+      - eng
+    description: Language codes to include (ISO 639-3)
+
+  - name: verbosity
+    type: integer
+    default: 2
+    description: MTEB verbosity level (0-3)
+
+  - name: co2_tracker
+    type: boolean
+    default: false
+    description: Enable CO2 emissions tracking
+
+  - name: tasks
+    type: array
+    default: null
+    description: Explicit list of MTEB task names (overrides benchmark preset)
+
+  - name: task_types
+    type: array
+    default: null
+    description: Filter by task type (STS, Retrieval, Classification, etc.)
