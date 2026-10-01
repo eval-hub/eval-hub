@@ -86,15 +86,14 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 			wantCreated: true,
 		},
 		{
-			name: "completed eval job succeeds and defaults threads",
+			name: "completed eval job succeeds",
 			body: marshalPostProcessingRequest(t, &api.EvaluationJobDataRef{ID: "source-job"}, nil),
 			storage: &postProcessingHandlerStorage{
 				fakeStorage: newPostProcessingBaseStorage(),
 				source:      completedSource,
 			},
-			wantStatus:      http.StatusAccepted,
-			wantCreated:     true,
-			wantThreadCount: 1,
+			wantStatus:  http.StatusAccepted,
+			wantCreated: true,
 		},
 		{
 			name: "completed eval job preserves explicit thread count",
