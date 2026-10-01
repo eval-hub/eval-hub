@@ -1,23 +1,13 @@
 package mlflowclient
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"strings"
+
+	mlflow "github.com/opendatahub-io/mlflow-go/mlflow"
 )
 
-const (
-	endpointServerInfo   = "/api/3.0/mlflow/server-info"
-	workspacesAPIBase    = "/api/3.0/mlflow/workspaces"
-	defaultWorkspaceName = "default"
-)
-
-func workspaceEndpoint(name string) string {
-	return workspacesAPIBase + "/" + url.PathEscape(name)
-}
+const defaultWorkspaceName = "default"
 
 // ServerInfoResponse is the JSON body from GET /api/3.0/mlflow/server-info (MLflow 3.10+).
 type ServerInfoResponse struct {
@@ -31,39 +21,19 @@ func (c *Client) ProbeWorkspacesEnabled() (bool, error) {
 	if c == nil {
 		return false, fmt.Errorf("mlflow client does not exist")
 	}
-	if c.ctx == nil {
-		return false, fmt.Errorf("context is nil for MLflow server-info request")
-	}
-
-	req, err := http.NewRequestWithContext(c.ctx, http.MethodGet, c.baseURL+endpointServerInfo, nil)
+	d, err := c.resolveDelegate()
 	if err != nil {
-		return false, fmt.Errorf("failed to create server-info request: %w", err)
+		return false, err
 	}
-	c.applyAuthHeader(req)
-
-	resp, err := c.httpClient.Do(req)
+	info, err := d.Workspaces().GetServerInfo(c.Context())
 	if err != nil {
-		return false, fmt.Errorf("failed to execute server-info request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return false, fmt.Errorf("failed to read server-info response: %w", err)
-	}
-
-	switch resp.StatusCode {
-	case http.StatusOK:
-		var info ServerInfoResponse
-		if err := json.Unmarshal(respBody, &info); err != nil {
-			return false, fmt.Errorf("failed to unmarshal server-info response: %w", err)
-		}
-		return info.WorkspacesEnabled, nil
-	case http.StatusNotFound:
 		// MLflow releases before workspace support do not expose this endpoint.
-		return false, nil
-	default:
-		return false, fmt.Errorf("server-info returned status %d: %s", resp.StatusCode, string(respBody))
+		if mlflow.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
 	}
+	return info.WorkspacesEnabled, nil
 }
 
 // WorkspacesEnabled reports whether the client will send X-MLFLOW-WORKSPACE headers.
@@ -83,20 +53,20 @@ func (c *Client) GetWorkspace(name string) (*Workspace, error) {
 	if name == "" {
 		return nil, fmt.Errorf("workspace name is empty")
 	}
-
-	respBody, err := c.doRequest(http.MethodGet, workspaceEndpoint(name), nil)
+	d, err := c.resolveDelegate()
 	if err != nil {
 		return nil, err
 	}
-
-	resp, err := unmarshalResponse[GetWorkspaceResponse](respBody)
+	ws, err := d.Workspaces().GetWorkspace(c.Context(), name)
 	if err != nil {
-		return nil, err
+		return nil, mapError(err)
 	}
-	return &resp.Workspace, nil
+	return &Workspace{Name: ws.Name}, nil
 }
 
 // CreateWorkspace creates a workspace without the X-MLFLOW-WORKSPACE header (global operation).
+// The mlflow-go Workspace type has no description field, so CreateWorkspaceRequest.Description
+// is ignored.
 func (c *Client) CreateWorkspace(req *CreateWorkspaceRequest) (*Workspace, error) {
 	if c == nil {
 		return nil, fmt.Errorf("mlflow client does not exist")
@@ -104,21 +74,21 @@ func (c *Client) CreateWorkspace(req *CreateWorkspaceRequest) (*Workspace, error
 	if req == nil || strings.TrimSpace(req.Name) == "" {
 		return nil, fmt.Errorf("create workspace request is nil or missing name")
 	}
-
-	respBody, err := c.doRequestWithoutWorkspace(http.MethodPost, workspacesAPIBase, req)
+	d, err := c.resolveDelegate()
 	if err != nil {
 		return nil, err
 	}
-
-	resp, err := unmarshalResponse[GetWorkspaceResponse](respBody)
+	ws, err := d.Workspaces().CreateWorkspace(c.Context(), req.Name)
 	if err != nil {
-		return nil, err
+		return nil, mapError(err)
 	}
-	return &resp.Workspace, nil
+	return &Workspace{Name: ws.Name}, nil
 }
 
 // EnsureWorkspace creates the client's active workspace when workspaces are enabled.
-// The reserved "default" workspace is assumed to exist. Idempotent for concurrent creators.
+// The reserved "default" workspace is assumed to exist. It uses get-first
+// semantics — the workspace usually already exists, so a needless create (and the
+// write it implies) is avoided — and tolerates a concurrent creator.
 // Callers must set WithWorkspacesSupport after resolving capability (service layer).
 func (c *Client) EnsureWorkspace() error {
 	if c == nil {
@@ -143,14 +113,12 @@ func (c *Client) EnsureWorkspace() error {
 		return err
 	}
 
-	_, err = c.CreateWorkspace(&CreateWorkspaceRequest{
-		Name:        name,
-		Description: "Created by eval-hub",
-	})
+	_, err = c.CreateWorkspace(&CreateWorkspaceRequest{Name: name})
 	if err == nil {
 		c.logger.Info("Created MLflow workspace", "workspace", name)
 		return nil
 	}
+	// A concurrent creator won the race; confirm the workspace now exists.
 	if IsResourceAlreadyExistsError(err) {
 		_, getErr := c.GetWorkspace(name)
 		return getErr

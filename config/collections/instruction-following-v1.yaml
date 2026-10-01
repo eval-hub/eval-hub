@@ -1,6 +1,11 @@
 id: instruction-following-v1
 name: Instruction Following v1
 category: instruction_following
+domains: [knowledge_and_reasoning, instruction_and_output_reliability]
+tasks: [reasoning, instruction_following]
+modalities: [text]
+evaluation_targets: [model]
+curation_order: 0
 description: >
   Evaluates how well instruction-tuned chat LLMs follow explicit instructions across
   math word problems, broad knowledge, multi-choice reasoning, formatting constraints,

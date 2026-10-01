@@ -97,3 +97,37 @@ func TestSearchRuns(t *testing.T) {
 		t.Fatalf("run id = %q", resp.Runs[0].Info.RunID)
 	}
 }
+
+func TestCreateRunErrorResponse(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error_code":"INVALID_PARAMETER_VALUE","message":"bad experiment"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := NewClient(srv.URL).WithContext(t.Context())
+	_, err := client.CreateRun(&CreateRunRequest{ExperimentID: "exp-1"})
+	if err == nil {
+		t.Fatal("expected create run error")
+	}
+	if apiErr, ok := err.(*APIError); !ok || apiErr.StatusCode != http.StatusBadRequest {
+		t.Fatalf("error = %v (%T), want *APIError with status 400", err, err)
+	}
+}
+
+func TestSearchRunsErrorResponse(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error_code":"INTERNAL_ERROR","message":"boom"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := NewClient(srv.URL).WithContext(t.Context())
+	if _, err := client.SearchRuns(&SearchRunsRequest{ExperimentIDs: []string{"exp-1"}}); err == nil {
+		t.Fatal("expected search runs error")
+	}
+}

@@ -219,7 +219,9 @@ Trace archival settings accepted by workspace APIs and returned in workspace met
 ## Usage in eval-hub
 
 Capability probing lives in the service layer (`internal/eval_hub/mlflow.WorkspaceSupport`).
-The HTTP client (`pkg/mlflowclient`) stays a thin transport wrapper.
+The client (`pkg/mlflowclient`) stays a thin adapter shim over
+[`opendatahub-io/mlflow-go`](https://github.com/opendatahub-io/mlflow-go), which
+handles the wire-level MLflow protocol.
 
 1. **`WorkspaceSupport.Resolve(ctx, client)`** — probes workspace capability once
    (5s timeout) via `server-info`. Concurrent callers share one in-flight probe.

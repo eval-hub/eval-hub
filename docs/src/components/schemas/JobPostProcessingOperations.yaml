@@ -1,0 +1,6 @@
+type: array
+title: JobPostProcessingOperations
+description: Post-processing operations associated with an evaluation job.
+minItems: 1
+items:
+  $ref: ./JobPostProcessingOperation.yaml

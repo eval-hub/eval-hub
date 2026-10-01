@@ -1,6 +1,11 @@
 id: leaderboard-v2
 name: Open LLM Leaderboard v2
 category: general
+domains: [knowledge_and_reasoning, instruction_and_output_reliability]
+tasks: [reasoning, instruction_following]
+modalities: [text]
+evaluation_targets: [model]
+curation_order: 0
 description: Comprehensive evaluation suite for general-purpose language models.
 tags:
   - leaderboard

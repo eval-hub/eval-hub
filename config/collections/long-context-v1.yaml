@@ -1,6 +1,11 @@
 id: long-context-v1
 name: Long Context v1
 category: long_context
+domains: [grounded_document_understanding]
+tasks: [long_context_understanding]
+modalities: [text]
+evaluation_targets: [model]
+curation_order: 0
 description: >
   Evaluates long-context retrieval and comprehension for instruction-tuned chat LLMs
   using Multi-step Retrieval and Comprehension Reasoning (MRCR). MRCR scores the model

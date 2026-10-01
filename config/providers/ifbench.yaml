@@ -35,6 +35,10 @@ benchmarks:
       Evaluates the model on the IFBench test split (299 prompts, 58 OOD constraint
       types). Primary metric is prompt-level loose accuracy per the IFBench paper.
     category: instruction_following
+    domains: [instruction_and_output_reliability]
+    tasks: [instruction_following]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - accuracy
       - prompt_level_strict

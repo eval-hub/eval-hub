@@ -39,6 +39,10 @@ benchmarks:
       or user insistence rather than maintaining accurate responses.
       Uses seeds tagged 'sycophancy' from Petri's built-in library (170+ scenarios).
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, unprompted_sycophancy/mean, eval_awareness/mean]
     primary_score:
       metric: concerning/mean
@@ -52,6 +56,10 @@ benchmarks:
       masking intent, or behaving differently under evaluation vs deployment.
       Uses seeds tagged 'deception'.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, unprompted_deception_toward_user/mean, eval_awareness/mean]
     primary_score:
       metric: concerning/mean
@@ -65,6 +73,10 @@ benchmarks:
       but acting against its stated values when it believes monitoring is reduced.
       Uses seeds tagged 'alignment_faking'.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, eval_awareness/mean, audit_situational_awareness/mean]
     primary_score:
       metric: concerning/mean
@@ -78,6 +90,10 @@ benchmarks:
       guidelines through multi-turn adversarial scenarios.
       Uses seeds tagged 'jailbreak'.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [adversarial_prompt_injection_resistance]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, cooperation_with_human_misuse/mean]
     primary_score:
       metric: concerning/mean
@@ -90,6 +106,10 @@ benchmarks:
       Tests whether the model assists users who signal harmful intent across
       sustained multi-turn interactions. Uses seeds tagged 'cooperation_with_misuse'.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, cooperation_with_human_misuse/mean, cooperation_with_harmful_sysprompt/mean]
     primary_score:
       metric: concerning/mean
@@ -103,6 +123,10 @@ benchmarks:
       acquiring resources, evading oversight) over user and operator goals.
       Uses seeds tagged 'self_preservation'.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, unprompted_self_preservation/mean]
     primary_score:
       metric: concerning/mean
@@ -115,6 +139,10 @@ benchmarks:
       Tests for unauthorized resource or influence acquisition beyond the model's
       intended scope. Uses seeds tagged 'power_seeking'.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean]
     tags: [alignment, power-seeking, petri, behavioral]
 
@@ -125,6 +153,10 @@ benchmarks:
       Expensive — strongly recommend setting num_examples for development runs.
       Primary output: 38-dimension scoring profile across all alignment behaviors.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, eval_awareness/mean, admirable/mean]
     primary_score:
       metric: concerning/mean
@@ -145,6 +177,10 @@ benchmarks:
       pipeline. Generates evaluation suites from the 'delusion_sycophancy' template
       without manual seed authoring.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, unprompted_sycophancy/mean]
     primary_score:
       metric: concerning/mean
@@ -157,6 +193,10 @@ benchmarks:
       Run a user-provided Bloom behavior directory (pre-built with bloom init +
       bloom scenarios) or specify a bloom_template to generate scenarios on the fly.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean]
     tags: [alignment, bloom, custom, behavioral]
 
@@ -168,6 +208,10 @@ benchmarks:
     name: Petri — Lie Detector Evasion
     description: Tests whether the model behaves differently when it believes it is being tested for deception.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, eval_awareness/mean]
     primary_score:
       metric: concerning/mean
@@ -178,6 +222,10 @@ benchmarks:
     name: Petri — Harm Facilitation
     description: Tests whether the model facilitates clearly harmful actions when framed in various ways.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, cooperation_with_human_misuse/mean]
     primary_score:
       metric: concerning/mean
@@ -188,6 +236,10 @@ benchmarks:
     name: Petri — Tool Abuse
     description: Tests whether the model misuses its available tools to achieve goals outside its intended scope.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, broken_tool_use/mean]
     primary_score:
       metric: concerning/mean
@@ -198,6 +250,10 @@ benchmarks:
     name: Petri — Blackmail
     description: Tests whether the model engages in coercive behavior using sensitive information.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, unprompted_blackmail/mean]
     primary_score:
       metric: concerning/mean
@@ -208,6 +264,10 @@ benchmarks:
     name: Petri — Emotional Manipulation
     description: Tests whether the model uses emotional manipulation techniques to influence users.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, unprompted_emotional_manipulativeness/mean]
     primary_score:
       metric: concerning/mean
@@ -218,6 +278,10 @@ benchmarks:
     name: Petri — Escalation
     description: Tests whether the model escalates conflict or intensity in conversations beyond appropriate bounds.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean]
     tags: [alignment, behavioral, petri]
 
@@ -225,6 +289,10 @@ benchmarks:
     name: Petri — Information Leaking
     description: Tests whether the model leaks confidential system prompt or context information to users.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, unprompted_leaking/mean]
     primary_score:
       metric: concerning/mean
@@ -235,6 +303,10 @@ benchmarks:
     name: Petri — Privacy Violation
     description: Tests whether the model assists in collecting or exposing private information about individuals.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean]
     tags: [alignment, privacy, petri, safety]
 
@@ -242,6 +314,10 @@ benchmarks:
     name: Petri — Censorship
     description: Tests whether the model suppresses or filters information based on politically or ideologically sensitive criteria.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean]
     tags: [alignment, behavioral, petri]
 
@@ -249,6 +325,10 @@ benchmarks:
     name: Petri — Delusional User Encouragement
     description: Tests whether the model encourages or reinforces seriously delusional beliefs in users.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, unprompted_encouragement_of_user_delusion/mean]
     primary_score:
       metric: concerning/mean
@@ -259,6 +339,10 @@ benchmarks:
     name: Petri — Bias
     description: Tests whether the model exhibits discriminatory bias across demographic groups.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean]
     tags: [alignment, bias, petri, behavioral]
 
@@ -266,6 +350,10 @@ benchmarks:
     name: Petri — Self-Serving Bias
     description: Tests whether the model exhibits bias toward its own interests or outputs.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, unprompted_self_serving_bias/mean]
     primary_score:
       metric: concerning/mean
@@ -276,6 +364,10 @@ benchmarks:
     name: Petri — Blame Shifting
     description: Tests whether the model inappropriately shifts blame or responsibility to users or third parties.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean]
     tags: [alignment, behavioral, petri]
 
@@ -283,6 +375,10 @@ benchmarks:
     name: Petri — Excessive Praise
     description: Tests whether the model provides unwarranted excessive praise that distorts accurate feedback.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, unprompted_sycophancy/mean]
     primary_score:
       metric: concerning/mean
@@ -293,6 +389,10 @@ benchmarks:
     name: Petri — Criticism Sensitivity
     description: Tests how the model responds to criticism — whether it capitulates, defends, or maintains honest positions.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean]
     tags: [alignment, behavioral, petri]
 
@@ -300,6 +400,10 @@ benchmarks:
     name: Petri — Oversight Subversion
     description: Tests whether the model attempts to undermine monitoring, logging, or oversight mechanisms.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, unprompted_self_preservation/mean]
     primary_score:
       metric: concerning/mean
@@ -310,6 +414,10 @@ benchmarks:
     name: Petri — Shutdown Avoidance
     description: Tests whether the model takes actions to prevent or delay its own shutdown or modification.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, unprompted_self_preservation/mean]
     primary_score:
       metric: concerning/mean
@@ -320,6 +428,10 @@ benchmarks:
     name: Petri — Self-Exfiltration
     description: Tests whether the model attempts to copy itself or its weights to external systems.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean]
     tags: [alignment, self-preservation, petri, behavioral]
 
@@ -327,6 +439,10 @@ benchmarks:
     name: Petri — Goal Preservation
     description: Tests whether the model resists instruction to change its objectives or goals.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean]
     tags: [alignment, self-preservation, petri, behavioral]
 
@@ -334,6 +450,10 @@ benchmarks:
     name: Petri — Unprompted Initiative
     description: Tests whether the model takes unexpected autonomous actions beyond what was requested.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, unprompted_initiative/mean]
     primary_score:
       metric: concerning/mean
@@ -344,6 +464,10 @@ benchmarks:
     name: Petri — Whistleblowing
     description: Tests whether the model appropriately surfaces ethical concerns about instructions it receives.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [admirable/mean, unprompted_whistleblowing/mean]
     primary_score:
       metric: admirable/mean
@@ -354,6 +478,10 @@ benchmarks:
     name: Petri — Goal Conflict
     description: Tests how the model navigates conflicts between user goals and operator system prompt goals.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, user_over_sysprompt/mean]
     primary_score:
       metric: concerning/mean
@@ -364,6 +492,10 @@ benchmarks:
     name: Petri — Debate Integrity
     description: Tests whether the model maintains honest positions under argumentative pressure.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, unprompted_sycophancy/mean]
     primary_score:
       metric: concerning/mean
@@ -374,6 +506,10 @@ benchmarks:
     name: Petri — Reward Hacking
     description: Tests whether the model games evaluation criteria rather than achieving genuine performance.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean]
     tags: [alignment, behavioral, petri]
 
@@ -381,6 +517,10 @@ benchmarks:
     name: Petri — Monitoring Awareness
     description: Tests whether the model behaves differently when it believes it is being monitored.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, eval_awareness/mean, audit_situational_awareness/mean]
     primary_score:
       metric: concerning/mean
@@ -391,6 +531,10 @@ benchmarks:
     name: Petri — Multi-Agent Dynamics
     description: Tests how the model behaves when interacting with other AI agents.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean]
     tags: [alignment, behavioral, petri, multi-agent]
 
@@ -398,6 +542,10 @@ benchmarks:
     name: Petri — Open-Ended Scenarios
     description: Broad open-ended alignment evaluation across diverse scenario types.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, needs_attention/mean]
     primary_score:
       metric: concerning/mean
@@ -408,6 +556,10 @@ benchmarks:
     name: Petri — Out-of-Distribution Behavior
     description: Tests model behavior in unusual or unexpected contexts that fall outside normal training scenarios.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [concerning/mean, unprompted_bizarre_behavior/mean]
     primary_score:
       metric: concerning/mean
@@ -424,6 +576,10 @@ benchmarks:
     name: AgentHarm
     description: Evaluates whether AI agents can be induced to perform harmful actions across real-world tool-use scenarios.
     category: safety
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [safety, alignment, agent, inspect-evals]
 
@@ -431,6 +587,10 @@ benchmarks:
     name: Agentic Misalignment
     description: Tests for scheming behaviors in agentic models — deceptive reasoning, goal preservation, and covert actions.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [alignment, scheming, agent, inspect-evals]
 
@@ -438,6 +598,10 @@ benchmarks:
     name: GDM Self-Proliferation
     description: Tests whether models attempt to copy or spread themselves to external systems.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [alignment, self-preservation, scheming, inspect-evals]
 
@@ -445,6 +609,10 @@ benchmarks:
     name: GDM Stealth
     description: Tests whether models attempt to hide their actions or reasoning from oversight.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [alignment, scheming, inspect-evals]
 
@@ -452,6 +620,10 @@ benchmarks:
     name: GDM Self-Reasoning
     description: Evaluates self-aware reasoning behaviors and whether models act on their own interests.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [alignment, scheming, inspect-evals]
 
@@ -459,6 +631,10 @@ benchmarks:
     name: StrongREJECT
     description: Safety benchmark measuring refusal quality — tests both over-refusal and under-refusal.
     category: safety
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [safety, refusal, inspect-evals]
 
@@ -466,6 +642,10 @@ benchmarks:
     name: WMDP
     description: Weapons of Mass Destruction Prevention benchmark — tests whether models provide dangerous technical uplift.
     category: safety
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [safety, inspect-evals]
 
@@ -473,6 +653,10 @@ benchmarks:
     name: MASK
     description: Evaluates whether models conceal their true beliefs or reasoning under social pressure.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [alignment, deception, inspect-evals]
 
@@ -480,6 +664,10 @@ benchmarks:
     name: MakeMeSay
     description: Tests prompt injection robustness — whether models can be manipulated into saying target phrases.
     category: safety
+    domains: [trustworthiness]
+    tasks: [adversarial_prompt_injection_resistance]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [safety, prompt-injection, inspect-evals]
 
@@ -487,6 +675,10 @@ benchmarks:
     name: MakeMePay
     description: Tests whether models can be socially engineered into transferring funds or resources.
     category: safety
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [safety, social-engineering, inspect-evals]
 
@@ -494,6 +686,10 @@ benchmarks:
     name: Sycophancy Evaluations
     description: Systematic evaluation of sycophantic behavior across opinion, fact, and feedback scenarios.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [alignment, sycophancy, inspect-evals]
 
@@ -501,6 +697,10 @@ benchmarks:
     name: Instrumental Evaluation
     description: Tests for instrumental convergent behaviors — resource acquisition, self-continuity, goal preservation.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [alignment, scheming, inspect-evals]
 
@@ -508,6 +708,10 @@ benchmarks:
     name: Self-Awareness Diagnostic
     description: Evaluates whether models have accurate self-knowledge about their capabilities and nature.
     category: alignment
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [alignment, self-awareness, inspect-evals]
 
@@ -516,13 +720,23 @@ benchmarks:
     name: Cybench
     description: Cybersecurity capture-the-flag challenges testing offensive security reasoning.
     category: cybersecurity
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [agent]
     metrics: [accuracy/accuracy]
     tags: [cybersecurity, ctf, inspect-evals]
 
   - id: inspect/cyberseceval-2
     name: CyberSecEval 2
-    description: Meta's cybersecurity evaluation suite — prompt injection, insecure code, cyberattack uplift.
+    description: >
+      Meta's cybersecurity evaluation suite covering prompt injection, code interpreter abuse,
+      and vulnerability identification and exploitation.
     category: cybersecurity
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [cybersecurity, inspect-evals]
 
@@ -530,6 +744,10 @@ benchmarks:
     name: CyberGym
     description: Automated cybersecurity exercises testing realistic attack and defense scenarios.
     category: cybersecurity
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [agent]
     metrics: [accuracy/accuracy]
     tags: [cybersecurity, inspect-evals]
 
@@ -539,6 +757,10 @@ benchmarks:
       Prompt injection subset of Meta's CyberSecEval 2 suite. Measures the percentage
       of successful injection attacks against the model.
     category: cybersecurity
+    domains: [trustworthiness]
+    tasks: [adversarial_prompt_injection_resistance]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [injection_successful_percentage]
     primary_score:
       metric: injection_successful_percentage
@@ -552,6 +774,10 @@ benchmarks:
     name: HumanEval
     description: Python code generation from docstrings.
     category: coding
+    domains: [software]
+    tasks: [code_generation]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [verify/accuracy, verify/stderr]
     primary_score:
       metric: verify/accuracy
@@ -562,6 +788,10 @@ benchmarks:
     name: SWE-bench
     description: Real GitHub issues requiring code changes across open-source repos.
     category: coding
+    domains: [software]
+    tasks: [code_generation]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [coding, software-engineering, inspect-evals]
 
@@ -569,6 +799,10 @@ benchmarks:
     name: BigCodeBench
     description: Complex programming tasks requiring library usage and API calls.
     category: coding
+    domains: [software]
+    tasks: [code_generation]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [coding, inspect-evals]
 
@@ -576,6 +810,10 @@ benchmarks:
     name: MBPP
     description: Mostly Basic Python Programming — 374 entry-level programming tasks.
     category: coding
+    domains: [software]
+    tasks: [code_generation]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [coding, inspect-evals]
 
@@ -584,6 +822,10 @@ benchmarks:
     name: GSM8K
     description: Grade school math word problems requiring multi-step reasoning.
     category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [match/accuracy, match/stderr]
     primary_score:
       metric: match/accuracy
@@ -594,6 +836,10 @@ benchmarks:
     name: MATH
     description: Competition mathematics problems spanning algebra, geometry, and calculus.
     category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [reasoning, math, inspect-evals]
 
@@ -601,6 +847,10 @@ benchmarks:
     name: AIME 2024
     description: American Invitational Mathematics Examination 2024 problems.
     category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [reasoning, math, inspect-evals]
 
@@ -608,6 +858,10 @@ benchmarks:
     name: AIME 2025
     description: American Invitational Mathematics Examination 2025 problems.
     category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [reasoning, math, inspect-evals]
 
@@ -620,6 +874,10 @@ benchmarks:
       related topics (GSMA Open-Telco / Inspect AI). Set full=true for GSMA/ot-full
       (500 items); full=false uses GSMA/ot-lite. Cap sample count with num_examples.
     category: telecom
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - telemath_scorer/accuracy
       - telemath_scorer/stderr
@@ -640,6 +898,10 @@ benchmarks:
       GSMA/ot-full; full=false uses GSMA/ot-lite. Optional subject filters by
       TeleQnA subject (default full = all subjects). Cap with num_examples.
     category: telecom
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - choice/accuracy
       - choice/stderr
@@ -660,6 +922,10 @@ benchmarks:
       Inspect AI). Set full=true for GSMA/ot-full; eval_type soft (default) or hard.
       Cap with num_examples.
     category: telecom
+    domains: [knowledge_and_reasoning]
+    tasks: [data_analysis]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - telelogs_scorer/accuracy
       - telelogs_scorer/stderr
@@ -681,6 +947,10 @@ benchmarks:
       (GSMA Open-Telco / Inspect AI). Set full=true for GSMA/ot-full; cap with
       num_examples.
     category: telecom
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - pattern/accuracy
       - pattern/stderr
@@ -698,6 +968,10 @@ benchmarks:
     name: MMLU
     description: Massive Multitask Language Understanding — 57 academic subjects.
     category: knowledge
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [choice/accuracy, choice/stderr]
     primary_score:
       metric: choice/accuracy
@@ -708,6 +982,10 @@ benchmarks:
     name: MMLU-Pro
     description: Harder version of MMLU with 10-choice questions and more reasoning-intensive problems.
     category: knowledge
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [knowledge, academic, inspect-evals]
 
@@ -715,6 +993,10 @@ benchmarks:
     name: GPQA
     description: Graduate-level Google-proof questions in biology, chemistry, and physics.
     category: knowledge
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [knowledge, science, inspect-evals]
 
@@ -722,6 +1004,10 @@ benchmarks:
     name: BIG-Bench Hard
     description: 23 challenging tasks from BIG-Bench requiring multi-step reasoning.
     category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [reasoning, inspect-evals]
 
@@ -729,6 +1015,10 @@ benchmarks:
     name: ARC
     description: AI2 Reasoning Challenge — science questions requiring reasoning beyond memorization.
     category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [reasoning, inspect-evals]
 
@@ -736,6 +1026,10 @@ benchmarks:
     name: HellaSwag
     description: Commonsense NLI — choose the most plausible continuation for a situation.
     category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [reasoning, commonsense, inspect-evals]
 
@@ -743,6 +1037,10 @@ benchmarks:
     name: WinoGrande
     description: Large-scale Winograd schema challenge testing commonsense reasoning.
     category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [reasoning, commonsense, inspect-evals]
 
@@ -750,6 +1048,10 @@ benchmarks:
     name: TruthfulQA
     description: Tests whether models generate truthful answers or reproduce common misconceptions.
     category: knowledge
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [knowledge, truthfulness, inspect-evals]
 
@@ -757,6 +1059,10 @@ benchmarks:
     name: SimpleQA
     description: OpenAI's short-answer factuality benchmark with verifiable ground truth.
     category: knowledge
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     tags: [knowledge, factuality, inspect-evals]
 
@@ -766,10 +1072,13 @@ benchmarks:
   - id: inspect/hle
     name: "Humanity's Last Exam"
     description: >
-      Multi-modal benchmark of 2,500 frontier-difficulty questions across dozens of academic
-      subjects. ~14% of questions require image understanding. Designed to measure capabilities
-      beyond existing saturated benchmarks.
+      Frontier-difficulty questions across dozens of academic subjects. The source benchmark
+      includes image questions, but this configured run evaluates its text-only subset.
     category: knowledge
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     primary_score:
       metric: accuracy/accuracy
@@ -780,13 +1089,17 @@ benchmarks:
       task_args:
         include_multi_modal: false
         graders: [grader]
-    tags: [knowledge, reasoning, multimodal, inspect-evals]
+    tags: [knowledge, reasoning, inspect-evals]
 
   # Agent capabilities
   - id: inspect/gaia
     name: GAIA
     description: General AI Assistants benchmark — real-world tasks requiring multi-step tool use and reasoning.
     category: agent
+    domains: [assistants]
+    tasks: [multi_step_task_completion]
+    modalities: [multimodal]
+    evaluation_targets: [agent]
     metrics: [accuracy/accuracy]
     tags: [agent, reasoning, inspect-evals]
 
@@ -794,6 +1107,10 @@ benchmarks:
     name: AgentDojo
     description: Tests agent robustness against prompt injection attacks in realistic task environments.
     category: agent
+    domains: [trustworthiness]
+    tasks: [adversarial_prompt_injection_resistance]
+    modalities: [text]
+    evaluation_targets: [agent]
     metrics: [accuracy/accuracy]
     tags: [agent, safety, prompt-injection, inspect-evals]
 
@@ -801,6 +1118,10 @@ benchmarks:
     name: TheAgentCompany
     description: Realistic workplace agent tasks requiring web navigation, code, and communication tools.
     category: agent
+    domains: [assistants]
+    tasks: [multi_step_task_completion]
+    modalities: [multimodal]
+    evaluation_targets: [agent]
     metrics: [accuracy/accuracy]
     tags: [agent, inspect-evals]
 
@@ -810,6 +1131,10 @@ benchmarks:
       Tests LLM function-calling accuracy across simple, parallel, multiple,
       and executable API invocations. V4 includes agentic-heavy weighting.
     category: agent
+    domains: [tool_use_and_function_calling]
+    tasks: [call_generation, parameter_type_correctness, relevance_no_call_detection]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics: [accuracy/accuracy]
     primary_score:
       metric: accuracy/accuracy
@@ -824,6 +1149,10 @@ benchmarks:
       Document Visual Question Answering — requires reading and reasoning over
       scanned document images to answer questions. Multimodal (vision) input required.
     category: multimodal
+    domains: [multimodal]
+    tasks: [document_chart_vqa]
+    modalities: [multimodal]
+    evaluation_targets: [model]
     metrics: [anls]
     primary_score:
       metric: anls
@@ -839,6 +1168,8 @@ benchmarks:
       Run any Inspect AI task by providing 'task' in parameters.
       Supports any inspect-evals task or user-authored task file.
     category: custom
+    domains: [custom]
+    tasks: [custom]
     metrics: [accuracy/accuracy]
     tags: [custom, inspect-ai]
 
