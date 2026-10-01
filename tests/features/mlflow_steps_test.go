@@ -21,6 +21,13 @@ import (
 const (
 	maxMLflowArtifactWait     = 1 * time.Minute
 	maxMLflowArtifactInterval = 5 * time.Second
+
+	// maxMLflowRunSearchWait is the maximum time to wait for an MLflow run to
+	// become discoverable via tag-based runs/search. MLflow's server-side tag
+	// indexing can lag under concurrent writes to the same experiment, so a
+	// short bounded retry avoids flaking tests while keeping feedback fast.
+	maxMLflowRunSearchWait  = 30 * time.Second
+	mlflowRunSearchInterval = 3 * time.Second
 )
 
 func (tc *scenarioConfig) iFetchMLflowArtifact(artifactPath, runIDPattern string) error {
@@ -168,7 +175,9 @@ func (tc *scenarioConfig) iFetchMLflowArtifactByExperimentAndJob(artifactName, e
 		return err
 	}
 
-	runID, err := tc.findMLflowRunIDForJob(experimentIDResolved, jobIDResolved)
+	// Use retry-aware search to tolerate MLflow tag-index lag under concurrent
+	// writes (RHOAIENG-94153).
+	runID, err := tc.findMLflowRunIDForJobWithRetry(experimentIDResolved, jobIDResolved)
 	if err != nil {
 		return err
 	}
@@ -308,6 +317,41 @@ func (tc *scenarioConfig) findMLflowRunIDForJob(experimentIDResolved, jobIDResol
 		return "", nil
 	}
 	return resp.Runs[0].Info.RunID, nil
+}
+
+// findMLflowRunIDForJobWithRetry wraps findMLflowRunIDForJob with bounded
+// retry/backoff to tolerate MLflow's eventual consistency of tag-based
+// runs/search under concurrent writes to the same experiment.
+func (tc *scenarioConfig) findMLflowRunIDForJobWithRetry(experimentIDResolved, jobIDResolved string) (string, error) {
+	runID, err := tc.findMLflowRunIDForJob(experimentIDResolved, jobIDResolved)
+	if err != nil || runID != "" {
+		return runID, err
+	}
+
+	// First attempt returned no run — retry with backoff in case MLflow's tag
+	// index has not caught up after concurrent writes.
+	deadline := time.Now().Add(maxMLflowRunSearchWait)
+	for {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			break
+		}
+		waitFor := mlflowRunSearchInterval
+		if remaining < waitFor {
+			waitFor = remaining
+		}
+		tc.logDebug("MLflow run not yet searchable for job %s in experiment %s; retrying in %s\n",
+			jobIDResolved, experimentIDResolved, waitFor)
+		timer := time.NewTimer(waitFor)
+		<-timer.C
+
+		runID, err = tc.findMLflowRunIDForJob(experimentIDResolved, jobIDResolved)
+		if err != nil || runID != "" {
+			return runID, err
+		}
+	}
+
+	return "", nil
 }
 
 func (tc *scenarioConfig) theMLflowArtifactShouldBeValidJSON() error {
