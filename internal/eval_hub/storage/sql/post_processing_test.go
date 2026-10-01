@@ -59,17 +59,12 @@ func testPostProcessingCompletionAtomic(t *testing.T, driver, databaseName strin
 	t.Cleanup(func() { _ = store.Close() })
 	tenant := api.Tenant(common.GUID())
 	scoped := store.WithTenant(tenant).WithOwner("owner")
-	for _, reason := range []string{"missing", "another tenant", "unfinished", "self reference"} {
+	for _, reason := range []string{"unfinished", "self reference"} {
 		t.Run(reason, func(t *testing.T) {
 			source := postProcessingTestJob(common.GUID(), tenant, api.EvaluationJobConfig{Name: "source"})
 			source.Status.State = api.OverallStateCompleted
 			job := postProcessingTestJob(common.GUID(), tenant, postProcessingTestConfig(source.Resource.ID))
 			switch reason {
-			case "another tenant":
-				source.Resource.Tenant = api.Tenant(common.GUID())
-				if err := store.WithTenant(source.Resource.Tenant).CreateEvaluationJob(source); err != nil {
-					t.Fatal(err)
-				}
 			case "unfinished":
 				source.Status.State = api.OverallStateRunning
 				if err := scoped.CreateEvaluationJob(source); err != nil {
@@ -91,17 +86,63 @@ func testPostProcessingCompletionAtomic(t *testing.T, driver, databaseName strin
 			if stored.Status.State != api.OverallStatePending || len(stored.Status.Benchmarks) != 0 || stored.Results != nil {
 				t.Fatalf("completion did not roll back: %+v", stored)
 			}
-			if reason == "missing" {
-				// A failed link does not make the job terminal: completion can be retried.
-				if err := scoped.CreateEvaluationJob(source); err != nil {
+		})
+	}
+}
+
+func TestPostProcessingCompletionWithUnavailableSource(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		anotherTenant bool
+	}{
+		{name: "missing"},
+		{name: "another tenant", anotherTenant: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			store, err := getTestStorage(t, drivers[0], getDBName())
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = store.Close() })
+
+			tenant := api.Tenant(common.GUID())
+			scoped := store.WithTenant(tenant).WithOwner("owner")
+			sourceTenant := tenant
+			if test.anotherTenant {
+				sourceTenant = api.Tenant(common.GUID())
+			}
+			sourceStore := store.WithTenant(sourceTenant).WithOwner("owner")
+			source := postProcessingTestJob(common.GUID(), sourceTenant, api.EvaluationJobConfig{Name: "source"})
+			source.Status.State = api.OverallStateCompleted
+			if test.anotherTenant {
+				if err := sourceStore.CreateEvaluationJob(source); err != nil {
 					t.Fatal(err)
 				}
-				if err := scoped.UpdateEvaluationJob(job.Resource.ID, postProcessingCompletion()); err != nil {
+			}
+
+			job := postProcessingTestJob(common.GUID(), tenant, postProcessingTestConfig(source.Resource.ID))
+			if err := scoped.CreateEvaluationJob(job); err != nil {
+				t.Fatal(err)
+			}
+			if err := scoped.UpdateEvaluationJob(job.Resource.ID, postProcessingCompletion()); err != nil {
+				t.Fatalf("complete post-processing job with %s source: %v", test.name, err)
+			}
+
+			completed, err := scoped.GetEvaluationJob(job.Resource.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if completed.Status.State != api.OverallStateCompleted {
+				t.Fatalf("state = %s, want completed", completed.Status.State)
+			}
+
+			if test.anotherTenant {
+				storedSource, err := sourceStore.GetEvaluationJob(source.Resource.ID)
+				if err != nil {
 					t.Fatal(err)
 				}
-				linked, err := scoped.GetEvaluationJob(source.Resource.ID)
-				if err != nil || linked.Results == nil || linked.Results.PostProcessingRef == nil || linked.Results.PostProcessingRef.ID != job.Resource.ID {
-					t.Fatalf("retry did not link source: %v, %+v", err, linked)
+				if storedSource.Results != nil && storedSource.Results.PostProcessingRef != nil {
+					t.Fatalf("cross-tenant source was linked to %q", storedSource.Results.PostProcessingRef.ID)
 				}
 			}
 		})
