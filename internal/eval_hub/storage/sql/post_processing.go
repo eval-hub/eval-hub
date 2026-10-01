@@ -2,6 +2,7 @@ package sql
 
 import (
 	"database/sql"
+	"errors"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
@@ -30,7 +31,8 @@ func (s *sqlStorage) linkCompletedPostProcessing(txn *sql.Tx, job *api.Evaluatio
 	}
 	source, err := s.getEvaluationJobTransactionalForUpdate(txn, sourceID)
 	if err != nil {
-		if isNotFound(err) {
+		var serviceErr *se.ServiceError
+		if errors.As(err, &serviceErr) && serviceErr.MessageCode() == messages.ResourceNotFound {
 			s.logger.Warn("post-processing source no longer exists; skipping link", "source_id", sourceID, "id", job.Resource.ID)
 			return nil
 		}
