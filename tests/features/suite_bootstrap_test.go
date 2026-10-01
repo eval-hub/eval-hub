@@ -19,7 +19,6 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
@@ -176,25 +175,6 @@ func (a *apiFeature) startLocalServer(port int) error {
 	if len(providerConfigs) == 0 {
 		return logError(fmt.Errorf("no provider configs loaded"))
 	}
-	// The embedded FVT server needs the internal provider to accept standalone
-	// post-processing requests. Use the regular local test adapter as its runtime;
-	// the feature scenario checks the API mapping rather than the computation.
-	providerConfigs[postprocessing.ProviderID] = pkgapi.ProviderResource{
-		Resource: pkgapi.Resource{ID: postprocessing.ProviderID, Owner: "system"},
-		ProviderConfig: pkgapi.ProviderConfig{
-			Name:  "EvalHub Internal",
-			Title: "EvalHub Internal",
-			Benchmarks: []pkgapi.BenchmarkResource{{
-				ID:      postprocessing.BenchmarkID,
-				Name:    "Evaluation post-processor",
-				Metrics: []string{"accuracy"},
-			}},
-			Runtime: &pkgapi.Runtime{
-				Local: &pkgapi.LocalRuntime{Command: "python tests/features/test_data/runtime/main.py"},
-			},
-		},
-	}
-
 	logger.Info("Providers loaded.")
 	for key := range providerConfigs {
 		providerCfg := providerConfigs[key]

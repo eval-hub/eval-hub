@@ -1,0 +1,19 @@
+id: eval_hub_internal
+name: EvalHub Internal
+title: EvalHub Internal
+description: Internal provider for post-processing computations.
+
+runtime:
+  local:
+    # Use the standard test adapter when exercising the API in local mode.
+    command: python tests/features/test_data/runtime/main.py
+
+benchmarks:
+  - id: evaluation_post_processor
+    name: Evaluation post-processor
+    domains: [knowledge_and_reasoning]
+    tasks: [statistical_analysis]
+    modalities: [text]
+    evaluation_targets: [model]
+    metrics:
+      - accuracy
