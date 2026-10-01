@@ -36,6 +36,14 @@ benchmarks:
       Multi-level instruction-following evaluation with HSR and SSR normalized
       to 0.0–1.0 and CSL reported on a 0–5 scale.
     category: instruction_following
+    domains:
+      - instruction_and_output_reliability
+    tasks:
+      - constraint_following
+    modalities:
+      - text
+    evaluation_targets:
+      - model
     metrics:
       - hsr
       - ssr
