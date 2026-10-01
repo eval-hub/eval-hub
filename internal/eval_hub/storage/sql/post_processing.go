@@ -30,6 +30,10 @@ func (s *sqlStorage) linkCompletedPostProcessing(txn *sql.Tx, job *api.Evaluatio
 	}
 	source, err := s.getEvaluationJobTransactionalForUpdate(txn, sourceID)
 	if err != nil {
+		if isNotFound(err) {
+			s.logger.Warn("post-processing source no longer exists; skipping link", "source_id", sourceID, "id", job.Resource.ID)
+			return nil
+		}
 		return err
 	}
 	if source.Status == nil || source.Status.State != api.OverallStateCompleted {
