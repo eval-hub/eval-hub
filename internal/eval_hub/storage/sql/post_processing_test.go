@@ -1,6 +1,7 @@
 package sql_test
 
 import (
+	"database/sql"
 	"sync"
 	"testing"
 	"time"
@@ -109,6 +110,134 @@ func testPostProcessingCompletionAtomic(t *testing.T, driver, databaseName strin
 
 func TestPostProcessingConcurrentCompletions(t *testing.T) {
 	testPostProcessingConcurrentCompletions(t, drivers[0], getDBName())
+}
+
+func TestPostProcessingCompletionWithoutEvaluationSourceDoesNotLink(t *testing.T) {
+	store, err := getTestStorage(t, drivers[0], getDBName())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	tenant := api.Tenant(common.GUID())
+	scoped := store.WithTenant(tenant).WithOwner("owner")
+	tests := []struct {
+		name   string
+		config api.EvaluationJobConfig
+	}{
+		{
+			name: "external results",
+			config: *postprocessing.ToEvaluationJob(&api.StandalonePostProcessingRequest{
+				Operations: api.StandalonePostProcessingOperations{ConfidenceInterval: &api.StandaloneConfidenceIntervalConfig{
+					ConfidenceIntervalConfigCommon: api.ConfidenceIntervalConfigCommon{
+						CalibrationDataRef: []api.CalibrationDataRef{{
+							PVC:        &api.PVCTestDataRef{ClaimName: "calibration"},
+							DataConfig: api.CalibrationDataConfig{Format: "jsonl", Columns: api.CalibrationDataColumns{Label: "label", Prediction: "prediction"}},
+						}},
+						SignificanceLevel: 0.05,
+					},
+					ResultsDataRef: &api.PostProcessingResultsDataRef{PVC: &api.PVCTestDataRef{ClaimName: "results"}},
+					PrimaryScore:   &api.PrimaryScore{Metric: "accuracy"},
+				}},
+			}),
+		},
+		{
+			name: "missing results reference",
+			config: api.EvaluationJobConfig{Benchmarks: []api.EvaluationBenchmarkConfig{{
+				ProviderID: postprocessing.ProviderID,
+				Ref:        api.Ref{ID: postprocessing.BenchmarkID},
+				Parameters: map[string]any{"operations": map[string]any{"confidence_interval": map[string]any{}}},
+			}}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			job := postProcessingTestJob(common.GUID(), tenant, test.config)
+			if err := scoped.CreateEvaluationJob(job); err != nil {
+				t.Fatal(err)
+			}
+			if err := scoped.UpdateEvaluationJob(job.Resource.ID, postProcessingCompletion()); err != nil {
+				t.Fatalf("complete post-processing job: %v", err)
+			}
+			stored, err := scoped.GetEvaluationJob(job.Resource.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if stored.Status.State != api.OverallStateCompleted {
+				t.Fatalf("state = %s, want completed", stored.Status.State)
+			}
+			if stored.Results != nil && stored.Results.PostProcessingRef != nil {
+				t.Fatalf("job with no eval-job source was linked to %q", stored.Results.PostProcessingRef.ID)
+			}
+		})
+	}
+}
+
+func TestPostProcessingCompletionRejectsMissingOperations(t *testing.T) {
+	store, err := getTestStorage(t, drivers[0], getDBName())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	tenant := api.Tenant(common.GUID())
+	scoped := store.WithTenant(tenant).WithOwner("owner")
+	job := postProcessingTestJob(common.GUID(), tenant, api.EvaluationJobConfig{Benchmarks: []api.EvaluationBenchmarkConfig{{
+		ProviderID: postprocessing.ProviderID,
+		Ref:        api.Ref{ID: postprocessing.BenchmarkID},
+	}}})
+	if err := scoped.CreateEvaluationJob(job); err != nil {
+		t.Fatal(err)
+	}
+	if err := scoped.UpdateEvaluationJob(job.Resource.ID, postProcessingCompletion()); err == nil {
+		t.Fatal("expected completion to fail when the stored computation has no operations")
+	}
+	stored, err := scoped.GetEvaluationJob(job.Resource.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status.State != api.OverallStatePending {
+		t.Fatalf("state = %s, want pending after rollback", stored.Status.State)
+	}
+}
+
+func TestPostProcessingCompletionRollsBackWhenSourceLinkUpdateFails(t *testing.T) {
+	databaseName := getDBName()
+	store, err := getTestStorage(t, drivers[0], databaseName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	tenant := api.Tenant(common.GUID())
+	scoped := store.WithTenant(tenant).WithOwner("owner")
+	source := postProcessingTestJob("source-for-trigger", tenant, api.EvaluationJobConfig{Name: "source"})
+	source.Status.State = api.OverallStateCompleted
+	if err := scoped.CreateEvaluationJob(source); err != nil {
+		t.Fatal(err)
+	}
+	job := postProcessingTestJob(common.GUID(), tenant, postProcessingTestConfig(source.Resource.ID))
+	if err := scoped.CreateEvaluationJob(job); err != nil {
+		t.Fatal(err)
+	}
+	triggerDB, err := sql.Open("sqlite", getDBInMemoryURL(databaseName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = triggerDB.Close() })
+	_, err = triggerDB.Exec(`CREATE TRIGGER reject_source_link BEFORE UPDATE ON evaluations
+WHEN OLD.id = 'source-for-trigger' BEGIN SELECT RAISE(FAIL, 'reject post-processing source update'); END;`)
+	if err != nil {
+		t.Fatalf("create source-update trigger: %v", err)
+	}
+	if err := scoped.UpdateEvaluationJob(job.Resource.ID, postProcessingCompletion()); err == nil {
+		t.Fatal("expected source-link update failure")
+	}
+	stored, err := scoped.GetEvaluationJob(job.Resource.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status.State != api.OverallStatePending {
+		t.Fatalf("state = %s, want pending after transaction rollback", stored.Status.State)
+	}
 }
 
 func testPostProcessingConcurrentCompletions(t *testing.T, driver, databaseName string) {

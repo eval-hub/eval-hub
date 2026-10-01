@@ -62,3 +62,42 @@ func TestPostProcessingResourceResultsJSON(t *testing.T) {
 		})
 	}
 }
+
+func TestPostProcessingOperations(t *testing.T) {
+	tests := []struct {
+		name       string
+		standalone StandalonePostProcessingOperations
+		job        JobPostProcessingOperations
+		wantNames  []string
+	}{
+		{name: "no operations"},
+		{
+			name: "confidence interval",
+			standalone: StandalonePostProcessingOperations{
+				ConfidenceInterval: &StandaloneConfidenceIntervalConfig{},
+			},
+			job: JobPostProcessingOperations{
+				ConfidenceInterval: &ConfidenceIntervalConfig{},
+			},
+			wantNames: []string{"confidence_interval"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			wantOperation := len(test.wantNames) > 0
+			if got := test.standalone.HasOperation(); got != wantOperation {
+				t.Errorf("StandalonePostProcessingOperations.HasOperation() = %t, want %t", got, wantOperation)
+			}
+			if got := test.job.HasOperation(); got != wantOperation {
+				t.Errorf("JobPostProcessingOperations.HasOperation() = %t, want %t", got, wantOperation)
+			}
+			if got := test.standalone.OperationNames(); !reflect.DeepEqual(got, test.wantNames) {
+				t.Errorf("StandalonePostProcessingOperations.OperationNames() = %v, want %v", got, test.wantNames)
+			}
+			if got := test.job.OperationNames(); !reflect.DeepEqual(got, test.wantNames) {
+				t.Errorf("JobPostProcessingOperations.OperationNames() = %v, want %v", got, test.wantNames)
+			}
+		})
+	}
+}
