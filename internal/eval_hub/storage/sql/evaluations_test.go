@@ -1,6 +1,7 @@
 package sql_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -314,8 +315,8 @@ func testUpdateEvaluationJob_ConcurrentBenchmarkCompletions(t *testing.T, driver
 		t.Fatalf("CreateEvaluationJob: %v", err)
 	}
 
-	completeBenchmark := func(id string, index int) error {
-		return store.UpdateEvaluationJob(jobID, &api.StatusEvent{
+	completeBenchmark := func(workerStore abstractions.Storage, id string, index int) error {
+		return workerStore.UpdateEvaluationJob(jobID, &api.StatusEvent{
 			BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 				ID: id, ProviderID: "garak", BenchmarkIndex: index,
 				Status: api.StateCompleted, CompletedAt: api.DateTimeToString(now),
@@ -323,7 +324,7 @@ func testUpdateEvaluationJob_ConcurrentBenchmarkCompletions(t *testing.T, driver
 		})
 	}
 
-	if err := completeBenchmark("truthfulqa_mc1", 1); err != nil {
+	if err := completeBenchmark(store, "truthfulqa_mc1", 1); err != nil {
 		t.Fatalf("complete truthfulqa_mc1: %v", err)
 	}
 
@@ -333,14 +334,30 @@ func testUpdateEvaluationJob_ConcurrentBenchmarkCompletions(t *testing.T, driver
 	// FOR UPDATE lets the second update finish and fail the contention check.
 	locked := make(chan struct{})
 	release := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseTransactions := func() {
+		releaseOnce.Do(func() {
+			close(release)
+		})
+	}
+	workerCtx, cancelWorkers := context.WithCancel(context.Background())
+	workerStore := store.WithContext(workerCtx)
 	var holdGate sync.Mutex
 	var holdingTxn bool
+	var wg sync.WaitGroup
 	t.Cleanup(func() {
 		sql.SetEvaluationJobUpdateAfterLockedReadHook(nil)
+		releaseTransactions()
+		cancelWorkers()
+		done := make(chan struct{})
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
 		select {
-		case <-release:
-		default:
-			close(release)
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Errorf("timed out waiting for concurrent UpdateEvaluationJob goroutines")
 		}
 	})
 	sql.SetEvaluationJobUpdateAfterLockedReadHook(func(_, _ string) {
@@ -357,8 +374,10 @@ func testUpdateEvaluationJob_ConcurrentBenchmarkCompletions(t *testing.T, driver
 
 	doneFirst := make(chan error, 1)
 	doneSecond := make(chan error, 1)
+	wg.Add(1)
 	go func() {
-		doneFirst <- completeBenchmark("toxigen", 0)
+		defer wg.Done()
+		doneFirst <- completeBenchmark(workerStore, "toxigen", 0)
 	}()
 
 	select {
@@ -367,8 +386,10 @@ func testUpdateEvaluationJob_ConcurrentBenchmarkCompletions(t *testing.T, driver
 		t.Fatal("timed out waiting for first transaction to acquire row lock")
 	}
 
+	wg.Add(1)
 	go func() {
-		doneSecond <- completeBenchmark("bigbench_hhh_alignment_multiple_choice", 2)
+		defer wg.Done()
+		doneSecond <- completeBenchmark(workerStore, "bigbench_hhh_alignment_multiple_choice", 2)
 	}()
 
 	if driver == "postgres" || driver == "pgx" {
@@ -382,7 +403,7 @@ func testUpdateEvaluationJob_ConcurrentBenchmarkCompletions(t *testing.T, driver
 		}
 	}
 
-	close(release)
+	releaseTransactions()
 
 	if err := <-doneFirst; err != nil {
 		t.Fatalf("complete toxigen: %v", err)
@@ -808,7 +829,10 @@ func testUpdateEvaluationJob_PersistsAdditionalInfo(t *testing.T, driver string,
 }
 
 func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
-	var store abstractions.Storage
+	store, err := getTestStorage(t, driver, databaseName)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
 	var evaluationId string
 	var tenant string
 
@@ -818,11 +842,9 @@ func testEvaluationsStorage(t *testing.T, driver string, databaseName string) {
 	}
 
 	t.Run("NewStorage creates a new storage instance", func(t *testing.T) {
-		s, err := getTestStorage(t, driver, databaseName)
-		if err != nil {
-			t.Fatalf("Failed to create storage: %v", err)
+		if store == nil {
+			t.Fatal("storage instance is nil")
 		}
-		store = s
 	})
 
 	t.Run("CreateEvaluationJob creates a new evaluation job", func(t *testing.T) {
