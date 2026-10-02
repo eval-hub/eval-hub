@@ -208,6 +208,12 @@ type fakeClientReader struct {
 	collectionOptions url.Values
 	providerCalls     int
 	collectionCalls   int
+	providers         *api.ProviderResourceList
+	providerErr       error
+	providerNil       bool
+	collections       *api.CollectionResourceList
+	collectionErr     error
+	collectionNil     bool
 }
 
 func (c *fakeClientReader) ListProviders(opts ...evalhubclient.ListOption) (*api.ProviderResourceList, error) {
@@ -215,6 +221,9 @@ func (c *fakeClientReader) ListProviders(opts ...evalhubclient.ListOption) (*api
 	c.providerOptions = url.Values{}
 	for _, opt := range opts {
 		opt(c.providerOptions)
+	}
+	if c.providerErr != nil || c.providers != nil || c.providerNil {
+		return c.providers, c.providerErr
 	}
 	return &api.ProviderResourceList{Page: api.Page{TotalCount: 1}, Items: []api.ProviderResource{{Resource: api.Resource{ID: "p"}}}}, nil
 }
@@ -224,6 +233,9 @@ func (c *fakeClientReader) ListCollections(opts ...evalhubclient.ListOption) (*a
 	c.collectionOptions = url.Values{}
 	for _, opt := range opts {
 		opt(c.collectionOptions)
+	}
+	if c.collectionErr != nil || c.collections != nil || c.collectionNil {
+		return c.collections, c.collectionErr
 	}
 	return &api.CollectionResourceList{Page: api.Page{TotalCount: 1}, Items: []api.CollectionResource{{Resource: api.Resource{ID: "c"}}}}, nil
 }
@@ -246,6 +258,49 @@ func TestClientSourcePagesAndCancellation(t *testing.T) {
 	if !errors.Is(err, context.Canceled) || client.providerCalls != 1 {
 		t.Fatalf("canceled request reached HTTP client: %v calls=%d", err, client.providerCalls)
 	}
+	_, err = source.ListCollections(ctx, 0, 1)
+	if !errors.Is(err, context.Canceled) || client.collectionCalls != 1 {
+		t.Fatalf("canceled request reached collection HTTP client: %v calls=%d", err, client.collectionCalls)
+	}
+}
+
+func TestClientSourceErrorsAndNilResults(t *testing.T) {
+	t.Parallel()
+	providerErr := errors.New("provider client failed")
+	providerCases := []struct {
+		name   string
+		client *fakeClientReader
+		want   error
+	}{
+		{name: "client error", client: &fakeClientReader{providerErr: providerErr}, want: providerErr},
+		{name: "nil result", client: &fakeClientReader{providerNil: true}, want: errors.New("provider list is nil")},
+	}
+	for _, tc := range providerCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := NewClientSource(tc.client).ListProviders(context.Background(), 0, 1)
+			if err == nil || err.Error() != tc.want.Error() {
+				t.Fatalf("ListProviders error = %v, want %v", err, tc.want)
+			}
+		})
+	}
+
+	collectionErr := errors.New("collection client failed")
+	collectionCases := []struct {
+		name   string
+		client *fakeClientReader
+		want   error
+	}{
+		{name: "client error", client: &fakeClientReader{collectionErr: collectionErr}, want: collectionErr},
+		{name: "nil result", client: &fakeClientReader{collectionNil: true}, want: errors.New("collection list is nil")},
+	}
+	for _, tc := range collectionCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := NewClientSource(tc.client).ListCollections(context.Background(), 0, 1)
+			if err == nil || err.Error() != tc.want.Error() {
+				t.Fatalf("ListCollections error = %v, want %v", err, tc.want)
+			}
+		})
+	}
 }
 
 type scopedStorage struct {
@@ -259,6 +314,10 @@ type scopedStorage struct {
 type storageReads struct {
 	providerFilter   *abstractions.QueryFilter
 	collectionFilter *abstractions.QueryFilter
+	providerErr      error
+	providerNil      bool
+	collectionErr    error
+	collectionNil    bool
 }
 
 func (s *scopedStorage) WithContext(ctx context.Context) abstractions.Storage {
@@ -284,6 +343,9 @@ func (s *scopedStorage) GetProviders(filter *abstractions.QueryFilter) (*abstrac
 		return nil, errors.New("provider read lost request scope")
 	}
 	s.reads.providerFilter = filter
+	if s.reads.providerErr != nil || s.reads.providerNil {
+		return nil, s.reads.providerErr
+	}
 	return &abstractions.QueryResults[api.ProviderResource]{Items: []api.ProviderResource{{Resource: api.Resource{ID: "p"}}}, TotalCount: 1}, nil
 }
 
@@ -292,6 +354,9 @@ func (s *scopedStorage) GetCollections(filter *abstractions.QueryFilter) (*abstr
 		return nil, errors.New("collection read lost request scope")
 	}
 	s.reads.collectionFilter = filter
+	if s.reads.collectionErr != nil || s.reads.collectionNil {
+		return nil, s.reads.collectionErr
+	}
 	return &abstractions.QueryResults[api.CollectionResource]{Items: []api.CollectionResource{{Resource: api.Resource{ID: "c"}}}, TotalCount: 1}, nil
 }
 
@@ -320,7 +385,48 @@ func TestStorageSourceRetainsRequestScope(t *testing.T) {
 	}
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
+	if _, err := source.ListProviders(canceled, 0, 1); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled provider storage read: %v", err)
+	}
 	if _, err := source.ListCollections(canceled, 0, 1); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled storage read: %v", err)
+	}
+}
+
+func TestStorageSourceErrorsAndNilResults(t *testing.T) {
+	t.Parallel()
+	providerErr := errors.New("provider storage failed")
+	collectionErr := errors.New("collection storage failed")
+	for _, tc := range []struct {
+		name  string
+		reads *storageReads
+		call  func(CatalogSource, context.Context) error
+		want  string
+	}{
+		{name: "provider error", reads: &storageReads{providerErr: providerErr}, call: func(source CatalogSource, ctx context.Context) error {
+			_, err := source.ListProviders(ctx, 0, 1)
+			return err
+		}, want: providerErr.Error()},
+		{name: "provider nil result", reads: &storageReads{providerNil: true}, call: func(source CatalogSource, ctx context.Context) error {
+			_, err := source.ListProviders(ctx, 0, 1)
+			return err
+		}, want: "provider query result is nil"},
+		{name: "collection error", reads: &storageReads{collectionErr: collectionErr}, call: func(source CatalogSource, ctx context.Context) error {
+			_, err := source.ListCollections(ctx, 0, 1)
+			return err
+		}, want: collectionErr.Error()},
+		{name: "collection nil result", reads: &storageReads{collectionNil: true}, call: func(source CatalogSource, ctx context.Context) error {
+			_, err := source.ListCollections(ctx, 0, 1)
+			return err
+		}, want: "collection query result is nil"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := (&scopedStorage{reads: tc.reads}).WithTenant("tenant-a").WithOwner("alice")
+			ctx := context.WithValue(context.Background(), requestKey{}, "request-a")
+			err := tc.call(NewStorageSource(store), ctx)
+			if err == nil || err.Error() != tc.want {
+				t.Fatalf("storage adapter error = %v, want %q", err, tc.want)
+			}
+		})
 	}
 }
