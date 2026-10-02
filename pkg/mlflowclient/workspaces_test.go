@@ -8,6 +8,12 @@ import (
 	"testing"
 )
 
+// MLflow REST wire paths issued by mlflow-go for workspace and experiment lookups.
+const (
+	endpointServerInfo               = "/api/3.0/mlflow/server-info"
+	endpointExperimentsGetByNameBase = "/api/2.0/mlflow/experiments/get-by-name"
+)
+
 func TestProbeWorkspacesEnabled(t *testing.T) {
 	t.Parallel()
 
@@ -97,6 +103,8 @@ func TestEnsureWorkspace(t *testing.T) {
 
 	t.Run("skips create when workspace exists", func(t *testing.T) {
 		t.Parallel()
+		// Get-first semantics: an existing workspace is confirmed with a GET and
+		// no create is attempted.
 		var createCalls int
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch {
@@ -132,24 +140,6 @@ func TestWorkspacesEnabled(t *testing.T) {
 	}
 	if NewClient("http://example").WithWorkspacesSupport(false).WorkspacesEnabled() {
 		t.Fatal("expected disabled")
-	}
-}
-
-func TestApplyWorkspaceHeaders(t *testing.T) {
-	t.Parallel()
-	req, err := http.NewRequest(http.MethodGet, "http://example/x", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	NewClient("http://example").WithWorkspacesSupport(true).WithWorkspace("ws-a").applyWorkspaceHeaders(req.Header)
-	if got := req.Header.Get("X-MLFLOW-WORKSPACE"); got != "ws-a" {
-		t.Fatalf("header = %q, want ws-a", got)
-	}
-
-	req2, _ := http.NewRequest(http.MethodGet, "http://example/x", nil)
-	NewClient("http://example").WithWorkspace("ws-a").applyWorkspaceHeaders(req2.Header)
-	if got := req2.Header.Get("X-MLFLOW-WORKSPACE"); got != "" {
-		t.Fatalf("header = %q, want empty when support disabled", got)
 	}
 }
 
@@ -245,6 +235,38 @@ func TestCreateWorkspace_validation(t *testing.T) {
 	}
 }
 
+func TestCreateWorkspaceErrorResponse(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/3.0/mlflow/workspaces" {
+			http.Error(w, `{"error_code":"INVALID_PARAMETER_VALUE","message":"bad name"}`, http.StatusBadRequest)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := NewClient(srv.URL).WithContext(t.Context())
+	if _, err := client.CreateWorkspace(&CreateWorkspaceRequest{Name: "tenant"}); err == nil {
+		t.Fatal("expected CreateWorkspace error")
+	}
+}
+
+func TestGetWorkspaceErrorResponse(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"error_code":"RESOURCE_DOES_NOT_EXIST","message":"nope"}`, http.StatusNotFound)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := NewClient(srv.URL).WithContext(t.Context())
+	if _, err := client.GetWorkspace("tenant"); err == nil {
+		t.Fatal("expected GetWorkspace error")
+	}
+}
+
 func TestWithWorkspaceRespectsServerSupport(t *testing.T) {
 	t.Parallel()
 
@@ -326,7 +348,7 @@ func TestWithWorkspaceRespectsServerSupport(t *testing.T) {
 func TestWorkspaceHelpers_nilClient(t *testing.T) {
 	t.Parallel()
 	var c *Client
-	if c.WorkspacesEnabled() || c.WorkspaceName() != "" || c.configuredWorkspaceName() != "" || c.workspaceHeaderValue() != "" {
+	if c.WorkspacesEnabled() || c.WorkspaceName() != "" || c.configuredWorkspaceName() != "" {
 		t.Fatal("nil client should report empty/false helpers")
 	}
 }

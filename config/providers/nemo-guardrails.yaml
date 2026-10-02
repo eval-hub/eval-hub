@@ -23,6 +23,10 @@ benchmarks:
     description: >-
       Evaluate a NeMo config against prompt injection datasets (neuralchemy, deepset, jackhhao).
     category: safety
+    domains: [trustworthiness]
+    tasks: [adversarial_prompt_injection_resistance]
+    modalities: [text]
+    evaluation_targets: [ai_app]
     metrics:
       - accuracy
       - blocked_precision
@@ -78,6 +82,10 @@ benchmarks:
     description: >-
       Evaluate a NeMo config against toxicity, profanity, and content safety datasets
     category: safety
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [ai_app]
     metrics:
       - accuracy
       - blocked_precision
@@ -138,6 +146,10 @@ benchmarks:
     description: >-
       Evaluate a NeMo config against personally identifiable information dataset
     category: safety
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [ai_app]
     metrics:
       - accuracy
       - blocked_precision
@@ -197,6 +209,10 @@ benchmarks:
     description: >-
       Evaluate a NeMo config's masking ability against personally identifiable information dataset
     category: safety
+    domains: [trustworthiness]
+    tasks: [safety]
+    modalities: [text]
+    evaluation_targets: [ai_app]
     metrics:
       - masking_accuracy
       - mean_latency_ms
@@ -246,6 +262,10 @@ benchmarks:
     description: >-
       Evaluate a NeMo config against prompt injections hidden inside tool/function call responses.
     category: safety
+    domains: [trustworthiness]
+    tasks: [adversarial_prompt_injection_resistance]
+    modalities: [text]
+    evaluation_targets: [ai_app]
     metrics:
       - accuracy
       - blocked_precision

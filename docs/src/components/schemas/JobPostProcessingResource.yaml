@@ -1,19 +1,19 @@
-type: object
 title: JobPostProcessingResource
 description: Confidence interval post-processing resource associated with an evaluation job.
-properties:
-  resource:
-    $ref: ./Resource.yaml
-  name:
-    $ref: ./PostProcessingName.yaml
-  confidence_interval_config:
-    $ref: ./ConfidenceIntervalConfig.yaml
-  status:
-    $ref: ./PostProcessingStatus.yaml
-  results:
-    $ref: ./PostProcessingResultsEvalJob.yaml
-required:
-  - resource
-  - confidence_interval_config
-  - status
-additionalProperties: false
+allOf:
+  - $ref: ./PostProcessingCommon.yaml
+  - type: object
+    properties:
+      resource:
+        $ref: ./Resource.yaml
+      operations:
+        $ref: ./JobPostProcessingOperations.yaml
+      status:
+        $ref: ./PostProcessingStatus.yaml
+      results:
+        $ref: ./PostProcessingResultsEvalJob.yaml
+    required:
+      - resource
+      - operations
+      - status
+unevaluatedProperties: false
