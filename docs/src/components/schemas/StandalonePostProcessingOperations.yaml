@@ -1,6 +1,11 @@
-type: array
+type: object
 title: StandalonePostProcessingOperations
-description: Post-processing operations executed by a standalone resource.
-minItems: 1
-items:
-  $ref: ./StandalonePostProcessingOperation.yaml
+description: |
+  Post-processing operations executed by a standalone resource. Each property
+  names an operation kind, so a kind can appear at most once. At least one
+  operation must be configured.
+minProperties: 1
+properties:
+  confidence_interval:
+    $ref: ./StandaloneConfidenceIntervalConfig.yaml
+additionalProperties: false

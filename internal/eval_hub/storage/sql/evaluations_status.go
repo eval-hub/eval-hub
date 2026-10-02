@@ -331,6 +331,11 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 		if err := s.updateEvaluationJobTxn(txn, id, overallState, &entity); err != nil {
 			return err
 		}
+		if overallState == api.OverallStateCompleted {
+			if err := s.linkCompletedPostProcessing(txn, job); err != nil {
+				return se.WithRollback(err)
+			}
+		}
 
 		return nil
 	})

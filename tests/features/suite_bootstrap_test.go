@@ -172,11 +172,9 @@ func (a *apiFeature) startLocalServer(port int) error {
 		// we do this as no point trying to continue
 		return logError(fmt.Errorf("failed to load provider configs: %w", err))
 	}
-
 	if len(providerConfigs) == 0 {
 		return logError(fmt.Errorf("no provider configs loaded"))
 	}
-
 	logger.Info("Providers loaded.")
 	for key := range providerConfigs {
 		providerCfg := providerConfigs[key]

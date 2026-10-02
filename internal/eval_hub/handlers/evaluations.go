@@ -17,6 +17,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serialization"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
@@ -191,28 +192,37 @@ func ValidateReadOnlyResolvedSHA(cfg *api.EvaluationJobConfig) error {
 
 // HandleCreateEvaluation handles POST /api/v1/evaluations/jobs
 func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
-	storage := h.getStorage(ctx)
-
 	logging.LogRequestStarted(ctx)
-
-	id := common.GUID()
-
+	bodyBytes, err := req.BodyAsBytes()
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
 	evaluation := &api.EvaluationJobConfig{}
+	if err := serialization.Unmarshal(h.validate, ctx, bodyBytes, evaluation); err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+	job, err := h.createEvaluationJob(ctx, evaluation)
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+	w.WriteJSON(job, 202)
+}
+
+// createEvaluationJob validates, persists, and launches an already decoded job.
+// HTTP decoding and response formatting belong to the calling API handler.
+func (h *Handlers) createEvaluationJob(ctx *executioncontext.ExecutionContext, evaluation *api.EvaluationJobConfig) (*api.EvaluationJobResource, error) {
+	storage := h.getStorage(ctx)
+	id := common.GUID()
 	var collection *api.CollectionResource
 	var benchmarks []api.EvaluationBenchmarkConfig
 
 	err := h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			// get the body bytes from the context
-			bodyBytes, err := req.BodyAsBytes()
-			if err != nil {
-				return err
-			}
-			err = serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, evaluation)
-			if err != nil {
-				return err
-			}
+			var err error
 			if evaluation.Collection != nil && evaluation.Collection.ID != "" {
 				collection, err = storage.WithContext(runtimeCtx).GetCollection(evaluation.Collection.ID)
 				if err != nil {
@@ -245,6 +255,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 			}
 			if (evaluation.Model != nil) &&
 				(strings.TrimSpace(evaluation.Model.URL) == "") &&
+				!postprocessing.IsPostProcessingJob(evaluation) &&
 				!allBenchmarksHavePreRecordedData(benchmarks) {
 				return serviceerrors.NewServiceError(messages.ModelURLRequired)
 			}
@@ -256,8 +267,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 	)
 
 	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
+		return nil, err
 	}
 
 	ApplyHardwareConfigQueueDefaults(evaluation)
@@ -282,13 +292,11 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 			"job.id", id,
 		)
 		if err != nil {
-			w.Error(err, ctx.RequestID)
-			return
+			return nil, err
 		}
 	} else if mlflow.HasExperimentName(evaluation) {
 		// MLflow not configured but experiment name provided in the input
-		w.Error(serviceerrors.NewServiceError(messages.MLFlowRequiredForExperiment), ctx.RequestID)
-		return
+		return nil, serviceerrors.NewServiceError(messages.MLFlowRequiredForExperiment)
 	}
 
 	var job *api.EvaluationJobResource
@@ -333,8 +341,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 	)
 
 	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
+		return nil, err
 	}
 
 	tenant := ctx.Tenant.String()
@@ -348,7 +355,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 	metrics.IncActiveJobs(ctx.Ctx, tenant)
 	metrics.IncQueueDepth(ctx.Ctx, tenant)
 
-	_ = h.withSpan(
+	err = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
 			if h.runtime != nil {
@@ -369,7 +376,6 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 						recordEvaluationJobTerminalTransition(ctx.Ctx, api.OverallStatePending, state, providerIDs, collectionID, job.Resource.CreatedAt, tenant)
 					}
 					// return the first error encountered
-					w.Error(runErr, ctx.RequestID)
 					return runErr
 				}
 			} else {
@@ -382,7 +388,6 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				}
 				job.Status.Message = message
 			}
-			w.WriteJSON(job, 202)
 			return nil
 		},
 		"runtime",
@@ -391,6 +396,10 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		"job.experiment_id", mlflowExperimentID,
 		"job.experiment_url", mlflowExperimentURL,
 	)
+	if err != nil {
+		return nil, err
+	}
+	return job, nil
 }
 
 func (h *Handlers) createRuntimeStorage(ctx *executioncontext.ExecutionContext, jobContext context.Context) *runtimeStorage {

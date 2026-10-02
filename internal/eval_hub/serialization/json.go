@@ -37,6 +37,10 @@ func formatValidationError(errs validator.ValidationErrors) string {
 	}
 	e := errs[0]
 	switch e.Tag() {
+	case "at_least_one_operation":
+		return "operations must contain at least one operation"
+	case "operation_order_matches_operations":
+		return "operation_order must list each configured operation exactly once"
 	case "oneof":
 		return fmt.Sprintf("%s must be one of: %s", e.Field(), strings.ReplaceAll(e.Param(), " ", ", "))
 	case "excluded_with":

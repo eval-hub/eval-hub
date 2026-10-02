@@ -1,5 +1,5 @@
 title: JobPostProcessingResource
-description: Confidence interval post-processing resource associated with an evaluation job.
+description: Post-processing resource associated with an evaluation job.
 allOf:
   - $ref: ./PostProcessingCommon.yaml
   - type: object
