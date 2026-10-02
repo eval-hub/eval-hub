@@ -91,6 +91,41 @@ func TestClusterModeRequiresIdentityHeaders(t *testing.T) {
 		}
 		assertMessageCode(t, w, "missing_tenant_header")
 	})
+
+	t.Run("GET info requires identity headers", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/info", nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("got status %d body %s", w.Code, w.Body.String())
+		}
+		assertMessageCode(t, w, "missing_tenant_header")
+	})
+
+	t.Run("GET info requires X-User", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/info", nil)
+		req.Header.Set("X-Tenant", "test-tenant")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("got status %d body %s", w.Code, w.Body.String())
+		}
+		assertMessageCode(t, w, "missing_user_header")
+	})
+
+	t.Run("GET info accepts both identity headers", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/info", nil)
+		req.Header.Set("X-Tenant", "test-tenant")
+		req.Header.Set("X-User", "test-user")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("got status %d body %s", w.Code, w.Body.String())
+		}
+	})
 }
 
 func TestLocalModeDoesNotRequireIdentityHeaders(t *testing.T) {
