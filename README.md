@@ -20,18 +20,19 @@ A lightweight REST API service for orchestrating LLM evaluations across multiple
 
 ```mermaid
 flowchart TB
-    rest[REST clients]
-    agents[MCP clients / agents]
-    mcp[EvalHub MCP server<br/>tools, resources, prompts<br/>stdio or HTTP]
-    model[Model endpoints]
-    mlflow[MLflow]
-    registry[OCI registry]
-    otelCollector[OpenTelemetry Collector<br/>OTLP endpoint]
+    subgraph clients[Clients]
+        direction LR
+        rest[REST clients]
+        agents[MCP clients / agents]
+    end
 
     subgraph openshift[OpenShift cluster]
         direction TB
         proxy[kube-rbac-proxy<br/>authentication and authorization]
         api[EvalHub API<br/>REST routes and handlers]
+        mcp[EvalHub MCP server<br/>tools, resources, prompts<br/>stdio or HTTP]
+        mlflow[MLflow]
+        otelCollector[OpenTelemetry Collector<br/>OTLP endpoint]
         database[(SQL storage<br/>PostgreSQL typical)]
         config[YAML config<br/>providers and collections]
         metrics[Metrics listener<br/>:8081 /metrics]
@@ -48,6 +49,15 @@ flowchart TB
         end
     end
 
+    subgraph externalEndpoints[External endpoints]
+        direction LR
+        model[Model endpoints]
+        registry[OCI registry]
+    end
+
+    %% Keep the external endpoints group after the cluster in the top-down layout.
+    openshift ~~~ externalEndpoints
+
     rest -->|REST| proxy
     proxy --> api
     agents -->|MCP| mcp
@@ -58,9 +68,8 @@ flowchart TB
     runtime -->|create jobs| kubeapi
     kubeapi --> job
     sidecar -->|status events| proxy
-    sidecar --> model
+    sidecar -->|model and OCI traffic| externalEndpoints
     sidecar --> mlflow
-    sidecar --> registry
     api -->|tracking and results| mlflow
     prometheus -->|scrape| metrics
     api -. OTLP .-> otelCollector
@@ -70,12 +79,12 @@ flowchart TB
     classDef external fill:#f5f7fa,stroke:#64748b,color:#1e293b
     classDef service fill:#e8f2ff,stroke:#3973ac,color:#142b45
     classDef runtimeNode fill:#eef8f1,stroke:#4b8b62,color:#193d26
-    class rest,agents,mcp,prometheus,model,mlflow,registry,otelCollector external
-    class proxy,api,database,config,metrics service
+    class rest,agents,model,registry external
+    class proxy,api,mcp,mlflow,otelCollector,database,config,metrics service
     class runtime,kubeapi,init,adapter,sidecar runtimeNode
 ```
 
-OpenShift API requests pass through kube-rbac-proxy, which supplies the authenticated user and tenant identity. The API creates Kubernetes jobs; each job pod runs a provider adapter and sidecar. The sidecar proxies model, MLflow, OCI, and API callback traffic. Prometheus scrapes the dedicated metrics listener. The MCP server is a separate process and may be deployed alongside or outside the cluster.
+OpenShift API requests pass through kube-rbac-proxy, which supplies the authenticated user and tenant identity. The API creates Kubernetes jobs; each job pod runs a provider adapter and sidecar. The sidecar proxies model, MLflow, OCI, and API callback traffic. Prometheus scrapes the dedicated metrics listener. The MCP server runs inside the cluster as a process separate from the API.
 
 ### Local architecture
 
