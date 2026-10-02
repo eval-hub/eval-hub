@@ -67,8 +67,8 @@ flowchart TB
     sidecar -->|status events| proxy
     sidecar --> mlflow
     api -->|tracking and results| mlflow
-    sidecar --> model
-    sidecar --> registry
+    sidecar -->|Model traffic| model
+    sidecar -->|OCI traffic| registry
     prometheus -->|scrape| metrics
     api -. OTLP .-> otelCollector
     adapter -. OTLP .-> otelCollector
