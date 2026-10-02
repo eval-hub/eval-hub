@@ -8,24 +8,29 @@ import (
 
 const (
 	DefaultMaxBenchmarks = 12
-	DefaultStrictness    = "moderate"
+
+	StrictnessLenient  = "lenient"
+	StrictnessModerate = "moderate"
+	StrictnessStrict   = "strict"
+
+	DefaultStrictness = StrictnessModerate
 )
 
-var validStrictness = []string{"lenient", "moderate", "strict"}
+var validStrictness = [...]string{StrictnessLenient, StrictnessModerate, StrictnessStrict}
 
 // Options describes a collection-design request after input normalization.
 // ProviderFilter retains the caller's trimmed text for the existing MCP summary;
-// ProviderIDs contains its nonempty, deduplicated IDs in their original order.
+// ProviderIDs contains its nonempty, deduplicated IDs for membership checks.
 type Options struct {
 	Goal           string
 	ProviderFilter string
-	ProviderIDs    []string
+	ProviderIDs    map[string]struct{}
 	MaxBenchmarks  int
 	Strictness     string
 }
 
 func ValidStrictness() []string {
-	return append([]string(nil), validStrictness...)
+	return append([]string(nil), validStrictness[:]...)
 }
 
 // ParseOptions accepts the MCP prompt's string arguments and returns typed options.
@@ -52,22 +57,18 @@ func ParseOptions(goal, providerFilter, maxBenchmarksRaw, strictness string) (Op
 	if strictness == "" {
 		strictness = DefaultStrictness
 	} else if !isValidStrictness(strictness) {
-		return Options{}, fmt.Errorf("invalid strictness %q; valid values: %s", strictness, strings.Join(validStrictness, ", "))
+		return Options{}, fmt.Errorf("invalid strictness %q; valid values: %s", strictness, strings.Join(validStrictness[:], ", "))
 	}
 
-	var providerIDs []string
+	var providerIDs map[string]struct{}
 	if providerFilter != "" {
-		seen := make(map[string]struct{})
+		providerIDs = make(map[string]struct{})
 		for id := range strings.SplitSeq(providerFilter, ",") {
 			id = strings.TrimSpace(id)
 			if id == "" {
 				continue
 			}
-			if _, exists := seen[id]; exists {
-				continue
-			}
-			seen[id] = struct{}{}
-			providerIDs = append(providerIDs, id)
+			providerIDs[id] = struct{}{}
 		}
 	}
 
@@ -93,12 +94,8 @@ func (o Options) allowsProvider(id string) bool {
 	if o.ProviderFilter == "" {
 		return true
 	}
-	for _, allowed := range o.ProviderIDs {
-		if allowed == id {
-			return true
-		}
-	}
-	return false
+	_, allowed := o.ProviderIDs[id]
+	return allowed
 }
 
 // Summary preserves the option text in the existing MCP prompt and tool.

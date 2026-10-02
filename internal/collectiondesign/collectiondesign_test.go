@@ -19,11 +19,16 @@ func TestParseOptions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if options.Goal != "evaluate safety" || options.ProviderFilter != "p2, p1, ,p2" || options.MaxBenchmarks != 7 || options.Strictness != "strict" {
+	if options.Goal != "evaluate safety" || options.ProviderFilter != "p2, p1, ,p2" || options.MaxBenchmarks != 7 || options.Strictness != StrictnessStrict {
 		t.Fatalf("unexpected options: %+v", options)
 	}
-	if !reflect.DeepEqual(options.ProviderIDs, []string{"p2", "p1"}) {
-		t.Fatalf("provider IDs were not deduplicated in order: %v", options.ProviderIDs)
+	if len(options.ProviderIDs) != 2 {
+		t.Fatalf("provider IDs were not deduplicated: %v", options.ProviderIDs)
+	}
+	for _, id := range []string{"p1", "p2"} {
+		if _, ok := options.ProviderIDs[id]; !ok {
+			t.Errorf("provider ID %q missing from lookup set: %v", id, options.ProviderIDs)
+		}
 	}
 	if got := options.Summary(); got != "Provider filter: p2, p1, ,p2 | Max benchmarks: 7 | Strictness: strict" {
 		t.Fatalf("MCP option summary changed: %q", got)
@@ -33,7 +38,7 @@ func TestParseOptions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if defaults.MaxBenchmarks != 12 || defaults.Strictness != "moderate" || defaults.Summary() != "Max benchmarks: 12 | Strictness: moderate" {
+	if defaults.MaxBenchmarks != 12 || defaults.Strictness != StrictnessModerate || defaults.Summary() != "Max benchmarks: 12 | Strictness: moderate" {
 		t.Fatalf("unexpected defaults: %+v", defaults)
 	}
 
@@ -49,7 +54,7 @@ func TestParseOptions(t *testing.T) {
 			t.Errorf("ParseOptions(%q,%q,%q,%q) = %v, want %q", tc.goal, tc.filter, tc.max, tc.strictness, err, tc.want)
 		}
 	}
-	if got := strings.Join(ValidStrictness(), ", "); got != "lenient, moderate, strict" {
+	if got := strings.Join(ValidStrictness(), ", "); got != strings.Join([]string{StrictnessLenient, StrictnessModerate, StrictnessStrict}, ", ") {
 		t.Fatalf("strictness values changed: %q", got)
 	}
 }
@@ -70,6 +75,25 @@ func TestNeutralGuidanceDoesNotContainMCPInstructions(t *testing.T) {
 		if strings.Contains(guidance, forbidden) {
 			t.Errorf("neutral guidance contains MCP-only text %q", forbidden)
 		}
+	}
+}
+
+func TestExtractGuidanceSectionRejectsMalformedMarkdown(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		markdown string
+	}{
+		{name: "missing section", markdown: "some prose"},
+		{name: "missing terminator", markdown: "<!-- BEGIN requirements -->\ncontent"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Fatal("expected malformed embedded guidance to panic")
+				}
+			}()
+			extractGuidanceSection(tc.markdown, "requirements")
+		})
 	}
 }
 

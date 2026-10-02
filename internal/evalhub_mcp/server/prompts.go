@@ -395,8 +395,8 @@ func renderDesignCollectionMessages(result *promptResultConfig, d *designCollect
 		"options_summary", d.OptionsSummary,
 		"design_requirements", collectiondesign.Requirements("the AVAILABLE BENCHMARKS catalog below"),
 		"calibration_guidelines", collectiondesign.CalibrationGuidelines(d.Strictness),
-		"domain_signal_mapping", collectiondesign.DomainSignalMapping,
-		"output_format", collectiondesign.OutputFormat,
+		"domain_signal_mapping", collectiondesign.DomainSignalMapping(),
+		"output_format", collectiondesign.OutputFormat(),
 		"benchmark_catalog", benchmarkCatalog,
 		"collection_examples", collectionExamples,
 	)
