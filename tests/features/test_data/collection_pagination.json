@@ -1,0 +1,17 @@
+{
+  "name": "fvt-pagination-collection-{{value:scenario_id}}",
+  "description": "Collection used to verify isolated pagination",
+  "category": "test",
+  "benchmarks": [
+    {
+      "id": "arc_easy",
+      "provider_id": "lm_evaluation_harness",
+      "parameters": {
+        "num_examples": 10,
+        "num_fewshot": 3,
+        "tokenizer": "{{env:FVT_BENCHMARK_TOKENIZER|google/flan-t5-small}}",
+        "weight": 3
+      }
+    }
+  ]
+}

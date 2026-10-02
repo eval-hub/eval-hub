@@ -267,3 +267,6 @@ internal/eval_runtime_sidecar/handlers/testdata/fuzz/
 
 # Inspect AI evaluation logs (local smoke tests)
 logs/
+
+.agents/
+.codex/

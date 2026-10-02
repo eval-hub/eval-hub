@@ -32,7 +32,7 @@ func TestNewStorageConnMaxLifetime(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewStorage failed with duration string: %v", err)
 		}
-		_ = s.Close()
+		t.Cleanup(func() { _ = s.Close() })
 	})
 
 	t.Run("accepts config without conn_max_lifetime", func(t *testing.T) {
@@ -44,7 +44,7 @@ func TestNewStorageConnMaxLifetime(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewStorage failed without conn_max_lifetime: %v", err)
 		}
-		_ = s.Close()
+		t.Cleanup(func() { _ = s.Close() })
 	})
 }
 
@@ -118,7 +118,11 @@ func getTestStorage(t *testing.T, driver string, databaseName string) (abstracti
 			"url":           getDBInMemoryURL(databaseName),
 			"database_name": databaseName,
 		}
-		return storage.NewStorage(&databaseConfig, nil, nil, false, false, logger)
+		s, err := storage.NewStorage(&databaseConfig, nil, nil, false, false, logger)
+		if err == nil {
+			t.Cleanup(func() { _ = s.Close() })
+		}
+		return s, err
 	case "postgres", "pgx":
 		url, err := getPostgresURL(databaseName)
 		if err != nil {
@@ -129,7 +133,11 @@ func getTestStorage(t *testing.T, driver string, databaseName string) (abstracti
 			"url":           url,
 			"database_name": databaseName,
 		}
-		return storage.NewStorage(&databaseConfig, nil, nil, false, false, logger)
+		s, err := storage.NewStorage(&databaseConfig, nil, nil, false, false, logger)
+		if err == nil {
+			t.Cleanup(func() { _ = s.Close() })
+		}
+		return s, err
 	default:
 		return nil, fmt.Errorf("unsupported driver: %s", driver)
 	}
