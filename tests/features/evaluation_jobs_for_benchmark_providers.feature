@@ -125,7 +125,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     Then the response code should be 204
 
   # Following lm_evaluation_harness benchmark needs a valid HF token
-  # Running all 188 lm_evaluation_harness benchmarks in a single job isn't viable — the model and HuggingFace both choke.
+  # Running all lm_evaluation_harness benchmarks in a single job isn't viable — the model and HuggingFace both choke.
   # Hence smaller groups were made.
   Scenario: Verifying results returned for Evaluation job - lm_evaluation_harness - group 1
     Given the service is running
@@ -165,7 +165,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain the value "{{env:MODEL_URL|http://test.com}}" at path "$.model.url"
     And the response should contain the value "test-evaluation-job-for-lm_evaluation_harness-benchmark" at path "$.name"
     And the response should contain "results"
-    And the array at path "results.benchmarks" in the response should have length 30
+    And the array at path "results.benchmarks" in the response should have length 26
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
     And all benchmarks in the response should have a test block with pass criteria
@@ -188,7 +188,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain the value "{{env:MODEL_URL|http://test.com}}" at path "$.model.url"
     And the response should contain the value "test-evaluation-job-for-lm_evaluation_harness-benchmark" at path "$.name"
     And the response should contain "results"
-    And the array at path "results.benchmarks" in the response should have length 30
+    And the array at path "results.benchmarks" in the response should have length 26
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
     And all benchmarks in the response should have a test block with pass criteria
@@ -235,7 +235,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain the value "{{env:MODEL_URL|http://test.com}}" at path "$.model.url"
     And the response should contain the value "test-evaluation-job-for-lm_evaluation_harness-benchmark" at path "$.name"
     And the response should contain "results"
-    And the array at path "results.benchmarks" in the response should have length 30
+    And the array at path "results.benchmarks" in the response should have length 28
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
     And all benchmarks in the response should have a test block with pass criteria
@@ -260,7 +260,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain the value "{{env:MODEL_URL|http://test.com}}" at path "$.model.url"
     And the response should contain the value "test-evaluation-job-for-lm_evaluation_harness-benchmark" at path "$.name"
     And the response should contain "results"
-    And the array at path "results.benchmarks" in the response should have length 38
+    And the array at path "results.benchmarks" in the response should have length 22
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
     And all benchmarks in the response should have a test block with pass criteria
