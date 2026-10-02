@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"errors"
+
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/httpwrappers"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -13,7 +16,14 @@ func (h *Handlers) HandleGetInfo(ctx *executioncontext.ExecutionContext, _ httpw
 	if lister, ok := h.runtime.(abstractions.QueueLister); ok {
 		listed, err := lister.ListQueues(ctx.Ctx, ctx.Tenant.String())
 		if err != nil {
-			w.Error(err, ctx.RequestID)
+			var serviceErr abstractions.ServiceError
+			if errors.As(err, &serviceErr) {
+				w.Error(err, ctx.RequestID)
+				return
+			}
+
+			ctx.Logger.Error("failed to list tenant queues", "error", err)
+			w.ErrorWithMessageCode(ctx.RequestID, messages.InternalServerError, "Error", "Failed to list tenant queues")
 			return
 		}
 		if listed != nil {

@@ -1,16 +1,21 @@
 package handlers_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -66,15 +71,46 @@ func TestHandleGetInfo(t *testing.T) {
 		}
 	})
 
-	t.Run("queue lookup errors are returned", func(t *testing.T) {
-		runtime := &infoQueueRuntime{err: errors.New("queue lookup denied")}
+	t.Run("unexpected queue lookup errors are logged and redacted", func(t *testing.T) {
+		const rawError = "queue lookup denied"
+		runtime := &infoQueueRuntime{err: errors.New(rawError)}
+		h := handlers.New(nil, nil, runtime, nil, nil, &config.Config{Service: &config.ServiceConfig{}}, nil)
+		recorder := httptest.NewRecorder()
+		var logs bytes.Buffer
+		ctx := &executioncontext.ExecutionContext{
+			Ctx:       context.Background(),
+			RequestID: "request-1",
+			Logger:    slog.New(slog.NewJSONHandler(&logs, nil)),
+			Tenant:    api.Tenant("tenant-a"),
+		}
+		h.HandleGetInfo(ctx, createMockRequest("GET", "/api/v1/info"), MockResponseWrapper{recorder: recorder})
+
+		if recorder.Code != 500 {
+			t.Fatalf("status = %d, want 500: %s", recorder.Code, recorder.Body.String())
+		}
+		if strings.Contains(recorder.Body.String(), rawError) {
+			t.Fatalf("response exposed internal error: %s", recorder.Body.String())
+		}
+		if !strings.Contains(recorder.Body.String(), "An internal server error occurred") {
+			t.Fatalf("response does not contain generic error: %s", recorder.Body.String())
+		}
+		if !strings.Contains(logs.String(), rawError) {
+			t.Fatalf("original error was not logged: %s", logs.String())
+		}
+	})
+
+	t.Run("service errors retain their client message", func(t *testing.T) {
+		runtime := &infoQueueRuntime{err: serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "queue", "ResourceId", "gpu")}
 		h := handlers.New(nil, nil, runtime, nil, nil, &config.Config{Service: &config.ServiceConfig{}}, nil)
 		recorder := httptest.NewRecorder()
 		ctx := &executioncontext.ExecutionContext{Ctx: context.Background(), RequestID: "request-1", Tenant: api.Tenant("tenant-a")}
 		h.HandleGetInfo(ctx, createMockRequest("GET", "/api/v1/info"), MockResponseWrapper{recorder: recorder})
 
-		if recorder.Code != 500 {
-			t.Fatalf("status = %d, want 500: %s", recorder.Code, recorder.Body.String())
+		if recorder.Code != 404 {
+			t.Fatalf("status = %d, want 404: %s", recorder.Code, recorder.Body.String())
+		}
+		if !strings.Contains(recorder.Body.String(), `"message_code":"resource_not_found"`) {
+			t.Fatalf("service error response not preserved: %s", recorder.Body.String())
 		}
 	})
 }
