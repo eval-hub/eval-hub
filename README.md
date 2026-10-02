@@ -16,9 +16,120 @@ A lightweight REST API service for orchestrating LLM evaluations across multiple
 
 ## Architecture
 
-![Architecture](docs/images/architecture.svg)
+### OpenShift architecture
 
-The service uses Go's standard `net/http` router, structured logging with zap, Prometheus metrics, and a pluggable storage layer (SQLite for development, PostgreSQL for production). Providers and benchmarks are declared in YAML configuration files shipped with the container image.
+```mermaid
+flowchart TB
+    subgraph clients[Clients]
+        direction LR
+        rest[REST clients]
+        agents[MCP clients / agents]
+    end
+
+    subgraph openshift[OpenShift cluster]
+        direction TB
+        proxy[kube-rbac-proxy<br/>authentication and authorization]
+        api[EvalHub API<br/>REST routes and handlers]
+        mcp[EvalHub MCP server<br/>tools, resources, prompts<br/>stdio or HTTP]
+        mlflow[MLflow]
+        otelCollector[OpenTelemetry Collector<br/>OTLP endpoint]
+        database[(SQL storage<br/>PostgreSQL typical)]
+        config[YAML config<br/>providers and collections]
+        metrics[Metrics listener<br/>:8081 /metrics]
+        prometheus[Prometheus]
+        runtime[Kubernetes runtime]
+        kubeapi[Kubernetes API]
+        subgraph job[Evaluation job pod]
+            direction TB
+            init[Optional data/source init]
+            adapter[Provider adapter]
+            sidecar[EvalHub sidecar<br/>API, model, MLflow and OCI proxies]
+            init -.-> adapter
+            adapter <--> sidecar
+        end
+    end
+
+    subgraph externalEndpoints[External endpoints]
+        direction LR
+        model[Model endpoints]
+        registry[OCI registry]
+    end
+
+    rest -->|REST| proxy
+    proxy --> api
+    agents -->|MCP| mcp
+    mcp -->|EvalHub REST client| proxy
+    api --> database
+    config --> api
+    api --> runtime
+    runtime -->|create jobs| kubeapi
+    kubeapi --> job
+    sidecar -->|status events| proxy
+    sidecar --> mlflow
+    api -->|tracking and results| mlflow
+    sidecar -->|Model traffic| model
+    sidecar -->|OCI traffic| registry
+    prometheus -->|scrape| metrics
+    api -. OTLP .-> otelCollector
+    adapter -. OTLP .-> otelCollector
+    sidecar -. OTLP .-> otelCollector
+
+    classDef external fill:#f5f7fa,stroke:#64748b,color:#1e293b
+    classDef service fill:#e8f2ff,stroke:#3973ac,color:#142b45
+    classDef runtimeNode fill:#eef8f1,stroke:#4b8b62,color:#193d26
+    class rest,agents,model,registry external
+    class proxy,api,mcp,mlflow,otelCollector,database,config,metrics service
+    class runtime,kubeapi,init,adapter,sidecar runtimeNode
+```
+
+OpenShift API requests pass through kube-rbac-proxy, which supplies the authenticated user and tenant identity. The API creates Kubernetes jobs; each job pod runs a provider adapter and sidecar. The sidecar proxies model, MLflow, OCI, and API callback traffic. Prometheus scrapes the dedicated metrics listener. The MCP server runs inside the cluster as a process separate from the API.
+
+### Local architecture
+
+```mermaid
+flowchart TB
+    rest[REST clients]
+    agents[MCP clients / agents]
+    mcp[EvalHub MCP server<br/>tools, resources, prompts<br/>stdio or HTTP]
+    prometheus[Prometheus]
+    model[Model endpoints]
+    mlflow[MLflow<br/>optional]
+
+    subgraph local[Local machine]
+        direction TB
+        api[EvalHub API<br/>REST routes and handlers]
+        database[(SQLite by default<br/>PostgreSQL optional)]
+        config[YAML config<br/>providers and collections]
+        metrics[Metrics listener<br/>:8081 /metrics]
+        runtime[Local runtime]
+        adapter[Provider adapter<br/>local process]
+        sidecar[Optional local sidecar<br/>API and per-job model proxy]
+    end
+
+    rest -->|REST| api
+    agents -->|MCP| mcp
+    mcp -->|EvalHub REST client| api
+    api --> database
+    config --> api
+    api --> runtime
+    runtime -->|launch| adapter
+    adapter -->|API callbacks when sidecar is off| api
+    adapter -. when enabled .-> sidecar
+    sidecar -->|API callbacks| api
+    adapter -. direct model calls when sidecar is off .-> model
+    sidecar -->|when enabled| model
+    api -->|tracking and results| mlflow
+    prometheus -->|scrape| metrics
+
+    classDef external fill:#f5f7fa,stroke:#64748b,color:#1e293b
+    classDef service fill:#e8f2ff,stroke:#3973ac,color:#142b45
+    classDef runtimeNode fill:#eef8f1,stroke:#4b8b62,color:#193d26
+    class rest,agents,mcp,prometheus,model,mlflow external
+    class api,database,config,metrics service
+    class runtime,adapter,sidecar runtimeNode
+```
+
+Local mode connects directly to the API without kube-rbac-proxy and runs each adapter as a local process. The shared sidecar is optional; when enabled, it handles API callbacks and per-job model routing. MLflow can be configured for experiment tracking and result export. Prometheus can scrape the separate metrics listener; local mode also exposes `/metrics` on the API port. The MCP server is a separate process and can run near the MCP client or alongside the API.
 
 ## Quick start
 
