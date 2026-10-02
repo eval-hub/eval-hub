@@ -239,24 +239,25 @@ Feature: Collections Endpoint
 
   Scenario: List collections pagination returns next href and next page contains remaining item
     Given the service is running
-    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_pagination.json"
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:first_id"
-    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_pagination.json"
     Then the response code should be 201
     And the "resource.id" field in the response should be saved as "value:second_id"
-    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection.json"
+    When I send a POST request to "/api/v1/evaluations/collections" with body "file:/collection_pagination.json"
     Then the response code should be 201
-    When I send a GET request to "/api/v1/evaluations/collections?limit=2&offset=0"
+    When I send a GET request to "/api/v1/evaluations/collections?name=fvt-pagination-collection-{{value:scenario_id}}&limit=2&offset=0"
     Then the response code should be 200
     And the "total_count" field in the response should be saved as "value:collection_total"
+    And the response should contain the value "3" at path "$.total_count"
     And the array at path "items" in the response should have length 2
     And the response should contain "next"
     And the "next.href" field in the response should be saved as "value:next_url"
     When I send a GET request to "{{value:next_url}}"
     Then the response code should be 200
-    And the array at path "items" in the response should have length at least 1
-    When I send a GET request to "/api/v1/evaluations/collections?limit=2&offset={{value:collection_total}}"
+    And the array at path "items" in the response should have length 1
+    When I send a GET request to "/api/v1/evaluations/collections?name=fvt-pagination-collection-{{value:scenario_id}}&limit=2&offset={{value:collection_total}}"
     Then the response code should be 200
     And the array at path "items" in the response should have length 0
     And the response should contain the value "{{value:collection_total}}" at path "$.total_count"
