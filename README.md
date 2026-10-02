@@ -55,9 +55,6 @@ flowchart TB
         registry[OCI registry]
     end
 
-    %% Keep the external endpoints group after the cluster in the top-down layout.
-    openshift ~~~ externalEndpoints
-
     rest -->|REST| proxy
     proxy --> api
     agents -->|MCP| mcp
@@ -68,9 +65,9 @@ flowchart TB
     runtime -->|create jobs| kubeapi
     kubeapi --> job
     sidecar -->|status events| proxy
-    sidecar -->|model and OCI traffic| externalEndpoints
     sidecar --> mlflow
     api -->|tracking and results| mlflow
+    openshift -->|sidecar proxies model and OCI traffic| externalEndpoints
     prometheus -->|scrape| metrics
     api -. OTLP .-> otelCollector
     adapter -. OTLP .-> otelCollector
