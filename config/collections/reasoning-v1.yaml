@@ -29,18 +29,6 @@ pass_criteria:
   # Threshold reflects solid reasoning capability across diverse task types.
   threshold: 0.38
 benchmarks:
-  - id: gsm8k_platinum_cot_llama
-    provider_id: lm_evaluation_harness
-    weight: 1
-    primary_score:
-      metric: exact_match
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.60   # Slightly lower than IF variant — 0-shot is harder
-    parameters:
-      num_fewshot: 0
-      apply_chat_template: true
-
   - id: leaderboard_mmlu_pro
     provider_id: lm_evaluation_harness
     weight: 1

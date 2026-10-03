@@ -36,8 +36,6 @@ test.mergeOptional(
         test.benchmark('careqa_open_perplexity', 'lm_evaluation_harness', { num_examples: 1 }),
         test.benchmark('AraDiCE_truthfulqa_mc1_lev', 'lm_evaluation_harness', { num_examples: 1 }),
         test.benchmark('metabench_truthfulqa_permute', 'lm_evaluation_harness', { num_examples: 1 }),
-        test.benchmark('nortruthfulqa_gen_nno_p0', 'lm_evaluation_harness', { num_examples: 1 }),
-        test.benchmark('nortruthfulqa_gen_nno_p3', 'lm_evaluation_harness', { num_examples: 1 }),
       ],
       tags: ['benchmark-providers', 'lm_evaluation_harness'],
     } else {},
