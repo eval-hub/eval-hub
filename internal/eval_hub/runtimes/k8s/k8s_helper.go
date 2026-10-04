@@ -9,6 +9,7 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -167,6 +168,14 @@ func (h *KubernetesHelper) CreateJob(ctx context.Context, job *batchv1.Job) (*ba
 	return created, err
 }
 
+// GetJob returns the Job with the given name in namespace.
+func (h *KubernetesHelper) GetJob(ctx context.Context, namespace, name string) (*batchv1.Job, error) {
+	if namespace == "" || name == "" {
+		return nil, fmt.Errorf("namespace and name are required")
+	}
+	return h.clientset.BatchV1().Jobs(namespace).Get(ctx, name, metav1.GetOptions{})
+}
+
 // DeleteJob deletes a Job in the given namespace.
 func (h *KubernetesHelper) DeleteJob(ctx context.Context, namespace, name string, opts metav1.DeleteOptions) error {
 	if namespace == "" || name == "" {
@@ -186,6 +195,43 @@ func (h *KubernetesHelper) DeleteConfigMap(ctx context.Context, namespace, name 
 	ctx, span := startK8sSpan(ctx, "delete_configmap", "ConfigMap", namespace, name)
 	err := h.clientset.CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	endK8sSpan(span, err)
+	return err
+}
+
+// CreateNetworkPolicy creates a NetworkPolicy in the policy's namespace.
+func (h *KubernetesHelper) CreateNetworkPolicy(ctx context.Context, policy *networkingv1.NetworkPolicy) (*networkingv1.NetworkPolicy, error) {
+	if policy == nil || policy.Namespace == "" || policy.Name == "" {
+		return nil, fmt.Errorf("network policy, namespace, and name are required")
+	}
+	ctx, span := startK8sSpan(ctx, "create_network_policy", "NetworkPolicy", policy.Namespace, policy.Name)
+	created, err := h.clientset.NetworkingV1().NetworkPolicies(policy.Namespace).Create(ctx, policy, metav1.CreateOptions{})
+	endK8sSpan(span, err)
+	return created, err
+}
+
+// GetNetworkPolicy returns the NetworkPolicy with the given name in namespace.
+func (h *KubernetesHelper) GetNetworkPolicy(ctx context.Context, namespace, name string) (*networkingv1.NetworkPolicy, error) {
+	if namespace == "" || name == "" {
+		return nil, fmt.Errorf("namespace and name are required")
+	}
+	return h.clientset.NetworkingV1().NetworkPolicies(namespace).Get(ctx, name, metav1.GetOptions{})
+}
+
+// SetNetworkPolicyOwner sets a single owner reference on the NetworkPolicy.
+func (h *KubernetesHelper) SetNetworkPolicyOwner(ctx context.Context, namespace, name string, owner metav1.OwnerReference) error {
+	if namespace == "" || name == "" {
+		return fmt.Errorf("namespace and name are required")
+	}
+	ctx, span := startK8sSpan(ctx, "set_network_policy_owner", "NetworkPolicy", namespace, name)
+	var err error
+	defer func() { endK8sSpan(span, err) }()
+
+	policy, err := h.clientset.NetworkingV1().NetworkPolicies(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	policy.OwnerReferences = []metav1.OwnerReference{owner}
+	_, err = h.clientset.NetworkingV1().NetworkPolicies(namespace).Update(ctx, policy, metav1.UpdateOptions{})
 	return err
 }
 
