@@ -407,6 +407,11 @@ func (r *K8sRuntime) Name() string {
 	return "kubernetes"
 }
 
+// ListQueues returns the tenant's Kueue LocalQueues.
+func (r *K8sRuntime) ListQueues(ctx context.Context, namespace string) ([]api.QueueInfo, error) {
+	return r.helper.ListLocalQueues(ctx, namespace)
+}
+
 // ValidateHardwareProfiles ensures referenced HardwareProfiles exist, are enabled,
 // and can be parsed. Called from the create handler before the job is persisted.
 func (r *K8sRuntime) ValidateHardwareProfiles(benchmarks []api.EvaluationBenchmarkConfig) error {
