@@ -2,6 +2,8 @@ type: object
 title: OCIDataRef
 description: Reference to a result artifact stored in an OCI registry.
 properties:
+  data_config:
+    $ref: ./ResultsDataConfig.yaml
   oci:
     type: object
     properties:

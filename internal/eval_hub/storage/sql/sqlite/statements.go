@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -165,6 +166,7 @@ func (s *sqliteStatementsFactory) CreateEntityFilterCondition(key string, value 
 
 func (s *sqliteStatementsFactory) CreateCountEntitiesStatement(tenant api.Tenant, tableName string, filter map[string]any) (string, []any) {
 	where, whereArgs := s.getWhereStatement(tenant, "") // we don't need to filter by id as we want to count all entities
+	where = addEvaluationJobTypeFilter(tableName, where)
 	filterClause, args := shared.CreateFilterStatement(s, where, whereArgs, filter, "", 0, 0, tableName)
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, tableName, filterClause)
 	return query, args
@@ -172,6 +174,7 @@ func (s *sqliteStatementsFactory) CreateCountEntitiesStatement(tenant api.Tenant
 
 func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant, tableName string, limit, offset int, filter map[string]any, sortBy string) (string, []any) {
 	where, whereArgs := s.getWhereStatement(tenant, "") // we don't need to filter by id as we want to count all entities
+	where = addEvaluationJobTypeFilter(tableName, where)
 	orderBy := "id DESC"
 	if tableName == shared.TableCollections && sortBy == "curation_order" {
 		orderBy = "CASE WHEN json_extract(entity, '$.curation_order') > 0 THEN 0 ELSE 1 END, CASE WHEN json_extract(entity, '$.curation_order') > 0 THEN json_extract(entity, '$.curation_order') END ASC, id DESC"
@@ -187,6 +190,22 @@ func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant,
 	}
 
 	return query, args
+}
+
+func addEvaluationJobTypeFilter(tableName, where string) string {
+	if tableName != shared.TableEvaluations {
+		return where
+	}
+	predicate := fmt.Sprintf(`NOT (
+		COALESCE(json_array_length(json_extract(entity, '$.config.benchmarks')), 0) = 1
+		AND json_extract(entity, '$.config.collection') IS NULL
+		AND COALESCE(json_extract(entity, '$.config.benchmarks[0].provider_id'), '') = '%s'
+		AND COALESCE(json_extract(entity, '$.config.benchmarks[0].id'), '') = '%s'
+	)`, postprocessing.ProviderID, postprocessing.BenchmarkID)
+	if where == "" {
+		return predicate
+	}
+	return where + " AND " + predicate
 }
 
 func (s *sqliteStatementsFactory) ScanRowForEntity(tenant api.Tenant, tableName string, rows *sql.Rows, query *shared.EntityQuery) error {

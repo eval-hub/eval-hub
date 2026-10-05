@@ -569,7 +569,7 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			response, err := storage.WithContext(runtimeCtx).GetEvaluationJob(evaluationJobID)
+			response, err := getEvaluationJob(storage.WithContext(runtimeCtx), evaluationJobID)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -581,6 +581,19 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 		"get-evaluation-job",
 		"job.id", evaluationJobID,
 	)
+}
+
+// getEvaluationJob hides post-processing computations from the evaluation-job
+// API even though both resource types share the same storage representation.
+func getEvaluationJob(storage abstractions.Storage, id string) (*api.EvaluationJobResource, error) {
+	job, err := storage.GetEvaluationJob(id)
+	if err != nil {
+		return nil, err
+	}
+	if job == nil || postprocessing.IsPostProcessingJob(&job.EvaluationJobConfig) {
+		return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
+	}
+	return job, nil
 }
 
 func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext, r httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
@@ -693,11 +706,11 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 	err := h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
+			job, err := getEvaluationJob(storage.WithContext(runtimeCtx), evaluationJobID)
+			if err != nil {
+				return err
+			}
 			if h.runtime != nil {
-				job, err := storage.WithContext(runtimeCtx).GetEvaluationJob(evaluationJobID)
-				if err != nil {
-					return err
-				}
 				if (job != nil) && (job.Status != nil) && (job.Status.State != api.OverallStateCancelled) {
 					if err := h.runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).DeleteEvaluationJobResources(job); err != nil {
 						// Cleanup failures shouldn't block deleting the storage record.

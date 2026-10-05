@@ -109,13 +109,20 @@ func (h *Handlers) HandleCreatePostProcessing(ctx *executioncontext.ExecutionCon
 		w.Error(err, ctx.RequestID)
 		return
 	}
+	var sourceJob *api.EvaluationJobResource
 	if operation := request.Operations.ConfidenceInterval; operation != nil {
-		if err := h.validatePostProcessingResultsSource(ctx, operation.ResultsDataRef); err != nil {
+		var err error
+		sourceJob, err = h.validatePostProcessingResultsSource(ctx, operation.ResultsDataRef)
+		if err != nil {
 			w.Error(err, ctx.RequestID)
 			return
 		}
 	}
-	job, err := h.createEvaluationJob(ctx, postprocessing.ToEvaluationJob(&request))
+	evaluation := postprocessing.ToEvaluationJob(&request)
+	if sourceJob != nil {
+		evaluation.Exports = copySourceOCIExports(sourceJob)
+	}
+	job, err := h.createEvaluationJob(ctx, evaluation)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
@@ -131,20 +138,41 @@ func (h *Handlers) HandleCreatePostProcessing(ctx *executioncontext.ExecutionCon
 // validatePostProcessingResultsSource checks the stored state of an eval_job
 // reference after Unmarshal has validated the schema for every source type.
 // External data access and content validation are performed by the adapter.
-// Job-scoped requests can use the same source check before mapping.
-func (h *Handlers) validatePostProcessingResultsSource(ctx *executioncontext.ExecutionContext, ref *api.PostProcessingResultsDataRef) error {
+func (h *Handlers) validatePostProcessingResultsSource(ctx *executioncontext.ExecutionContext, ref *api.PostProcessingResultsDataRef) (*api.EvaluationJobResource, error) {
 	if ref.EvalJob == nil {
-		return nil
+		return nil, nil
 	}
 	source, err := h.getStorage(ctx).GetEvaluationJob(ref.EvalJob.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if source == nil {
-		return serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", ref.EvalJob.ID)
+	if source == nil || postprocessing.IsPostProcessingJob(&source.EvaluationJobConfig) {
+		return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", ref.EvalJob.ID)
 	}
 	if source.Status == nil || source.Status.State != api.OverallStateCompleted {
-		return serviceerrors.NewServiceError(messages.PostProcessingSourceNotCompleted, "Id", source.Resource.ID)
+		return nil, serviceerrors.NewServiceError(messages.PostProcessingSourceNotCompleted, "Id", source.Resource.ID)
 	}
-	return nil
+	return source, nil
+}
+
+// copySourceOCIExports carries the source job's OCI coordinates and runtime
+// credentials reference into the generated job so its sidecar can download
+// per-sample results from the same registry.
+func copySourceOCIExports(source *api.EvaluationJobResource) *api.EvaluationExports {
+	if source == nil || source.Exports == nil || source.Exports.OCI == nil {
+		return nil
+	}
+
+	oci := *source.Exports.OCI
+	if annotations := source.Exports.OCI.Coordinates.Annotations; annotations != nil {
+		oci.Coordinates.Annotations = make(map[string]string, len(annotations))
+		for key, value := range annotations {
+			oci.Coordinates.Annotations[key] = value
+		}
+	}
+	if connection := source.Exports.OCI.K8s; connection != nil {
+		copiedConnection := *connection
+		oci.K8s = &copiedConnection
+	}
+	return &api.EvaluationExports{OCI: &oci}
 }

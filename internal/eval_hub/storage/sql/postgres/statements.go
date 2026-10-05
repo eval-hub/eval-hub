@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -164,6 +165,7 @@ func (s *postgresStatementsFactory) CreateEntityFilterCondition(key string, valu
 
 func (s *postgresStatementsFactory) CreateCountEntitiesStatement(tenant api.Tenant, tableName string, filter map[string]any) (string, []any) {
 	where, whereArgs := s.getWhereStatement(tenant, "", 1) // we don't need to filter by id as we want to count all entities
+	where = addEvaluationJobTypeFilter(tableName, where)
 	filterClause, args := shared.CreateFilterStatement(s, where, whereArgs, filter, "", 0, 0, tableName)
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, tableName, filterClause)
 	return query, args
@@ -171,6 +173,7 @@ func (s *postgresStatementsFactory) CreateCountEntitiesStatement(tenant api.Tena
 
 func (s *postgresStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant, tableName string, limit, offset int, filter map[string]any, sortBy string) (string, []any) {
 	where, whereArgs := s.getWhereStatement(tenant, "", 1) // we don't need to filter by id as we want to list all entities
+	where = addEvaluationJobTypeFilter(tableName, where)
 	orderBy := "id DESC"
 	if tableName == shared.TableCollections && sortBy == "curation_order" {
 		orderBy = "NULLIF((entity->>'curation_order')::bigint, 0) ASC NULLS LAST, id DESC"
@@ -186,6 +189,22 @@ func (s *postgresStatementsFactory) CreateListEntitiesStatement(tenant api.Tenan
 	}
 
 	return query, args
+}
+
+func addEvaluationJobTypeFilter(tableName, where string) string {
+	if tableName != shared.TableEvaluations {
+		return where
+	}
+	predicate := fmt.Sprintf(`NOT (
+		COALESCE(jsonb_array_length(entity->'config'->'benchmarks'), 0) = 1
+		AND (entity->'config'->'collection' IS NULL OR entity->'config'->'collection' = 'null'::jsonb)
+		AND COALESCE(entity->'config'->'benchmarks'->0->>'provider_id', '') = '%s'
+		AND COALESCE(entity->'config'->'benchmarks'->0->>'id', '') = '%s'
+	)`, postprocessing.ProviderID, postprocessing.BenchmarkID)
+	if where == "" {
+		return predicate
+	}
+	return where + " AND " + predicate
 }
 
 func (s *postgresStatementsFactory) ScanRowForEntity(tenant api.Tenant, tableName string, rows *sql.Rows, query *shared.EntityQuery) error {

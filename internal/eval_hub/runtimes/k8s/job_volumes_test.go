@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
@@ -18,6 +19,91 @@ func assertTestDataEmptyDirSizeLimit(t *testing.T, volumes []corev1.Volume) {
 	want := resource.MustParse(defaultTestDataEmptyDirSizeLimit)
 	if vol.EmptyDir.SizeLimit.Cmp(want) != 0 {
 		t.Fatalf("test-data sizeLimit = %s, want %s", vol.EmptyDir.SizeLimit.String(), want.String())
+	}
+}
+
+func TestBuildJobMountsPostProcessorCalibrationPVCs(t *testing.T) {
+	pvcs := []postProcessorPVCConfig{
+		{
+			claimName:  "calibration-a",
+			volumeName: postProcessorCalibrationPVCVolumeNamePrefix + "0",
+			mountPath:  postProcessorCalibrationPVCMountPathPrefix + "/calibration-a",
+		},
+		{
+			claimName:  "calibration-b",
+			volumeName: postProcessorCalibrationPVCVolumeNamePrefix + "1",
+			mountPath:  postProcessorCalibrationPVCMountPathPrefix + "/calibration-b",
+		},
+	}
+	cfg := &jobConfig{
+		jobID:          "job-ppi-pvc",
+		resourceGUID:   "guid-ppi-pvc",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "eval_hub_internal",
+		benchmarkID:    "evaluation_post_processor",
+		adapterImage:   "adapter:latest",
+		defaultEnv: []api.EnvVar{{
+			Name:  envPostProcessorPVCMountsName,
+			Value: "provider-value-must-not-override-runtime-paths",
+		}},
+		postProcessorPVCs: pvcs,
+	}
+
+	job, err := buildJob(cfg, nil)
+	if err != nil {
+		t.Fatalf("buildJob: %v", err)
+	}
+	adapter := findContainer(job.Spec.Template.Spec.Containers, adapterContainerName)
+	if adapter == nil {
+		t.Fatal("expected adapter container")
+	}
+	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
+	if sidecar == nil {
+		t.Fatal("expected sidecar init container")
+	}
+
+	wantMountPaths := make(map[string]string, len(pvcs))
+	for _, pvc := range pvcs {
+		wantMountPaths[pvc.claimName] = pvc.mountPath
+		volume := findVolume(job.Spec.Template.Spec.Volumes, pvc.volumeName)
+		if volume == nil || volume.PersistentVolumeClaim == nil {
+			t.Fatalf("expected PVC volume %q", pvc.volumeName)
+		}
+		if volume.PersistentVolumeClaim.ClaimName != pvc.claimName || !volume.PersistentVolumeClaim.ReadOnly {
+			t.Errorf("PVC volume %q = %#v, want claim %q mounted read-only", pvc.volumeName, volume.PersistentVolumeClaim, pvc.claimName)
+		}
+		mount := findVolumeMount(adapter.VolumeMounts, pvc.volumeName)
+		if mount == nil || mount.MountPath != pvc.mountPath || !mount.ReadOnly {
+			t.Errorf("adapter mount %q = %#v, want read-only mount at %q", pvc.volumeName, mount, pvc.mountPath)
+		}
+		if findVolumeMount(sidecar.VolumeMounts, pvc.volumeName) != nil {
+			t.Errorf("sidecar must not mount calibration PVC %q", pvc.claimName)
+		}
+	}
+
+	var encodedMountPaths string
+	var mappingEnvCount int
+	for _, item := range adapter.Env {
+		if item.Name == envPostProcessorPVCMountsName {
+			mappingEnvCount++
+			encodedMountPaths = item.Value
+		}
+	}
+	if mappingEnvCount != 1 {
+		t.Fatalf("found %d %s env vars, want 1", mappingEnvCount, envPostProcessorPVCMountsName)
+	}
+	var mountPaths map[string]string
+	if err := json.Unmarshal([]byte(encodedMountPaths), &mountPaths); err != nil {
+		t.Fatalf("decode %s: %v", envPostProcessorPVCMountsName, err)
+	}
+	if len(mountPaths) != len(wantMountPaths) {
+		t.Fatalf("mount mapping = %#v, want %#v", mountPaths, wantMountPaths)
+	}
+	for claimName, wantPath := range wantMountPaths {
+		if mountPaths[claimName] != wantPath {
+			t.Errorf("mount mapping for %q = %q, want %q", claimName, mountPaths[claimName], wantPath)
+		}
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
@@ -59,6 +60,7 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 		wantStatus      int
 		wantCreated     bool
 		wantThreadCount int
+		wantExports     *api.EvaluationExports
 	}{
 		{
 			name:       "body read error",
@@ -94,6 +96,54 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 			},
 			wantStatus:  http.StatusAccepted,
 			wantCreated: true,
+		},
+		{
+			name: "post-processing job cannot be used as an eval-job source",
+			body: marshalPostProcessingRequest(t, &api.EvaluationJobDataRef{ID: "source-job"}, nil),
+			storage: &postProcessingHandlerStorage{
+				fakeStorage: newPostProcessingBaseStorage(),
+				source: &api.EvaluationJobResource{
+					Resource: api.EvaluationResource{Resource: api.Resource{ID: "source-job"}},
+					EvaluationJobConfig: api.EvaluationJobConfig{Benchmarks: []api.EvaluationBenchmarkConfig{{
+						Ref: api.Ref{ID: postprocessing.BenchmarkID}, ProviderID: postprocessing.ProviderID,
+					}}},
+					Status: &api.EvaluationJobStatus{EvaluationJobState: api.EvaluationJobState{State: api.OverallStateCompleted}},
+				},
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name: "completed eval job propagates OCI export settings",
+			body: marshalPostProcessingRequest(t, &api.EvaluationJobDataRef{ID: "source-job"}, nil),
+			storage: &postProcessingHandlerStorage{
+				fakeStorage: newPostProcessingBaseStorage(),
+				source: &api.EvaluationJobResource{
+					Resource: api.EvaluationResource{Resource: api.Resource{ID: "source-job"}},
+					Status:   &api.EvaluationJobStatus{EvaluationJobState: api.EvaluationJobState{State: api.OverallStateCompleted}},
+					EvaluationJobConfig: api.EvaluationJobConfig{
+						Exports: &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{
+							Coordinates: api.OCICoordinates{
+								OCIHost:       "quay.io",
+								OCIRepository: "rh-ee-nbs/nbs-dev",
+								OCITag:        "source-results",
+								Annotations:   map[string]string{"purpose": "evaluation-results"},
+							},
+							K8s: &api.OCIConnectionConfig{Connection: "oci-credentials"},
+						}},
+					},
+				},
+			},
+			wantStatus:  http.StatusAccepted,
+			wantCreated: true,
+			wantExports: &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{
+				Coordinates: api.OCICoordinates{
+					OCIHost:       "quay.io",
+					OCIRepository: "rh-ee-nbs/nbs-dev",
+					OCITag:        "source-results",
+					Annotations:   map[string]string{"purpose": "evaluation-results"},
+				},
+				K8s: &api.OCIConnectionConfig{Connection: "oci-credentials"},
+			}},
 		},
 		{
 			name: "completed eval job preserves explicit thread count",
@@ -179,6 +229,9 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 			}
 			if (test.storage.createdJob != nil) != test.wantCreated {
 				t.Fatalf("created job = %v, want created %t", test.storage.createdJob, test.wantCreated)
+			}
+			if test.wantCreated && !reflect.DeepEqual(test.storage.createdJob.Exports, test.wantExports) {
+				t.Errorf("created job exports = %#v, want %#v", test.storage.createdJob.Exports, test.wantExports)
 			}
 			if test.wantThreadCount > 0 {
 				mapped, ok := test.storage.createdJob.Benchmarks[0].Parameters["operations"].(api.StandalonePostProcessingOperations)

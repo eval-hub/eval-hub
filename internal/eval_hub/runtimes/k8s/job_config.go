@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/google/uuid"
@@ -78,6 +79,7 @@ type jobConfig struct {
 	sidecarResources           corev1.ResourceRequirements
 	testDataS3                 s3TestDataConfig
 	testDataPVC                pvcTestDataConfig
+	postProcessorPVCs          []postProcessorPVCConfig
 	testDataGit                gitTestDataConfig
 	testDataHF                 hfTestDataConfig
 	testDataInitImage          string
@@ -100,6 +102,12 @@ type pvcTestDataConfig struct {
 	subPath   string
 }
 
+type postProcessorPVCConfig struct {
+	claimName  string
+	volumeName string
+	mountPath  string
+}
+
 type gitTestDataConfig struct {
 	url       string
 	ref       string
@@ -112,6 +120,43 @@ type hfTestDataConfig struct {
 	revision  string
 	subPath   string
 	secretRef string
+}
+
+func postProcessorPVCConfigs(evaluation *api.EvaluationJobResource) ([]postProcessorPVCConfig, error) {
+	if evaluation == nil || !postprocessing.IsPostProcessingJob(&evaluation.EvaluationJobConfig) {
+		return nil, nil
+	}
+
+	operations, err := postprocessing.OperationsFromJob(&evaluation.EvaluationJobConfig)
+	if err != nil {
+		return nil, fmt.Errorf("read post-processing calibration data refs: %w", err)
+	}
+	if operations.ConfidenceInterval == nil {
+		return nil, nil
+	}
+
+	seenClaims := make(map[string]struct{})
+	var configs []postProcessorPVCConfig
+	for _, ref := range operations.ConfidenceInterval.CalibrationDataRef {
+		if ref.PVC == nil {
+			continue
+		}
+		claimName := strings.TrimSpace(ref.PVC.ClaimName)
+		if claimName == "" {
+			return nil, fmt.Errorf("post-processing calibration PVC claim_name is required")
+		}
+		if _, exists := seenClaims[claimName]; exists {
+			continue
+		}
+		seenClaims[claimName] = struct{}{}
+
+		configs = append(configs, postProcessorPVCConfig{
+			claimName:  claimName,
+			volumeName: fmt.Sprintf("%s%d", postProcessorCalibrationPVCVolumeNamePrefix, len(configs)),
+			mountPath:  fmt.Sprintf("%s/%s", postProcessorCalibrationPVCMountPathPrefix, claimName),
+		})
+	}
+	return configs, nil
 }
 
 func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkConfig *api.EvaluationBenchmarkConfig, benchmarkIndex int, serviceConfig *config.Config, hardwareProfile *hardwareProfileResources) (*jobConfig, error) {
@@ -236,6 +281,11 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		testDataHFSecretRef = strings.TrimSpace(benchmarkConfig.TestDataRef.HF.SecretRef)
 	}
 
+	postProcessorPVCs, err := postProcessorPVCConfigs(evaluation)
+	if err != nil {
+		return nil, err
+	}
+
 	// GPU resource requests/limits are always propagated to the pod spec so that Kueue can
 	// account for GPU quota. Provider nodeSelector is the default; a HardwareProfile with
 	// Node scheduling overrides it, and a Queue-backed profile (or hardware_config.queue /
@@ -289,6 +339,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 			claimName: testDataPVCClaimName,
 			subPath:   testDataPVCSubPath,
 		},
+		postProcessorPVCs: postProcessorPVCs,
 		testDataGit: gitTestDataConfig{
 			url:       testDataGitURL,
 			ref:       testDataGitRef,

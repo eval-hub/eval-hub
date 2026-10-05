@@ -186,6 +186,56 @@ func TestResourceFromJob(t *testing.T) {
 	}
 }
 
+func TestResourceFromJobMapsConfidenceIntervalResults(t *testing.T) {
+	evaluationJob := &api.EvaluationJobResource{
+		EvaluationJobConfig: *postProcessingJob(map[string]any{"operations": validOperations()}),
+		Results: &api.EvaluationJobResults{Benchmarks: []api.BenchmarkResult{{
+			AdditionalInfo: map[string]any{"confidence_interval": map[string]any{
+				"benchmarks": []any{map[string]any{
+					"id": "telemath", "provider_id": "inspect", "benchmark_index": 0,
+					"confidence_interval": map[string]any{"lower": -0.03, "upper": 0.36},
+				}},
+			}},
+		}}},
+	}
+	resource, err := ResourceFromJob(evaluationJob)
+	if err != nil {
+		t.Fatalf("ResourceFromJob() error = %v", err)
+	}
+	if resource.Results == nil || len(resource.Results.Benchmarks) != 1 {
+		t.Fatalf("eval-job results were not mapped: %+v", resource.Results)
+	}
+	benchmark := resource.Results.Benchmarks[0]
+	if benchmark.ID != "telemath" || benchmark.ProviderID != "inspect" || benchmark.BenchmarkIndex != 0 || benchmark.ConfidenceInterval.Lower != -0.03 || benchmark.ConfidenceInterval.Upper != 0.36 {
+		t.Fatalf("unexpected mapped eval-job result: %+v", benchmark)
+	}
+	if resource.Results.ConfidenceInterval != nil {
+		t.Fatalf("eval-job result unexpectedly contains an aggregate interval: %+v", resource.Results)
+	}
+
+	externalOperations := validOperations()
+	confidenceInterval := externalOperations["confidence_interval"].(map[string]any)
+	confidenceInterval["results_data_ref"] = map[string]any{"pvc": map[string]any{"claim_name": "results"}}
+	externalJob := &api.EvaluationJobResource{
+		EvaluationJobConfig: *postProcessingJob(map[string]any{"operations": externalOperations}),
+		Results: &api.EvaluationJobResults{Benchmarks: []api.BenchmarkResult{{
+			AdditionalInfo: map[string]any{"confidence_interval": map[string]any{
+				"confidence_interval": map[string]any{"lower": 0.4, "upper": 0.6},
+			}},
+		}}},
+	}
+	resource, err = ResourceFromJob(externalJob)
+	if err != nil {
+		t.Fatalf("ResourceFromJob() for external results error = %v", err)
+	}
+	if resource.Results == nil || resource.Results.ConfidenceInterval == nil {
+		t.Fatalf("external confidence interval was not mapped: %+v", resource.Results)
+	}
+	if resource.Results.ConfidenceInterval.Lower != 0.4 || resource.Results.ConfidenceInterval.Upper != 0.6 || len(resource.Results.Benchmarks) != 0 {
+		t.Fatalf("unexpected mapped external result: %+v", resource.Results)
+	}
+}
+
 func postProcessingJob(parameters any) *api.EvaluationJobConfig {
 	var params map[string]any
 	if parameters != nil {

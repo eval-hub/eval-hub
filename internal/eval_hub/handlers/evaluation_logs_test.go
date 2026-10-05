@@ -18,6 +18,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -547,6 +548,32 @@ func TestHandleGetEvaluationJobLogsJobNotFound(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestHandleGetEvaluationJobLogsHidesPostProcessingJob(t *testing.T) {
+	jobID := "post-processing-job"
+	storage := &fakeStorage{job: &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+		EvaluationJobConfig: api.EvaluationJobConfig{Benchmarks: []api.EvaluationBenchmarkConfig{{
+			Ref: api.Ref{ID: postprocessing.BenchmarkID}, ProviderID: postprocessing.ProviderID,
+		}}},
+	}}
+	// The job type must be checked before runtime availability so that a
+	// post-processing ID consistently appears missing through this API.
+	h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, nil)
+	rec := httptest.NewRecorder()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-ppi-logs", logger, "test-user", "test-tenant")
+	req := &logsRequest{
+		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
+	}
+
+	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404: %s", rec.Code, rec.Body.String())
 	}
 }
 
