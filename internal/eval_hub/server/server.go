@@ -232,6 +232,23 @@ func (s *Server) setupHealthRoutes(h *handlers.Handlers, router *http.ServeMux) 
 	})
 }
 
+func (s *Server) setupInfoRoutes(h *handlers.Handlers, router *http.ServeMux) {
+	s.handleFunc(router, "/api/v1/info", func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := s.newRequestWrapper(w, r)
+		if !s.canContinueRequest(ctx, resp) {
+			return
+		}
+		switch req.Method() {
+		case http.MethodGet:
+			h.HandleGetInfo(ctx, req, resp)
+		default:
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
+		}
+	})
+}
+
 func (s *Server) setupEvaluationJobsRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, "/api/v1/evaluations/jobs", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
@@ -481,6 +498,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 
 	// Health
 	s.setupHealthRoutes(h, router)
+	s.setupInfoRoutes(h, router)
 
 	// Evaluation jobs endpoints
 	s.setupEvaluationJobsRoutes(h, router)
