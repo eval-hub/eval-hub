@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
+	"strings"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -20,6 +22,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
+
+	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 // KubernetesHelper wraps the Kubernetes client-go client and exposes methods to interact with the cluster.
@@ -36,6 +40,12 @@ var hardwareProfileGVR = schema.GroupVersionResource{
 	Group:    hardwareProfileAPIGroup,
 	Version:  hardwareProfileAPIVersion,
 	Resource: hardwareProfileResource,
+}
+
+var localQueueGVR = schema.GroupVersionResource{
+	Group:    "kueue.x-k8s.io",
+	Version:  "v1beta1",
+	Resource: "localqueues",
 }
 
 func loadKubernetesConfig() (*rest.Config, error) {
@@ -110,6 +120,50 @@ func (h *KubernetesHelper) GetHardwareProfile(ctx context.Context, namespace, na
 		return nil, fmt.Errorf("dynamic kubernetes client is not configured")
 	}
 	return h.dynamicClient.Resource(hardwareProfileGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+}
+
+// ListLocalQueues returns Kueue LocalQueues from a tenant namespace, including their Active
+// condition when one is present.
+func (h *KubernetesHelper) ListLocalQueues(ctx context.Context, namespace string) ([]api.QueueInfo, error) {
+	if namespace == "" {
+		return nil, fmt.Errorf("namespace is required")
+	}
+	if h.dynamicClient == nil {
+		return nil, fmt.Errorf("dynamic kubernetes client is not configured")
+	}
+
+	list, err := h.dynamicClient.Resource(localQueueGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	queues := make([]api.QueueInfo, 0, len(list.Items))
+	for _, item := range list.Items {
+		queue := api.QueueInfo{Name: item.GetName()}
+		conditions, found, err := unstructured.NestedSlice(item.Object, "status", "conditions")
+		if err != nil {
+			return nil, fmt.Errorf("read LocalQueue %q conditions: %w", item.GetName(), err)
+		}
+		if found {
+			for _, rawCondition := range conditions {
+				condition, ok := rawCondition.(map[string]any)
+				if !ok || condition["type"] != "Active" {
+					continue
+				}
+				status, _ := condition["status"].(string)
+				queue.Active = status == "True"
+				queue.Reason, _ = condition["reason"].(string)
+				queue.Message, _ = condition["message"].(string)
+				break
+			}
+		}
+		queues = append(queues, queue)
+	}
+
+	slices.SortFunc(queues, func(a, b api.QueueInfo) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+	return queues, nil
 }
 
 // DeleteHardwareProfile deletes a HardwareProfile custom resource by name in the given namespace.
