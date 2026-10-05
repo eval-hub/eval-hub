@@ -181,6 +181,9 @@ func TestStandaloneConfidenceIntervalValidation(t *testing.T) {
 func TestOCIDataRefDigestValidation(t *testing.T) {
 	validate := newTestValidator(t)
 	valid := validOCIRef()
+	if err := validate.Struct(*valid); err != nil {
+		t.Fatalf("empty digest rejected: %v", err)
+	}
 	valid.Digest = "sha256:" + strings.Repeat("a", 64)
 	if err := validate.Struct(*valid); err != nil {
 		t.Fatalf("valid digest rejected: %v", err)

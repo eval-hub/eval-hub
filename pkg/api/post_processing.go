@@ -135,7 +135,7 @@ type MLflowDataRef struct {
 
 type OCIDataRef struct {
 	Coordinates  OCICoordinates       `json:"coordinates" validate:"required"`
-	Digest       string               `json:"digest,omitempty"`
+	Digest       string               `json:"digest,omitempty" validate:"omitempty,sha256_digest"`
 	ArtifactPath string               `json:"artifact_path" validate:"notblank"`
 	K8s          *OCIConnectionConfig `json:"k8s,omitempty"`
 }
