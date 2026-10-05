@@ -169,29 +169,6 @@ benchmarks:
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
-  - id: mmlu
-    name: 57-Subject knowledge test
-    description: |-
-      Factual recall and reasoning across 57 academic subjects from STEM to humanities (5-shot, 15,908 examples).
-    category: knowledge
-    domains: [knowledge_and_reasoning]
-    tasks: [reasoning]
-    modalities: [text]
-    evaluation_targets: [model]
-    metrics:
-      - acc
-      - acc_norm
-    num_few_shot: 5
-    dataset_size: 15908
-    tags:
-      - knowledge
-      - multitask
-      - lighteval
-    primary_score:
-      metric: acc_norm
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.25
   - id: triviaqa
     name: Trivia factual recall
     description: Answers trivia questions using evidence from web pages and Wikipedia.
