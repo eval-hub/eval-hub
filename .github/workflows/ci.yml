@@ -69,6 +69,8 @@ jobs:
     - name: Run all tests (unit and integration) with coverage
       run: |
         make clean build test-all-coverage
+      env:
+        GOFLAGS: "-p=1"
 
     - name: Upload coverage reports to Codecov
       # Only upload from the canonical repo, not forks

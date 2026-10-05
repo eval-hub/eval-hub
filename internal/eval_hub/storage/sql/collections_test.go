@@ -1,6 +1,7 @@
 package sql_test
 
 import (
+	"context"
 	"encoding/json"
 	"math"
 	"sync"
@@ -39,6 +40,7 @@ func TestCollections_PassCriteria(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create storage: %v", err)
 	}
+	t.Cleanup(func() { _ = store.Close() })
 
 	filter := &abstractions.QueryFilter{Limit: 50, Offset: 0, Params: map[string]any{"scope": "system"}}
 
@@ -120,6 +122,7 @@ func TestCollections_BenchmarksExist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create storage: %v", err)
 	}
+	t.Cleanup(func() { _ = store.Close() })
 
 	filter := &abstractions.QueryFilter{Limit: 50, Offset: 0, Params: map[string]any{"scope": "system"}}
 
@@ -593,17 +596,33 @@ func testCollectionPatchConcurrentDisjoint(t *testing.T, driver, databaseName st
 	locked := make(chan struct{})
 	secondLockedReadAttempt := make(chan struct{})
 	release := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseTransactions := func() {
+		releaseOnce.Do(func() {
+			close(release)
+		})
+	}
+	workerCtx, cancelWorkers := context.WithCancel(context.Background())
+	workerScoped := scoped.WithContext(workerCtx)
 	var holdGate sync.Mutex
 	var holdingTxn bool
 	var readAttemptGate sync.Mutex
 	readAttempts := 0
+	var wg sync.WaitGroup
 	t.Cleanup(func() {
 		sql.SetCollectionPatchBeforeLockedReadHook(nil)
 		sql.SetCollectionPatchAfterLockedReadHook(nil)
+		releaseTransactions()
+		cancelWorkers()
+		done := make(chan struct{})
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
 		select {
-		case <-release:
-		default:
-			close(release)
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Errorf("timed out waiting for concurrent PatchCollection goroutines")
 		}
 	})
 	sql.SetCollectionPatchBeforeLockedReadHook(func(_ string) {
@@ -630,8 +649,10 @@ func testCollectionPatchConcurrentDisjoint(t *testing.T, driver, databaseName st
 	patchDescription := &api.Patch{{Op: api.PatchOpReplace, Path: "/description", Value: "Updated description"}}
 	firstDone := make(chan error, 1)
 	secondDone := make(chan error, 1)
+	wg.Add(1)
 	go func() {
-		_, err := scoped.PatchCollection(collection.Resource.ID, patchName)
+		defer wg.Done()
+		_, err := workerScoped.PatchCollection(collection.Resource.ID, patchName)
 		firstDone <- err
 	}()
 
@@ -641,8 +662,10 @@ func testCollectionPatchConcurrentDisjoint(t *testing.T, driver, databaseName st
 		t.Fatal("timed out waiting for first PATCH transaction to acquire row lock")
 	}
 
+	wg.Add(1)
 	go func() {
-		_, err := scoped.PatchCollection(collection.Resource.ID, patchDescription)
+		defer wg.Done()
+		_, err := workerScoped.PatchCollection(collection.Resource.ID, patchDescription)
 		secondDone <- err
 	}()
 	select {
@@ -660,7 +683,7 @@ func testCollectionPatchConcurrentDisjoint(t *testing.T, driver, databaseName st
 		// Expected: the second transaction is blocked on SELECT ... FOR UPDATE.
 	}
 
-	close(release)
+	releaseTransactions()
 	if err := <-firstDone; err != nil {
 		t.Fatalf("first PatchCollection: %v", err)
 	}
