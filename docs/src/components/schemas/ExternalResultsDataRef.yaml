@@ -1,6 +1,37 @@
-oneOf:
-  - $ref: ./TestDataRef.yaml
-  - $ref: ./MLflowDataRef.yaml
-  - $ref: ./OCIDataRef.yaml
 title: ExternalResultsDataRef
 description: Reference to result data outside an evaluation job.
+oneOf:
+  - type: object
+    properties:
+      s3:
+        $ref: ./TestDataRefS3.yaml
+    required:
+      - s3
+    additionalProperties: false
+    title: S3
+  - type: object
+    properties:
+      pvc:
+        $ref: ./TestDataRefPVC.yaml
+    required:
+      - pvc
+    additionalProperties: false
+    title: PVC
+  - type: object
+    properties:
+      git:
+        $ref: ./TestDataRefGit.yaml
+    required:
+      - git
+    additionalProperties: false
+    title: Git
+  - type: object
+    properties:
+      hf:
+        $ref: ./TestDataRefHF.yaml
+    required:
+      - hf
+    additionalProperties: false
+    title: HuggingFace
+  - $ref: ./MLflowDataRef.yaml
+  - $ref: ./OCIDataRef.yaml

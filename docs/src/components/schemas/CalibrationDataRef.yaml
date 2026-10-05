@@ -10,10 +10,6 @@ properties:
     $ref: ./TestDataRefGit.yaml
   hf:
     $ref: ./TestDataRefHF.yaml
-  resolved_sha:
-    $ref: ./TestDataRefResolvedSHA.yaml
-  type:
-    $ref: ./TestDataRefType.yaml
   data_config:
     $ref: ./CalibrationDataConfig.yaml
 required:

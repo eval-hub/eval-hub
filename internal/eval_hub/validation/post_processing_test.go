@@ -27,7 +27,7 @@ func TestPostProcessingOperationsRequireAtLeastOneOperation(t *testing.T) {
 				t.Fatalf("validation error = %v", err)
 			}
 			if test.wantErr {
-				assertValidationTag(t, err, "at_least_one_operation")
+				assertValidationTag(t, err, "required")
 			}
 		})
 	}
@@ -83,7 +83,7 @@ func TestPostProcessingResultsDataRefValidation(t *testing.T) {
 		ref  api.PostProcessingResultsDataRef
 		want string
 	}{
-		{name: "no source", want: "exactly_one_source"},
+		{name: "no source", want: "required_without_all"},
 		{name: "eval job", ref: api.PostProcessingResultsDataRef{EvalJob: &api.EvaluationJobDataRef{ID: "job-id"}}},
 		{name: "s3", ref: api.PostProcessingResultsDataRef{S3: validS3Ref()}},
 		{name: "pvc", ref: api.PostProcessingResultsDataRef{PVC: validPVCRef()}},
@@ -94,17 +94,7 @@ func TestPostProcessingResultsDataRefValidation(t *testing.T) {
 		{
 			name: "multiple sources",
 			ref:  api.PostProcessingResultsDataRef{S3: validS3Ref(), PVC: validPVCRef()},
-			want: "exactly_one_source",
-		},
-		{
-			name: "type requires test-data source",
-			ref:  api.PostProcessingResultsDataRef{EvalJob: &api.EvaluationJobDataRef{ID: "job-id"}, Type: "data_set"},
-			want: "test_data_source_required",
-		},
-		{
-			name: "resolved sha is read-only",
-			ref:  api.PostProcessingResultsDataRef{EvalJob: &api.EvaluationJobDataRef{ID: "job-id"}, ResolvedSHA: "abc"},
-			want: "read_only",
+			want: "excluded_with",
 		},
 	}
 	for _, test := range tests {
@@ -127,7 +117,7 @@ func TestCalibrationDataRefValidation(t *testing.T) {
 		ref  api.CalibrationDataRef
 		want string
 	}{
-		{name: "no source", ref: calibrationRefWithSource(nil), want: "exactly_one_source"},
+		{name: "no source", ref: calibrationRefWithSource(nil), want: "required_without_all"},
 		{name: "s3", ref: calibrationRefWithSource(func(ref *api.CalibrationDataRef) { ref.S3 = validS3Ref() })},
 		{name: "pvc", ref: calibrationRefWithSource(func(ref *api.CalibrationDataRef) { ref.PVC = validPVCRef() })},
 		{name: "git", ref: calibrationRefWithSource(func(ref *api.CalibrationDataRef) { ref.Git = validGitRef() })},
@@ -138,15 +128,7 @@ func TestCalibrationDataRefValidation(t *testing.T) {
 				ref.PVC = validPVCRef()
 				ref.HF = validHFRef()
 			}),
-			want: "exactly_one_source",
-		},
-		{
-			name: "resolved sha is read-only",
-			ref: calibrationRefWithSource(func(ref *api.CalibrationDataRef) {
-				ref.PVC = validPVCRef()
-				ref.ResolvedSHA = "abc"
-			}),
-			want: "read_only",
+			want: "excluded_with",
 		},
 	}
 	for _, test := range tests {
@@ -172,7 +154,7 @@ func TestStandaloneConfidenceIntervalValidation(t *testing.T) {
 		want string
 	}{
 		{name: "eval job source", cfg: *validStandaloneConfidenceInterval()},
-		{name: "external source requires primary score", cfg: *external, want: "required_for_external_results"},
+		{name: "external source requires primary score", cfg: *external, want: "required_without"},
 		{
 			name: "primary score not allowed with eval job",
 			cfg: func() api.StandaloneConfidenceIntervalConfig {
@@ -180,16 +162,7 @@ func TestStandaloneConfidenceIntervalValidation(t *testing.T) {
 				cfg.PrimaryScore = &api.PrimaryScore{Metric: "accuracy"}
 				return cfg
 			}(),
-			want: "not_allowed_for_eval_job_results",
-		},
-		{
-			name: "calibration sha is read-only",
-			cfg: func() api.StandaloneConfidenceIntervalConfig {
-				cfg := *validStandaloneConfidenceInterval()
-				cfg.CalibrationDataRef[0].ResolvedSHA = "abc"
-				return cfg
-			}(),
-			want: "read_only",
+			want: "excluded_with",
 		},
 	}
 	for _, test := range tests {

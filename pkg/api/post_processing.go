@@ -18,7 +18,7 @@ type StandalonePostProcessingRequest struct {
 // StandalonePostProcessingOperations contains at most one operation of each
 // supported kind. The operation key identifies its kind.
 type StandalonePostProcessingOperations struct {
-	ConfidenceInterval *StandaloneConfidenceIntervalConfig `json:"confidence_interval,omitempty"`
+	ConfidenceInterval *StandaloneConfidenceIntervalConfig `json:"confidence_interval,omitempty" validate:"required"`
 }
 
 // HasOperation reports whether at least one supported standalone operation is set.
@@ -44,7 +44,7 @@ type ConfidenceIntervalPostProcessingRequest struct {
 // JobPostProcessingOperations contains at most one operation of each
 // supported kind. The operation key identifies its kind.
 type JobPostProcessingOperations struct {
-	ConfidenceInterval *ConfidenceIntervalConfig `json:"confidence_interval,omitempty"`
+	ConfidenceInterval *ConfidenceIntervalConfig `json:"confidence_interval,omitempty" validate:"required"`
 }
 
 // HasOperation reports whether at least one supported job-scoped operation is set.
@@ -80,33 +80,29 @@ type ConfidenceIntervalConfig struct {
 type StandaloneConfidenceIntervalConfig struct {
 	ConfidenceIntervalConfigCommon
 	ResultsDataRef *PostProcessingResultsDataRef `json:"results_data_ref" validate:"required"`
-	PrimaryScore   *PrimaryScore                 `json:"primary_score,omitempty"`
+	PrimaryScore   *PrimaryScore                 `json:"primary_score,omitempty" validate:"required_without=ResultsDataRef.EvalJob,excluded_with=ResultsDataRef.EvalJob"`
 }
 
 // PostProcessingResultsDataRef accepts exactly one source. Calibration data
 // uses CalibrationDataRef instead, excluding evaluation jobs, MLflow, and OCI.
 type PostProcessingResultsDataRef struct {
-	EvalJob     *EvaluationJobDataRef `json:"eval_job,omitempty"`
-	S3          *S3TestDataRef        `json:"s3,omitempty"`
-	PVC         *PVCTestDataRef       `json:"pvc,omitempty"`
-	Git         *GitTestDataRef       `json:"git,omitempty"`
-	HF          *HFTestDataRef        `json:"hf,omitempty"`
-	MLFlow      *MLflowDataRef        `json:"mlflow,omitempty"`
-	OCI         *OCIDataRef           `json:"oci,omitempty"`
-	Type        string                `json:"type,omitempty" validate:"omitempty,oneof=data_set pre_recorded_data"`
-	ResolvedSHA string                `json:"resolved_sha,omitempty"`
+	EvalJob *EvaluationJobDataRef `json:"eval_job,omitempty" validate:"required_without_all=S3 PVC Git HF MLFlow OCI,excluded_with=S3 PVC Git HF MLFlow OCI"`
+	S3      *S3TestDataRef        `json:"s3,omitempty" validate:"required_without_all=EvalJob PVC Git HF MLFlow OCI,excluded_with=EvalJob PVC Git HF MLFlow OCI"`
+	PVC     *PVCTestDataRef       `json:"pvc,omitempty" validate:"required_without_all=EvalJob S3 Git HF MLFlow OCI,excluded_with=EvalJob S3 Git HF MLFlow OCI"`
+	Git     *GitTestDataRef       `json:"git,omitempty" validate:"required_without_all=EvalJob S3 PVC HF MLFlow OCI,excluded_with=EvalJob S3 PVC HF MLFlow OCI"`
+	HF      *HFTestDataRef        `json:"hf,omitempty" validate:"required_without_all=EvalJob S3 PVC Git MLFlow OCI,excluded_with=EvalJob S3 PVC Git MLFlow OCI"`
+	MLFlow  *MLflowDataRef        `json:"mlflow,omitempty" validate:"required_without_all=EvalJob S3 PVC Git HF OCI,excluded_with=EvalJob S3 PVC Git HF OCI"`
+	OCI     *OCIDataRef           `json:"oci,omitempty" validate:"required_without_all=EvalJob S3 PVC Git HF MLFlow,excluded_with=EvalJob S3 PVC Git HF MLFlow"`
 }
 
 // CalibrationDataRef describes one labeled calibration dataset and its
 // logical-to-physical column mapping.
 type CalibrationDataRef struct {
-	S3          *S3TestDataRef        `json:"s3,omitempty"`
-	PVC         *PVCTestDataRef       `json:"pvc,omitempty"`
-	Git         *GitTestDataRef       `json:"git,omitempty"`
-	HF          *HFTestDataRef        `json:"hf,omitempty"`
-	ResolvedSHA string                `json:"resolved_sha,omitempty"`
-	Type        string                `json:"type,omitempty" validate:"omitempty,oneof=data_set pre_recorded_data"`
-	DataConfig  CalibrationDataConfig `json:"data_config" validate:"required"`
+	S3         *S3TestDataRef        `json:"s3,omitempty" validate:"required_without_all=PVC Git HF,excluded_with=PVC Git HF"`
+	PVC        *PVCTestDataRef       `json:"pvc,omitempty" validate:"required_without_all=S3 Git HF,excluded_with=S3 Git HF"`
+	Git        *GitTestDataRef       `json:"git,omitempty" validate:"required_without_all=S3 PVC HF,excluded_with=S3 PVC HF"`
+	HF         *HFTestDataRef        `json:"hf,omitempty" validate:"required_without_all=S3 PVC Git,excluded_with=S3 PVC Git"`
+	DataConfig CalibrationDataConfig `json:"data_config" validate:"required"`
 }
 
 type CalibrationDataConfig struct {

@@ -5379,12 +5379,6 @@
           "hf": {
             "$ref": "#/components/schemas/TestDataRefHF"
           },
-          "resolved_sha": {
-            "$ref": "#/components/schemas/TestDataRefResolvedSHA"
-          },
-          "type": {
-            "$ref": "#/components/schemas/TestDataRefType"
-          },
           "data_config": {
             "$ref": "#/components/schemas/CalibrationDataConfig"
           }
@@ -5545,9 +5539,60 @@
         "additionalProperties": false
       },
       "ExternalResultsDataRef": {
+        "title": "ExternalResultsDataRef",
+        "description": "Reference to result data outside an evaluation job.",
         "oneOf": [
           {
-            "$ref": "#/components/schemas/TestDataRef"
+            "type": "object",
+            "properties": {
+              "s3": {
+                "$ref": "#/components/schemas/TestDataRefS3"
+              }
+            },
+            "required": [
+              "s3"
+            ],
+            "additionalProperties": false,
+            "title": "S3"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "pvc": {
+                "$ref": "#/components/schemas/TestDataRefPVC"
+              }
+            },
+            "required": [
+              "pvc"
+            ],
+            "additionalProperties": false,
+            "title": "PVC"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "git": {
+                "$ref": "#/components/schemas/TestDataRefGit"
+              }
+            },
+            "required": [
+              "git"
+            ],
+            "additionalProperties": false,
+            "title": "Git"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "hf": {
+                "$ref": "#/components/schemas/TestDataRefHF"
+              }
+            },
+            "required": [
+              "hf"
+            ],
+            "additionalProperties": false,
+            "title": "HuggingFace"
           },
           {
             "$ref": "#/components/schemas/MLflowDataRef"
@@ -5555,9 +5600,7 @@
           {
             "$ref": "#/components/schemas/OCIDataRef"
           }
-        ],
-        "title": "ExternalResultsDataRef",
-        "description": "Reference to result data outside an evaluation job."
+        ]
       },
       "StandaloneConfidenceIntervalConfig": {
         "type": "object",

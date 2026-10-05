@@ -37,18 +37,20 @@ func formatValidationError(errs validator.ValidationErrors) string {
 	}
 	e := errs[0]
 	switch e.Tag() {
-	case "at_least_one_operation":
-		return "operations must contain at least one operation"
+	case "required":
+		if e.Field() == "operations" || e.Field() == "confidence_interval" {
+			return "operations must contain at least one operation"
+		}
 	case "operation_order_matches_operations":
 		return "operation_order must list each configured operation exactly once"
 	case "oneof":
 		return fmt.Sprintf("%s must be one of: %s", e.Field(), strings.ReplaceAll(e.Param(), " ", ", "))
 	case "excluded_with":
-		if isTestDataRefSourceField(e.Field()) {
+		if isTestDataRefSourceField(e.Field()) && strings.Contains(e.StructNamespace(), "TestDataRef.") {
 			return "test_data_ref: exactly one of s3, pvc, git, or hf must be set"
 		}
 	case "required_without_all":
-		if isTestDataRefSourceField(e.Field()) {
+		if isTestDataRefSourceField(e.Field()) && strings.Contains(e.StructNamespace(), "TestDataRef.") {
 			return "test_data_ref: one of s3, pvc, git, or hf must be set"
 		}
 	case "category_or_domains":
