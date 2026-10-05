@@ -12,6 +12,7 @@ test.mergeOptional(
         revision: test.env('TEST_DATA_HF_SHA_REVISION', test.env('TEST_DATA_HF_REVISION', 'main')),
       }),
       test.hfTruthfulqaMc1Benchmark({}, {
+        revision: test.env('TEST_DATA_HF_REVISION', 'main'),
         sub_path: test.env('TEST_DATA_HF_NESTED_SUB_PATH', 'staging_sub_path'),
       }),
     ],
