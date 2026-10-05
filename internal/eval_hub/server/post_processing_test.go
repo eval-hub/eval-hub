@@ -319,7 +319,6 @@ func TestPostProcessingValidation(t *testing.T) {
 		"empty calibration":              `{"operations":{"confidence_interval":{"results_data_ref":{"eval_job":{"id":"source"}},"calibration_data_ref":[],"significance_level":0.05}}}`,
 		"eval job calibration":           strings.Replace(valid, `"pvc":{"claim_name":"calibration-data"}`, `"eval_job":{"id":"source"}`, 1),
 		"mlflow calibration":             strings.Replace(valid, `"pvc":{"claim_name":"calibration-data"}`, `"mlflow":{"run_id":"run","artifact_path":"results"}`, 1),
-		"resolved sha":                   strings.Replace(valid, `"pvc":{"claim_name":"calibration-data"}`, `"pvc":{"claim_name":"calibration-data"},"resolved_sha":"abc"`, 1),
 		"missing data config":            strings.Replace(valid, `,"data_config":{"format":"jsonl","columns":{"label":"human","prediction":"judge"}}`, "", 1),
 		"invalid hardware":               strings.Replace(valid, `"cpu":{"request":"500m"}`, `"hardware_profile_name":"cpu-profile","cpu":{"request":"500m"}`, 1),
 		"external missing primary score": strings.Replace(postProcessingBody(`{"oci":{"coordinates":{"oci_host":"quay.io","oci_repository":"repo"},"artifact_path":"results"}}`), `,"primary_score":{"metric":"accuracy"}`, "", 1),
@@ -350,6 +349,7 @@ func TestPostProcessingIgnoresUnknownFields(t *testing.T) {
 	handler, store, _ := newPostProcessingServer(t)
 	source := createPostProcessingSource(t, store, api.OverallStateCompleted)
 	body := postProcessingBody(fmt.Sprintf(`{"eval_job":{"id":%q,"future_source_option":true}}`, source.Resource.ID))
+	body = strings.Replace(body, `"pvc":{"claim_name":"calibration-data"}`, `"pvc":{"claim_name":"calibration-data"},"resolved_sha":"abc"`, 1)
 	body = strings.Replace(body, `"name":`, `"future_request_option":true,"name":`, 1)
 	body = strings.Replace(body, `"results_data_ref":`, `"future_config_option":true,"num_parallel_threads":99,"results_data_ref":`, 1)
 	response := postProcessingRequest(handler, http.MethodPost, postProcessingPath, body)
