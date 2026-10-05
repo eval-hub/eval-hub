@@ -2,9 +2,8 @@ id: knowledge-reasoning-v1
 name: Knowledge & Reasoning v1
 category: knowledge_reasoning
 description: >
-  Evaluates broad academic knowledge and expert-level reasoning. GPQA-Diamond tests
-  graduate-level science questions that resist internet lookup. HLE (Humanity's Last Exam)
-  is a frontier benchmark across dozens of subjects; this collection uses its text-only subset.
+  Evaluates the text-only subset of Humanity's Last Exam (HLE), a multidisciplinary
+  benchmark of challenging questions across a broad range of subjects.
   Part of the Curated Collections taxonomy (#916).
 tags:
   - knowledge
