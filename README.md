@@ -341,7 +341,7 @@ log-likelihood or log-probability scoring when evaluating a remote model
 endpoint through the LiteLLM backend.
 
 The pinned `lighteval==0.13.0` implementation raises `NotImplementedError`
-from `LiteLLMModel.loglikelihood()` and `loglikelihood_rolling()`. As a
+from `LiteLLMClient.loglikelihood()` and `loglikelihood_rolling()`. As a
 result, the affected benchmarks fail before reaching the model endpoint and
 are intentionally not registered under the EvalHub Lighteval provider.
 
