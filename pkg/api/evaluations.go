@@ -250,6 +250,13 @@ func (h *BenchmarkHardwareConfig) HasDirectFields() bool {
 	return h.Queue != nil || h.CPU != nil || h.Memory != nil || h.GPU != nil
 }
 
+// SecretEnvVarRef references a key in a Kubernetes Secret to expose to the adapter.
+type SecretEnvVarRef struct {
+	Name      string `mapstructure:"name" json:"name" validate:"required"`
+	SecretRef string `mapstructure:"secret_ref" json:"secret_ref" validate:"required,rfc1123_dns_label"`
+	Key       string `mapstructure:"key" json:"key" validate:"required"`
+}
+
 // EvaluationBenchmarkConfig represents a benchmark reference in an evaluation job request or persisted job config.
 type EvaluationBenchmarkConfig struct {
 	Ref            `mapstructure:",squash"`
@@ -259,6 +266,7 @@ type EvaluationBenchmarkConfig struct {
 	PassCriteria   *PassCriteria            `mapstructure:"pass_criteria" json:"pass_criteria,omitempty"`
 	HardwareConfig *BenchmarkHardwareConfig `mapstructure:"hardware_config" json:"hardware_config,omitempty"`
 	Parameters     map[string]any           `mapstructure:"parameters" json:"parameters,omitempty"`
+	SecretEnv      []SecretEnvVarRef        `mapstructure:"secret_env" json:"secret_env,omitempty" validate:"omitempty,dive"`
 	TestDataRef    *TestDataRef             `mapstructure:"test_data_ref" json:"test_data_ref,omitempty"`
 }
 

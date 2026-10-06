@@ -370,6 +370,35 @@ func hasEnvVar(env []corev1.EnvVar, name string) bool {
 	return false
 }
 
+func TestBuildEnvVarsInjectsSecretKeyReference(t *testing.T) {
+	jc := &jobConfig{
+		secretEnv: []api.SecretEnvVarRef{{
+			Name: "OPENAI_JUDGE_API_KEY", SecretRef: "judge-secret", Key: "OPENAI_API_KEY",
+		}},
+	}
+
+	envVars := buildEnvVars(jc, nil)
+	var got *corev1.EnvVar
+	for i := range envVars {
+		if envVars[i].Name == "OPENAI_JUDGE_API_KEY" {
+			got = &envVars[i]
+			break
+		}
+	}
+	if got == nil {
+		t.Fatal("OPENAI_JUDGE_API_KEY was not added to adapter env")
+	}
+	if got.Value != "" {
+		t.Fatalf("Secret-backed env unexpectedly has a literal value: %q", got.Value)
+	}
+	if got.ValueFrom == nil || got.ValueFrom.SecretKeyRef == nil {
+		t.Fatalf("expected SecretKeyRef, got %#v", got.ValueFrom)
+	}
+	if got.ValueFrom.SecretKeyRef.Name != "judge-secret" || got.ValueFrom.SecretKeyRef.Key != "OPENAI_API_KEY" {
+		t.Fatalf("SecretKeyRef = %#v, want judge-secret/OPENAI_API_KEY", got.ValueFrom.SecretKeyRef)
+	}
+}
+
 func TestBuildEnvVarsInjectsOTELEndpointWhenEnabled(t *testing.T) {
 	serviceConfig := &config.Config{
 		OTEL: &config.OTELConfig{

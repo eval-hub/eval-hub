@@ -42,6 +42,48 @@ func TestBuildJobUsesJobConfigSidecarPort(t *testing.T) {
 	}
 }
 
+func TestBuildJobInjectsSecretEnvOnlyIntoAdapter(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:        "job-secret-env",
+		resourceGUID: "guid-secret-env",
+		namespace:    "default",
+		providerID:   "inspect",
+		benchmarkID:  "strong-reject",
+		adapterImage: "adapter:latest",
+		sidecarImage: "sidecar:latest",
+		secretEnv: []api.SecretEnvVarRef{{
+			Name: "OPENAI_JUDGE_API_KEY", SecretRef: "judge-secret", Key: "OPENAI_API_KEY",
+		}},
+	}
+
+	job, err := buildJob(cfg, nil)
+	if err != nil {
+		t.Fatalf("buildJob: %v", err)
+	}
+
+	adapter := mustFindContainer(t, job.Spec.Template.Spec.Containers, adapterContainerName)
+	var judgeKey *corev1.EnvVar
+	for i := range adapter.Env {
+		if adapter.Env[i].Name == "OPENAI_JUDGE_API_KEY" {
+			judgeKey = &adapter.Env[i]
+			break
+		}
+	}
+	if judgeKey == nil || judgeKey.Value != "" || judgeKey.ValueFrom == nil || judgeKey.ValueFrom.SecretKeyRef == nil {
+		t.Fatalf("adapter judge key should use SecretKeyRef, got %#v", judgeKey)
+	}
+	if ref := judgeKey.ValueFrom.SecretKeyRef; ref.Name != "judge-secret" || ref.Key != "OPENAI_API_KEY" {
+		t.Fatalf("adapter SecretKeyRef = %#v, want judge-secret/OPENAI_API_KEY", ref)
+	}
+
+	sidecar := mustFindContainer(t, job.Spec.Template.Spec.InitContainers, sidecarContainerName)
+	for _, env := range sidecar.Env {
+		if env.Name == "OPENAI_JUDGE_API_KEY" {
+			t.Fatal("judge Secret env must not be injected into the sidecar")
+		}
+	}
+}
+
 func TestBuildJobRejectsOutOfRangeSidecarPort(t *testing.T) {
 	for _, port := range []int32{-1, 65536} {
 		cfg := &jobConfig{

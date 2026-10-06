@@ -103,6 +103,24 @@ func buildEnvVars(jc *jobConfig, serviceConfig *config.Config) []corev1.EnvVar {
 	}
 
 	// Add provider-specific environment variables
+	// Secret values are resolved by Kubernetes and are never copied into the job config.
+	for _, item := range jc.secretEnv {
+		if item.Name == "" || seen[item.Name] {
+			continue
+		}
+		seen[item.Name] = true
+		env = append(env, corev1.EnvVar{
+			Name: item.Name,
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: item.SecretRef},
+					Key:                  item.Key,
+				},
+			},
+		})
+	}
+
+	// Provider defaults do not override explicitly configured Secret-backed values.
 	for _, item := range jc.defaultEnv {
 		if item.Name == "" || seen[item.Name] {
 			continue

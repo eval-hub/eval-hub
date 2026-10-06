@@ -11,6 +11,7 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 	validator "github.com/go-playground/validator/v10"
 	"github.com/go-playground/validator/v10/non-standard/validators"
+	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 )
 
 var (
@@ -64,6 +65,7 @@ func registerCustomValidators(instance *validator.Validate) error {
 	instance.RegisterStructValidation(validateBenchmarkStatusEventMetricsSchema, api.BenchmarkStatusEvent{})
 	instance.RegisterStructValidation(validateGitTestDataRefAuth, api.GitTestDataRef{})
 	instance.RegisterStructValidation(validateCollectionClassification, api.CollectionConfig{})
+	instance.RegisterStructValidation(validateBenchmarkSecretEnv, api.EvaluationBenchmarkConfig{})
 	// hardware_profile_name is mutually exclusive with inline queue/cpu/memory/gpu.
 	instance.RegisterStructValidation(validateBenchmarkHardwareConfigExclusive, api.BenchmarkHardwareConfig{})
 	return nil
@@ -96,6 +98,47 @@ func validateCollectionClassification(sl validator.StructLevel) {
 		return
 	}
 	sl.ReportError(collection.Domains, "domains", "Domains", "category_or_domains", "")
+}
+
+// validateBenchmarkSecretEnv validates adapter environment names, Secret keys, and uniqueness.
+func validateBenchmarkSecretEnv(sl validator.StructLevel) {
+	benchmark, ok := sl.Current().Interface().(api.EvaluationBenchmarkConfig)
+	if !ok || len(benchmark.SecretEnv) == 0 {
+		return
+	}
+
+	seen := make(map[string]struct{}, len(benchmark.SecretEnv))
+	for i, secretEnv := range benchmark.SecretEnv {
+		fieldPrefix := fmt.Sprintf("secret_env[%d]", i)
+		if problems := k8svalidation.IsEnvVarName(secretEnv.Name); len(problems) > 0 {
+			sl.ReportError(
+				secretEnv.Name,
+				fieldPrefix+".name",
+				fieldPrefix+".Name",
+				"secret_env_name",
+				strings.Join(problems, "; "),
+			)
+		}
+		if problems := k8svalidation.IsConfigMapKey(secretEnv.Key); len(problems) > 0 {
+			sl.ReportError(
+				secretEnv.Key,
+				fieldPrefix+".key",
+				fieldPrefix+".Key",
+				"secret_env_key",
+				strings.Join(problems, "; "),
+			)
+		}
+		if _, duplicate := seen[secretEnv.Name]; duplicate {
+			sl.ReportError(
+				secretEnv.Name,
+				fieldPrefix+".name",
+				fieldPrefix+".Name",
+				"secret_env_duplicate_name",
+				secretEnv.Name,
+			)
+		}
+		seen[secretEnv.Name] = struct{}{}
+	}
 }
 
 // ValidateCollectionOverrides returns an error if any override references a

@@ -32,6 +32,59 @@ func TestNewValidator(t *testing.T) {
 	}
 }
 
+func TestEvaluationBenchmarkConfigSecretEnvValidation(t *testing.T) {
+	validate := newTestValidator(t)
+
+	tests := []struct {
+		name      string
+		secretEnv []api.SecretEnvVarRef
+		wantErr   bool
+	}{
+		{
+			name: "valid reference",
+			secretEnv: []api.SecretEnvVarRef{{
+				Name: "OPENAI_JUDGE_API_KEY", SecretRef: "judge-secret", Key: "OPENAI_API_KEY",
+			}},
+		},
+		{
+			name: "invalid environment variable name",
+			secretEnv: []api.SecretEnvVarRef{{
+				Name: "OPENAI=JUDGE=KEY", SecretRef: "judge-secret", Key: "OPENAI_API_KEY",
+			}},
+			wantErr: true,
+		},
+		{
+			name: "invalid Secret key",
+			secretEnv: []api.SecretEnvVarRef{{
+				Name: "OPENAI_JUDGE_API_KEY", SecretRef: "judge-secret", Key: "bad key",
+			}},
+			wantErr: true,
+		},
+		{
+			name: "duplicate environment variable name",
+			secretEnv: []api.SecretEnvVarRef{
+				{Name: "OPENAI_JUDGE_API_KEY", SecretRef: "judge-secret", Key: "OPENAI_API_KEY"},
+				{Name: "OPENAI_JUDGE_API_KEY", SecretRef: "other-secret", Key: "token"},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := api.EvaluationBenchmarkConfig{
+				Ref:        api.Ref{ID: "test-benchmark"},
+				ProviderID: "inspect",
+				SecretEnv:  tc.secretEnv,
+			}
+			err := validate.Struct(cfg)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("validation error = %v, wantErr %t", err, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestCollectionConfigClassification(t *testing.T) {
 	validate := newTestValidator(t)
 	cases := []struct {

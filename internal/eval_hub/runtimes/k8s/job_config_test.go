@@ -13,6 +13,9 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 	callbackURL := "http://localhost:8080"
 	benchmark := api.EvaluationBenchmarkConfig{
 		Ref: api.Ref{ID: "bench-1"},
+		SecretEnv: []api.SecretEnvVarRef{{
+			Name: "OPENAI_JUDGE_API_KEY", SecretRef: "judge-secret", Key: "OPENAI_API_KEY",
+		}},
 		Parameters: map[string]any{
 			"num_examples": 50,
 			"max_tokens":   128,
@@ -57,6 +60,9 @@ func TestBuildJobConfigDefaults(t *testing.T) {
 	}
 	if cfg.adapterImage != "adapter:latest" {
 		t.Fatalf("expected adapter image to be set")
+	}
+	if len(cfg.secretEnv) != 1 || cfg.secretEnv[0].Name != "OPENAI_JUDGE_API_KEY" || cfg.secretEnv[0].SecretRef != "judge-secret" || cfg.secretEnv[0].Key != "OPENAI_API_KEY" {
+		t.Fatalf("expected benchmark Secret env reference to be propagated, got %#v", cfg.secretEnv)
 	}
 	if cfg.adapterPullPolicy != corev1.PullIfNotPresent {
 		t.Fatalf("expected default adapterPullPolicy to be IfNotPresent, got %q", cfg.adapterPullPolicy)

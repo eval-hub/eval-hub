@@ -47,6 +47,7 @@ type jobConfig struct {
 	sidecarImage       string
 	entrypoint         []string
 	defaultEnv         []api.EnvVar
+	secretEnv          []api.SecretEnvVarRef
 	cpuRequest         string
 	memoryRequest      string
 	cpuLimit           string
@@ -259,6 +260,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		sidecarImage:               sidecarImage,
 		entrypoint:                 runtime.K8s.Entrypoint,
 		defaultEnv:                 runtime.K8s.Env,
+		secretEnv:                  benchmarkConfig.SecretEnv,
 		cpuRequest:                 cpuRequest,
 		memoryRequest:              memoryRequest,
 		cpuLimit:                   cpuLimit,
