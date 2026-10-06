@@ -10,7 +10,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/pkg/api"
-	"go.opentelemetry.io/otel/log/global"
+	"go.opentelemetry.io/otel"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 )
 
@@ -46,7 +46,7 @@ func TestParseBenchmarkIDFromSectionHeader(t *testing.T) {
 func TestEmitContainerLogs(t *testing.T) {
 	exporter := &captureLogExporter{}
 	provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exporter)))
-	global.SetLoggerProvider(provider)
+	otel.SetLoggerProvider(provider)
 	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
 
 	job := &api.EvaluationJobResource{
@@ -67,7 +67,7 @@ func TestEmitContainerLogs(t *testing.T) {
 func TestBridgeSlogToOTELPreservesBaseOutput(t *testing.T) {
 	exporter := &captureLogExporter{}
 	provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exporter)))
-	global.SetLoggerProvider(provider)
+	otel.SetLoggerProvider(provider)
 	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
 
 	base := slog.New(slog.NewTextHandler(discardWriter{}, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -84,14 +84,14 @@ type discardWriter struct{}
 func (discardWriter) Write(p []byte) (int, error) { return len(p), nil }
 
 func TestExportJobContainerLogsAsyncNoopWithoutProvider(t *testing.T) {
-	global.SetLoggerProvider(nil)
+	otel.SetLoggerProvider(nil)
 	ExportJobContainerLogsAsync(context.Background(), nil, &api.EvaluationJobResource{}, nil, slog.Default())
 }
 
 func TestExportJobContainerLogsAsyncInvokesRuntime(t *testing.T) {
 	exporter := &captureLogExporter{}
 	provider := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exporter)))
-	global.SetLoggerProvider(provider)
+	otel.SetLoggerProvider(provider)
 	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
 
 	exported := make(chan struct{})
