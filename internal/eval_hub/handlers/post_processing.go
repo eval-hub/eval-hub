@@ -30,7 +30,7 @@ func (h *Handlers) HandleCreatePostProcessing(ctx *executioncontext.ExecutionCon
 			return
 		}
 	}
-	job, err := h.createEvaluationJob(ctx, postprocessing.ToEvaluationJob(&request))
+	job, err := h.createPostProcessingEvaluationJob(ctx, postprocessing.ToEvaluationJob(&request))
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return

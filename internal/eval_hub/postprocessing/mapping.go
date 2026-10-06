@@ -13,6 +13,22 @@ const (
 	BenchmarkID = "evaluation_post_processor"
 )
 
+// RuntimeProvider builds the in-memory execution descriptor used by runtimes
+// for post-processing. This does not register the provider in the catalog.
+func RuntimeProvider(runtime *api.Runtime) *api.ProviderResource {
+	return &api.ProviderResource{
+		Resource: api.Resource{ID: ProviderID},
+		ProviderConfig: api.ProviderConfig{
+			Name:    "EvalHub Internal",
+			Title:   "EvalHub Internal",
+			Runtime: runtime,
+			Benchmarks: []api.BenchmarkResource{{
+				ID: BenchmarkID,
+			}},
+		},
+	}
+}
+
 // IsPostProcessingJob recognizes the single benchmark used to execute post-processing.
 func IsPostProcessingJob(cfg *api.EvaluationJobConfig) bool {
 	return cfg != nil && cfg.Collection == nil && len(cfg.Benchmarks) == 1 &&
