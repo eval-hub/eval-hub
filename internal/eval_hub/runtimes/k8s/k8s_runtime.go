@@ -14,6 +14,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/otel"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -190,7 +191,17 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 ) error {
 	benchmarkID := benchmark.ID
 	// Provider/benchmark validation should be handled during creation.
-	provider, err := storage.GetProvider(benchmark.ProviderID)
+	var postProcessingRuntime *api.Runtime
+	if r.serviceConfig != nil && r.serviceConfig.PostProcessing != nil {
+		postProcessingRuntime = r.serviceConfig.PostProcessing.Runtime
+	}
+	provider, err := shared.ProviderForBenchmark(
+		evaluation,
+		*benchmark,
+		postProcessingRuntime,
+		shared.ProviderRuntimeKubernetes,
+		storage,
+	)
 	if err != nil {
 		return err
 	}

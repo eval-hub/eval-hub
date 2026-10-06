@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
@@ -56,6 +57,7 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 		body            []byte
 		bodyErr         error
 		storage         *postProcessingHandlerStorage
+		serviceConfig   *config.Config
 		wantStatus      int
 		wantCreated     bool
 		wantThreadCount int
@@ -143,10 +145,19 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 			wantStatus: http.StatusInternalServerError,
 		},
 		{
-			name:       "provider validation fails while creating job",
-			body:       marshalPostProcessingRequest(t, nil, nil),
-			storage:    newPostProcessingHandlerStorageWithoutProvider(),
-			wantStatus: http.StatusNotFound,
+			name:          "configured post-processing runtime does not require a catalog provider",
+			body:          marshalPostProcessingRequest(t, nil, nil),
+			storage:       newPostProcessingHandlerStorageWithoutProvider(),
+			serviceConfig: localPostProcessingConfig(),
+			wantStatus:    http.StatusAccepted,
+			wantCreated:   true,
+		},
+		{
+			name:        "dedicated endpoint bypasses catalog validation without service runtime config",
+			body:        marshalPostProcessingRequest(t, nil, nil),
+			storage:     newPostProcessingHandlerStorageWithoutProvider(),
+			wantStatus:  http.StatusAccepted,
+			wantCreated: true,
 		},
 		{
 			name: "created job cannot be represented as post-processing resource",
@@ -163,7 +174,7 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			handler := handlers.New(test.storage, testhelpers.NewValidator(t), nil, nil, nil, nil, nil)
+			handler := handlers.New(test.storage, testhelpers.NewValidator(t), nil, nil, nil, test.serviceConfig, nil)
 			recorder := httptest.NewRecorder()
 			request := &bodyRequest{
 				MockRequest: createMockRequest(http.MethodPost, "/api/v1/evaluations/post-processing"),
@@ -196,6 +207,35 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestHandleCreateEvaluationCannotUseUnregisteredPostProcessingProvider(t *testing.T) {
+	storage := newPostProcessingHandlerStorageWithoutProvider()
+	handler := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, localPostProcessingConfig(), nil)
+	recorder := httptest.NewRecorder()
+	request := &bodyRequest{
+		MockRequest: createMockRequest(http.MethodPost, "/api/v1/evaluations/jobs"),
+		body:        []byte(`{"name":"ordinary-evaluation","model":{"name":"model","url":"http://model.example"},"benchmarks":[{"id":"evaluation_post_processor","provider_id":"eval_hub_internal"}]}`),
+	}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-ordinary-evaluation", slog.New(slog.NewTextHandler(io.Discard, nil)), "test-user", "test-tenant")
+
+	handler.HandleCreateEvaluation(ctx, request, MockResponseWrapper{recorder: recorder})
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d; response=%s", recorder.Code, http.StatusNotFound, recorder.Body.String())
+	}
+	if storage.createdJob != nil {
+		t.Fatal("ordinary evaluation with an unregistered provider must not be persisted")
+	}
+}
+
+func localPostProcessingConfig() *config.Config {
+	return &config.Config{
+		Service: &config.ServiceConfig{LocalMode: true},
+		PostProcessing: &config.PostProcessingConfig{
+			Runtime: &api.Runtime{Local: &api.LocalRuntime{Command: "true"}},
+		},
 	}
 }
 

@@ -88,3 +88,9 @@ sidecar:
       limits:
         cpu: 200m
         memory: 256Mi
+
+# Runtime configuration for server-managed standalone post-processing jobs.
+post_processing:
+  runtime:
+    local:
+      command: python tests/features/test_data/runtime/main.py

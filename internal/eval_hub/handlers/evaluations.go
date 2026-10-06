@@ -214,8 +214,52 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 // createEvaluationJob validates, persists, and launches an already decoded job.
 // HTTP decoding and response formatting belong to the calling API handler.
 func (h *Handlers) createEvaluationJob(ctx *executioncontext.ExecutionContext, evaluation *api.EvaluationJobConfig) (*api.EvaluationJobResource, error) {
-	storage := h.getStorage(ctx)
 	id := common.GUID()
+	collection, benchmarks, err := h.prepareEvaluationJob(ctx, evaluation, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			return h.validateBenchmarkReferences(ctx.WithContext(runtimeCtx), benchmarks)
+		},
+		"validation",
+		"validate-benchmark-references",
+		"job.id", id,
+	); err != nil {
+		return nil, err
+	}
+	if err := h.validatePreparedEvaluation(ctx, evaluation, benchmarks, id); err != nil {
+		return nil, err
+	}
+	return h.createPreparedEvaluationJob(ctx, evaluation, collection, benchmarks, id)
+}
+
+// createPostProcessingEvaluationJob creates a job from the dedicated
+// post-processing endpoint. Only this server-controlled path may execute the
+// internal adapter without a provider catalog entry.
+func (h *Handlers) createPostProcessingEvaluationJob(ctx *executioncontext.ExecutionContext, evaluation *api.EvaluationJobConfig) (*api.EvaluationJobResource, error) {
+	if !postprocessing.IsPostProcessingJob(evaluation) {
+		return nil, fmt.Errorf("invalid internal post-processing job configuration")
+	}
+	id := common.GUID()
+	collection, benchmarks, err := h.prepareEvaluationJob(ctx, evaluation, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := h.validatePreparedEvaluation(ctx, evaluation, benchmarks, id); err != nil {
+		return nil, err
+	}
+	return h.createPreparedEvaluationJob(ctx, evaluation, collection, benchmarks, id)
+}
+
+func (h *Handlers) prepareEvaluationJob(
+	ctx *executioncontext.ExecutionContext,
+	evaluation *api.EvaluationJobConfig,
+	id string,
+) (*api.CollectionResource, []api.EvaluationBenchmarkConfig, error) {
+	storage := h.getStorage(ctx)
 	var collection *api.CollectionResource
 	var benchmarks []api.EvaluationBenchmarkConfig
 
@@ -243,9 +287,28 @@ func (h *Handlers) createEvaluationJob(ctx *executioncontext.ExecutionContext, e
 			if err := ValidateReadOnlyResolvedSHA(evaluation); err != nil {
 				return err
 			}
-			if err := h.validateBenchmarkReferences(ctx, benchmarks); err != nil {
-				return err
-			}
+			return nil
+		},
+		"validation",
+		"resolve-evaluation-benchmarks",
+		"job.id", id,
+	)
+
+	if err != nil {
+		return nil, nil, err
+	}
+	return collection, benchmarks, nil
+}
+
+func (h *Handlers) validatePreparedEvaluation(
+	ctx *executioncontext.ExecutionContext,
+	evaluation *api.EvaluationJobConfig,
+	benchmarks []api.EvaluationBenchmarkConfig,
+	id string,
+) error {
+	return h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
 			if h.runtime != nil {
 				if err := h.runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).ValidateHardwareProfiles(
 					benchmarksWithHardwareConfigFallback(benchmarks, evaluation.HardwareConfig),
@@ -265,15 +328,22 @@ func (h *Handlers) createEvaluationJob(ctx *executioncontext.ExecutionContext, e
 		"validate-evaluation-job",
 		"job.id", id,
 	)
+}
 
-	if err != nil {
-		return nil, err
-	}
+func (h *Handlers) createPreparedEvaluationJob(
+	ctx *executioncontext.ExecutionContext,
+	evaluation *api.EvaluationJobConfig,
+	collection *api.CollectionResource,
+	benchmarks []api.EvaluationBenchmarkConfig,
+	id string,
+) (*api.EvaluationJobResource, error) {
+	storage := h.getStorage(ctx)
 
 	ApplyHardwareConfigQueueDefaults(evaluation)
 
 	mlflowExperimentID := ""
 	mlflowExperimentURL := ""
+	var err error
 	if h.mlflowClient != nil {
 		err = h.withSpan(
 			ctx,
