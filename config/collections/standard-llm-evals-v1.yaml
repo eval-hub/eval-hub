@@ -86,21 +86,6 @@ benchmarks:
       pass_at_k: 1
       num_samples: 8
 
-  - id: gpqa:diamond
-    provider_id: lighteval
-    weight: 2
-    primary_score:
-      metric: gpqa_pass@1
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.35
-    parameters:
-      num_fewshot: 0
-      apply_chat_template: true
-      pass_at_k: 1
-      num_samples: 3
-
-  # ── Coding ─────────────────────────────────────────────────────────────────
   - id: lcb:codegeneration_v6
     provider_id: lighteval
     weight: 2
