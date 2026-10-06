@@ -134,7 +134,7 @@ export TEST_INFO_BUILD_DATE="2026-10-01T12:00:00Z"
 export TEST_INFO_GIT_HASH="abc123"
 ```
 
-The `@cluster` queue scenario is excluded by default with other cluster scenarios. To run it, set `TEST_INFO_QUEUE_NAME` to a LocalQueue in `X_TENANT` and run with a Godog tag expression that includes `@cluster`. Optional expectations are `TEST_INFO_QUEUE_ACTIVE`, `TEST_INFO_QUEUE_REASON`, and `TEST_INFO_QUEUE_MESSAGE`. Set `TEST_INFO_OTHER_TENANT_QUEUE_NAME` to a queue in another namespace to assert that it is not returned for the authenticated tenant. The queue scenario is skipped when `TEST_INFO_QUEUE_NAME` is unset.
+The `@cluster` queue scenario is excluded by default with other cluster scenarios. To run it, set `TEST_INFO_QUEUE_NAME` to a LocalQueue in `X_TENANT` and run with a Godog tag expression that includes `@cluster`. Optional expectations are `TEST_INFO_QUEUE_ACTIVE`, `TEST_INFO_QUEUE_REASON`, and `TEST_INFO_QUEUE_MESSAGE`. Set `TEST_INFO_OTHER_TENANT_QUEUE_NAME` to a queue in another namespace to assert that it is not returned for the authenticated tenant; its value must differ from `TEST_INFO_QUEUE_NAME`. The queue scenario is skipped when `TEST_INFO_QUEUE_NAME` is unset.
 
 ### Hardware profile tests (`@hardware_profile`)
 

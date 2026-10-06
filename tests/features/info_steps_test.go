@@ -40,6 +40,10 @@ func (tc *scenarioConfig) configuredTenantQueueShouldBeReturned() error {
 		logDebug("Skipping scenario: TEST_INFO_QUEUE_NAME is not set\n")
 		return godog.ErrSkip
 	}
+	otherTenantQueueName := os.Getenv("TEST_INFO_OTHER_TENANT_QUEUE_NAME")
+	if otherTenantQueueName != "" && otherTenantQueueName == queueName {
+		return tc.logError(fmt.Errorf("TEST_INFO_OTHER_TENANT_QUEUE_NAME %q must differ from TEST_INFO_QUEUE_NAME", otherTenantQueueName))
+	}
 
 	type queueInfo struct {
 		Name    string `json:"name"`
@@ -84,7 +88,7 @@ func (tc *scenarioConfig) configuredTenantQueueShouldBeReturned() error {
 		return tc.logError(fmt.Errorf("queue %q message = %q, want %q", queueName, queue.Message, expected))
 	}
 
-	if otherTenantQueueName := os.Getenv("TEST_INFO_OTHER_TENANT_QUEUE_NAME"); otherTenantQueueName != "" {
+	if otherTenantQueueName != "" {
 		for _, queue := range response.Queues {
 			if queue.Name == otherTenantQueueName {
 				return tc.logError(fmt.Errorf("queue %q from another tenant was returned", otherTenantQueueName))
