@@ -244,3 +244,45 @@ func TestComputeBenchmarkTestResult_MissingPrimaryMetricReturnsNil(t *testing.T)
 		t.Fatalf("expected nil when primary metric is missing from metrics, got %+v", result)
 	}
 }
+
+func TestComputeBenchmarkTestResult_FilteredPrimaryMetric(t *testing.T) {
+	t.Parallel()
+	s := testResultsStorage()
+	job := jobWithBenchmark("bbh_cot_fewshot_navigate", "lm_evaluation_harness",
+		&api.PrimaryScore{Metric: "exact_match"},
+		&api.PassCriteria{Threshold: threshold32(0.25)},
+	)
+	event := statusEvent("bbh_cot_fewshot_navigate", "lm_evaluation_harness", map[string]any{
+		"exact_match,get-answer": float64(0.75),
+		"exact_match_stderr,get-answer": float64(0.1),
+	})
+	result := s.computeBenchmarkTestResult(nil, job, event, nil)
+	if result == nil {
+		t.Fatal("expected test result for filtered primary metric")
+	}
+	if result.PrimaryScoreMetric != "exact_match,get-answer" || result.PrimaryScore != 0.75 || result.Threshold != 0.25 || !result.Pass {
+		t.Errorf("unexpected filtered metric test result: %+v", result)
+	}
+}
+
+func TestComputeBenchmarkTestResult_AmbiguousFilteredPrimaryMetricReturnsNil(t *testing.T) {
+	t.Parallel()
+	s := testResultsStorage()
+	job := jobWithBenchmark("bbh_cot_zeroshot", "lm_evaluation_harness",
+		&api.PrimaryScore{Metric: "exact_match"},
+		&api.PassCriteria{Threshold: threshold32(0.25)},
+	)
+	event := statusEvent("bbh_cot_zeroshot", "lm_evaluation_harness", map[string]any{
+		"exact_match,strict-match":     float64(0.3),
+		"exact_match,flexible-extract": float64(0.8),
+	})
+	if result := s.computeBenchmarkTestResult(nil, job, event, nil); result != nil {
+		t.Fatalf("expected nil for ambiguous filtered metrics, got %+v", result)
+	}
+
+	event.Metrics["exact_match"] = float64(0.5)
+	result := s.computeBenchmarkTestResult(nil, job, event, nil)
+	if result == nil || result.PrimaryScoreMetric != "exact_match" || result.PrimaryScore != 0.5 {
+		t.Fatalf("expected exact metric to take precedence, got %+v", result)
+	}
+}

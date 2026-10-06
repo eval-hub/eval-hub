@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -135,7 +136,7 @@ func (s *sqlStorage) computeBenchmarkTestResult(txn *sql.Tx, job *api.Evaluation
 		}
 		if primaryScore != nil && primaryScore.Metric != "" {
 			primaryMetric := primaryScore.Metric
-			primaryMetricValue, ok := benchmarkStatusEvent.Metrics[primaryMetric]
+			primaryMetric, primaryMetricValue, ok := findPrimaryMetric(benchmarkStatusEvent.Metrics, primaryMetric)
 			if !ok {
 				if len(benchmarkStatusEvent.Metrics) > 0 {
 					s.logger.Error("Primary score metric not present in benchmark metrics; test section omitted",
@@ -171,6 +172,32 @@ func (s *sqlStorage) computeBenchmarkTestResult(txn *sql.Tx, job *api.Evaluation
 		}
 	}
 	return nil
+}
+
+// findPrimaryMetric accepts the unfiltered metric name configured by a provider
+// and the filtered form emitted by LM Evaluation Harness (for example,
+// "exact_match,get-answer"). An exact key takes precedence. When more than one
+// filtered variant exists, there is no safe way to choose a primary score.
+func findPrimaryMetric(metrics map[string]any, configured string) (string, any, bool) {
+	if value, ok := metrics[configured]; ok {
+		return configured, value, true
+	}
+	var matched string
+	var value any
+	for name, candidate := range metrics {
+		base, filter, filtered := strings.Cut(name, ",")
+		if !filtered || base != configured || filter == "" {
+			continue
+		}
+		if matched != "" {
+			return configured, nil, false
+		}
+		matched, value = name, candidate
+	}
+	if matched == "" {
+		return configured, nil, false
+	}
+	return matched, value, true
 }
 
 func castAnyToFloat32(primaryMetricValue any) (float32, error) {
