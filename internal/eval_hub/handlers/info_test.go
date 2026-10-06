@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -33,7 +34,10 @@ func (r *infoQueueRuntime) ListQueues(_ context.Context, namespace string) ([]ap
 
 func TestHandleGetInfo(t *testing.T) {
 	t.Run("returns metadata and tenant queues", func(t *testing.T) {
-		runtime := &infoQueueRuntime{queues: []api.QueueInfo{{Name: "gpu", Active: true}}}
+		runtime := &infoQueueRuntime{queues: []api.QueueInfo{
+			{Name: "gpu", Active: true, Reason: "Ready", Message: "Can admit new workloads"},
+			{Name: "paused", Active: false, Reason: "ClusterQueueIsInactive", Message: "queue is paused"},
+		}}
 		h := handlers.New(nil, nil, runtime, nil, nil, &config.Config{Service: &config.ServiceConfig{
 			Version: "1.2.3", Build: "release", BuildDate: "2026-10-02", GitHash: "abc123",
 		}}, nil)
@@ -41,6 +45,12 @@ func TestHandleGetInfo(t *testing.T) {
 		ctx := &executioncontext.ExecutionContext{Ctx: context.Background(), Tenant: api.Tenant("tenant-a")}
 		h.HandleGetInfo(ctx, createMockRequest("GET", "/api/v1/info"), MockResponseWrapper{recorder: recorder})
 
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+		}
+		if contentType := recorder.Header().Get("Content-Type"); contentType != "application/json" {
+			t.Fatalf("Content-Type = %q, want application/json", contentType)
+		}
 		var got api.InfoResponse
 		if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode response: %v", err)
@@ -51,8 +61,24 @@ func TestHandleGetInfo(t *testing.T) {
 		if runtime.tenant != "tenant-a" {
 			t.Fatalf("queue namespace = %q, want tenant-a", runtime.tenant)
 		}
-		if len(got.Queues) != 1 || got.Queues[0].Name != "gpu" || !got.Queues[0].Active {
+		if len(got.Queues) != len(runtime.queues) {
 			t.Fatalf("queues = %#v", got.Queues)
+		}
+		for i, want := range runtime.queues {
+			if got.Queues[i] != want {
+				t.Errorf("queues[%d] = %#v, want %#v", i, got.Queues[i], want)
+			}
+		}
+		var wire struct {
+			Queues []map[string]json.RawMessage `json:"queues"`
+		}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &wire); err != nil {
+			t.Fatalf("decode queue fields: %v", err)
+		}
+		for i, queue := range wire.Queues {
+			if _, ok := queue["active"]; !ok {
+				t.Errorf("queues[%d] does not include active state", i)
+			}
 		}
 	})
 
@@ -60,6 +86,22 @@ func TestHandleGetInfo(t *testing.T) {
 		h := handlers.New(nil, nil, nil, nil, nil, &config.Config{Service: &config.ServiceConfig{}}, nil)
 		recorder := httptest.NewRecorder()
 		ctx := &executioncontext.ExecutionContext{Ctx: context.Background()}
+		h.HandleGetInfo(ctx, createMockRequest("GET", "/api/v1/info"), MockResponseWrapper{recorder: recorder})
+
+		var got map[string]json.RawMessage
+		if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if string(got["queues"]) != "[]" {
+			t.Fatalf("queues = %s, want []", got["queues"])
+		}
+	})
+
+	t.Run("queue lister returning nil queues produces an empty array", func(t *testing.T) {
+		runtime := &infoQueueRuntime{}
+		h := handlers.New(nil, nil, runtime, nil, nil, &config.Config{Service: &config.ServiceConfig{}}, nil)
+		recorder := httptest.NewRecorder()
+		ctx := &executioncontext.ExecutionContext{Ctx: context.Background(), Tenant: api.Tenant("tenant-a")}
 		h.HandleGetInfo(ctx, createMockRequest("GET", "/api/v1/info"), MockResponseWrapper{recorder: recorder})
 
 		var got map[string]json.RawMessage
