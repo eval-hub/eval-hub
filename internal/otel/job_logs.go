@@ -9,9 +9,9 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
-	"go.opentelemetry.io/otel/log/global"
 )
 
 const (
@@ -29,9 +29,6 @@ func ExportJobContainerLogsAsync(
 	logger *slog.Logger,
 ) {
 	if runtime == nil || job == nil || len(benchmarks) == 0 {
-		return
-	}
-	if global.GetLoggerProvider() == nil {
 		return
 	}
 	if logger == nil {
@@ -67,7 +64,7 @@ func ExportJobContainerLogsAsync(
 }
 
 func emitContainerLogs(ctx context.Context, job *api.EvaluationJobResource, logs string) {
-	otelLogger := global.GetLoggerProvider().Logger(jobLogsInstrumentationScope)
+	otelLogger := otel.GetLoggerProvider().Logger(jobLogsInstrumentationScope)
 
 	jobID := job.Resource.ID
 	jobState := ""
