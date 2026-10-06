@@ -253,7 +253,7 @@ func TestComputeBenchmarkTestResult_FilteredPrimaryMetric(t *testing.T) {
 		&api.PassCriteria{Threshold: threshold32(0.25)},
 	)
 	event := statusEvent("bbh_cot_fewshot_navigate", "lm_evaluation_harness", map[string]any{
-		"exact_match,get-answer": float64(0.75),
+		"exact_match,get-answer":        float64(0.75),
 		"exact_match_stderr,get-answer": float64(0.1),
 	})
 	result := s.computeBenchmarkTestResult(nil, job, event, nil)
