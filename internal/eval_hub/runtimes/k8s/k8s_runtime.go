@@ -311,7 +311,13 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 	)
 
 	logger.Info("kubernetes resource", "kind", "ConfigMap", "object", configMap)
-	logger.Info("kubernetes resource", "kind", "Job", "object", job)
+	logger.Info(
+		"kubernetes job prepared",
+		"job_id", evaluation.Resource.ID,
+		"benchmark_id", benchmarkID,
+		"namespace", job.Namespace,
+		"name", job.Name,
+	)
 
 	// Create the ephemeral internalModelRef secret before the Job so the Pod can mount it.
 	if jobConfig.modelInternalRefSecretName != "" {
