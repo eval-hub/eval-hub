@@ -31,9 +31,6 @@ func ExportJobContainerLogsAsync(
 	if runtime == nil || job == nil || len(benchmarks) == 0 {
 		return
 	}
-	if otel.GetLoggerProvider() == nil {
-		return
-	}
 	if logger == nil {
 		logger = slog.Default()
 	}
