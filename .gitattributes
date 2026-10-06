@@ -1,1 +1,4 @@
 *.cmd text eol=crlf
+docs/*.html linguist-generated
+docs/*.json linguist-generated
+docs/*.yaml linguist-generated
