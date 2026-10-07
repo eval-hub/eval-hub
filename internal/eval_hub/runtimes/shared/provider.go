@@ -20,7 +20,7 @@ func WorkloadType(evaluation *api.EvaluationJobResource, benchmark api.Evaluatio
 	if evaluation != nil {
 		job = &evaluation.EvaluationJobConfig
 	}
-	if workload, ok := workloads.ForJob(job); ok {
+	if workload := workloads.ForJob(job); workload != nil {
 		if benchmark.ProviderID != workload.ProviderID || benchmark.ID != workload.BenchmarkID {
 			return "", fmt.Errorf("workload %q benchmark does not match the stored job", workload.Type)
 		}
@@ -44,8 +44,8 @@ func ProviderForBenchmark(
 		return nil, err
 	}
 	if workloadType != workloads.BenchmarkEvaluation {
-		workload, ok := workloads.ByType(workloadType)
-		if !ok {
+		workload := workloads.ByType(workloadType)
+		if workload == nil {
 			return nil, fmt.Errorf("workload %q is not registered", workloadType)
 		}
 		provider := workload.RuntimeProvider()
