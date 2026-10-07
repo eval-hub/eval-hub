@@ -1,6 +1,11 @@
-type: array
+type: object
 title: JobPostProcessingOperations
-description: Post-processing operations associated with an evaluation job.
-minItems: 1
-items:
-  $ref: ./JobPostProcessingOperation.yaml
+description: |
+  Post-processing operations associated with an evaluation job. Each property
+  names an operation kind, so a kind can appear at most once. At least one
+  operation must be configured.
+minProperties: 1
+properties:
+  confidence_interval:
+    $ref: ./ConfidenceIntervalConfig.yaml
+additionalProperties: false

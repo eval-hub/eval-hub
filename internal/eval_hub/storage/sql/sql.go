@@ -318,6 +318,11 @@ func (s *sqlStorage) ensureSchema() error {
 	if _, err := s.exec(nil, schemas); err != nil {
 		return err
 	}
+	if s.sqlConfig.Driver == SQLiteDriver {
+		// CREATE TABLE IF NOT EXISTS does not add columns to an existing table,
+		// and SQLite has no ADD COLUMN IF NOT EXISTS syntax.
+		return sqlite.EnsureEvaluationWorkloadTypeColumn(s.pool)
+	}
 
 	return nil
 }

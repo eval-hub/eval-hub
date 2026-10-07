@@ -12,6 +12,8 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -175,6 +177,20 @@ func TestK8sRuntimeName(t *testing.T) {
 	runtime := &K8sRuntime{}
 	if runtime.Name() != "kubernetes" {
 		t.Fatalf("expected Name to be kubernetes")
+	}
+}
+
+func TestPostProcessingProviderUsesImageEnvironment(t *testing.T) {
+	t.Setenv("EVALHUB_POST_PROCESSING_IMAGE", "post-processor:custom")
+	benchmark := api.EvaluationBenchmarkConfig{Ref: api.Ref{ID: postprocessing.BenchmarkID}, ProviderID: postprocessing.ProviderID}
+	evaluation := &api.EvaluationJobResource{EvaluationJobConfig: api.EvaluationJobConfig{Benchmarks: []api.EvaluationBenchmarkConfig{benchmark}}}
+
+	provider, err := shared.ProviderForBenchmark(evaluation, benchmark, nil)
+	if err != nil {
+		t.Fatalf("ProviderForBenchmark failed without catalog storage: %v", err)
+	}
+	if provider.Resource.ID != postprocessing.ProviderID || provider.Runtime.K8s.Image != "post-processor:custom" {
+		t.Fatalf("unexpected runtime provider: %#v", provider)
 	}
 }
 

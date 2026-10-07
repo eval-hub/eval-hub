@@ -6,3 +6,16 @@ properties:
     $ref: ./PostProcessingName.yaml
   hardware_config:
     $ref: ./PostProcessingHardwareConfig.yaml
+  operation_order:
+    description: |
+      Optional execution order for operation kinds. When present, this must
+      list every configured operation kind exactly once. When omitted, no
+      execution order is guaranteed.
+    type: array
+    minItems: 1
+    maxItems: 1
+    uniqueItems: true
+    items:
+      type: string
+      enum:
+        - confidence_interval

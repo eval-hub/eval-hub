@@ -217,6 +217,14 @@ make lint                   # go vet
 make fmt                    # go fmt
 ```
 
+For local post-processing, the runtime launches the real adapter from a sibling
+`../eval-hub-contrib/adapters/evalhub-post-processor` checkout. Install that
+adapter's `requirements.txt` in its `.venv` before starting EvalHub from this
+repository root. For another checkout or Python environment, set
+`EVALHUB_POST_PROCESSING_LOCAL_COMMAND` to the command that runs its `main.py`.
+The adapter also needs a reachable callback service and access to the referenced
+data; see the adapter's README for local setup.
+
 Run a single test:
 
 ```bash

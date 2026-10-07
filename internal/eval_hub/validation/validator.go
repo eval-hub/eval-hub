@@ -60,7 +60,12 @@ func registerCustomValidators(instance *validator.Validate) error {
 	if err := instance.RegisterValidation("git_clone_url", validateGitCloneURL); err != nil {
 		return fmt.Errorf("register validator failed for git_clone_url: %w", err)
 	}
+	if err := instance.RegisterValidation("sha256_digest", validateOCIDigest); err != nil {
+		return fmt.Errorf("register validator failed for sha256_digest: %w", err)
+	}
 	instance.RegisterStructValidation(evaluationJobConfig, api.EvaluationJobConfig{})
+	instance.RegisterStructValidation(validateStandalonePostProcessingRequest, api.StandalonePostProcessingRequest{})
+	instance.RegisterStructValidation(validateJobPostProcessingRequest, api.ConfidenceIntervalPostProcessingRequest{})
 	instance.RegisterStructValidation(validateBenchmarkStatusEventMetricsSchema, api.BenchmarkStatusEvent{})
 	instance.RegisterStructValidation(validateGitTestDataRefAuth, api.GitTestDataRef{})
 	instance.RegisterStructValidation(validateCollectionClassification, api.CollectionConfig{})

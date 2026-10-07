@@ -29,3 +29,25 @@ func Setup(logger *slog.Logger, pool *sql.DB, config *shared.SQLDatabaseConfig) 
 	}
 	return NewStatementsFactory(logger), nil
 }
+
+// EnsureEvaluationWorkloadTypeColumn upgrades databases created before the
+// workload_type column was added. SQLite does not support ADD COLUMN IF NOT EXISTS.
+func EnsureEvaluationWorkloadTypeColumn(pool *sql.DB) error {
+	var columns int
+	const columnQuery = `SELECT COUNT(*) FROM pragma_table_info('evaluations') WHERE name = 'workload_type'`
+	if err := pool.QueryRow(columnQuery).Scan(&columns); err != nil {
+		return fmt.Errorf("check evaluations workload_type column: %w", err)
+	}
+	if columns != 0 {
+		return nil
+	}
+	const migration = `ALTER TABLE evaluations ADD COLUMN workload_type TEXT NOT NULL DEFAULT 'evaluation'`
+	if _, err := pool.Exec(migration); err != nil {
+		// Another instance may have added the column after the check.
+		if checkErr := pool.QueryRow(columnQuery).Scan(&columns); checkErr == nil && columns != 0 {
+			return nil
+		}
+		return fmt.Errorf("add evaluations workload_type column: %w", err)
+	}
+	return nil
+}
