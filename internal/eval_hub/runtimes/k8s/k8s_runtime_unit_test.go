@@ -670,6 +670,13 @@ func TestCreateBenchmarkResourcesDeletesConfigMapOnJobFailure(t *testing.T) {
 	if len(configMaps) != 0 {
 		t.Fatalf("expected configmap to be deleted, got %d", len(configMaps))
 	}
+	policies, listErr := clientset.NetworkingV1().NetworkPolicies("default").List(context.Background(), metav1.ListOptions{})
+	if listErr != nil {
+		t.Fatalf("list NetworkPolicies: %v", listErr)
+	}
+	if len(policies.Items) != 1 || len(policies.Items[0].OwnerReferences) != 1 || policies.Items[0].OwnerReferences[0].Kind != "ConfigMap" {
+		t.Fatalf("expected orphan-safe policy ownership by the deleted ConfigMap for garbage collection, got %#v", policies.Items)
+	}
 }
 
 func TestCreateBenchmarkResourcesAppliesHardwareProfile(t *testing.T) {
