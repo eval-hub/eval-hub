@@ -2,8 +2,7 @@
 package workloads
 
 import (
-	"fmt"
-	"sync"
+	"log/slog"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -13,8 +12,8 @@ type Type string
 
 const BenchmarkEvaluation Type = "benchmark-evaluation"
 
-// Definition describes a workload that supplies its own runtime provider.
-type Definition struct {
+// Workload describes a workload that supplies its own runtime provider.
+type Workload struct {
 	Type            Type
 	ProviderID      string
 	BenchmarkID     string
@@ -23,60 +22,50 @@ type Definition struct {
 	RuntimeProvider func() *api.ProviderResource
 }
 
-var registry = struct {
-	sync.RWMutex
-	definitions []Definition
-}{}
+var registry []Workload
 
-// Register adds a workload during package initialization. Duplicate IDs or
-// types are programming errors, so registration fails immediately.
-func Register(definition Definition) {
-	if definition.Type == "" || definition.Type == BenchmarkEvaluation || definition.ProviderID == "" || definition.BenchmarkID == "" ||
-		definition.MatchesJob == nil || definition.RuntimeProvider == nil {
-		panic("incomplete workload registration")
+// Register adds a workload during package initialization. Invalid or duplicate
+// registrations are logged and ignored.
+func Register(workload Workload) {
+	if workload.Type == "" || workload.Type == BenchmarkEvaluation || workload.ProviderID == "" || workload.BenchmarkID == "" ||
+		workload.MatchesJob == nil || workload.RuntimeProvider == nil {
+		slog.Error("Incomplete workload registration", "type", workload.Type, "provider_id", workload.ProviderID, "benchmark_id", workload.BenchmarkID)
+		return
 	}
-	registry.Lock()
-	defer registry.Unlock()
-	for _, registered := range registry.definitions {
-		if registered.Type == definition.Type ||
-			(registered.ProviderID == definition.ProviderID && registered.BenchmarkID == definition.BenchmarkID) {
-			panic(fmt.Sprintf("duplicate workload registration: %s", definition.Type))
+	for _, registered := range registry {
+		if registered.Type == workload.Type ||
+			(registered.ProviderID == workload.ProviderID && registered.BenchmarkID == workload.BenchmarkID) {
+			slog.Error("Duplicate workload registration", "type", workload.Type, "provider_id", workload.ProviderID, "benchmark_id", workload.BenchmarkID)
+			return
 		}
 	}
-	registry.definitions = append(registry.definitions, definition)
+	registry = append(registry, workload)
 }
 
 // ForJob returns the registered workload that owns a stored job.
-func ForJob(job *api.EvaluationJobConfig) (Definition, bool) {
-	registry.RLock()
-	definitions := append([]Definition(nil), registry.definitions...)
-	registry.RUnlock()
-	for _, definition := range definitions {
-		if definition.MatchesJob(job) {
-			return definition, true
+func ForJob(job *api.EvaluationJobConfig) (Workload, bool) {
+	for _, workload := range registry {
+		if workload.MatchesJob(job) {
+			return workload, true
 		}
 	}
-	return Definition{}, false
+	return Workload{}, false
 }
 
 // ByType returns a registered workload by type.
-func ByType(workloadType Type) (Definition, bool) {
-	registry.RLock()
-	defer registry.RUnlock()
-	for _, definition := range registry.definitions {
-		if definition.Type == workloadType {
-			return definition, true
+func ByType(workloadType Type) (Workload, bool) {
+	for _, workload := range registry {
+		if workload.Type == workloadType {
+			return workload, true
 		}
 	}
-	return Definition{}, false
+	return Workload{}, false
 }
 
 // IsInternalProviderID reports whether an internal workload registered an ID.
 func IsInternalProviderID(id string) bool {
-	registry.RLock()
-	defer registry.RUnlock()
-	for _, definition := range registry.definitions {
-		if definition.Internal && definition.ProviderID == id {
+	for _, workload := range registry {
+		if workload.Internal && workload.ProviderID == id {
 			return true
 		}
 	}

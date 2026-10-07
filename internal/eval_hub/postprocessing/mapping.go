@@ -21,7 +21,7 @@ const (
 )
 
 func init() {
-	workloads.Register(workloads.Definition{
+	workloads.Register(workloads.Workload{
 		Type:            workloadType,
 		ProviderID:      ProviderID,
 		BenchmarkID:     BenchmarkID,
