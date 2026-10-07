@@ -210,8 +210,8 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 	}
 }
 
-func TestHandleCreateEvaluationCannotUseUnregisteredPostProcessingProvider(t *testing.T) {
-	storage := newPostProcessingHandlerStorageWithoutProvider()
+func TestHandleCreateEvaluationRejectsInternalPostProcessingProvider(t *testing.T) {
+	storage := newPostProcessingHandlerStorage()
 	handler := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, localPostProcessingConfig(), nil)
 	recorder := httptest.NewRecorder()
 	request := &bodyRequest{
@@ -222,11 +222,11 @@ func TestHandleCreateEvaluationCannotUseUnregisteredPostProcessingProvider(t *te
 
 	handler.HandleCreateEvaluation(ctx, request, MockResponseWrapper{recorder: recorder})
 
-	if recorder.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want %d; response=%s", recorder.Code, http.StatusNotFound, recorder.Body.String())
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; response=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
 	}
 	if storage.createdJob != nil {
-		t.Fatal("ordinary evaluation with an unregistered provider must not be persisted")
+		t.Fatal("ordinary evaluation with an internal provider must not be persisted")
 	}
 }
 
