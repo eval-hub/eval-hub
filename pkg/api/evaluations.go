@@ -364,6 +364,7 @@ type EvaluationJobResults struct {
 
 // OCICoordinates represents OCI artifact coordinates for persistence
 type OCICoordinates struct {
+	// OCIHost accepts an explicit http:// origin for plain HTTP; otherwise HTTPS is used.
 	OCIHost       string            `json:"oci_host" validate:"required"`
 	OCIRepository string            `json:"oci_repository" validate:"required"`
 	OCITag        string            `json:"oci_tag,omitempty"`
