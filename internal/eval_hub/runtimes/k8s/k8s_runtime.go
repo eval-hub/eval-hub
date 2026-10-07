@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
@@ -19,6 +20,7 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 type K8sRuntime struct {
@@ -393,21 +395,25 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		Controller: boolPtr(true),
 	}
 	if err := r.helper.SetNetworkPolicyOwner(ctx, networkPolicy.Namespace, networkPolicy.Name, ownerRef); err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.Warn("network policy disappeared during job creation — cleaning up job without ingress policy",
-				"namespace", createdJob.Namespace, "job", createdJob.Name, "network_policy", networkPolicy.Name)
-			if delErr := r.helper.DeleteJob(ctx, createdJob.Namespace, createdJob.Name, jobForegroundDeleteOptions()); delErr != nil && !apierrors.IsNotFound(delErr) {
-				logger.Error("failed to delete job after network policy disappeared", "namespace", createdJob.Namespace, "name", createdJob.Name, "error", delErr)
-				return delErr
-			}
-			cleanupModelRefSecret()
-			cleanupConfigMap()
-			return nil
+		ownerErr := fmt.Errorf("job %s benchmark %s: set network policy owner: %w", evaluation.Resource.ID, benchmarkID, err)
+		logger.Error("failed to set network policy owner reference; cleaning up job", "namespace", networkPolicy.Namespace, "name", networkPolicy.Name, "error", err)
+		if delErr := r.helper.DeleteJob(ctx, createdJob.Namespace, createdJob.Name, jobForegroundDeleteOptions()); delErr != nil && !apierrors.IsNotFound(delErr) {
+			return errors.Join(ownerErr, fmt.Errorf("delete job after network policy owner failure: %w", delErr))
 		}
-		// The policy already exists before the Job is created, so a transient owner-reference
-		// update failure does not remove ingress protection. Log the lifecycle degradation;
-		// the policy remains in place rather than deleting coverage for a possibly running Pod.
-		logger.Error("failed to set network policy owner reference", "namespace", networkPolicy.Namespace, "name", networkPolicy.Name, "error", err)
+		// Foreground deletion is asynchronous. Retain the ConfigMap-owned policy until
+		// Job deletion completes, so cleanup cannot remove protection from running Pods.
+		if waitErr := wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+			_, getErr := r.helper.GetJob(ctx, createdJob.Namespace, createdJob.Name)
+			if apierrors.IsNotFound(getErr) {
+				return true, nil
+			}
+			return false, getErr
+		}); waitErr != nil {
+			return errors.Join(ownerErr, fmt.Errorf("wait for job deletion after network policy owner failure: %w", waitErr))
+		}
+		cleanupModelRefSecret()
+		cleanupConfigMap()
+		return ownerErr
 	}
 	if err := r.helper.SetConfigMapOwner(ctx, configMap.Namespace, configMap.Name, ownerRef); err != nil {
 		if apierrors.IsNotFound(err) {

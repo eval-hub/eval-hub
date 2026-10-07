@@ -2,14 +2,19 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/pkg/api"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -243,5 +248,136 @@ func newNetworkPolicyTestRuntime(clientset *fake.Clientset) *K8sRuntime {
 		serviceConfig: &config.Config{
 			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 		},
+	}
+}
+
+func TestNetworkPolicyOwnerRetriesConflictWithFreshPolicy(t *testing.T) {
+	policy := &networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "policy", Namespace: "default", ResourceVersion: "1"}}
+	clientset := fake.NewClientset(policy)
+	updates := 0
+	clientset.PrependReactor("update", "networkpolicies", func(action ktesting.Action) (bool, kruntime.Object, error) {
+		updates++
+		if updates == 1 {
+			newPolicy := policy.DeepCopy()
+			newPolicy.ResourceVersion = "2"
+			if err := clientset.Tracker().Update(networkingv1.SchemeGroupVersion.WithResource("networkpolicies"), newPolicy, policy.Namespace); err != nil {
+				t.Fatal(err)
+			}
+			return true, nil, apierrors.NewConflict(schema.GroupResource{Resource: "networkpolicies"}, policy.Name, fmt.Errorf("concurrent update"))
+		}
+		if got := action.(ktesting.UpdateAction).GetObject().(*networkingv1.NetworkPolicy).ResourceVersion; got != "2" {
+			t.Fatalf("retried with resource version %q, want 2", got)
+		}
+		return false, nil, nil
+	})
+	helper := &KubernetesHelper{clientset: clientset}
+	owner := metav1.OwnerReference{APIVersion: "batch/v1", Kind: "Job", Name: "job", UID: "job-uid"}
+	if err := helper.SetNetworkPolicyOwner(context.Background(), policy.Namespace, policy.Name, owner); err != nil {
+		t.Fatal(err)
+	}
+	if updates != 2 {
+		t.Fatalf("update attempts = %d, want 2", updates)
+	}
+	updated, err := helper.GetNetworkPolicy(context.Background(), policy.Namespace, policy.Name)
+	if err != nil || len(updated.OwnerReferences) != 1 || updated.OwnerReferences[0].UID != owner.UID {
+		t.Fatalf("owner transfer failed: policy=%#v err=%v", updated, err)
+	}
+}
+
+func TestNetworkPolicyOwnerFailureRollsBackAndReportsFailedStatus(t *testing.T) {
+	for _, kind := range []string{"not-found", "forbidden", "conflict"} {
+		t.Run(kind, func(t *testing.T) {
+			evaluation := sampleEvaluation("provider-1")
+			evaluation.Model.Auth = &api.ModelAuth{SecretRef: "model-auth"}
+			clientset := fake.NewClientset(&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "model-auth", Namespace: "default"},
+				Data:       map[string][]byte{"api-key": []byte("test-key")},
+			})
+			resource := schema.GroupResource{Resource: "networkpolicies"}
+			var ownerErr error
+			switch kind {
+			case "not-found":
+				ownerErr = apierrors.NewNotFound(resource, "policy")
+			case "forbidden":
+				ownerErr = apierrors.NewForbidden(resource, "policy", fmt.Errorf("denied"))
+			case "conflict":
+				ownerErr = apierrors.NewConflict(resource, "policy", fmt.Errorf("concurrent update"))
+			}
+			clientset.PrependReactor("update", "networkpolicies", func(ktesting.Action) (bool, kruntime.Object, error) {
+				return true, nil, ownerErr
+			})
+			runtime := newNetworkPolicyTestRuntime(clientset)
+			runtime.ctx = context.Background()
+			storage := &fakeStorage{providerConfigs: sampleProviders("provider-1"), runStatusChan: make(chan *api.StatusEvent, 1)}
+			if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case event := <-storage.runStatusChan:
+				if event.BenchmarkStatusEvent.Status != api.StateFailed {
+					t.Fatalf("status = %v, want failed", event.BenchmarkStatusEvent.Status)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("no failure status event")
+			}
+			if jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID); len(jobs) != 0 {
+				t.Fatalf("left %d Jobs after rollback", len(jobs))
+			}
+			cms, err := clientset.CoreV1().ConfigMaps("default").List(context.Background(), metav1.ListOptions{})
+			if err != nil || len(cms.Items) != 0 {
+				t.Fatalf("ConfigMaps after rollback: %#v, err=%v", cms, err)
+			}
+			secrets, err := clientset.CoreV1().Secrets("default").List(context.Background(), metav1.ListOptions{})
+			if err != nil || len(secrets.Items) != 1 || secrets.Items[0].Name != "model-auth" {
+				t.Fatalf("expected only source credential Secret after rollback: %#v, err=%v", secrets, err)
+			}
+			for _, action := range clientset.Actions() {
+				if action.GetVerb() == "delete" && action.GetResource().Resource == "jobs" {
+					options := action.(ktesting.DeleteAction).GetDeleteOptions()
+					if options.PropagationPolicy == nil || *options.PropagationPolicy != metav1.DeletePropagationForeground {
+						t.Fatal("rollback must use foreground deletion")
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestNetworkPolicyOwnerFailureRetainsCoverageWhenRollbackFails(t *testing.T) {
+	for _, failure := range []string{"delete", "confirm-deletion"} {
+		t.Run(failure, func(t *testing.T) {
+			clientset := fake.NewClientset()
+			ownerErr := fmt.Errorf("owner update denied")
+			cleanupErr := fmt.Errorf("rollback unavailable")
+			clientset.PrependReactor("update", "networkpolicies", func(ktesting.Action) (bool, kruntime.Object, error) {
+				return true, nil, ownerErr
+			})
+			if failure == "delete" {
+				clientset.PrependReactor("delete", "jobs", func(ktesting.Action) (bool, kruntime.Object, error) {
+					return true, nil, cleanupErr
+				})
+			} else {
+				// Accept the deletion request but leave the Job present, as the API does
+				// while foreground garbage collection is still terminating Pods.
+				clientset.PrependReactor("delete", "jobs", func(ktesting.Action) (bool, kruntime.Object, error) {
+					return true, nil, nil
+				})
+				clientset.PrependReactor("get", "jobs", func(ktesting.Action) (bool, kruntime.Object, error) {
+					return true, nil, cleanupErr
+				})
+			}
+			evaluation := sampleEvaluation("provider-1")
+			runtime := newNetworkPolicyTestRuntime(clientset)
+			storage := &fakeStorage{providerConfigs: sampleProviders("provider-1")}
+			err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
+			if !errors.Is(err, ownerErr) || !errors.Is(err, cleanupErr) {
+				t.Fatalf("error = %v, want owner and cleanup failures", err)
+			}
+			for _, action := range clientset.Actions() {
+				if action.GetVerb() == "delete" && (action.GetResource().Resource == "configmaps" || action.GetResource().Resource == "networkpolicies") {
+					t.Fatalf("removed policy coverage during incomplete rollback: %#v", action)
+				}
+			}
+		})
 	}
 }

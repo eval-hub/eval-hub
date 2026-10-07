@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -280,12 +281,15 @@ func (h *KubernetesHelper) SetNetworkPolicyOwner(ctx context.Context, namespace,
 	var err error
 	defer func() { endK8sSpan(span, err) }()
 
-	policy, err := h.clientset.NetworkingV1().NetworkPolicies(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-	policy.OwnerReferences = []metav1.OwnerReference{owner}
-	_, err = h.clientset.NetworkingV1().NetworkPolicies(namespace).Update(ctx, policy, metav1.UpdateOptions{})
+	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		policy, getErr := h.clientset.NetworkingV1().NetworkPolicies(namespace).Get(ctx, name, metav1.GetOptions{})
+		if getErr != nil {
+			return getErr
+		}
+		policy.OwnerReferences = []metav1.OwnerReference{owner}
+		_, updateErr := h.clientset.NetworkingV1().NetworkPolicies(namespace).Update(ctx, policy, metav1.UpdateOptions{})
+		return updateErr
+	})
 	return err
 }
 
