@@ -29,7 +29,7 @@ func WorkloadType(evaluation *api.EvaluationJobResource, benchmark api.Evaluatio
 	if workloads.IsInternalProviderID(benchmark.ProviderID) {
 		return "", fmt.Errorf("internal workload provider %q cannot be resolved as a conventional benchmark", benchmark.ProviderID)
 	}
-	return workloads.BenchmarkEvaluation, nil
+	return workloads.Evaluation, nil
 }
 
 // ProviderForBenchmark builds a runtime provider for an internal workload or
@@ -43,7 +43,7 @@ func ProviderForBenchmark(
 	if err != nil {
 		return nil, err
 	}
-	if workloadType != workloads.BenchmarkEvaluation {
+	if workloadType != workloads.Evaluation {
 		workload := workloads.ByType(workloadType)
 		if workload == nil {
 			return nil, fmt.Errorf("workload %q is not registered", workloadType)

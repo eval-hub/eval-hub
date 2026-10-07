@@ -8,10 +8,11 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
-// Type identifies how a benchmark's execution provider is resolved.
+// Type identifies a stored job's workload. These values are persisted in
+// evaluations.workload_type and must remain stable.
 type Type string
 
-const BenchmarkEvaluation Type = "benchmark-evaluation"
+const Evaluation Type = "evaluation"
 
 // Workload describes a workload that supplies its own runtime provider.
 type Workload struct {
@@ -30,7 +31,13 @@ var (
 
 // Register adds a workload. Invalid or duplicate registrations are logged and ignored.
 func Register(workload Workload) {
-	if workload.Type == "" || workload.Type == BenchmarkEvaluation || workload.ProviderID == "" || workload.BenchmarkID == "" ||
+	// Conventional evaluations use catalog providers and benchmarks, so they
+	// cannot be represented by one fixed provider/benchmark registration.
+	if workload.Type == Evaluation {
+		slog.Error("Conventional evaluation cannot be registered as a workload", "type", workload.Type)
+		return
+	}
+	if workload.Type == "" || workload.ProviderID == "" || workload.BenchmarkID == "" ||
 		workload.MatchesJob == nil || workload.RuntimeProvider == nil {
 		slog.Error("Incomplete workload registration", "type", workload.Type, "provider_id", workload.ProviderID, "benchmark_id", workload.BenchmarkID)
 		return
@@ -64,6 +71,14 @@ func ForJob(job *api.EvaluationJobConfig) *Workload {
 		}
 	}
 	return nil
+}
+
+// TypeForJob returns the registered workload type, or the default evaluation type.
+func TypeForJob(job *api.EvaluationJobConfig) Type {
+	if workload := ForJob(job); workload != nil {
+		return workload.Type
+	}
+	return Evaluation
 }
 
 // ByType returns a registered workload by type.
