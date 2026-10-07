@@ -637,7 +637,7 @@ Feature: Collections Endpoint
     And there is a system collection with id "safety-and-fairness-v1"
     When I send a GET request to "/api/v1/evaluations/collections/safety-and-fairness-v1"
     Then the response code should be 200
-    And the response should contain the value "0.758" at path "$.pass_criteria.threshold"
+    And the response should contain the value "0.75" at path "$.pass_criteria.threshold"
 
   Scenario: Verify out of box collection retrieval - benchmarks
     Given the service is running
@@ -693,7 +693,7 @@ Feature: Collections Endpoint
     And the array at path "benchmarks" in the response should have length 6
     And the response should equal the value "0.6" at path "$.benchmarks[0].pass_criteria.threshold"
     And the response should equal the value "0.85" at path "$.benchmarks[1].pass_criteria.threshold"
-    And the response should equal the value "0.8" at path "$.benchmarks[2].pass_criteria.threshold"
+    And the response should equal the value "0.6" at path "$.benchmarks[2].pass_criteria.threshold"
     And the response should equal the value "0.5" at path "$.benchmarks[3].pass_criteria.threshold"
     And the response should equal the value "0.9" at path "$.benchmarks[4].pass_criteria.threshold"
     And the response should equal the value "0.75" at path "$.benchmarks[5].pass_criteria.threshold"

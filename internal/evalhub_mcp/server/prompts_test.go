@@ -2,11 +2,14 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/eval-hub/eval-hub/internal/collectiondesign"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -572,6 +575,22 @@ func TestDesignCollectionBasic(t *testing.T) {
 	}
 }
 
+// The shared guidance extraction must not alter the existing MCP prompt text.
+// This digest is the rendered prompt from main before the extraction, using
+// testDesignCollectionDS and the default options.
+func TestDesignCollectionPromptCompatibility(t *testing.T) {
+	t.Parallel()
+	ctx, cs := connectWithPromptsAndDS(t, testDesignCollectionDS())
+	result := getPrompt(t, ctx, cs, "design_collection", map[string]string{
+		"evaluation_goal": "enterprise safety deployment",
+	})
+	got := fmt.Sprintf("%x", sha256.Sum256([]byte(promptMessagesText(result.Messages))))
+	const want = "85f4d7b8400103162152c08a495e2d204081676dfa81b8920b97b1c42e99301c"
+	if got != want {
+		t.Fatalf("rendered MCP design prompt changed: sha256=%s, want %s", got, want)
+	}
+}
+
 func TestDesignCollectionWithProviderFilter(t *testing.T) {
 	t.Parallel()
 	ctx, cs := connectWithPromptsAndDS(t, testDesignCollectionDS())
@@ -612,7 +631,7 @@ func TestDesignCollectionStrictnessValidation(t *testing.T) {
 	if !strings.Contains(errMsg, "extreme") {
 		t.Errorf("error should mention invalid value, got: %s", errMsg)
 	}
-	for _, valid := range validStrictness {
+	for _, valid := range collectiondesign.ValidStrictness() {
 		if !strings.Contains(errMsg, valid) {
 			t.Errorf("error should list valid value %q, got: %s", valid, errMsg)
 		}
