@@ -85,15 +85,14 @@ func (jr *pidTracker) isCancelled(jobID string) bool {
 }
 
 type LocalRuntime struct {
-	logger                *slog.Logger
-	ctx                   context.Context
-	tracker               jobTracker
-	callbackURL           *string
-	mlflowTrackingURI     string
-	otelEndpoint          string                     // OTEL_EXPORTER_OTLP_ENDPOINT for adapter subprocesses; empty when OTEL is not configured
-	sidecarBaseURL        string                     // non-empty when local sidecar mode is active
-	sidecarModelDefaults  *config.SidecarModelConfig // model proxy defaults from config; may be nil
-	postProcessingRuntime *api.Runtime
+	logger               *slog.Logger
+	ctx                  context.Context
+	tracker              jobTracker
+	callbackURL          *string
+	mlflowTrackingURI    string
+	otelEndpoint         string                     // OTEL_EXPORTER_OTLP_ENDPOINT for adapter subprocesses; empty when OTEL is not configured
+	sidecarBaseURL       string                     // non-empty when local sidecar mode is active
+	sidecarModelDefaults *config.SidecarModelConfig // model proxy defaults from config; may be nil
 }
 
 func NewLocalRuntime(
@@ -113,13 +112,12 @@ func NewLocalRuntime(
 	}
 	otelEndpoint = otelEndpointFromConfig(serviceConfig)
 	return &LocalRuntime{
-		logger:                logger,
-		callbackURL:           buildCallbackURL(serviceConfig),
-		mlflowTrackingURI:     mlflowTrackingURI,
-		otelEndpoint:          otelEndpoint,
-		sidecarBaseURL:        sidecarBaseURL,
-		sidecarModelDefaults:  sidecarModelDefaults,
-		postProcessingRuntime: postProcessingRuntime(serviceConfig),
+		logger:               logger,
+		callbackURL:          buildCallbackURL(serviceConfig),
+		mlflowTrackingURI:    mlflowTrackingURI,
+		otelEndpoint:         otelEndpoint,
+		sidecarBaseURL:       sidecarBaseURL,
+		sidecarModelDefaults: sidecarModelDefaults,
 		tracker: &pidTracker{
 			pids:      make(map[string][]int),
 			cancelled: make(map[string]bool),
@@ -164,37 +162,28 @@ func otelEndpointFromConfig(serviceConfig *config.Config) string {
 
 func (r *LocalRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
 	return &LocalRuntime{
-		logger:                logger,
-		ctx:                   r.ctx,
-		tracker:               r.tracker,
-		callbackURL:           r.callbackURL,
-		mlflowTrackingURI:     r.mlflowTrackingURI,
-		otelEndpoint:          r.otelEndpoint,
-		sidecarBaseURL:        r.sidecarBaseURL,
-		sidecarModelDefaults:  r.sidecarModelDefaults,
-		postProcessingRuntime: r.postProcessingRuntime,
+		logger:               logger,
+		ctx:                  r.ctx,
+		tracker:              r.tracker,
+		callbackURL:          r.callbackURL,
+		mlflowTrackingURI:    r.mlflowTrackingURI,
+		otelEndpoint:         r.otelEndpoint,
+		sidecarBaseURL:       r.sidecarBaseURL,
+		sidecarModelDefaults: r.sidecarModelDefaults,
 	}
 }
 
 func (r *LocalRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 	return &LocalRuntime{
-		logger:                r.logger,
-		ctx:                   ctx,
-		tracker:               r.tracker,
-		callbackURL:           r.callbackURL,
-		mlflowTrackingURI:     r.mlflowTrackingURI,
-		otelEndpoint:          r.otelEndpoint,
-		sidecarBaseURL:        r.sidecarBaseURL,
-		sidecarModelDefaults:  r.sidecarModelDefaults,
-		postProcessingRuntime: r.postProcessingRuntime,
+		logger:               r.logger,
+		ctx:                  ctx,
+		tracker:              r.tracker,
+		callbackURL:          r.callbackURL,
+		mlflowTrackingURI:    r.mlflowTrackingURI,
+		otelEndpoint:         r.otelEndpoint,
+		sidecarBaseURL:       r.sidecarBaseURL,
+		sidecarModelDefaults: r.sidecarModelDefaults,
 	}
-}
-
-func postProcessingRuntime(serviceConfig *config.Config) *api.Runtime {
-	if serviceConfig == nil || serviceConfig.PostProcessing == nil {
-		return nil
-	}
-	return serviceConfig.PostProcessing.Runtime
 }
 
 func (r *LocalRuntime) RunEvaluationJob(
@@ -274,8 +263,6 @@ func (r *LocalRuntime) runBenchmark(
 	provider, err := shared.ProviderForBenchmark(
 		evaluation,
 		bench,
-		r.postProcessingRuntime,
-		shared.ProviderRuntimeLocal,
 		storage,
 	)
 	if err != nil {

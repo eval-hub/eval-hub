@@ -216,7 +216,7 @@ func TestHandleCreateEvaluationCannotUseUnregisteredPostProcessingProvider(t *te
 	recorder := httptest.NewRecorder()
 	request := &bodyRequest{
 		MockRequest: createMockRequest(http.MethodPost, "/api/v1/evaluations/jobs"),
-		body:        []byte(`{"name":"ordinary-evaluation","model":{"name":"model","url":"http://model.example"},"benchmarks":[{"id":"evaluation_post_processor","provider_id":"eval_hub_internal"}]}`),
+		body:        []byte(`{"name":"ordinary-evaluation","model":{"name":"model","url":"http://model.example"},"benchmarks":[{"id":"evaluation-post-processor","provider_id":"evalhub-internal"}]}`),
 	}
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-ordinary-evaluation", slog.New(slog.NewTextHandler(io.Discard, nil)), "test-user", "test-tenant")
 
@@ -233,9 +233,6 @@ func TestHandleCreateEvaluationCannotUseUnregisteredPostProcessingProvider(t *te
 func localPostProcessingConfig() *config.Config {
 	return &config.Config{
 		Service: &config.ServiceConfig{LocalMode: true},
-		PostProcessing: &config.PostProcessingConfig{
-			Runtime: &api.Runtime{Local: &api.LocalRuntime{Command: "true"}},
-		},
 	}
 }
 

@@ -31,19 +31,6 @@ func TestLoadConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("loading post-processing runtime from service config", func(t *testing.T) {
-		serviceConfig, err := config.LoadConfig(logger, version, "local", time.Now().Format(time.RFC3339), "", "../../../config")
-		if err != nil {
-			t.Fatalf("Failed to load config: %v", err)
-		}
-		if serviceConfig.PostProcessing == nil || serviceConfig.PostProcessing.Runtime == nil || serviceConfig.PostProcessing.Runtime.Local == nil {
-			t.Fatal("expected local post-processing runtime configuration")
-		}
-		if got := serviceConfig.PostProcessing.Runtime.Local.Command; got != "python tests/features/test_data/runtime/main.py" {
-			t.Fatalf("post-processing local command = %q, want test runtime command", got)
-		}
-	})
-
 	t.Run("setting environment variables", func(t *testing.T) {
 		t.Setenv("MLFLOW_TRACKING_URI", "http://localhost:9999")
 		serviceConfig, err := config.LoadConfig(logger, version, "local", time.Now().Format(time.RFC3339), "../../../tests")

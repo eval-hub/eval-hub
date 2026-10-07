@@ -1,26 +1,17 @@
 package config
 
-import "github.com/eval-hub/eval-hub/pkg/api"
-
 const (
 	// SidecarTerminationFilePath is used for Kubernetes termination messages.
 	SidecarTerminationFilePath = "/data/termination-log"
 )
 
 type Config struct {
-	Service        *ServiceConfig        `mapstructure:"service"`
-	Database       *map[string]any       `mapstructure:"database"`
-	MLFlow         *MLFlowConfig         `mapstructure:"mlflow,omitempty"`
-	OTEL           *OTELConfig           `mapstructure:"otel,omitempty"`
-	Prometheus     *PrometheusConfig     `mapstructure:"prometheus,omitempty"`
-	Sidecar        *SidecarConfig        `mapstructure:"sidecar,omitempty"`
-	PostProcessing *PostProcessingConfig `mapstructure:"post_processing,omitempty"`
-}
-
-// PostProcessingConfig contains runtime configuration for server-managed
-// post-processing jobs. It is intentionally separate from the provider catalog.
-type PostProcessingConfig struct {
-	Runtime *api.Runtime `mapstructure:"runtime,omitempty"`
+	Service    *ServiceConfig    `mapstructure:"service"`
+	Database   *map[string]any   `mapstructure:"database"`
+	MLFlow     *MLFlowConfig     `mapstructure:"mlflow,omitempty"`
+	OTEL       *OTELConfig       `mapstructure:"otel,omitempty"`
+	Prometheus *PrometheusConfig `mapstructure:"prometheus,omitempty"`
+	Sidecar    *SidecarConfig    `mapstructure:"sidecar,omitempty"`
 }
 
 // IsOTELEnabled reports whether OpenTelemetry export is turned on in config.

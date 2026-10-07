@@ -4,24 +4,55 @@ package postprocessing
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 const (
-	ProviderID  = "eval_hub_internal"
-	BenchmarkID = "evaluation_post_processor"
+	ProviderID          = "evalhub-internal"
+	BenchmarkID         = "evaluation-post-processor"
+	workloadType        = workloads.Type("post-processing")
+	defaultAdapterImage = "quay.io/evalhub/evalhub-post-processor:latest"
+	adapterImageEnv     = "EVALHUB_POST_PROCESSING_IMAGE"
+	localCommand        = "python tests/features/test_data/runtime/main.py"
 )
 
+func init() {
+	workloads.Register(workloads.Workload{
+		Type:            workloadType,
+		ProviderID:      ProviderID,
+		BenchmarkID:     BenchmarkID,
+		Internal:        true,
+		MatchesJob:      IsPostProcessingJob,
+		RuntimeProvider: RuntimeProvider,
+	})
+}
+
 // RuntimeProvider builds the in-memory execution descriptor used by runtimes
-// for post-processing. This does not register the provider in the catalog.
-func RuntimeProvider(runtime *api.Runtime) *api.ProviderResource {
+// for post-processing. The image comes from the environment or the built-in
+// latest image; Kubernetes job creation supplies default resource values.
+func RuntimeProvider() *api.ProviderResource {
+	image := strings.TrimSpace(os.Getenv(adapterImageEnv))
+	if image == "" {
+		image = defaultAdapterImage
+	}
+	pullPolicy := ""
+	if strings.HasSuffix(image, ":latest") {
+		pullPolicy = "always"
+	}
+
 	return &api.ProviderResource{
 		Resource: api.Resource{ID: ProviderID},
 		ProviderConfig: api.ProviderConfig{
-			Name:    "EvalHub Internal",
-			Title:   "EvalHub Internal",
-			Runtime: runtime,
+			Name:  "EvalHub Internal",
+			Title: "EvalHub Internal",
+			Runtime: &api.Runtime{
+				K8s:   &api.K8sRuntime{Image: image, ImagePullPolicy: pullPolicy},
+				Local: &api.LocalRuntime{Command: localCommand},
+			},
 			Benchmarks: []api.BenchmarkResource{{
 				ID: BenchmarkID,
 			}},
@@ -29,7 +60,7 @@ func RuntimeProvider(runtime *api.Runtime) *api.ProviderResource {
 	}
 }
 
-// IsPostProcessingJob recognizes the single benchmark used to execute post-processing.
+// IsPostProcessingJob recognizes the single benchmark used for post-processing.
 func IsPostProcessingJob(cfg *api.EvaluationJobConfig) bool {
 	return cfg != nil && cfg.Collection == nil && len(cfg.Benchmarks) == 1 &&
 		cfg.Benchmarks[0].ProviderID == ProviderID && cfg.Benchmarks[0].ID == BenchmarkID

@@ -21,6 +21,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serialization"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/otel"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -509,6 +510,13 @@ func (h *Handlers) validateBenchmarkReferences(ctx *executioncontext.ExecutionCo
 	storage := h.getStorage(ctx)
 
 	for _, benchmark := range benchmarks {
+		if workloads.IsInternalProviderID(benchmark.ProviderID) {
+			return serviceerrors.NewServiceError(
+				messages.ResourceDoesNotExist,
+				"Type", "provider",
+				"ResourceID", benchmark.ProviderID,
+			)
+		}
 		provider, err := storage.GetProvider(benchmark.ProviderID)
 		if err != nil {
 			ctx.Logger.Error("Failed to get provider whilst validating benchmark", "benchmark_id", benchmark.ID, "provider_id", benchmark.ProviderID, "error", err)

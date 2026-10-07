@@ -2,20 +2,10 @@ package shared
 
 import (
 	"fmt"
-	"strings"
 
-	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
+	_ "github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing" // Register the post-processing workload.
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
-)
-
-// ProviderRuntimeKind identifies the runtime that will execute a benchmark.
-type ProviderRuntimeKind int
-
-const (
-	// ProviderRuntimeKubernetes selects the Kubernetes runtime configuration.
-	ProviderRuntimeKubernetes ProviderRuntimeKind = iota
-	// ProviderRuntimeLocal selects the local runtime configuration.
-	ProviderRuntimeLocal
 )
 
 // ProviderStorage provides the catalog lookup required for ordinary benchmarks.
@@ -23,19 +13,46 @@ type ProviderStorage interface {
 	GetProvider(id string) (*api.ProviderResource, error)
 }
 
-// ProviderForBenchmark resolves the provider used to execute a benchmark.
-// Dedicated post-processing jobs use the service runtime configuration; other
-// jobs always resolve their provider from the catalog.
+// WorkloadType identifies a server-managed workload from its stored job and
+// verifies that the effective benchmark belongs to that workload.
+func WorkloadType(evaluation *api.EvaluationJobResource, benchmark api.EvaluationBenchmarkConfig) (workloads.Type, error) {
+	var job *api.EvaluationJobConfig
+	if evaluation != nil {
+		job = &evaluation.EvaluationJobConfig
+	}
+	if workload, ok := workloads.ForJob(job); ok {
+		if benchmark.ProviderID != workload.ProviderID || benchmark.ID != workload.BenchmarkID {
+			return "", fmt.Errorf("workload %q benchmark does not match the stored job", workload.Type)
+		}
+		return workload.Type, nil
+	}
+	if workloads.IsInternalProviderID(benchmark.ProviderID) {
+		return "", fmt.Errorf("internal workload provider %q cannot be resolved as a conventional benchmark", benchmark.ProviderID)
+	}
+	return workloads.BenchmarkEvaluation, nil
+}
+
+// ProviderForBenchmark builds a runtime provider for an internal workload or
+// resolves a conventional benchmark provider from the catalog.
 func ProviderForBenchmark(
 	evaluation *api.EvaluationJobResource,
 	benchmark api.EvaluationBenchmarkConfig,
-	postProcessingRuntime *api.Runtime,
-	runtimeKind ProviderRuntimeKind,
 	storage ProviderStorage,
 ) (*api.ProviderResource, error) {
-	if evaluation != nil && postprocessing.IsPostProcessingJob(&evaluation.EvaluationJobConfig) &&
-		postProcessingRuntimeConfigured(postProcessingRuntime, runtimeKind) {
-		return postprocessing.RuntimeProvider(postProcessingRuntime), nil
+	workloadType, err := WorkloadType(evaluation, benchmark)
+	if err != nil {
+		return nil, err
+	}
+	if workloadType != workloads.BenchmarkEvaluation {
+		workload, ok := workloads.ByType(workloadType)
+		if !ok {
+			return nil, fmt.Errorf("workload %q is not registered", workloadType)
+		}
+		provider := workload.RuntimeProvider()
+		if provider == nil {
+			return nil, fmt.Errorf("workload %q did not provide a runtime provider", workloadType)
+		}
+		return provider, nil
 	}
 	if storage == nil {
 		return nil, fmt.Errorf("provider %q is not configured", benchmark.ProviderID)
@@ -48,18 +65,4 @@ func ProviderForBenchmark(
 		return nil, fmt.Errorf("provider %q is not configured", benchmark.ProviderID)
 	}
 	return provider, nil
-}
-
-func postProcessingRuntimeConfigured(runtimeConfig *api.Runtime, runtimeKind ProviderRuntimeKind) bool {
-	if runtimeConfig == nil {
-		return false
-	}
-	switch runtimeKind {
-	case ProviderRuntimeKubernetes:
-		return runtimeConfig.K8s != nil && strings.TrimSpace(runtimeConfig.K8s.Image) != ""
-	case ProviderRuntimeLocal:
-		return runtimeConfig.Local != nil && strings.TrimSpace(runtimeConfig.Local.Command) != ""
-	default:
-		return false
-	}
 }

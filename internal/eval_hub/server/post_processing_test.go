@@ -378,7 +378,7 @@ func TestEvaluationCreationErrorsPreserveRequestID(t *testing.T) {
 		{
 			name: "evaluation MLflow error",
 			path: "/api/v1/evaluations/jobs",
-			body: `{"name":"evaluation","model":{"name":"model","url":"https://model.example"},"benchmarks":[{"id":"evaluation_post_processor","provider_id":"eval_hub_internal"}],"experiment":{"name":"experiment"}}`,
+			body: `{"name":"evaluation","model":{"name":"model","url":"https://model.example"},"benchmarks":[{"id":"evaluation-post-processor","provider_id":"evalhub-internal"}],"experiment":{"name":"experiment"}}`,
 		},
 		{
 			name:       "post-processing runtime error",
