@@ -7,6 +7,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/evalcards"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/oci"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/k8s"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/ociclient"
@@ -16,8 +17,8 @@ type kubernetesDockerConfigSecretGetter struct {
 	helper *k8s.KubernetesHelper
 }
 
-// newKubernetesDockerConfigSecretGetter adapts KubernetesHelper to the evalcards secret getter interface.
-func newKubernetesDockerConfigSecretGetter(helper *k8s.KubernetesHelper) evalcards.DockerConfigSecretGetter {
+// newKubernetesDockerConfigSecretGetter adapts KubernetesHelper to the OCI secret getter interface.
+func newKubernetesDockerConfigSecretGetter(helper *k8s.KubernetesHelper) oci.DockerConfigSecretGetter {
 	return &kubernetesDockerConfigSecretGetter{helper: helper}
 }
 
@@ -35,16 +36,24 @@ func (g *kubernetesDockerConfigSecretGetter) GetDockerConfigJSON(ctx context.Con
 	return ociclient.DockerConfigJSONFromSecret(secret.Data)
 }
 
-// newOCIPublisherFactory wires the real OCI exporter in cluster mode. Local mode uses a noop
-// factory; cluster initialization failures return an error-aware factory so OCI export requests
+// newOCIPublisherFactory wires anonymous local or tenant-authenticated cluster exporters.
+// Initialization failures return an error-aware factory so OCI export requests
 // fail explicitly instead of being silently discarded.
 // The returned cleanup func must be called when the factory is no longer needed to stop the
 // Kubernetes EventBroadcaster goroutines started by NewKubernetesHelper.
 func newOCIPublisherFactory(logger *slog.Logger, serviceConfig *config.Config) (evalcards.OCIPublisherFactory, func()) {
 	noop := func() {}
-	if serviceConfig == nil || serviceConfig.Service == nil || serviceConfig.Service.LocalMode {
+	if serviceConfig == nil || serviceConfig.Service == nil {
 		return evalcards.NewNoopOCIPublisherFactory(), noop
 	}
+	if serviceConfig.Service.LocalMode {
+		httpClient, err := evalcards.NewOCIHTTPClient(serviceConfig, serviceConfig.IsOTELEnabled(), logger)
+		if err != nil {
+			return newUnavailableOCIPublisherFactory(fmt.Errorf("oci export unavailable: http client: %w", err)), noop
+		}
+		return evalcards.NewOCIPublisherFactory(oci.NewLocalCredentialResolver(), httpClient), noop
+	}
+
 	helper, err := k8s.NewKubernetesHelper()
 	if err != nil {
 		if logger != nil {
@@ -61,7 +70,7 @@ func newOCIPublisherFactory(logger *slog.Logger, serviceConfig *config.Config) (
 		return newUnavailableOCIPublisherFactory(fmt.Errorf("oci export unavailable: http client: %w", err)), noop
 	}
 	return evalcards.NewOCIPublisherFactory(
-		newKubernetesDockerConfigSecretGetter(helper),
+		oci.NewKubernetesCredentialResolver(newKubernetesDockerConfigSecretGetter(helper)),
 		httpClient,
 	), func() { _ = helper.Close() }
 }
