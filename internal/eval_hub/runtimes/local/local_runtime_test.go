@@ -306,6 +306,7 @@ func TestNewLocalRuntime(t *testing.T) {
 }
 
 func TestPostProcessingProviderUsesLocalCommand(t *testing.T) {
+	t.Setenv("EVALHUB_POST_PROCESSING_LOCAL_COMMAND", "")
 	benchmark := api.EvaluationBenchmarkConfig{Ref: api.Ref{ID: postprocessing.BenchmarkID}, ProviderID: postprocessing.ProviderID}
 	evaluation := &api.EvaluationJobResource{EvaluationJobConfig: api.EvaluationJobConfig{Benchmarks: []api.EvaluationBenchmarkConfig{benchmark}}}
 
@@ -313,7 +314,16 @@ func TestPostProcessingProviderUsesLocalCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ProviderForBenchmark failed without catalog storage: %v", err)
 	}
-	if provider.Resource.ID != postprocessing.ProviderID || provider.Runtime.Local.Command != "python tests/features/test_data/runtime/main.py" {
+	if provider.Resource.ID != postprocessing.ProviderID || provider.Runtime.Local.Command != "../eval-hub-contrib/adapters/evalhub-post-processor/.venv/bin/python ../eval-hub-contrib/adapters/evalhub-post-processor/main.py" {
+		t.Fatalf("unexpected default runtime provider: %#v", provider)
+	}
+
+	t.Setenv("EVALHUB_POST_PROCESSING_LOCAL_COMMAND", "python /path/to/evalhub-post-processor/main.py")
+	provider, err = shared.ProviderForBenchmark(evaluation, benchmark, nil)
+	if err != nil {
+		t.Fatalf("ProviderForBenchmark failed with local command override: %v", err)
+	}
+	if provider.Runtime.Local.Command != "python /path/to/evalhub-post-processor/main.py" {
 		t.Fatalf("unexpected runtime provider: %#v", provider)
 	}
 }

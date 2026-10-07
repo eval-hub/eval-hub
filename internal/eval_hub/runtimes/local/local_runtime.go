@@ -344,6 +344,9 @@ func (r *LocalRuntime) runBenchmark(
 	cmd.Env = os.Environ()
 	cmd.Env = replaceEnvironmentVariable(cmd.Env, evalHubJobSpecPathEnv, absJobSpecPath)
 	cmd.Env = replaceEnvironmentVariable(cmd.Env, evalHubModeEnv, "local")
+	if tenant := evaluation.Resource.Tenant.String(); tenant != "" {
+		cmd.Env = replaceEnvironmentVariable(cmd.Env, "EVALHUB_TENANT", tenant)
+	}
 	if r.mlflowTrackingURI != "" {
 		cmd.Env = replaceEnvironmentVariable(cmd.Env, mlflowTrackingURIEnv, r.mlflowTrackingURI)
 	}
