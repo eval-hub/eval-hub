@@ -1,43 +1,27 @@
 id: instruction-following-v1
 name: Instruction Following v1
 category: instruction_following
-domains: [knowledge_and_reasoning, instruction_and_output_reliability]
-tasks: [reasoning, instruction_following]
+domains: [instruction_and_output_reliability]
+tasks: [instruction_following]
 modalities: [text]
 evaluation_targets: [model]
 curation_order: 0
 description: >
-  Evaluates how well instruction-tuned chat LLMs follow explicit instructions across
-  broad knowledge, multi-choice reasoning, formatting constraints, and competition
-  mathematics. Uses 5-shot with fewshot_as_multiturn for the knowledge-intensive task;
-  IFEval and Math 500 are always 0-shot. All benchmarks
-  require --apply_chat_template and a vLLM OpenAI-compatible endpoint.
+  Evaluates how well instruction-tuned chat LLMs follow explicit instructions using
+  IFEval's verifiable constraints for length, keywords, formatting, JSON structure,
+  and language. IFEval runs 0-shot and requires --apply_chat_template with a vLLM
+  OpenAI-compatible endpoint.
   Part of the Standard LLM Evaluation Suite (standard-llm-evals-v1).
 tags:
   - instruction_following
   - chat
   - lm_eval
-  - lighteval
   - vllm
   - standard
 pass_criteria:
-  # Weighted average across 3 benchmarks (equal weight).
-  # Threshold reflects a capable instruction-following model.
-  threshold: 0.50
+  # Desired capability level for instruction following.
+  threshold: 0.65
 benchmarks:
-  - id: leaderboard_mmlu_pro
-    provider_id: lm_evaluation_harness
-    weight: 1
-    primary_score:
-      metric: acc_norm
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.45
-    parameters:
-      num_fewshot: 5
-      apply_chat_template: true
-      fewshot_as_multiturn: true
-
   - id: ifeval
     provider_id: lm_evaluation_harness
     weight: 1
@@ -45,21 +29,7 @@ benchmarks:
       metric: inst_level_strict_acc
       lower_is_better: false
     pass_criteria:
-      threshold: 0.60
+      threshold: 0.70
     parameters:
       num_fewshot: 0
       apply_chat_template: true
-
-  - id: math_500
-    provider_id: lighteval
-    weight: 1
-    primary_score:
-      metric: pass@1
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.30
-    parameters:
-      num_fewshot: 0
-      apply_chat_template: true
-      pass_at_k: 1
-      num_samples: 3
