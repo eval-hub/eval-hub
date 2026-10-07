@@ -18,6 +18,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/common"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage"
 	"github.com/eval-hub/eval-hub/internal/testhelpers"
@@ -40,6 +41,15 @@ func (r *postProcessingRuntime) RunEvaluationJob(job *api.EvaluationJobResource,
 	if r.err != nil {
 		return r.err
 	}
+	if postprocessing.IsPostProcessingJob(&job.EvaluationJobConfig) {
+		benchmark := benchmarks[0]
+		provider, err := shared.ProviderForBenchmark(job, benchmark, store)
+		if err != nil {
+			return err
+		}
+		_, err = shared.BuildJobSpec(job, provider.Resource.ID, &benchmark, 0, nil, provider)
+		return err
+	}
 	return r.stubRuntime.RunEvaluationJob(job, benchmarks, store)
 }
 
@@ -47,11 +57,11 @@ func newPostProcessingServer(t *testing.T) (http.Handler, abstractions.Storage, 
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	providers := map[string]api.ProviderResource{
-		postprocessing.ProviderID: {
-			Resource: api.Resource{ID: postprocessing.ProviderID},
+		"ordinary-provider": {
+			Resource: api.Resource{ID: "ordinary-provider"},
 			ProviderConfig: api.ProviderConfig{
-				Name:       "Internal",
-				Benchmarks: []api.BenchmarkResource{{ID: postprocessing.BenchmarkID}},
+				Name:       "Ordinary Provider",
+				Benchmarks: []api.BenchmarkResource{{ID: "ordinary-benchmark"}},
 			},
 		},
 	}
@@ -467,7 +477,7 @@ func TestEvaluationCreationErrorsPreserveRequestID(t *testing.T) {
 		{
 			name: "evaluation MLflow error",
 			path: "/api/v1/evaluations/jobs",
-			body: `{"name":"evaluation","model":{"name":"model","url":"https://model.example"},"benchmarks":[{"id":"evaluation_post_processor","provider_id":"eval_hub_internal"}],"experiment":{"name":"experiment"}}`,
+			body: `{"name":"evaluation","model":{"name":"model","url":"https://model.example"},"benchmarks":[{"id":"ordinary-benchmark","provider_id":"ordinary-provider"}],"experiment":{"name":"experiment"}}`,
 		},
 		{
 			name:       "post-processing runtime error",

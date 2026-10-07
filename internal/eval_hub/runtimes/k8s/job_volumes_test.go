@@ -40,8 +40,8 @@ func TestBuildJobMountsPostProcessorCalibrationPVCs(t *testing.T) {
 		resourceGUID:   "guid-ppi-pvc",
 		benchmarkIndex: 0,
 		namespace:      "default",
-		providerID:     "eval_hub_internal",
-		benchmarkID:    "evaluation_post_processor",
+		providerID:     "evalhub-internal",
+		benchmarkID:    "evaluation-post-processor",
 		adapterImage:   "adapter:latest",
 		defaultEnv: []api.EnvVar{{
 			Name:  envPostProcessorPVCMountsName,

@@ -4,16 +4,71 @@ package postprocessing
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 const (
-	ProviderID  = "eval_hub_internal"
-	BenchmarkID = "evaluation_post_processor"
+	ProviderID          = "evalhub-internal"
+	BenchmarkID         = "evaluation-post-processor"
+	workloadType        = workloads.Type("post-processing")
+	defaultAdapterImage = "quay.io/evalhub/evalhub-post-processor:latest"
+	adapterImageEnv     = "EVALHUB_POST_PROCESSING_IMAGE"
+	localAdapterDir     = "../eval-hub-contrib/adapters/evalhub-post-processor"
+	defaultLocalCommand = localAdapterDir + "/.venv/bin/python " + localAdapterDir + "/main.py"
+	localCommandEnv     = "EVALHUB_POST_PROCESSING_LOCAL_COMMAND"
 )
 
-// IsPostProcessingJob recognizes the single benchmark used to execute post-processing.
+func init() {
+	workloads.Register(workloads.Workload{
+		Type:            workloadType,
+		ProviderID:      ProviderID,
+		BenchmarkID:     BenchmarkID,
+		Internal:        true,
+		MatchesJob:      IsPostProcessingJob,
+		RuntimeProvider: RuntimeProvider,
+	})
+}
+
+// RuntimeProvider builds the in-memory execution descriptor used by runtimes
+// for post-processing. The image comes from the environment or the built-in
+// latest image; Kubernetes job creation supplies default resource values. The
+// local command runs the adapter from a sibling eval-hub-contrib checkout unless
+// overridden for a different local layout.
+func RuntimeProvider() *api.ProviderResource {
+	image := strings.TrimSpace(os.Getenv(adapterImageEnv))
+	if image == "" {
+		image = defaultAdapterImage
+	}
+	pullPolicy := ""
+	if strings.HasSuffix(image, ":latest") {
+		pullPolicy = "always"
+	}
+	localCommand := strings.TrimSpace(os.Getenv(localCommandEnv))
+	if localCommand == "" {
+		localCommand = defaultLocalCommand
+	}
+
+	return &api.ProviderResource{
+		Resource: api.Resource{ID: ProviderID},
+		ProviderConfig: api.ProviderConfig{
+			Name:  "EvalHub Internal",
+			Title: "EvalHub Internal",
+			Runtime: &api.Runtime{
+				K8s:   &api.K8sRuntime{Image: image, ImagePullPolicy: pullPolicy},
+				Local: &api.LocalRuntime{Command: localCommand},
+			},
+			Benchmarks: []api.BenchmarkResource{{
+				ID: BenchmarkID,
+			}},
+		},
+	}
+}
+
+// IsPostProcessingJob recognizes the single benchmark used for post-processing.
 func IsPostProcessingJob(cfg *api.EvaluationJobConfig) bool {
 	return cfg != nil && cfg.Collection == nil && len(cfg.Benchmarks) == 1 &&
 		cfg.Benchmarks[0].ProviderID == ProviderID && cfg.Benchmarks[0].ID == BenchmarkID

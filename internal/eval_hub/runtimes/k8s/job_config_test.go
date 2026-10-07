@@ -1523,8 +1523,8 @@ func TestPostProcessorPVCConfigs(t *testing.T) {
 	evaluation := &api.EvaluationJobResource{
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Benchmarks: []api.EvaluationBenchmarkConfig{{
-				Ref:        api.Ref{ID: "evaluation_post_processor"},
-				ProviderID: "eval_hub_internal",
+				Ref:        api.Ref{ID: "evaluation-post-processor"},
+				ProviderID: "evalhub-internal",
 				Parameters: map[string]any{
 					"operations": api.StandalonePostProcessingOperations{
 						ConfidenceInterval: &api.StandaloneConfidenceIntervalConfig{

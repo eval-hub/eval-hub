@@ -8,17 +8,20 @@ import (
 	"log/slog"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/otel"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 type K8sRuntime struct {
@@ -131,10 +134,6 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 	if err != nil {
 		return err
 	}
-	configMaps, err := r.helper.ListConfigMaps(r.ctx, namespace, labelSelector)
-	if err != nil {
-		return err
-	}
 	var deleteErr error
 	for _, job := range jobs {
 		r.logger.Info(
@@ -147,20 +146,11 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 			deleteErr = errors.Join(deleteErr, err)
 		}
 	}
-	// Delete ConfigMaps explicitly to avoid orphans if the owner ref was never set or the
-	// job delete is delayed. OwnerReferences GC them automatically when the Job is removed,
-	// but explicit deletion is a safe belt-and-suspenders measure.
-	for _, configMap := range configMaps {
-		r.logger.Info(
-			"deleting evaluation runtime configmap",
-			"job_id", evaluation.Resource.ID,
-			"configmap_name", configMap.Name,
-			"namespace", namespace,
-		)
-		if err := r.helper.DeleteConfigMap(r.ctx, namespace, configMap.Name); err != nil && !apierrors.IsNotFound(err) {
-			deleteErr = errors.Join(deleteErr, err)
-		}
-	}
+	// Job-spec ConfigMaps own the per-execution NetworkPolicy until the Job is created,
+	// then both are owned by the Job. Leave them for foreground Job garbage collection so
+	// this cleanup does not remove ingress protection before Job-owned Pods terminate.
+	// If an owner-reference update failed, an orphan may remain; retaining policy coverage
+	// is safer than deleting it while a Pod could still be running.
 	// Delete ref secrets explicitly using the same label selector so they are never orphaned
 	// even if the Job's owner-reference GC is delayed or the owner ref was never set.
 	secrets, err := r.helper.ListSecrets(r.ctx, namespace, labelSelector)
@@ -190,7 +180,11 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 ) error {
 	benchmarkID := benchmark.ID
 	// Provider/benchmark validation should be handled during creation.
-	provider, err := storage.GetProvider(benchmark.ProviderID)
+	provider, err := shared.ProviderForBenchmark(
+		evaluation,
+		*benchmark,
+		storage,
+	)
 	if err != nil {
 		return err
 	}
@@ -285,6 +279,10 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		logger.Error("kubernetes job build error", "benchmark_id", benchmarkID, "error", err)
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
 	}
+	networkPolicy, err := buildJobNetworkPolicy(jobConfig)
+	if err != nil {
+		return fmt.Errorf("job %s benchmark %s: network policy: %w", evaluation.Resource.ID, benchmarkID, err)
+	}
 	hasServiceCAVolume := false
 	for _, volume := range job.Spec.Template.Spec.Volumes {
 		if volume.Name == serviceCAVolumeName {
@@ -311,6 +309,7 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 	)
 
 	logger.Info("kubernetes resource", "kind", "ConfigMap", "object", configMap)
+	logger.Info("kubernetes resource", "kind", "NetworkPolicy", "object", networkPolicy)
 	logger.Info("kubernetes resource", "kind", "Job", "object", job)
 
 	// Create the ephemeral internalModelRef secret before the Job so the Pod can mount it.
@@ -332,7 +331,7 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		}
 	}
 
-	_, err = r.helper.CreateConfigMap(ctx, configMap.Namespace, configMap.Name, configMap.Data, &CreateConfigMapOptions{
+	createdConfigMap, err := r.helper.CreateConfigMap(ctx, configMap.Namespace, configMap.Name, configMap.Data, &CreateConfigMapOptions{
 		Labels:      configMap.Labels,
 		Annotations: configMap.Annotations,
 	})
@@ -342,17 +341,56 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
 	}
 
+	cleanupConfigMap := func() {
+		if cleanupErr := r.helper.DeleteConfigMap(ctx, configMap.Namespace, configMap.Name); cleanupErr != nil && !apierrors.IsNotFound(cleanupErr) {
+			logger.Error("failed to delete configmap after job creation error", "error", cleanupErr)
+		}
+	}
+
+	configMapOwnerRef := metav1.OwnerReference{
+		APIVersion: "v1",
+		Kind:       "ConfigMap",
+		Name:       createdConfigMap.Name,
+		UID:        createdConfigMap.UID,
+		Controller: boolPtr(true),
+	}
+	// The ConfigMap is created before the policy and temporarily owns it. If Job creation
+	// fails, deleting the ConfigMap lets Kubernetes garbage-collect this policy without
+	// granting the EvalHub ServiceAccount NetworkPolicy delete permission.
+	networkPolicy.OwnerReferences = []metav1.OwnerReference{configMapOwnerRef}
+	if _, err := r.helper.CreateNetworkPolicy(ctx, networkPolicy); err != nil {
+		logger.Error("kubernetes network policy create error", "namespace", networkPolicy.Namespace, "name", networkPolicy.Name, "error", err)
+		cleanupModelRefSecret()
+		cleanupConfigMap()
+		return fmt.Errorf("job %s benchmark %s: create network policy: %w", evaluation.Resource.ID, benchmarkID, err)
+	}
+
 	createdJob, err := r.helper.CreateJob(ctx, job)
 	if err != nil {
 		logger.Error("kubernetes job create error", "namespace", job.Namespace, "name", job.Name, "error", err)
-		cleanupModelRefSecret()
-		cleanupErr := r.helper.DeleteConfigMap(ctx, configMap.Namespace, configMap.Name)
-		if cleanupErr != nil && !apierrors.IsNotFound(cleanupErr) {
-			if logger != nil {
-				logger.Error("failed to delete configmap after job creation error", "error", cleanupErr)
+		existingJob, getErr := r.helper.GetJob(ctx, job.Namespace, job.Name)
+		switch {
+		case apierrors.IsNotFound(getErr):
+			cleanupModelRefSecret()
+			cleanupConfigMap()
+			return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
+		case getErr == nil && jobMatchesExecution(existingJob, job):
+			// The API may persist a create before the response is lost. Reuse only a Job
+			// carrying this request's server-generated identity; keep its policy in place.
+			createdJob = existingJob
+			logger.Warn("job create response was ambiguous; found matching persisted job", "namespace", job.Namespace, "name", job.Name)
+		default:
+			if getErr != nil {
+				return errors.Join(
+					fmt.Errorf("job %s benchmark %s: create job: %w", evaluation.Resource.ID, benchmarkID, err),
+					fmt.Errorf("confirm job creation outcome: %w", getErr),
+				)
 			}
+			return errors.Join(
+				fmt.Errorf("job %s benchmark %s: create job: %w", evaluation.Resource.ID, benchmarkID, err),
+				fmt.Errorf("job %s exists but does not match the execution identity", job.Name),
+			)
 		}
-		return fmt.Errorf("job %s benchmark %s: %w", evaluation.Resource.ID, benchmarkID, err)
 	}
 	ownerRef := metav1.OwnerReference{
 		APIVersion: "batch/v1",
@@ -360,6 +398,27 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		Name:       createdJob.Name,
 		UID:        createdJob.UID,
 		Controller: boolPtr(true),
+	}
+	if err := r.helper.SetNetworkPolicyOwner(ctx, networkPolicy.Namespace, networkPolicy.Name, ownerRef); err != nil {
+		ownerErr := fmt.Errorf("job %s benchmark %s: set network policy owner: %w", evaluation.Resource.ID, benchmarkID, err)
+		logger.Error("failed to set network policy owner reference; cleaning up job", "namespace", networkPolicy.Namespace, "name", networkPolicy.Name, "error", err)
+		if delErr := r.helper.DeleteJob(ctx, createdJob.Namespace, createdJob.Name, jobForegroundDeleteOptions()); delErr != nil && !apierrors.IsNotFound(delErr) {
+			return errors.Join(ownerErr, fmt.Errorf("delete job after network policy owner failure: %w", delErr))
+		}
+		// Foreground deletion is asynchronous. Retain the ConfigMap-owned policy until
+		// Job deletion completes, so cleanup cannot remove protection from running Pods.
+		if waitErr := wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+			_, getErr := r.helper.GetJob(ctx, createdJob.Namespace, createdJob.Name)
+			if apierrors.IsNotFound(getErr) {
+				return true, nil
+			}
+			return false, getErr
+		}); waitErr != nil {
+			return errors.Join(ownerErr, fmt.Errorf("wait for job deletion after network policy owner failure: %w", waitErr))
+		}
+		cleanupModelRefSecret()
+		cleanupConfigMap()
+		return ownerErr
 	}
 	if err := r.helper.SetConfigMapOwner(ctx, configMap.Namespace, configMap.Name, ownerRef); err != nil {
 		if apierrors.IsNotFound(err) {

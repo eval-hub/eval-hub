@@ -9,6 +9,10 @@ import (
 
 var ociDigestPattern = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
 
+func validateOCIDigest(fl validator.FieldLevel) bool {
+	return ociDigestPattern.MatchString(fl.Field().String())
+}
+
 func validateStandalonePostProcessingRequest(sl validator.StructLevel) {
 	request, ok := sl.Current().Interface().(api.StandalonePostProcessingRequest)
 	if !ok {
@@ -48,11 +52,4 @@ func validatePostProcessingOperationOrder(sl validator.StructLevel, operationNam
 
 func reportInvalidPostProcessingOperationOrder(sl validator.StructLevel, order []string) {
 	sl.ReportError(order, "operation_order", "OperationOrder", "operation_order_matches_operations", "")
-}
-
-func validateOCIDataRef(sl validator.StructLevel) {
-	ref := sl.Current().Interface().(api.OCIDataRef)
-	if ref.Digest != "" && !ociDigestPattern.MatchString(ref.Digest) {
-		sl.ReportError(ref.Digest, "digest", "Digest", "sha256_digest", "")
-	}
 }

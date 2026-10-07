@@ -122,7 +122,7 @@ func (h *Handlers) HandleCreatePostProcessing(ctx *executioncontext.ExecutionCon
 	if sourceJob != nil {
 		evaluation.Exports = copySourceOCIExports(sourceJob)
 	}
-	job, err := h.createEvaluationJob(ctx, evaluation)
+	job, err := h.createPostProcessingEvaluationJob(ctx, evaluation)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
