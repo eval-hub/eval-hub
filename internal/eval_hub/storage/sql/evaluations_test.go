@@ -74,6 +74,8 @@ func TestGetEvaluationJobs_Postgres(t *testing.T) {
 	testEvaluationsStorage(t, drivers[1], databaseName)
 	testUpdateBenchmarkStatus_RejectsTerminalDowngrade(t, drivers[1], databaseName)
 	testUpdateEvaluationJob_ConcurrentBenchmarkCompletions(t, drivers[1], databaseName)
+	testPostProcessingCompletionAtomic(t, drivers[1], databaseName)
+	testPostProcessingConcurrentCompletions(t, drivers[1], databaseName)
 }
 
 func testCreateEvaluationJobAndUpdateCollection(t *testing.T, driver string, databaseName string) {

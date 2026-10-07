@@ -77,7 +77,9 @@ When running in local server mode, the tests will:
 | --- | :-- |
 | `@collections` | Used to run just the collections tests |
 | `@evaluations` | Used to run just the evaluations tests |
+| `@post_processing` | Standalone post-processing API scenarios in `standalone_post_processing.feature`; run with `GODOG_TAGS="@post_processing"` against the embedded local FVT server. |
 | `@providers` | Used to run just the providers tests |
+| `@info` | Authenticated service metadata and tenant queue tests in `info.feature` |
 | `@mcp` | MCP tool and resource scenarios in `mcp.feature` |
 | `@cluster` | Tests that require the Kubernetes cluster runtime (default `make test-fvt` excludes them via `~@cluster` in `FVT_TAGS`) |
 | `@local_runtime` | Scenarios that require a **fully functional local evaluation runtime**—eval-hub in local mode (embedded FVT server with `LocalMode`, or a binary started with `--local`). Use for flows such as local evaluation jobs that run to completion. Distinct from `@cluster`. **Excluded by default for `make test-fvt`/CI** via `~@local_runtime` in Makefile `FVT_TAGS`; `suite_test.go` only defaults to `~@ignore`, so plain `go test ./tests/features/...` does not exclude `@local_runtime` unless you set `GODOG_TAGS` |
@@ -117,6 +119,23 @@ GODOG_TAGS="@metrics" go test -v ./tests/features/...
 ```
 
 If `SERVER_URL` is set but `METRICS_URL` is not, `@metrics` scenarios are **skipped**.
+
+### Service info tests (`@info`)
+
+`info.feature` checks the authenticated `GET /api/v1/info` response, including build metadata and the queues array. Requests use `X_TENANT` and `X_USER` (defaulting to `test-tenant` and `test-user`); remote cluster runs also need `AUTH_TOKEN`.
+
+Run the general response scenario with `GODOG_TAGS="@info && ~@cluster" go test -v ./tests/features/...`. Run the queue scenario with `GODOG_TAGS="@info && @cluster" go test -v ./tests/features/...` after setting the queue environment variables below.
+
+To compare returned build metadata with a known deployment, optionally set any of these variables:
+
+```bash
+export TEST_INFO_VERSION="1.2.3"
+export TEST_INFO_BUILD="1234"
+export TEST_INFO_BUILD_DATE="2026-10-01T12:00:00Z"
+export TEST_INFO_GIT_HASH="abc123"
+```
+
+The `@cluster` queue scenario is excluded by default with other cluster scenarios. To run it, set `TEST_INFO_QUEUE_NAME` to a LocalQueue in `X_TENANT` and run with a Godog tag expression that includes `@cluster`. Optional expectations are `TEST_INFO_QUEUE_ACTIVE`, `TEST_INFO_QUEUE_REASON`, and `TEST_INFO_QUEUE_MESSAGE`. Set `TEST_INFO_OTHER_TENANT_QUEUE_NAME` to a queue in another namespace to assert that it is not returned for the authenticated tenant; its value must differ from `TEST_INFO_QUEUE_NAME`. The queue scenario is skipped when `TEST_INFO_QUEUE_NAME` is unset.
 
 ### Hardware profile tests (`@hardware_profile`)
 

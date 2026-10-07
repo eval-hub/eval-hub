@@ -9,6 +9,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/shared"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -225,7 +226,7 @@ func TestCreateEvaluationAddEntityStatement(t *testing.T) {
 		Resource: api.EvaluationResource{Resource: api.Resource{ID: "e1", Tenant: "t1", Owner: "u1"}},
 		Status:   &api.EvaluationJobStatus{EvaluationJobState: api.EvaluationJobState{State: state}},
 	}
-	stmt, args := f.CreateEvaluationAddEntityStatement(eval, `{}`)
+	stmt, args := f.CreateEvaluationAddEntityStatement(eval, `{}`, workloads.Evaluation)
 	if !strings.Contains(stmt, "INSERT INTO evaluations") {
 		t.Errorf("expected INSERT INTO evaluations, got: %s", stmt)
 	}

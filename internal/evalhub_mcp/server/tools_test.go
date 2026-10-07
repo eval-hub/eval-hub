@@ -1519,6 +1519,26 @@ func TestDesignCollectionToolBasic(t *testing.T) {
 	}
 }
 
+func TestDesignCollectionToolStructuredReadOnly(t *testing.T) {
+	t.Parallel()
+	client := &mockToolClient{createCollectionFn: func(api.CollectionConfig) (*api.CollectionResource, error) {
+		t.Error("design_collection must not persist a collection")
+		return nil, nil
+	}}
+	ctx, cs := connectWithToolsAndDS(t, client, testDesignCollectionDS())
+	out := callToolJSON[map[string]json.RawMessage](t, ctx, cs, "design_collection", map[string]any{
+		"evaluation_goal": "enterprise safety deployment",
+	})
+	for _, key := range []string{"guidance", "benchmarks", "collection_examples"} {
+		if len(out[key]) == 0 {
+			t.Errorf("structured design output missing %q: %v", key, out)
+		}
+	}
+	if len(out) != 3 {
+		t.Errorf("structured design output unexpectedly changed shape: %v", out)
+	}
+}
+
 func hasBenchmarkID(entries []benchmarkCatalogEntry, id string) bool {
 	for _, e := range entries {
 		if e.ID == id {

@@ -1,7 +1,9 @@
 # EvalHub
 
-[![CI](https://github.com/eval-hub/eval-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/eval-hub/eval-hub/actions/workflows/ci.yml)
+[![GO](https://img.shields.io/badge/Made%20with-Go-1f425f?logo=go&logoColor=white)](https://go.dev)
+[![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/eval-hub/eval-hub.svg)](https://github.com/eval-hub/eval-hub)
 [![Go Reference](https://pkg.go.dev/badge/github.com/eval-hub/eval-hub.svg)](https://pkg.go.dev/github.com/eval-hub/eval-hub)
+[![CI](https://github.com/eval-hub/eval-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/eval-hub/eval-hub/actions/workflows/ci.yml)
 [![golangci-lint](https://github.com/eval-hub/eval-hub/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/eval-hub/eval-hub/actions/workflows/golangci-lint.yml)
 [![codecov](https://codecov.io/github/eval-hub/eval-hub/graph/badge.svg?token=LHJACCNC9A)](https://codecov.io/github/eval-hub/eval-hub)
 [![TrustyAI Operator ConfigMap Sync](https://github.com/eval-hub/eval-hub/actions/workflows/check-trustyai-service-operator-configmap-sync.yml/badge.svg)](https://github.com/eval-hub/eval-hub/actions/workflows/check-trustyai-service-operator-configmap-sync.yml)
@@ -214,6 +216,14 @@ make test-coverage          # generate coverage.html
 make lint                   # go vet
 make fmt                    # go fmt
 ```
+
+For local post-processing, the runtime launches the real adapter from a sibling
+`../eval-hub-contrib/adapters/evalhub-post-processor` checkout. Install that
+adapter's `requirements.txt` in its `.venv` before starting EvalHub from this
+repository root. For another checkout or Python environment, set
+`EVALHUB_POST_PROCESSING_LOCAL_COMMAND` to the command that runs its `main.py`.
+The adapter also needs a reachable callback service and access to the referenced
+data; see the adapter's README for local setup.
 
 Run a single test:
 

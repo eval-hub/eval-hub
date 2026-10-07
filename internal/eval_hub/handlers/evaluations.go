@@ -17,9 +17,11 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serialization"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/internal/otel"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -191,28 +193,81 @@ func ValidateReadOnlyResolvedSHA(cfg *api.EvaluationJobConfig) error {
 
 // HandleCreateEvaluation handles POST /api/v1/evaluations/jobs
 func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
-	storage := h.getStorage(ctx)
-
 	logging.LogRequestStarted(ctx)
-
-	id := common.GUID()
-
+	bodyBytes, err := req.BodyAsBytes()
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
 	evaluation := &api.EvaluationJobConfig{}
+	if err := serialization.Unmarshal(h.validate, ctx, bodyBytes, evaluation); err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+	job, err := h.createEvaluationJob(ctx, evaluation)
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+	w.WriteJSON(job, 202)
+}
+
+// createEvaluationJob validates, persists, and launches an already decoded job.
+// HTTP decoding and response formatting belong to the calling API handler.
+func (h *Handlers) createEvaluationJob(ctx *executioncontext.ExecutionContext, evaluation *api.EvaluationJobConfig) (*api.EvaluationJobResource, error) {
+	id := common.GUID()
+	collection, benchmarks, err := h.prepareEvaluationJob(ctx, evaluation, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
+			return h.validateBenchmarkReferences(ctx.WithContext(runtimeCtx), benchmarks)
+		},
+		"validation",
+		"validate-benchmark-references",
+		"job.id", id,
+	); err != nil {
+		return nil, err
+	}
+	if err := h.validatePreparedEvaluation(ctx, evaluation, benchmarks, id); err != nil {
+		return nil, err
+	}
+	return h.createPreparedEvaluationJob(ctx, evaluation, collection, benchmarks, id)
+}
+
+// createPostProcessingEvaluationJob creates a job from the dedicated
+// post-processing endpoint. Only this server-controlled path may execute the
+// internal adapter without a provider catalog entry.
+func (h *Handlers) createPostProcessingEvaluationJob(ctx *executioncontext.ExecutionContext, evaluation *api.EvaluationJobConfig) (*api.EvaluationJobResource, error) {
+	if !postprocessing.IsPostProcessingJob(evaluation) {
+		return nil, fmt.Errorf("invalid internal post-processing job configuration")
+	}
+	id := common.GUID()
+	collection, benchmarks, err := h.prepareEvaluationJob(ctx, evaluation, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := h.validatePreparedEvaluation(ctx, evaluation, benchmarks, id); err != nil {
+		return nil, err
+	}
+	return h.createPreparedEvaluationJob(ctx, evaluation, collection, benchmarks, id)
+}
+
+func (h *Handlers) prepareEvaluationJob(
+	ctx *executioncontext.ExecutionContext,
+	evaluation *api.EvaluationJobConfig,
+	id string,
+) (*api.CollectionResource, []api.EvaluationBenchmarkConfig, error) {
+	storage := h.getStorage(ctx)
 	var collection *api.CollectionResource
 	var benchmarks []api.EvaluationBenchmarkConfig
 
 	err := h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			// get the body bytes from the context
-			bodyBytes, err := req.BodyAsBytes()
-			if err != nil {
-				return err
-			}
-			err = serialization.Unmarshal(h.validate, ctx.WithContext(runtimeCtx), bodyBytes, evaluation)
-			if err != nil {
-				return err
-			}
+			var err error
 			if evaluation.Collection != nil && evaluation.Collection.ID != "" {
 				collection, err = storage.WithContext(runtimeCtx).GetCollection(evaluation.Collection.ID)
 				if err != nil {
@@ -233,9 +288,28 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 			if err := ValidateReadOnlyResolvedSHA(evaluation); err != nil {
 				return err
 			}
-			if err := h.validateBenchmarkReferences(ctx, benchmarks); err != nil {
-				return err
-			}
+			return nil
+		},
+		"validation",
+		"resolve-evaluation-benchmarks",
+		"job.id", id,
+	)
+
+	if err != nil {
+		return nil, nil, err
+	}
+	return collection, benchmarks, nil
+}
+
+func (h *Handlers) validatePreparedEvaluation(
+	ctx *executioncontext.ExecutionContext,
+	evaluation *api.EvaluationJobConfig,
+	benchmarks []api.EvaluationBenchmarkConfig,
+	id string,
+) error {
+	return h.withSpan(
+		ctx,
+		func(runtimeCtx context.Context) error {
 			if h.runtime != nil {
 				if err := h.runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).ValidateHardwareProfiles(
 					benchmarksWithHardwareConfigFallback(benchmarks, evaluation.HardwareConfig),
@@ -245,6 +319,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 			}
 			if (evaluation.Model != nil) &&
 				(strings.TrimSpace(evaluation.Model.URL) == "") &&
+				!postprocessing.IsPostProcessingJob(evaluation) &&
 				!allBenchmarksHavePreRecordedData(benchmarks) {
 				return serviceerrors.NewServiceError(messages.ModelURLRequired)
 			}
@@ -254,16 +329,22 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		"validate-evaluation-job",
 		"job.id", id,
 	)
+}
 
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
+func (h *Handlers) createPreparedEvaluationJob(
+	ctx *executioncontext.ExecutionContext,
+	evaluation *api.EvaluationJobConfig,
+	collection *api.CollectionResource,
+	benchmarks []api.EvaluationBenchmarkConfig,
+	id string,
+) (*api.EvaluationJobResource, error) {
+	storage := h.getStorage(ctx)
 
 	ApplyHardwareConfigQueueDefaults(evaluation)
 
 	mlflowExperimentID := ""
 	mlflowExperimentURL := ""
+	var err error
 	if h.mlflowClient != nil {
 		err = h.withSpan(
 			ctx,
@@ -282,13 +363,11 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 			"job.id", id,
 		)
 		if err != nil {
-			w.Error(err, ctx.RequestID)
-			return
+			return nil, err
 		}
 	} else if mlflow.HasExperimentName(evaluation) {
 		// MLflow not configured but experiment name provided in the input
-		w.Error(serviceerrors.NewServiceError(messages.MLFlowRequiredForExperiment), ctx.RequestID)
-		return
+		return nil, serviceerrors.NewServiceError(messages.MLFlowRequiredForExperiment)
 	}
 
 	var job *api.EvaluationJobResource
@@ -333,8 +412,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 	)
 
 	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
+		return nil, err
 	}
 
 	tenant := ctx.Tenant.String()
@@ -348,7 +426,7 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 	metrics.IncActiveJobs(ctx.Ctx, tenant)
 	metrics.IncQueueDepth(ctx.Ctx, tenant)
 
-	_ = h.withSpan(
+	err = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
 			if h.runtime != nil {
@@ -369,7 +447,6 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 						recordEvaluationJobTerminalTransition(ctx.Ctx, api.OverallStatePending, state, providerIDs, collectionID, job.Resource.CreatedAt, tenant)
 					}
 					// return the first error encountered
-					w.Error(runErr, ctx.RequestID)
 					return runErr
 				}
 			} else {
@@ -382,7 +459,6 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 				}
 				job.Status.Message = message
 			}
-			w.WriteJSON(job, 202)
 			return nil
 		},
 		"runtime",
@@ -391,6 +467,10 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 		"job.experiment_id", mlflowExperimentID,
 		"job.experiment_url", mlflowExperimentURL,
 	)
+	if err != nil {
+		return nil, err
+	}
+	return job, nil
 }
 
 func (h *Handlers) createRuntimeStorage(ctx *executioncontext.ExecutionContext, jobContext context.Context) *runtimeStorage {
@@ -430,6 +510,13 @@ func (h *Handlers) validateBenchmarkReferences(ctx *executioncontext.ExecutionCo
 	storage := h.getStorage(ctx)
 
 	for _, benchmark := range benchmarks {
+		if workloads.IsInternalProviderID(benchmark.ProviderID) {
+			return serviceerrors.NewServiceError(
+				messages.ResourceDoesNotExist,
+				"Type", "provider",
+				"ResourceID", benchmark.ProviderID,
+			)
+		}
 		provider, err := storage.GetProvider(benchmark.ProviderID)
 		if err != nil {
 			ctx.Logger.Error("Failed to get provider whilst validating benchmark", "benchmark_id", benchmark.ID, "provider_id", benchmark.ProviderID, "error", err)

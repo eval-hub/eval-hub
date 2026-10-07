@@ -37,15 +37,43 @@ func formatValidationError(errs validator.ValidationErrors) string {
 	}
 	e := errs[0]
 	switch e.Tag() {
+	case "required":
+		if e.Field() == "operations" || e.Field() == "confidence_interval" {
+			return "operations must contain at least one operation"
+		}
+		if e.Field() == "results_data_ref" {
+			return "results_data_ref is required"
+		}
+	case "operation_order_matches_operations":
+		return "operation_order must list each configured operation exactly once"
 	case "oneof":
 		return fmt.Sprintf("%s must be one of: %s", e.Field(), strings.ReplaceAll(e.Param(), " ", ", "))
 	case "excluded_with":
-		if isTestDataRefSourceField(e.Field()) {
+		if refName := postProcessingDataRefName(e); refName != "" {
+			if refName == "calibration_data_ref" {
+				return "calibration_data_ref: exactly one of s3, pvc, git, or hf must be set"
+			}
+			return fmt.Sprintf("%s: exactly one data source must be set", refName)
+		}
+		if isTestDataRefSourceField(e.Field()) && strings.Contains(e.StructNamespace(), "TestDataRef.") {
 			return "test_data_ref: exactly one of s3, pvc, git, or hf must be set"
 		}
+		if e.Field() == "primary_score" {
+			return "primary_score is not allowed when results_data_ref.eval_job is set"
+		}
 	case "required_without_all":
-		if isTestDataRefSourceField(e.Field()) {
+		if refName := postProcessingDataRefName(e); refName != "" {
+			if refName == "calibration_data_ref" {
+				return "calibration_data_ref: one of s3, pvc, git, or hf must be set"
+			}
+			return fmt.Sprintf("%s: exactly one data source must be set", refName)
+		}
+		if isTestDataRefSourceField(e.Field()) && strings.Contains(e.StructNamespace(), "TestDataRef.") {
 			return "test_data_ref: one of s3, pvc, git, or hf must be set"
+		}
+	case "required_without":
+		if e.Field() == "primary_score" {
+			return "primary_score is required when results_data_ref.eval_job is not set"
 		}
 	case "category_or_domains":
 		return "either category or a non-empty domains array must be provided"
@@ -60,6 +88,18 @@ func formatValidationError(errs validator.ValidationErrors) string {
 		}
 	}
 	return errs.Error()
+}
+
+func postProcessingDataRefName(e validator.FieldError) string {
+	namespace := e.StructNamespace()
+	switch {
+	case strings.Contains(namespace, ".ResultsDataRef."):
+		return "results_data_ref"
+	case strings.Contains(namespace, ".CalibrationDataRef["):
+		return "calibration_data_ref"
+	default:
+		return ""
+	}
 }
 
 func isTestDataRefSourceField(field string) bool {
