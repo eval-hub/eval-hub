@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"strings"
 
+	"github.com/eval-hub/eval-hub/internal/collectiondesign"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -39,9 +39,6 @@ const (
 	ArgNameGuidelineMeasure        = "measure"
 	ArgNameGuidelineIterate        = "iterate"
 	ArgNameGuidelineStartingPrompt = "starting_prompt"
-
-	defaultStrictness    = "moderate"
-	defaultMaxBenchmarks = 12
 )
 
 // For now the yaml files are embedded here, but in the future we should load them from config maps if needed
@@ -301,8 +298,6 @@ func compareRunsHandler(result *promptResultConfig, logger *slog.Logger) mcp.Pro
 	}
 }
 
-var validStrictness = []string{"lenient", "moderate", "strict"}
-
 func designCollectionHandler(result *promptResultConfig, ds EvalHubDiscovery, logger *slog.Logger) mcp.PromptHandler {
 	return func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 		log := requestLogger(ctx, logger)
@@ -320,7 +315,7 @@ func designCollectionHandler(result *promptResultConfig, ds EvalHubDiscovery, lo
 			ArgNameStrictness, strictness,
 		)
 
-		data, err := gatherDesignCollection(ds, result, goal, providerFilter, maxBenchmarksRaw, strictness)
+		data, err := gatherDesignCollection(ctx, ds, result, goal, providerFilter, maxBenchmarksRaw, strictness)
 		if err != nil {
 			return nil, err
 		}
@@ -361,66 +356,30 @@ type designCollectionData struct {
 	Examples       []collectionExample
 }
 
+type benchmarkCatalogEntry = collectiondesign.BenchmarkCatalogEntry
+type collectionExample = collectiondesign.CollectionExample
+
 // gatherDesignCollection validates the design inputs and collects the benchmark
 // catalog and reference collections shared by the design_collection prompt and
 // tool. It returns structured data, or an error for invalid input or an empty
 // catalog. maxBenchmarksRaw is accepted as a string so both callers (prompt
 // arguments and tool input) can share parsing.
-func gatherDesignCollection(ds EvalHubDiscovery, result *promptResultConfig, goal, providerFilter, maxBenchmarksRaw, strictness string) (*designCollectionData, error) {
-	goal = strings.TrimSpace(goal)
-	providerFilter = strings.TrimSpace(providerFilter)
-	maxBenchmarksRaw = strings.TrimSpace(maxBenchmarksRaw)
-	strictness = strings.TrimSpace(strictness)
-
-	if goal == "" {
-		return nil, fmt.Errorf("%s is required", ArgNameEvaluationGoal)
-	}
-
-	maxBenchmarks := defaultMaxBenchmarks
-	if maxBenchmarksRaw != "" {
-		n, err := strconv.Atoi(maxBenchmarksRaw)
-		if err != nil || n <= 0 {
-			return nil, fmt.Errorf("invalid %s %q; must be a positive integer", ArgNameMaxBenchmarks, maxBenchmarksRaw)
-		}
-		maxBenchmarks = n
-	}
-
-	if strictness == "" {
-		strictness = defaultStrictness
-	} else if !isValidStrictness(strictness) {
-		return nil, fmt.Errorf("invalid %s %q; valid values: %s", ArgNameStrictness, strictness, strings.Join(validStrictness, ", "))
-	}
-
-	benchmarks, err := collectBenchmarkCatalog(ds, providerFilter)
+func gatherDesignCollection(ctx context.Context, ds EvalHubDiscovery, result *promptResultConfig, goal, providerFilter, maxBenchmarksRaw, strictness string) (*designCollectionData, error) {
+	options, err := collectiondesign.ParseOptions(goal, providerFilter, maxBenchmarksRaw, strictness)
 	if err != nil {
-		return nil, fmt.Errorf("fetching benchmark catalog: %w", err)
+		return nil, err
 	}
-	if len(benchmarks) == 0 {
-		if providerFilter != "" {
-			return nil, fmt.Errorf("benchmark catalog is empty for provider filter %q; check that the eval-hub service has these providers loaded", providerFilter)
-		}
-		return nil, fmt.Errorf("benchmark catalog is empty; check that the eval-hub service has providers loaded")
-	}
-
-	examples, err := collectCollectionExamples(ds, providerFilter)
+	catalog, err := collectiondesign.Gather(ctx, collectiondesign.NewClientSource(ds), options)
 	if err != nil {
-		return nil, fmt.Errorf("fetching collection examples: %w", err)
+		return nil, err
 	}
-
-	var optionsParts []string
-	if providerFilter != "" {
-		optionsParts = append(optionsParts, fmt.Sprintf("Provider filter: %s", providerFilter))
-	}
-	optionsParts = append(optionsParts, fmt.Sprintf("Max benchmarks: %s", strconv.Itoa(maxBenchmarks)))
-	optionsParts = append(optionsParts, fmt.Sprintf("Strictness: %s", strictness))
-
 	return &designCollectionData{
-		Description:    replaceTemplateVariables(result.Description, ArgNameEvaluationGoal, goal),
-		Goal:           goal,
-		Strictness:     strictness,
-		OptionsSummary: strings.Join(optionsParts, " | "),
-		Benchmarks:     benchmarks,
-		Examples:       examples,
+		Description:    replaceTemplateVariables(result.Description, ArgNameEvaluationGoal, options.Goal),
+		Goal:           options.Goal,
+		Strictness:     options.Strictness,
+		OptionsSummary: options.Summary(),
+		Benchmarks:     catalog.Benchmarks,
+		Examples:       catalog.Examples,
 	}, nil
 }
 
@@ -434,7 +393,10 @@ func renderDesignCollectionMessages(result *promptResultConfig, d *designCollect
 		"",
 		ArgNameEvaluationGoal, d.Goal,
 		"options_summary", d.OptionsSummary,
-		ArgNameStrictness, d.Strictness,
+		"design_requirements", collectiondesign.Requirements("the AVAILABLE BENCHMARKS catalog below"),
+		"calibration_guidelines", collectiondesign.CalibrationGuidelines(d.Strictness),
+		"domain_signal_mapping", collectiondesign.DomainSignalMapping(),
+		"output_format", collectiondesign.OutputFormat(),
 		"benchmark_catalog", benchmarkCatalog,
 		"collection_examples", collectionExamples,
 	)
@@ -465,129 +427,6 @@ func promptMessagesText(messages []*mcp.PromptMessage) string {
 	return strings.Join(parts, "\n\n")
 }
 
-func isValidStrictness(s string) bool {
-	for _, v := range validStrictness {
-		if s == v {
-			return true
-		}
-	}
-	return false
-}
-
-type benchmarkCatalogEntry struct {
-	ID          string   `json:"id"`
-	ProviderID  string   `json:"provider_id"`
-	Name        string   `json:"name,omitempty"`
-	Description string   `json:"description,omitempty"`
-	Tags        []string `json:"tags,omitempty"`
-	Metrics     []string `json:"metrics,omitempty"`
-}
-
-func collectBenchmarkCatalog(ds EvalHubDiscovery, providerFilter string) ([]benchmarkCatalogEntry, error) {
-	var allowedProviders map[string]struct{}
-	if providerFilter != "" {
-		allowedProviders = make(map[string]struct{})
-		for p := range strings.SplitSeq(providerFilter, ",") {
-			p = strings.TrimSpace(p)
-			if p != "" {
-				allowedProviders[p] = struct{}{}
-			}
-		}
-	}
-
-	providers, err := allProviders(ds)
-	if err != nil {
-		return nil, err
-	}
-
-	entries := make([]benchmarkCatalogEntry, 0)
-	for _, p := range providers {
-		if allowedProviders != nil {
-			if _, ok := allowedProviders[p.Resource.ID]; !ok {
-				continue
-			}
-		}
-		for _, b := range p.Benchmarks {
-			entry := benchmarkCatalogEntry{
-				ID:          b.ID,
-				ProviderID:  p.Resource.ID,
-				Name:        b.Name,
-				Description: b.Description,
-				Tags:        b.Tags,
-			}
-			if len(b.Metrics) > 0 {
-				entry.Metrics = b.Metrics
-			}
-			entries = append(entries, entry)
-		}
-	}
-
-	return entries, nil
-}
-
-type collectionExample struct {
-	ID           string                          `json:"id"`
-	Name         string                          `json:"name"`
-	Domains      []string                        `json:"domains,omitempty"`
-	Description  string                          `json:"description,omitempty"`
-	Tags         []string                        `json:"tags,omitempty"`
-	PassCriteria *api.PassCriteria               `json:"pass_criteria,omitempty"`
-	Benchmarks   []api.CollectionBenchmarkConfig `json:"benchmarks"`
-}
-
-func collectCollectionExamples(ds EvalHubDiscovery, providerFilter string) ([]collectionExample, error) {
-	var allowedProviders map[string]struct{}
-	if providerFilter != "" {
-		allowedProviders = make(map[string]struct{})
-		for p := range strings.SplitSeq(providerFilter, ",") {
-			p = strings.TrimSpace(p)
-			if p != "" {
-				allowedProviders[p] = struct{}{}
-			}
-		}
-	}
-
-	collections, err := allCollections(ds)
-	if err != nil {
-		return nil, err
-	}
-
-	examples := make([]collectionExample, 0)
-	for _, c := range collections {
-		if c.Resource.Owner != "system" {
-			continue
-		}
-		benchmarks := c.Benchmarks
-		if allowedProviders != nil {
-			benchmarks = filterBenchmarksByProvider(benchmarks, allowedProviders)
-			if len(benchmarks) == 0 {
-				continue
-			}
-		}
-		examples = append(examples, collectionExample{
-			ID:           c.Resource.ID,
-			Name:         c.Name,
-			Domains:      c.Domains,
-			Description:  c.Description,
-			Tags:         c.Tags,
-			PassCriteria: c.PassCriteria,
-			Benchmarks:   benchmarks,
-		})
-	}
-
-	return examples, nil
-}
-
-func filterBenchmarksByProvider(benchmarks []api.CollectionBenchmarkConfig, allowed map[string]struct{}) []api.CollectionBenchmarkConfig {
-	var filtered []api.CollectionBenchmarkConfig
-	for _, b := range benchmarks {
-		if _, ok := allowed[b.ProviderID]; ok {
-			filtered = append(filtered, b)
-		}
-	}
-	return filtered
-}
-
 // providerLister is the subset needed to page through providers. Both
 // EvalHubDiscovery and EvalHubToolClient satisfy it, so allProviders can be
 // shared by the prompt/tool discovery paths and the benchmark tool handlers.
@@ -601,23 +440,6 @@ func allProviders(ds providerLister) ([]api.ProviderResource, error) {
 	var all []api.ProviderResource
 	for offset := 0; ; offset += pageSize {
 		list, err := ds.ListProviders(evalhubclient.WithLimit(pageSize), evalhubclient.WithOffset(offset))
-		if err != nil {
-			return nil, err
-		}
-		all = append(all, list.Items...)
-		if len(all) >= list.TotalCount || len(list.Items) < pageSize {
-			break
-		}
-	}
-	return all, nil
-}
-
-// allCollections paginates through all collection pages from the discovery source.
-func allCollections(ds EvalHubDiscovery) ([]api.CollectionResource, error) {
-	pageSize := evalhubclient.DefaultListPageLimit
-	var all []api.CollectionResource
-	for offset := 0; ; offset += pageSize {
-		list, err := ds.ListCollections(evalhubclient.WithLimit(pageSize), evalhubclient.WithOffset(offset))
 		if err != nil {
 			return nil, err
 		}

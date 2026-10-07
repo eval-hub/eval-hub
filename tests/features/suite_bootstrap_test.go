@@ -627,6 +627,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the response should not contain "([^"]*)"$`, tc.theResponseShouldNotContain)
 	ctx.Step(`^the response should be JSON$`, tc.theResponseShouldBeJSON)
 	ctx.Step(`^the response should contain Prometheus metrics$`, tc.theResponseShouldContainPrometheusMetrics)
+	ctx.Step(`^service info metadata matches configured environment variables$`, tc.infoMetadataMatchesConfiguredEnvironment)
+	ctx.Step(`^the configured tenant queue should be returned$`, tc.configuredTenantQueueShouldBeReturned)
 	ctx.Step(`^the metrics should include "([^"]*)"$`, tc.theMetricsShouldInclude)
 	ctx.Step(`^the metrics should show request count for "([^"]*)"$`, tc.theMetricsShouldShowRequestCountFor)
 	// Responses
@@ -640,6 +642,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the response should not contain the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldNotContainAtJSONPath)
 	ctx.Step(`^the response should not equal the value "([^"]*)" at path "([^"]*)"$`, tc.theResponseShouldNotEqualAtJSONPath)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLength)
+	ctx.Step(`^the string at path "([^"]*)" in the response should have length (\d+)$`, tc.theStringAtPathInResponseShouldHaveLength)
+	ctx.Step(`^the response at path "([^"]*)" should not be empty$`, tc.theValueIsNotEmpty)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length "([^"]*)"$`, tc.theArrayAtPathInResponseShouldHaveLength)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least (\d+)$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
 	ctx.Step(`^the array at path "([^"]*)" in the response should have length at least "([^"]*)"$`, tc.theArrayAtPathInResponseShouldHaveLengthAtLeast)
@@ -690,4 +694,10 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 
 	// Kubernetes lifecycle signal steps (event emission and evaluation-phase label)
 	InitializeLifecycleSignalSteps(ctx, tc)
+
+	// Hugging Face credential-isolation steps (Kubernetes Job template inspection)
+	InitializeHFSecuritySteps(ctx, tc)
+
+	// Hugging Face sub-path staging steps (live /test_data inspection)
+	InitializeHFSubpathSteps(ctx, tc)
 }

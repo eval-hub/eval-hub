@@ -52,4 +52,10 @@ type Runtime interface {
 	NotifyThresholdViolation(ctx context.Context, evaluation *api.EvaluationJobResource, benchmarkIndex int, metricName string, actualValue, threshold float32)
 }
 
+// QueueLister is an optional runtime capability for listing scheduling queues available to a
+// tenant. Runtimes without cluster queue discovery do not implement it.
+type QueueLister interface {
+	ListQueues(ctx context.Context, namespace string) ([]api.QueueInfo, error)
+}
+
 // This interface must be decoupled from the service HTTP layer

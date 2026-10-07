@@ -644,7 +644,7 @@ func designCollectionToolHandler(ds EvalHubDiscovery, result *promptResultConfig
 			ArgNameStrictness, input.Strictness,
 		)
 
-		data, err := gatherDesignCollection(ds, result, input.EvaluationGoal, input.ProviderFilter, maxBenchmarksRaw, input.Strictness)
+		data, err := gatherDesignCollection(ctx, ds, result, input.EvaluationGoal, input.ProviderFilter, maxBenchmarksRaw, input.Strictness)
 		if err != nil {
 			log.Error("design_collection tool failed", "error", err)
 			return errorResult(err.Error()), DesignCollectionOutput{}, nil
