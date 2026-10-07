@@ -180,16 +180,16 @@ func TestK8sRuntimeName(t *testing.T) {
 	}
 }
 
-func TestPostProcessingProviderComesFromServiceConfig(t *testing.T) {
-	runtimeConfig := &api.Runtime{K8s: &api.K8sRuntime{Image: "post-processor:latest", Entrypoint: []string{"python", "main.py"}}}
+func TestPostProcessingProviderUsesImageEnvironment(t *testing.T) {
+	t.Setenv("EVALHUB_POST_PROCESSING_IMAGE", "post-processor:custom")
 	benchmark := api.EvaluationBenchmarkConfig{Ref: api.Ref{ID: postprocessing.BenchmarkID}, ProviderID: postprocessing.ProviderID}
 	evaluation := &api.EvaluationJobResource{EvaluationJobConfig: api.EvaluationJobConfig{Benchmarks: []api.EvaluationBenchmarkConfig{benchmark}}}
 
-	provider, err := shared.ProviderForBenchmark(evaluation, benchmark, runtimeConfig, shared.ProviderRuntimeKubernetes, nil)
+	provider, err := shared.ProviderForBenchmark(evaluation, benchmark, nil)
 	if err != nil {
 		t.Fatalf("ProviderForBenchmark failed without catalog storage: %v", err)
 	}
-	if provider.Resource.ID != postprocessing.ProviderID || provider.Runtime.K8s.Image != "post-processor:latest" {
+	if provider.Resource.ID != postprocessing.ProviderID || provider.Runtime.K8s.Image != "post-processor:custom" {
 		t.Fatalf("unexpected runtime provider: %#v", provider)
 	}
 }

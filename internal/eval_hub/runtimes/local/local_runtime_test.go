@@ -305,23 +305,15 @@ func TestNewLocalRuntime(t *testing.T) {
 	}
 }
 
-func TestPostProcessingProviderComesFromServiceConfig(t *testing.T) {
-	runtimeConfig := &api.Runtime{Local: &api.LocalRuntime{Command: "python post_processor.py"}}
-	rt, err := NewLocalRuntime(discardLogger(), &config.Config{
-		PostProcessing: &config.PostProcessingConfig{Runtime: runtimeConfig},
-	})
-	if err != nil {
-		t.Fatalf("NewLocalRuntime failed: %v", err)
-	}
-	localRuntime := rt.(*LocalRuntime)
+func TestPostProcessingProviderUsesLocalCommand(t *testing.T) {
 	benchmark := api.EvaluationBenchmarkConfig{Ref: api.Ref{ID: postprocessing.BenchmarkID}, ProviderID: postprocessing.ProviderID}
 	evaluation := &api.EvaluationJobResource{EvaluationJobConfig: api.EvaluationJobConfig{Benchmarks: []api.EvaluationBenchmarkConfig{benchmark}}}
 
-	provider, err := shared.ProviderForBenchmark(evaluation, benchmark, localRuntime.postProcessingRuntime, shared.ProviderRuntimeLocal, nil)
+	provider, err := shared.ProviderForBenchmark(evaluation, benchmark, nil)
 	if err != nil {
 		t.Fatalf("ProviderForBenchmark failed without catalog storage: %v", err)
 	}
-	if provider.Resource.ID != postprocessing.ProviderID || provider.Runtime.Local.Command != "python post_processor.py" {
+	if provider.Resource.ID != postprocessing.ProviderID || provider.Runtime.Local.Command != "python tests/features/test_data/runtime/main.py" {
 		t.Fatalf("unexpected runtime provider: %#v", provider)
 	}
 }

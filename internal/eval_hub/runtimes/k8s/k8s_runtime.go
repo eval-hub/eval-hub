@@ -191,15 +191,9 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 ) error {
 	benchmarkID := benchmark.ID
 	// Provider/benchmark validation should be handled during creation.
-	var postProcessingRuntime *api.Runtime
-	if r.serviceConfig != nil && r.serviceConfig.PostProcessing != nil {
-		postProcessingRuntime = r.serviceConfig.PostProcessing.Runtime
-	}
 	provider, err := shared.ProviderForBenchmark(
 		evaluation,
 		*benchmark,
-		postProcessingRuntime,
-		shared.ProviderRuntimeKubernetes,
 		storage,
 	)
 	if err != nil {
