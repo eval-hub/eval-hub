@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -14,6 +15,9 @@ type noopStorage struct{}
 
 func (noopStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return noopStorage{} }
 func (noopStorage) WithContext(_ context.Context) abstractions.Storage {
+	return noopStorage{}
+}
+func (noopStorage) WithContextAndWorkloadType(_ context.Context, _ workloads.Type) abstractions.Storage {
 	return noopStorage{}
 }
 func (noopStorage) WithTenant(_ api.Tenant) abstractions.Storage { return noopStorage{} }

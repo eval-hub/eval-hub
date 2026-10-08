@@ -7,6 +7,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	se "github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -29,7 +30,7 @@ func (s *sqlStorage) linkCompletedPostProcessing(txn *sql.Tx, job *api.Evaluatio
 	if sourceID == job.Resource.ID {
 		return se.NewServiceError(messages.RequestValidationFailed, "Error", "post-processing cannot reference itself")
 	}
-	source, err := s.getEvaluationJobTransactionalForUpdate(txn, sourceID)
+	source, err := s.getEvaluationJobTransactionalForUpdateWithType(txn, sourceID, workloads.Evaluation)
 	if err != nil {
 		var serviceErr *se.ServiceError
 		if errors.As(err, &serviceErr) && serviceErr.MessageCode() == messages.ResourceNotFound {
@@ -53,4 +54,43 @@ func (s *sqlStorage) linkCompletedPostProcessing(txn *sql.Tx, job *api.Evaluatio
 		return err
 	}
 	return nil
+}
+
+// unlinkDeletedPostProcessingJob clears the referenced evaluation job's link
+// when it points to the post-processing job being deleted.
+func (s *sqlStorage) unlinkDeletedPostProcessingJob(txn *sql.Tx, postProcessingJob *api.EvaluationJobResource) error {
+	if !postprocessing.IsPostProcessingJob(&postProcessingJob.EvaluationJobConfig) {
+		return nil
+	}
+	operations, err := postprocessing.OperationsFromJob(&postProcessingJob.EvaluationJobConfig)
+	if err != nil {
+		return err
+	}
+	operation := operations.ConfidenceInterval
+	if operation == nil || operation.ResultsDataRef == nil || operation.ResultsDataRef.EvalJob == nil {
+		return nil
+	}
+
+	sourceEvaluationJobID := operation.ResultsDataRef.EvalJob.ID
+	if sourceEvaluationJobID == postProcessingJob.Resource.ID {
+		return nil
+	}
+	sourceEvaluationJob, err := s.getEvaluationJobTransactionalForUpdateWithType(txn, sourceEvaluationJobID, workloads.Evaluation)
+	if err != nil {
+		var serviceErr *se.ServiceError
+		if errors.As(err, &serviceErr) && serviceErr.MessageCode() == messages.ResourceNotFound {
+			return nil
+		}
+		return err
+	}
+	if sourceEvaluationJob.Results == nil || sourceEvaluationJob.Results.PostProcessingRef == nil || sourceEvaluationJob.Results.PostProcessingRef.ID != postProcessingJob.Resource.ID {
+		return nil
+	}
+
+	sourceEvaluationJob.Results.PostProcessingRef = nil
+	return s.updateEvaluationJobTxn(txn, sourceEvaluationJobID, sourceEvaluationJob.Status.State, &EvaluationJobEntity{
+		Config:  &sourceEvaluationJob.EvaluationJobConfig,
+		Status:  sourceEvaluationJob.Status,
+		Results: sourceEvaluationJob.Results,
+	})
 }

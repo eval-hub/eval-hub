@@ -87,15 +87,22 @@ func (s *sqlStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, er
 }
 
 func (s *sqlStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api.EvaluationJobResource, error) {
-	return s.scanEvaluationJobTransactional(txn, id, false)
+	return s.scanEvaluationJobTransactional(txn, id, false, workloads.TypeFromContext(s.ctx))
 }
 
 func (s *sqlStorage) getEvaluationJobTransactionalForUpdate(txn *sql.Tx, id string) (*api.EvaluationJobResource, error) {
-	return s.scanEvaluationJobTransactional(txn, id, true)
+	return s.scanEvaluationJobTransactional(txn, id, true, workloads.TypeFromContext(s.ctx))
 }
 
-func (s *sqlStorage) scanEvaluationJobTransactional(txn *sql.Tx, id string, forUpdate bool) (*api.EvaluationJobResource, error) {
-	query := shared.EntityQuery{Resource: api.Resource{ID: id, Tenant: s.tenant}}
+func (s *sqlStorage) getEvaluationJobTransactionalForUpdateWithType(txn *sql.Tx, id string, workloadType workloads.Type) (*api.EvaluationJobResource, error) {
+	return s.scanEvaluationJobTransactional(txn, id, true, workloadType)
+}
+
+func (s *sqlStorage) scanEvaluationJobTransactional(txn *sql.Tx, id string, forUpdate bool, workloadType workloads.Type) (*api.EvaluationJobResource, error) {
+	query := shared.EntityQuery{
+		Resource:     api.Resource{ID: id, Tenant: s.tenant},
+		WorkloadType: workloadType,
+	}
 	var selectQuery string
 	var selectArgs, queryArgs []any
 	if forUpdate {
@@ -133,26 +140,35 @@ func (s *sqlStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstr
 	return listEntities[api.EvaluationJobResource](s, txn, shared.TableEvaluations, filter)
 }
 
+// DeleteEvaluationJob deletes the evaluation job identified by id. For a
+// post-processing job, its source evaluation's matching post_processing_ref is
+// cleared in the same transaction before the post-processing job is deleted.
 func (s *sqlStorage) DeleteEvaluationJob(id string) error {
-	// Build the DELETE query
-	deleteQuery, args := s.statementsFactory.CreateDeleteEntityStatement(s.tenant, shared.TableEvaluations, id)
+	return s.withTransaction("delete evaluation job", id, func(txn *sql.Tx) error {
+		jobToDelete, err := s.getEvaluationJobTransactionalForUpdate(txn, id)
+		if err != nil {
+			return err
+		}
+		if err := s.unlinkDeletedPostProcessingJob(txn, jobToDelete); err != nil {
+			return err
+		}
 
-	// Execute the DELETE query
-	result, err := s.exec(nil, deleteQuery, args...)
-	if err != nil {
-		s.logger.Error("Failed to delete evaluation job", "error", err, "id", id)
-		return se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error()))
-	}
-	rows, rowsErr := result.RowsAffected()
-	if rowsErr != nil {
-		s.logger.Error("Failed to determine rows affected", "error", rowsErr, "id", id)
-		return se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", rowsErr.Error()))
-	}
-	if rows == 0 {
-		s.logger.Debug("Evaluation job not found", "id", id)
-		return se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
-	}
-	s.logger.Info("Deleted evaluation job", "id", id)
-
-	return nil
+		deleteQuery, args := s.statementsFactory.CreateDeleteEntityStatement(s.tenant, shared.TableEvaluations, id)
+		result, err := s.exec(txn, deleteQuery, args...)
+		if err != nil {
+			s.logger.Error("Failed to delete evaluation job", "error", err, "id", id)
+			return se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error()))
+		}
+		rows, rowsErr := result.RowsAffected()
+		if rowsErr != nil {
+			s.logger.Error("Failed to determine rows affected", "error", rowsErr, "id", id)
+			return se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", rowsErr.Error()))
+		}
+		if rows == 0 {
+			s.logger.Debug("Evaluation job not found", "id", id)
+			return se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
+		}
+		s.logger.Info("Deleted evaluation job", "id", id)
+		return nil
+	})
 }

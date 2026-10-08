@@ -180,6 +180,10 @@ func TestCreateCountEntitiesStatement(t *testing.T) {
 	if !strings.Contains(stmt, "SELECT COUNT(*)") {
 		t.Errorf("expected COUNT(*), got: %s", stmt)
 	}
+	evaluationStmt, _ := f.CreateCountEntitiesStatement("t1", shared.TableEvaluations, map[string]any{})
+	if !strings.Contains(evaluationStmt, "workload_type = 'evaluation'") {
+		t.Errorf("evaluation-job count should exclude post-processing jobs, got: %s", evaluationStmt)
+	}
 }
 
 func TestCreateListEntitiesStatement(t *testing.T) {
@@ -187,6 +191,10 @@ func TestCreateListEntitiesStatement(t *testing.T) {
 	stmt, _ := f.CreateListEntitiesStatement("t1", shared.TableCollections, 10, 0, map[string]any{}, "")
 	if !strings.Contains(stmt, "ORDER BY id DESC") {
 		t.Errorf("default statement should preserve id ordering, got: %s", stmt)
+	}
+	evaluationStmt, _ := f.CreateListEntitiesStatement("t1", shared.TableEvaluations, 10, 0, map[string]any{}, "")
+	if !strings.Contains(evaluationStmt, "workload_type = 'evaluation'") {
+		t.Errorf("evaluation-job list should exclude post-processing jobs, got: %s", evaluationStmt)
 	}
 
 	curatedStmt, _ := f.CreateListEntitiesStatement("t1", shared.TableCollections, 10, 0, map[string]any{}, "curation_order")
@@ -208,6 +216,72 @@ func TestCreateCollectionGetEntityForUpdateStatement(t *testing.T) {
 	stmt, _, _ := f.CreateCollectionGetEntityForUpdateStatement(query)
 	if !strings.HasSuffix(stmt, "FOR UPDATE;") {
 		t.Errorf("expected FOR UPDATE statement, got %q", stmt)
+	}
+}
+
+func TestCreateEvaluationGetEntityStatementWorkloadFilters(t *testing.T) {
+	factory := NewStatementsFactory(slog.Default())
+	tests := []struct {
+		name         string
+		query        shared.EntityQuery
+		wantContains []string
+		wantArgs     []any
+	}{
+		{
+			name:         "unscoped lookup",
+			query:        shared.EntityQuery{Resource: api.Resource{ID: "job-1"}},
+			wantContains: []string{"WHERE id = $1;"},
+			wantArgs:     []any{"job-1"},
+		},
+		{
+			name:         "tenant scoped lookup",
+			query:        shared.EntityQuery{Resource: api.Resource{ID: "job-1", Tenant: "tenant-a"}},
+			wantContains: []string{"WHERE id = $1 AND tenant_id = $2;"},
+			wantArgs:     []any{"job-1", "tenant-a"},
+		},
+		{
+			name:         "workload scoped lookup",
+			query:        shared.EntityQuery{Resource: api.Resource{ID: "job-1"}, WorkloadType: workloads.PostProcessing},
+			wantContains: []string{"WHERE id = $1 AND workload_type = $2;"},
+			wantArgs:     []any{"job-1", string(workloads.PostProcessing)},
+		},
+		{
+			name:         "tenant and workload scoped lookup",
+			query:        shared.EntityQuery{Resource: api.Resource{ID: "job-1", Tenant: "tenant-a"}, WorkloadType: workloads.Evaluation},
+			wantContains: []string{"WHERE id = $1 AND tenant_id = $2 AND workload_type = $3;"},
+			wantArgs:     []any{"job-1", "tenant-a", string(workloads.Evaluation)},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			statement, args, _ := factory.CreateEvaluationGetEntityStatement(&test.query)
+			for _, fragment := range test.wantContains {
+				if !strings.Contains(statement, fragment) {
+					t.Errorf("statement %q does not contain %q", statement, fragment)
+				}
+			}
+			if len(args) != len(test.wantArgs) {
+				t.Fatalf("args = %#v, want %d args", args, len(test.wantArgs))
+			}
+			for i, want := range test.wantArgs {
+				if i == 0 {
+					if got, ok := args[i].(*string); !ok || *got != want {
+						t.Errorf("id arg = %#v, want %q", args[i], want)
+					}
+					continue
+				}
+				if args[i] != want {
+					t.Errorf("arg %d = %#v, want %#v", i, args[i], want)
+				}
+			}
+			updateStatement, updateArgs, _ := factory.CreateEvaluationGetEntityForUpdateStatement(&test.query)
+			if !strings.HasSuffix(updateStatement, "FOR UPDATE;") {
+				t.Errorf("FOR UPDATE statement = %q", updateStatement)
+			}
+			if len(updateArgs) != len(args) {
+				t.Errorf("FOR UPDATE args = %#v, want %#v", updateArgs, args)
+			}
+		})
 	}
 }
 
