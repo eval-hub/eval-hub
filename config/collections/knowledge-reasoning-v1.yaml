@@ -1,4 +1,5 @@
----
+id: knowledge-reasoning-v1
+curation_order: 1
 name: Knowledge & Reasoning v1
 description: >
   Evaluates closed-book, text-only knowledge and reasoning across difficult
@@ -71,59 +72,3 @@ benchmarks:
       num_fewshot: 0
       num_samples: 3
       pass_at_k: 1
-
-custom:
-  design:
-    tool: design_collection
-    date: '2026-10-07'
-    evaluation_goal: >
-      Closed-book scientific, academic and mathematical reasoning from
-      parametric knowledge. Future expansion includes reasoning over supplied
-      tables and structured data.
-    strictness: moderate
-    candidate_benchmark_count: 334
-
-  scope:
-    target: bare_model
-    agent_harness: false
-    tool_execution: false
-    multi_step_scaffolding: false
-    browsing: false
-    retrieval_execution: false
-    post_response_scoring_allowed: true
-
-  coverage_status: partial
-
-  coverage:
-    - subtask: reasoning
-      status: covered
-      benchmark_indices:
-        - 0
-        - 1
-        - 2
-      note: >
-        Scientific, academic and mathematical reasoning from parametric
-        knowledge; no browsing, retrieval, tool-assisted solving, or agent harness.
-
-    - subtask: data_analysis
-      status: gap
-      benchmark_indices: []
-      note: >
-        No dedicated supplied-table or structured-data reasoning benchmark
-        is configured.
-
-  scoring:
-    threshold_status: provisional_not_empirically_calibrated
-    collection_threshold_method: >
-      Weighted mean of benchmark thresholds in higher-is-better space;
-      lower-is-better ceilings contribute 1 - threshold.
-    weight_policy: >
-      Equal weight per represented benchmark.
-    interpretation: >
-      Individual benchmark pass criteria are required; the collection aggregate
-      is a summary score and does not compensate for a failed benchmark. Report
-      benchmark/subtask scores and coverage gaps alongside the aggregate.
-
-  execution_status: configuration_validated_evaluations_not_run
-
-  notes: []

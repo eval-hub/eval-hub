@@ -1,6 +1,13 @@
 id: multimodal-v1
+curation_order: 7
 name: Multimodal v1
-category: multimodal
+description: >
+  Evaluates vision-language understanding on scanned-document visual question
+  answering using DocVQA. Requires a vision-capable model. The collection
+  currently measures document VQA using ANLS; dedicated chart and table-image
+  QA and general natural-image reasoning are not yet covered.
+  Part of the Standard LLM Evaluation Suite (standard-llm-evals-v1).
+
 domains:
   - multimodal
 tasks:
@@ -9,13 +16,6 @@ modalities:
   - multimodal
 evaluation_targets:
   - model
-description: >
-  Evaluates vision-language understanding on scanned-document visual question
-  answering using DocVQA. Requires a vision-capable model. The collection
-  currently measures document VQA using ANLS; dedicated chart and table-image
-  QA and general natural-image reasoning are not yet covered.
-  Part of the Standard LLM Evaluation Suite (standard-llm-evals-v1).
-
 tags:
   - multimodal
   - vision
@@ -37,63 +37,3 @@ benchmarks:
     pass_criteria:
       threshold: 0.50
     parameters: {}
-
-custom:
-  design:
-    tool: design_collection
-    date: '2026-10-07'
-    evaluation_goal: >
-      Evaluate scanned-document VQA, with future expansion to chart/table-image
-      QA and general natural-image reasoning.
-    strictness: moderate
-    candidate_benchmark_count: 334
-
-  scope:
-    target: bare_model
-    agent_harness: false
-    tool_execution: false
-    multi_step_scaffolding: false
-    browsing: false
-    retrieval_execution: false
-    post_response_scoring_allowed: true
-
-  coverage_status: partial
-
-  coverage:
-    - subtask: document_vqa
-      status: covered
-      benchmark_indices:
-        - 0
-      note: >
-        Scanned-document QA measured using ANLS.
-
-    - subtask: chart_table_image_vqa
-      status: gap
-      benchmark_indices: []
-      note: >
-        No dedicated chart or table-as-image benchmark is currently configured.
-
-    - subtask: general_visual_reasoning
-      status: gap
-      benchmark_indices: []
-      note: >
-        No dedicated natural-image reasoning benchmark is currently configured.
-
-  scoring:
-    threshold_status: provisional_not_empirically_calibrated
-    collection_threshold_method: >
-      Weighted mean of benchmark thresholds in higher-is-better space;
-      lower-is-better ceilings contribute 1 - threshold.
-    weight_policy: >
-      Equal total weight per represented subtask/group, split across related
-      benchmarks.
-    interpretation: >
-      Report benchmark and subtask scores and coverage gaps alongside the
-      aggregate. Missing subtasks have no score; collection pass does not
-      certify complete multimodal domain coverage.
-
-  execution_status: configuration_validated_evaluations_not_run
-
-  notes:
-    - Run only on vision-capable targets. Report unsupported modality for
-      text-only models rather than assigning a zero score.

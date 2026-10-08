@@ -1,7 +1,6 @@
----
 id: software-v1
+curation_order: 5
 name: Software v1
-category: software
 
 description: >
   Evaluates non-agentic software capabilities across code generation and code
@@ -76,70 +75,3 @@ benchmarks:
     parameters:
       num_fewshot: 0
       apply_chat_template: true
-
-custom:
-  design:
-    tool: design_collection
-    date: '2026-10-07'
-    evaluation_goal: >
-      Evaluate code generation from specifications and code understanding
-      through execution-based output prediction. Future expansion may include
-      code repair; repository-level agent workflows are out of scope.
-    strictness: moderate
-    candidate_benchmark_count: 334
-
-  scope:
-    target: bare_model
-    agent_harness: false
-    tool_execution: false
-    multi_step_scaffolding: false
-    browsing: false
-    retrieval_execution: false
-    post_response_scoring_allowed: true
-
-  coverage_status: partial
-
-  coverage:
-    - subtask: code_generation
-      status: covered
-      benchmark_indices:
-        - 0
-        - 1
-      note: >
-        Specification-to-code generation using LiveCodeBench and BigCodeBench.
-        Generated code may be executed for scoring, but execution results are
-        not fed back to the model.
-
-    - subtask: code_understanding
-      status: partial
-      benchmark_indices:
-        - 2
-      note: >
-        CRUXEval measures Python function output prediction as a narrow proxy
-        for code understanding; explanation and broader program comprehension
-        are not measured.
-
-    - subtask: code_repair
-      status: gap
-      benchmark_indices: []
-      note: >
-        No supplied-bug repair benchmark is configured. Repository-level
-        agent workflows such as SWE-bench are excluded.
-
-  scoring:
-    threshold_status: provisional_not_empirically_calibrated
-    collection_threshold_method: >
-      Weighted mean of benchmark thresholds in higher-is-better space;
-      lower-is-better ceilings contribute 1 - threshold.
-    weight_policy: >
-      Code generation receives 50% total weight, split equally between
-      LiveCodeBench and BigCodeBench. Code understanding receives 50% through
-      CRUXEval.
-    interpretation: >
-      Report benchmark and subtask scores and coverage gaps alongside the
-      aggregate. Missing subtasks have no score; collection pass does not
-      certify complete software engineering capability.
-
-  execution_status: configuration_validated_evaluations_not_run
-
-  notes: []
