@@ -67,7 +67,7 @@ func (h *Handlers) handleGetEvaluationLogs(
 		ctx,
 		func(runtimeCtx context.Context) error {
 			scopedContext := storage.WithContextAndWorkloadType(runtimeCtx, workloads.Evaluation)
-			job, err := getEvaluationJob(scopedContext, evaluationJobID)
+			job, err := scopedContext.GetEvaluationJob(evaluationJobID)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err

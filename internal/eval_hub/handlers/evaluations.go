@@ -648,7 +648,7 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 		ctx,
 		func(runtimeCtx context.Context) error {
 			scopedContext := storage.WithContextAndWorkloadType(runtimeCtx, workloads.Evaluation)
-			response, err := getEvaluationJob(scopedContext, evaluationJobID)
+			response, err := scopedContext.GetEvaluationJob(evaluationJobID)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -660,19 +660,6 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 		"get-evaluation-job",
 		"job.id", evaluationJobID,
 	)
-}
-
-// getEvaluationJob exposes only conventional evaluations through the
-// evaluation-job API, even though other workloads share the same storage.
-func getEvaluationJob(storage abstractions.Storage, id string) (*api.EvaluationJobResource, error) {
-	job, err := storage.GetEvaluationJob(id)
-	if err != nil {
-		return nil, err
-	}
-	if job == nil || workloads.TypeForJob(&job.EvaluationJobConfig) != workloads.Evaluation {
-		return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
-	}
-	return job, nil
 }
 
 func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext, r httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
@@ -786,7 +773,7 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 		ctx,
 		func(runtimeCtx context.Context) error {
 			scopedContext := storage.WithContextAndWorkloadType(runtimeCtx, workloads.Evaluation)
-			job, err := getEvaluationJob(scopedContext, evaluationJobID)
+			job, err := scopedContext.GetEvaluationJob(evaluationJobID)
 			if err != nil {
 				return err
 			}

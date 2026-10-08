@@ -20,6 +20,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -559,9 +560,8 @@ func TestHandleGetEvaluationJobLogsHidesPostProcessingJob(t *testing.T) {
 			Ref: api.Ref{ID: postprocessing.BenchmarkID}, ProviderID: postprocessing.ProviderID,
 		}}},
 	}}
-	// The job type must be checked before runtime availability so that a
-	// post-processing ID consistently appears missing through this API.
-	h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, nil)
+	// Provide a runtime so the request reaches the workload-scoped storage lookup.
+	h := handlers.New(storage, testhelpers.NewValidator(t), &logsRuntime{}, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-ppi-logs", logger, "test-user", "test-tenant")
@@ -825,6 +825,12 @@ func (s *logsJobStorage) WithContext(ctx context.Context) abstractions.Storage {
 	return c
 }
 
+func (s *logsJobStorage) WithContextAndWorkloadType(ctx context.Context, workloadType workloads.Type) abstractions.Storage {
+	c := s.copy()
+	c.fakeStorage = *s.fakeStorage.WithContextAndWorkloadType(ctx, workloadType).(*fakeStorage)
+	return c
+}
+
 func (s *logsJobStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
 	c := s.copy()
 	c.fakeStorage = *s.fakeStorage.WithTenant(tenant).(*fakeStorage)
@@ -862,6 +868,12 @@ func (s *logsCollectionStorage) WithLogger(logger *slog.Logger) abstractions.Sto
 func (s *logsCollectionStorage) WithContext(ctx context.Context) abstractions.Storage {
 	c := s.copy()
 	c.fakeStorage = *s.fakeStorage.WithContext(ctx).(*fakeStorage)
+	return c
+}
+
+func (s *logsCollectionStorage) WithContextAndWorkloadType(ctx context.Context, workloadType workloads.Type) abstractions.Storage {
+	c := s.copy()
+	c.fakeStorage = *s.fakeStorage.WithContextAndWorkloadType(ctx, workloadType).(*fakeStorage)
 	return c
 }
 
