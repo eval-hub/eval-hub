@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -10,4 +11,5 @@ type EntityQuery struct {
 	MLFlowExperimentID string
 	Status             string
 	EntityJSON         string
+	WorkloadType       workloads.Type
 }

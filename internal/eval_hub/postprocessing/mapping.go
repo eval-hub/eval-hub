@@ -14,7 +14,7 @@ import (
 const (
 	ProviderID          = "evalhub-internal"
 	BenchmarkID         = "evaluation-post-processor"
-	workloadType        = workloads.Type("post-processing")
+	workloadType        = workloads.PostProcessing
 	defaultAdapterImage = "quay.io/evalhub/evalhub-post-processor:latest"
 	adapterImageEnv     = "EVALHUB_POST_PROCESSING_IMAGE"
 	localAdapterDir     = "../eval-hub-contrib/adapters/evalhub-post-processor"

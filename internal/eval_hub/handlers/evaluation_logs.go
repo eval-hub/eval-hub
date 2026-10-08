@@ -12,6 +12,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/httpwrappers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -60,7 +61,8 @@ func (h *Handlers) handleGetEvaluationLogs(
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			job, err := getEvaluationJob(storage.WithContext(runtimeCtx), evaluationJobID)
+			scopedContext := storage.WithContextAndWorkloadType(runtimeCtx, workloads.Evaluation)
+			job, err := getEvaluationJob(scopedContext, evaluationJobID)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -71,7 +73,7 @@ func (h *Handlers) handleGetEvaluationLogs(
 				return err
 			}
 
-			benchmarks, err := h.resolveJobBenchmarks(storage.WithContext(runtimeCtx), job)
+			benchmarks, err := h.resolveJobBenchmarks(scopedContext, job)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err

@@ -319,7 +319,7 @@ func (h *Handlers) validatePreparedEvaluation(
 			}
 			if (evaluation.Model != nil) &&
 				(strings.TrimSpace(evaluation.Model.URL) == "") &&
-				!postprocessing.IsPostProcessingJob(evaluation) &&
+				workloads.TypeForJob(evaluation) == workloads.Evaluation &&
 				!allBenchmarksHavePreRecordedData(benchmarks) {
 				return serviceerrors.NewServiceError(messages.ModelURLRequired)
 			}
@@ -647,7 +647,8 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			response, err := getEvaluationJob(storage.WithContext(runtimeCtx), evaluationJobID)
+			scopedContext := storage.WithContextAndWorkloadType(runtimeCtx, workloads.Evaluation)
+			response, err := getEvaluationJob(scopedContext, evaluationJobID)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -661,14 +662,14 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 	)
 }
 
-// getEvaluationJob hides post-processing computations from the evaluation-job
-// API even though both resource types share the same storage representation.
+// getEvaluationJob exposes only conventional evaluations through the
+// evaluation-job API, even though other workloads share the same storage.
 func getEvaluationJob(storage abstractions.Storage, id string) (*api.EvaluationJobResource, error) {
 	job, err := storage.GetEvaluationJob(id)
 	if err != nil {
 		return nil, err
 	}
-	if job == nil || postprocessing.IsPostProcessingJob(&job.EvaluationJobConfig) {
+	if job == nil || workloads.TypeForJob(&job.EvaluationJobConfig) != workloads.Evaluation {
 		return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
 	}
 	return job, nil
@@ -784,7 +785,8 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 	err := h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			job, err := getEvaluationJob(storage.WithContext(runtimeCtx), evaluationJobID)
+			scopedContext := storage.WithContextAndWorkloadType(runtimeCtx, workloads.Evaluation)
+			job, err := getEvaluationJob(scopedContext, evaluationJobID)
 			if err != nil {
 				return err
 			}
@@ -826,8 +828,9 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
+			scopedContext := storage.WithContextAndWorkloadType(runtimeCtx, workloads.Evaluation)
 			if hardDelete {
-				err = storage.WithContext(runtimeCtx).DeleteEvaluationJob(evaluationJobID)
+				err = scopedContext.DeleteEvaluationJob(evaluationJobID)
 				if err != nil {
 					ctx.Logger.Info("Failed to delete evaluation job", "error", err.Error(), "id", evaluationJobID)
 					w.Error(err, ctx.RequestID)
@@ -835,11 +838,11 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 				}
 			} else {
 				var previousState api.OverallState
-				job, jobErr := storage.WithContext(runtimeCtx).GetEvaluationJob(evaluationJobID)
+				job, jobErr := scopedContext.GetEvaluationJob(evaluationJobID)
 				if jobErr == nil && job != nil && job.Status != nil {
 					previousState = job.Status.State
 				}
-				err = storage.WithContext(runtimeCtx).UpdateEvaluationJobStatus(evaluationJobID, api.OverallStateCancelled, api.WithMessageOrigin(&api.MessageInfo{
+				err = scopedContext.UpdateEvaluationJobStatus(evaluationJobID, api.OverallStateCancelled, api.WithMessageOrigin(&api.MessageInfo{
 					Message:     "Evaluation job cancelled",
 					MessageCode: constants.MessageCodeEvaluationJobCancelled,
 				}, api.MessageOriginServer))

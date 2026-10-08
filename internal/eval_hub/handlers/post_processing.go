@@ -13,11 +13,12 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serialization"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
-// HandleGetPostProcessing handles GET /api/v1/evaluations/post-processing/{id}.
+// HandleGetPostProcessing handles GET /api/v1/evaluations/post-processing/{post_processing_job_id}.
 func (h *Handlers) HandleGetPostProcessing(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
 	logging.LogRequestStarted(ctx)
 	id := req.PathValue(constants.PathParameterPostProcessingID)
@@ -28,7 +29,8 @@ func (h *Handlers) HandleGetPostProcessing(ctx *executioncontext.ExecutionContex
 
 	storage := h.getStorage(ctx)
 	_ = h.withSpan(ctx, func(runtimeCtx context.Context) error {
-		job, err := h.getStandalonePostProcessingJob(storage.WithContext(runtimeCtx), id)
+		scopedContext := storage.WithContextAndWorkloadType(runtimeCtx, workloads.PostProcessing)
+		job, err := h.getStandalonePostProcessingJob(scopedContext, id)
 		if err != nil {
 			w.Error(err, ctx.RequestID)
 			return err
@@ -44,7 +46,7 @@ func (h *Handlers) HandleGetPostProcessing(ctx *executioncontext.ExecutionContex
 	}, "storage", "get-post-processing", "post_processing.id", id)
 }
 
-// HandleDeletePostProcessing handles DELETE /api/v1/evaluations/post-processing/{id}.
+// HandleDeletePostProcessing handles DELETE /api/v1/evaluations/post-processing/{post_processing_job_id}.
 func (h *Handlers) HandleDeletePostProcessing(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
 	logging.LogRequestStarted(ctx)
 	id := req.PathValue(constants.PathParameterPostProcessingID)
@@ -55,8 +57,8 @@ func (h *Handlers) HandleDeletePostProcessing(ctx *executioncontext.ExecutionCon
 
 	storage := h.getStorage(ctx)
 	_ = h.withSpan(ctx, func(runtimeCtx context.Context) error {
-		scoped := storage.WithContext(runtimeCtx)
-		job, err := h.getStandalonePostProcessingJob(scoped, id)
+		scopedContext := storage.WithContextAndWorkloadType(runtimeCtx, workloads.PostProcessing)
+		job, err := h.getStandalonePostProcessingJob(scopedContext, id)
 		if err != nil {
 			w.Error(err, ctx.RequestID)
 			return err
@@ -68,7 +70,7 @@ func (h *Handlers) HandleDeletePostProcessing(ctx *executioncontext.ExecutionCon
 			}
 		}
 
-		if err := scoped.DeleteEvaluationJob(id); err != nil {
+		if err := scopedContext.DeleteEvaluationJob(id); err != nil {
 			w.Error(err, ctx.RequestID)
 			return err
 		}
@@ -142,11 +144,12 @@ func (h *Handlers) validatePostProcessingResultsSource(ctx *executioncontext.Exe
 	if ref.EvalJob == nil {
 		return nil, nil
 	}
-	source, err := h.getStorage(ctx).GetEvaluationJob(ref.EvalJob.ID)
+	sourceStorage := h.getStorage(ctx).WithContextAndWorkloadType(ctx.Ctx, workloads.Evaluation)
+	source, err := sourceStorage.GetEvaluationJob(ref.EvalJob.ID)
 	if err != nil {
 		return nil, err
 	}
-	if source == nil || postprocessing.IsPostProcessingJob(&source.EvaluationJobConfig) {
+	if source == nil || workloads.TypeForJob(&source.EvaluationJobConfig) != workloads.Evaluation {
 		return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", ref.EvalJob.ID)
 	}
 	if source.Status == nil || source.Status.State != api.OverallStateCompleted {

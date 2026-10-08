@@ -8,6 +8,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 )
 
 func ValidateFilter(filter []string, allowedColumns []string) error {
@@ -47,6 +48,19 @@ func GetValues(key string, values any) ([]any, string) {
 		return results, "OR"
 	}
 	return []any{values}, "AND"
+}
+
+// AddEvaluationWorkloadTypeFilter limits evaluation list and count queries to
+// conventional evaluation jobs. Other resource tables are unchanged.
+func AddEvaluationWorkloadTypeFilter(tableName, where string) string {
+	if tableName != TableEvaluations {
+		return where
+	}
+	predicate := fmt.Sprintf("workload_type = '%s'", workloads.Evaluation)
+	if where == "" {
+		return predicate
+	}
+	return where + " AND " + predicate
 }
 
 // CreateFilterStatement builds a WHERE clause and args from the filter.
