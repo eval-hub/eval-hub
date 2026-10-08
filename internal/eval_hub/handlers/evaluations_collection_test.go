@@ -54,11 +54,15 @@ func (s *collectionRunCountStorage) CreateEvaluationJobAndUpdateCollection(job *
 		return s.atomicErr
 	}
 	s.createdJob = job
-	if s.collection.Status != nil {
-		s.collection.Status.RunCount++
-		s.updatedStatusID = job.Collection.ID
-		s.updatedStatus = s.collection.Status
+	if s.collection.Resource.IsSystemResource() {
+		return nil
 	}
+	if s.collection.Status == nil {
+		s.collection.Status = &api.CollectionStatus{}
+	}
+	s.collection.Status.RunCount++
+	s.updatedStatusID = job.Collection.ID
+	s.updatedStatus = s.collection.Status
 	return nil
 }
 
@@ -100,10 +104,12 @@ func TestHandleCreateEvaluationUpdatesCustomCollectionRunCount(t *testing.T) {
 		wantCode     int
 		wantUpdate   bool
 		wantRunCount int
+		owner        api.User
 	}{
-		{name: "custom collection", status: &api.CollectionStatus{RunCount: 2}, wantCode: http.StatusAccepted, wantUpdate: true, wantRunCount: 3},
-		{name: "system collection", wantCode: http.StatusAccepted},
-		{name: "atomic storage failure", status: &api.CollectionStatus{RunCount: 2}, atomicErr: errors.New("storage failed"), wantCode: http.StatusInternalServerError},
+		{name: "custom collection", owner: "user-1", status: &api.CollectionStatus{RunCount: 2}, wantCode: http.StatusAccepted, wantUpdate: true, wantRunCount: 3},
+		{name: "custom collection without status", owner: "user-1", wantCode: http.StatusAccepted, wantUpdate: true, wantRunCount: 1},
+		{name: "system collection", owner: "system", wantCode: http.StatusAccepted},
+		{name: "atomic storage failure", owner: "user-1", status: &api.CollectionStatus{RunCount: 2}, atomicErr: errors.New("storage failed"), wantCode: http.StatusInternalServerError},
 	}
 
 	for _, tt := range tests {
@@ -118,7 +124,7 @@ func TestHandleCreateEvaluationUpdatesCustomCollectionRunCount(t *testing.T) {
 					},
 				}},
 				collection: &api.CollectionResource{
-					Resource: api.Resource{ID: "collection-1", UpdatedAt: now},
+					Resource: api.Resource{ID: "collection-1", Owner: tt.owner, UpdatedAt: now},
 					CollectionConfig: api.CollectionConfig{
 						Name:     "collection",
 						Category: "test",

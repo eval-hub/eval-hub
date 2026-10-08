@@ -406,6 +406,7 @@ func (h *Handlers) HandleCreateCollection(ctx *executioncontext.ExecutionContext
 					Tenant:    ctx.Tenant,
 				},
 				CollectionConfig: *collection,
+				Status:           &api.CollectionStatus{},
 			}
 			// Enrich benchmark URLs and auto-populate classification fields before persisting
 			// so that entity JSON stored in the DB can be matched by array-field SQL filters.

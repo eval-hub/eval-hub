@@ -185,8 +185,29 @@ func testCreateEvaluationJobAndUpdateCollection(t *testing.T, driver string, dat
 	if err != nil {
 		t.Fatalf("GetCollection without status: %v", err)
 	}
-	if storedNoStatus.Status != nil {
-		t.Errorf("collection without status was updated: %+v", storedNoStatus.Status)
+	if storedNoStatus.Status == nil || storedNoStatus.Status.RunCount != 1 {
+		t.Errorf("collection without status run count = %v, want 1", storedNoStatus.Status)
+	}
+
+	systemCollection := &api.CollectionResource{
+		Resource: api.Resource{ID: common.GUID(), Owner: "system"},
+		CollectionConfig: api.CollectionConfig{
+			Name: "system collection", Category: "test",
+			Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "benchmark-1"}, ProviderID: "provider-1"}},
+		},
+	}
+	if err := store.CreateCollection(systemCollection); err != nil {
+		t.Fatalf("CreateCollection system: %v", err)
+	}
+	if err := scoped.CreateEvaluationJobAndUpdateCollection(newJob(common.GUID(), systemCollection.Resource.ID)); err != nil {
+		t.Fatalf("CreateEvaluationJobAndUpdateCollection system collection: %v", err)
+	}
+	storedSystem, err := store.GetCollection(systemCollection.Resource.ID)
+	if err != nil {
+		t.Fatalf("GetCollection system: %v", err)
+	}
+	if storedSystem.Status != nil {
+		t.Errorf("system collection unexpectedly has status: %+v", storedSystem.Status)
 	}
 }
 
