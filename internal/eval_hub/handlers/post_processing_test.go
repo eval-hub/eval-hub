@@ -44,7 +44,7 @@ func (s *postProcessingHandlerStorage) WithContext(_ context.Context) abstractio
 }
 func (s *postProcessingHandlerStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
 func (s *postProcessingHandlerStorage) WithOwner(_ api.User) abstractions.Storage    { return s }
-func (s *postProcessingHandlerStorage) WithContextAndWorkloadType(_ context.Context, workloadType workloads.Type) abstractions.Storage {
+func (s *postProcessingHandlerStorage) WithWorkloadType(workloadType workloads.Type) abstractions.Storage {
 	s.gotWorkload = workloadType
 	return s
 }

@@ -647,7 +647,7 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			scopedContext := storage.WithContextAndWorkloadType(runtimeCtx, workloads.Evaluation)
+			scopedContext := storage.WithContext(runtimeCtx).WithWorkloadType(workloads.Evaluation)
 			response, err := scopedContext.GetEvaluationJob(evaluationJobID)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
@@ -772,7 +772,7 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 	err := h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			scopedContext := storage.WithContextAndWorkloadType(runtimeCtx, workloads.Evaluation)
+			scopedContext := storage.WithContext(runtimeCtx).WithWorkloadType(workloads.Evaluation)
 			job, err := scopedContext.GetEvaluationJob(evaluationJobID)
 			if err != nil {
 				return err
@@ -815,7 +815,7 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			scopedContext := storage.WithContextAndWorkloadType(runtimeCtx, workloads.Evaluation)
+			scopedContext := storage.WithContext(runtimeCtx).WithWorkloadType(workloads.Evaluation)
 			if hardDelete {
 				err = scopedContext.DeleteEvaluationJob(evaluationJobID)
 				if err != nil {
