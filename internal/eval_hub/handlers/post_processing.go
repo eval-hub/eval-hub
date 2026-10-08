@@ -29,7 +29,7 @@ func (h *Handlers) HandleGetPostProcessing(ctx *executioncontext.ExecutionContex
 
 	storage := h.getStorage(ctx)
 	_ = h.withSpan(ctx, func(runtimeCtx context.Context) error {
-		scopedContext := storage.WithContextAndWorkloadType(runtimeCtx, workloads.PostProcessing)
+		scopedContext := storage.WithContext(runtimeCtx).WithWorkloadType(workloads.PostProcessing)
 		job, err := h.getStandalonePostProcessingJob(scopedContext, id)
 		if err != nil {
 			w.Error(err, ctx.RequestID)
@@ -57,7 +57,7 @@ func (h *Handlers) HandleDeletePostProcessing(ctx *executioncontext.ExecutionCon
 
 	storage := h.getStorage(ctx)
 	_ = h.withSpan(ctx, func(runtimeCtx context.Context) error {
-		scopedContext := storage.WithContextAndWorkloadType(runtimeCtx, workloads.PostProcessing)
+		scopedContext := storage.WithContext(runtimeCtx).WithWorkloadType(workloads.PostProcessing)
 		job, err := h.getStandalonePostProcessingJob(scopedContext, id)
 		if err != nil {
 			w.Error(err, ctx.RequestID)
@@ -144,7 +144,7 @@ func (h *Handlers) validatePostProcessingResultsSource(ctx *executioncontext.Exe
 	if ref.EvalJob == nil {
 		return nil, nil
 	}
-	sourceStorage := h.getStorage(ctx).WithContextAndWorkloadType(ctx.Ctx, workloads.Evaluation)
+	sourceStorage := h.getStorage(ctx).WithContext(ctx.Ctx).WithWorkloadType(workloads.Evaluation)
 	source, err := sourceStorage.GetEvaluationJob(ref.EvalJob.ID)
 	if err != nil {
 		return nil, err

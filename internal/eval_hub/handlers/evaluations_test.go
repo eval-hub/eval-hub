@@ -65,7 +65,7 @@ func (f *fakeStorage) clone() *fakeStorage {
 
 func (f *fakeStorage) WithLogger(_ *slog.Logger) abstractions.Storage     { return f.clone() }
 func (f *fakeStorage) WithContext(_ context.Context) abstractions.Storage { return f.clone() }
-func (f *fakeStorage) WithContextAndWorkloadType(_ context.Context, workloadType workloads.Type) abstractions.Storage {
+func (f *fakeStorage) WithWorkloadType(workloadType workloads.Type) abstractions.Storage {
 	clone := f.clone()
 	clone.workloadType = workloadType
 	return clone
