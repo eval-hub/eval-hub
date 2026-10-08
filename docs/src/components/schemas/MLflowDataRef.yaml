@@ -2,6 +2,8 @@ type: object
 title: MLflowDataRef
 description: Reference to a result artifact stored in MLflow.
 properties:
+  data_config:
+    $ref: ./ResultsDataConfig.yaml
   mlflow:
     type: object
     properties:

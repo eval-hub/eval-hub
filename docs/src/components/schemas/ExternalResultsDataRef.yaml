@@ -3,6 +3,8 @@ description: Reference to result data outside an evaluation job.
 oneOf:
   - type: object
     properties:
+      data_config:
+        $ref: ./ResultsDataConfig.yaml
       s3:
         $ref: ./TestDataRefS3.yaml
     required:
@@ -11,6 +13,8 @@ oneOf:
     title: S3
   - type: object
     properties:
+      data_config:
+        $ref: ./ResultsDataConfig.yaml
       pvc:
         $ref: ./TestDataRefPVC.yaml
     required:
@@ -19,6 +23,8 @@ oneOf:
     title: PVC
   - type: object
     properties:
+      data_config:
+        $ref: ./ResultsDataConfig.yaml
       git:
         $ref: ./TestDataRefGit.yaml
     required:
@@ -27,6 +33,8 @@ oneOf:
     title: Git
   - type: object
     properties:
+      data_config:
+        $ref: ./ResultsDataConfig.yaml
       hf:
         $ref: ./TestDataRefHF.yaml
     required:

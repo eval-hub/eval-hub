@@ -86,13 +86,14 @@ type StandaloneConfidenceIntervalConfig struct {
 // PostProcessingResultsDataRef accepts exactly one source. Calibration data
 // uses CalibrationDataRef instead, excluding evaluation jobs, MLflow, and OCI.
 type PostProcessingResultsDataRef struct {
-	EvalJob *EvaluationJobDataRef `json:"eval_job,omitempty" validate:"required_without_all=S3 PVC Git HF MLFlow OCI,excluded_with=S3 PVC Git HF MLFlow OCI"`
-	S3      *S3TestDataRef        `json:"s3,omitempty" validate:"required_without_all=EvalJob PVC Git HF MLFlow OCI,excluded_with=EvalJob PVC Git HF MLFlow OCI"`
-	PVC     *PVCTestDataRef       `json:"pvc,omitempty" validate:"required_without_all=EvalJob S3 Git HF MLFlow OCI,excluded_with=EvalJob S3 Git HF MLFlow OCI"`
-	Git     *GitTestDataRef       `json:"git,omitempty" validate:"required_without_all=EvalJob S3 PVC HF MLFlow OCI,excluded_with=EvalJob S3 PVC HF MLFlow OCI"`
-	HF      *HFTestDataRef        `json:"hf,omitempty" validate:"required_without_all=EvalJob S3 PVC Git MLFlow OCI,excluded_with=EvalJob S3 PVC Git MLFlow OCI"`
-	MLFlow  *MLflowDataRef        `json:"mlflow,omitempty" validate:"required_without_all=EvalJob S3 PVC Git HF OCI,excluded_with=EvalJob S3 PVC Git HF OCI"`
-	OCI     *OCIDataRef           `json:"oci,omitempty" validate:"required_without_all=EvalJob S3 PVC Git HF MLFlow,excluded_with=EvalJob S3 PVC Git HF MLFlow"`
+	DataConfig *ResultsDataConfig    `json:"data_config,omitempty"`
+	EvalJob    *EvaluationJobDataRef `json:"eval_job,omitempty" validate:"required_without_all=S3 PVC Git HF MLFlow OCI,excluded_with=S3 PVC Git HF MLFlow OCI"`
+	S3         *S3TestDataRef        `json:"s3,omitempty" validate:"required_without_all=EvalJob PVC Git HF MLFlow OCI,excluded_with=EvalJob PVC Git HF MLFlow OCI"`
+	PVC        *PVCTestDataRef       `json:"pvc,omitempty" validate:"required_without_all=EvalJob S3 Git HF MLFlow OCI,excluded_with=EvalJob S3 Git HF MLFlow OCI"`
+	Git        *GitTestDataRef       `json:"git,omitempty" validate:"required_without_all=EvalJob S3 PVC HF MLFlow OCI,excluded_with=EvalJob S3 PVC HF MLFlow OCI"`
+	HF         *HFTestDataRef        `json:"hf,omitempty" validate:"required_without_all=EvalJob S3 PVC Git MLFlow OCI,excluded_with=EvalJob S3 PVC Git MLFlow OCI"`
+	MLFlow     *MLflowDataRef        `json:"mlflow,omitempty" validate:"required_without_all=EvalJob S3 PVC Git HF OCI,excluded_with=EvalJob S3 PVC Git HF OCI"`
+	OCI        *OCIDataRef           `json:"oci,omitempty" validate:"required_without_all=EvalJob S3 PVC Git HF MLFlow,excluded_with=EvalJob S3 PVC Git HF MLFlow"`
 }
 
 // CalibrationDataRef describes one labeled calibration dataset and its
@@ -160,12 +161,11 @@ type JobPostProcessingResource struct {
 }
 
 type PostProcessingStatus struct {
-	State          State             `json:"state"`
-	ErrorMessage   *MessageInfo      `json:"error_message,omitempty"`
-	WarningMessage *MessageInfo      `json:"warning_message,omitempty"`
-	StartedAt      DateTime          `json:"started_at,omitempty"`
-	CompletedAt    DateTime          `json:"completed_at,omitempty"`
-	Benchmarks     []BenchmarkStatus `json:"benchmarks,omitempty"`
+	State          State        `json:"state"`
+	ErrorMessage   *MessageInfo `json:"error_message,omitempty"`
+	WarningMessage *MessageInfo `json:"warning_message,omitempty"`
+	StartedAt      DateTime     `json:"started_at,omitempty"`
+	CompletedAt    DateTime     `json:"completed_at,omitempty"`
 }
 
 // PostProcessingResults contains per-benchmark results for evaluation-job
