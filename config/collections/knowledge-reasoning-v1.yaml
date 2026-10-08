@@ -5,15 +5,18 @@ description: >
   Evaluates broad academic knowledge and expert-level reasoning. GPQA-Diamond tests
   graduate-level science questions that resist internet lookup. HLE (Humanity's Last Exam)
   is a frontier benchmark across dozens of subjects; this collection uses its text-only subset.
+  DataBench Lite tests tabular question answering over official sample tables
+  using direct answers without generated-code execution.
   Part of the Curated Collections taxonomy (#916).
 tags:
   - knowledge
   - reasoning
   - science
   - inspect-evals
+  - table-qa
   - curated
 domains: [knowledge_and_reasoning]
-tasks: [reasoning]
+tasks: [reasoning, data_analysis]
 modalities: [text]
 evaluation_targets: [model]
 curation_order: 1
@@ -41,3 +44,10 @@ benchmarks:
       task_args:
         include_multi_modal: false
         graders: [grader]
+
+  - id: databench_lite
+    provider_id: databench
+    weight: 1
+    primary_score:
+      metric: accuracy
+      lower_is_better: false
