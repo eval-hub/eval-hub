@@ -69,6 +69,9 @@ func jobLabels(cfg *jobConfig) map[string]string {
 		labelBenchmarkIndexKey:  sanitizeLabelValue(strconv.Itoa(cfg.benchmarkIndex)),
 		labelEvaluationPhaseKey: EvaluationPhasePending,
 	}
+	if cfg.resourceGUID != "" {
+		m[labelExecutionIDKey] = sanitizeLabelValue(cfg.resourceGUID)
+	}
 	if cfg.evalHubInstanceName != "" && cfg.evalHubCRNamespace != "" {
 		m[labelEvalHubInstanceNameKey] = sanitizeLabelValue(cfg.evalHubInstanceName)
 		m[labelEvalHubInstanceNamespaceKey] = sanitizeLabelValue(cfg.evalHubCRNamespace)

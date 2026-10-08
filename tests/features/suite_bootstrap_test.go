@@ -172,11 +172,9 @@ func (a *apiFeature) startLocalServer(port int) error {
 		// we do this as no point trying to continue
 		return logError(fmt.Errorf("failed to load provider configs: %w", err))
 	}
-
 	if len(providerConfigs) == 0 {
 		return logError(fmt.Errorf("no provider configs loaded"))
 	}
-
 	logger.Info("Providers loaded.")
 	for key := range providerConfigs {
 		providerCfg := providerConfigs[key]
@@ -627,6 +625,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the response should not contain "([^"]*)"$`, tc.theResponseShouldNotContain)
 	ctx.Step(`^the response should be JSON$`, tc.theResponseShouldBeJSON)
 	ctx.Step(`^the response should contain Prometheus metrics$`, tc.theResponseShouldContainPrometheusMetrics)
+	ctx.Step(`^service info metadata matches configured environment variables$`, tc.infoMetadataMatchesConfiguredEnvironment)
+	ctx.Step(`^the configured tenant queue should be returned$`, tc.configuredTenantQueueShouldBeReturned)
 	ctx.Step(`^the metrics should include "([^"]*)"$`, tc.theMetricsShouldInclude)
 	ctx.Step(`^the metrics should show request count for "([^"]*)"$`, tc.theMetricsShouldShowRequestCountFor)
 	// Responses

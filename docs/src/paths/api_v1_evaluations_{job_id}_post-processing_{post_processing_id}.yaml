@@ -39,25 +39,27 @@ get:
               memory:
                 request: 1Gi
                 limit: "4Gi"
+            operation_order:
+              - confidence_interval
             operations:
-              - confidence_interval_config:
-                  num_parallel_threads: 2
-                  calibration_data_ref:
-                    - s3:
-                        bucket: evaluation-data
-                        key: calibration/accuracy
-                        secret_ref: s3-secret
-                      data_config:
-                        format: jsonl
-                        columns:
-                          sample_id: example_id
-                          label: human_score
-                          prediction: judge_score
-                          benchmark_id: benchmark_id
-                          provider_id: provider_id
-                        selection:
-                          metric: accuracy
-                  significance_level: 0.7
+              confidence_interval:
+                num_parallel_threads: 2
+                calibration_data_ref:
+                  - s3:
+                      bucket: evaluation-data
+                      key: calibration/accuracy
+                      secret_ref: s3-secret
+                    data_config:
+                      format: jsonl
+                      columns:
+                        sample_id: example_id
+                        label: human_score
+                        prediction: judge_score
+                        benchmark_id: benchmark_id
+                        provider_id: provider_id
+                      selection:
+                        metric: accuracy
+                significance_level: 0.7
             status:
               state: completed
               benchmarks:

@@ -1,7 +1,0 @@
-type: object
-title: StandalonePostProcessingOperation
-description: Confidence interval operation executed by standalone post-processing.
-properties:
-  confidence_interval_config:
-    $ref: ./StandaloneConfidenceIntervalConfig.yaml
-additionalProperties: false

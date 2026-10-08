@@ -432,6 +432,9 @@ func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, 
 		case "jobs":
 			url = "evaluations/jobs"
 			hardDelete = true
+		case "post-processing":
+			url = "evaluations/jobs"
+			hardDelete = true
 		case "collections":
 			url = "evaluations/collections"
 		case "providers":
