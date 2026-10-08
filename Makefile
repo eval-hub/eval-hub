@@ -175,7 +175,7 @@ vet: ## Run go vet
 FUZZTIME ?= 10000x
 GO_TEST_TIMEOUT ?= 10m
 # Packages that define Fuzz* tests. Keep in sync when adding new fuzz targets.
-FUZZ_PACKAGES ?= ./pkg/ociclient ./pkg/mlflowclient ./pkg/api ./internal/eval_hub/handlers ./internal/eval_hub/storage/sql/shared ./internal/eval_hub/config ./internal/eval_runtime_sidecar/handlers ./internal/eval_runtime_sidecar/proxy ./internal/evalhub_mcp/server ./internal/safefile ./cmd/eval_runtime_init
+FUZZ_PACKAGES ?= ./internal/eval_hub/runtimes/k8s ./pkg/ociclient ./pkg/mlflowclient ./pkg/api ./internal/eval_hub/handlers ./internal/eval_hub/storage/sql/shared ./internal/eval_hub/config ./internal/eval_runtime_sidecar/handlers ./internal/eval_runtime_sidecar/proxy ./internal/evalhub_mcp/server ./internal/safefile ./cmd/eval_runtime_init
 
 test: ## Run unit tests (including fuzz seed corpora and a short fuzzing pass)
 	@echo "Running unit tests..."

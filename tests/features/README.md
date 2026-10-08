@@ -122,9 +122,9 @@ If `SERVER_URL` is set but `METRICS_URL` is not, `@metrics` scenarios are **skip
 
 ### Service info tests (`@info`)
 
-`info.feature` checks the authenticated `GET /api/v1/info` response, including build metadata and the queues array. Requests use `X_TENANT` and `X_USER` (defaulting to `test-tenant` and `test-user`); remote cluster runs also need `AUTH_TOKEN`.
+`info.feature` checks the authenticated `GET /api/v1/info` response, including build metadata and the hardware_profiles array. Requests use `X_TENANT` and `X_USER` (defaulting to `test-tenant` and `test-user`); remote cluster runs also need `AUTH_TOKEN`.
 
-Run the general response scenario with `GODOG_TAGS="@info && ~@cluster" go test -v ./tests/features/...`. Run the queue scenario with `GODOG_TAGS="@info && @cluster" go test -v ./tests/features/...` after setting the queue environment variables below.
+Run the general response scenario with `GODOG_TAGS="@info && ~@cluster" go test -v ./tests/features/...`. Run the hardware profile scenario with `GODOG_TAGS="@info && @cluster" go test -v ./tests/features/...` after setting the hardware profile environment variables below.
 
 To compare returned build metadata with a known deployment, optionally set any of these variables:
 
@@ -135,7 +135,7 @@ export TEST_INFO_BUILD_DATE="2026-10-01T12:00:00Z"
 export TEST_INFO_GIT_HASH="abc123"
 ```
 
-The `@cluster` queue scenario is excluded by default with other cluster scenarios. To run it, set `TEST_INFO_QUEUE_NAME` to a LocalQueue in `X_TENANT` and run with a Godog tag expression that includes `@cluster`. Optional expectations are `TEST_INFO_QUEUE_ACTIVE`, `TEST_INFO_QUEUE_REASON`, and `TEST_INFO_QUEUE_MESSAGE`. Set `TEST_INFO_OTHER_TENANT_QUEUE_NAME` to a queue in another namespace to assert that it is not returned for the authenticated tenant; its value must differ from `TEST_INFO_QUEUE_NAME`. The queue scenario is skipped when `TEST_INFO_QUEUE_NAME` is unset.
+The `@cluster` hardware profile scenario is excluded by default. Set `TEST_INFO_HARDWARE_PROFILE_NAME` to an enabled profile available to `X_TENANT` and include `@cluster` in the Godog tag expression. Set `TEST_INFO_OTHER_TENANT_HARDWARE_PROFILE_NAME` to a queue-backed profile whose LocalQueue exists only in another tenant to assert isolation. The scenario is skipped when `TEST_INFO_HARDWARE_PROFILE_NAME` is unset.
 
 ### Hardware profile tests (`@hardware_profile`)
 

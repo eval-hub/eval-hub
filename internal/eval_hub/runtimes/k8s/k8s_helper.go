@@ -124,6 +124,17 @@ func (h *KubernetesHelper) GetHardwareProfile(ctx context.Context, namespace, na
 	return h.dynamicClient.Resource(hardwareProfileGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
 }
 
+// ListHardwareProfiles lists profiles from the configured platform namespace.
+func (h *KubernetesHelper) ListHardwareProfiles(ctx context.Context, namespace string) (*unstructured.UnstructuredList, error) {
+	if namespace == "" {
+		return nil, fmt.Errorf("namespace is required")
+	}
+	if h.dynamicClient == nil {
+		return nil, fmt.Errorf("dynamic kubernetes client is not configured")
+	}
+	return h.dynamicClient.Resource(hardwareProfileGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
+}
+
 // ListLocalQueues returns Kueue LocalQueues from a tenant namespace, including their Active
 // condition when one is present.
 func (h *KubernetesHelper) ListLocalQueues(ctx context.Context, namespace string) ([]api.QueueInfo, error) {
@@ -141,7 +152,7 @@ func (h *KubernetesHelper) ListLocalQueues(ctx context.Context, namespace string
 
 	queues := make([]api.QueueInfo, 0, len(list.Items))
 	for _, item := range list.Items {
-		queue := api.QueueInfo{Name: item.GetName()}
+		queue := api.QueueInfo{Name: item.GetName(), Status: api.QueueAvailabilityUnknown}
 		conditions, found, err := unstructured.NestedSlice(item.Object, "status", "conditions")
 		if err != nil {
 			return nil, fmt.Errorf("read LocalQueue %q conditions: %w", item.GetName(), err)
@@ -153,7 +164,13 @@ func (h *KubernetesHelper) ListLocalQueues(ctx context.Context, namespace string
 					continue
 				}
 				status, _ := condition["status"].(string)
-				queue.Active = status == "True"
+				switch status {
+				case "True":
+					queue.Status = api.QueueAvailabilityActive
+				case "False":
+					queue.Status = api.QueueAvailabilityInactive
+				}
+				queue.Active = queue.Status == api.QueueAvailabilityActive
 				queue.Reason, _ = condition["reason"].(string)
 				queue.Message, _ = condition["message"].(string)
 				break
