@@ -1,6 +1,6 @@
 id: instruction-output-v1
 curation_order: 3
-name: Instruction & Output Reliability v1
+name: Instruction and Output Reliability v1
 description: >
   Evaluates bare-model instruction and output reliability across explicit
   instruction following, unconstrained JSON/schema compliance, and compound
