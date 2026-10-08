@@ -1,0 +1,13 @@
+type: object
+description: >-
+  Signing information associated with the evaluation bundle digest. Omit until
+  an actual signing outcome is available. Processing status is reported separately
+  in results.oci.status; it does not change the evaluation job status.
+properties:
+  type:
+    type: string
+    enum: [key-pair]
+    description: Signing method. Only key-pair is currently supported.
+required:
+  - type
+additionalProperties: false
