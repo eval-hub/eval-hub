@@ -51,3 +51,8 @@ benchmarks:
     primary_score:
       metric: accuracy
       lower_is_better: false
+    # Provisional internal gate based on published GPT-4o Lite test accuracy
+    # (56.32%, TeleAI SemEval-2025, Table 5); not an official pass threshold
+    # or a controlled reproduction of the paper's evaluation protocol.
+    pass_criteria:
+      threshold: 0.56
