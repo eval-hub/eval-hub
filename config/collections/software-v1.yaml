@@ -1,52 +1,77 @@
 id: software-v1
-name: Software v1
-category: software
-description: >
-  Evaluates code generation and program comprehension. LiveCodeBench uses post-cutoff
-  competitive programming problems (contamination-free). BigCodeBench tests practical
-  coding tasks. CRUXEval tests code output prediction.
-  Part of the Curated Collections taxonomy (#916).
-tags:
-  - code
-  - software
-  - competitive-programming
-  - curated
-domains: [software]
-tasks: [code_generation, code_understanding]
-modalities: [text]
-evaluation_targets: [model]
 curation_order: 5
+name: Software v1
+
+description: >
+  Evaluates non-agentic software capabilities across code generation and code
+  understanding. Code generation receives 50% of the collection weight, split
+  equally between LiveCodeBench and BigCodeBench; code understanding receives
+  50% through CRUXEval output prediction. Generated code may be executed for
+  scoring after the model response, but execution results are not fed back to
+  the model. Code repair and repository-level agent workflows remain outside
+  the current collection scope.
+  Part of the Standard LLM Evaluation Suite (standard-llm-evals-v1).
+
+domains:
+  - software
+
+tasks:
+  - code_generation
+  - code_understanding
+
+modalities:
+  - text
+
+evaluation_targets:
+  - model
+
+tags:
+  - software
+  - code-generation
+  - code-understanding
+  - execution
+  - bare-model
+  - lighteval
+  - inspect-evals
+  - lm-evaluation-harness
+  - standard
+
 pass_criteria:
-  threshold: 0.20
+  threshold: 0.1875
+
 benchmarks:
   - id: lcb:codegeneration_v6
     provider_id: lighteval
-    weight: 1
+    weight: 0.25
     primary_score:
       metric: codegen_pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
     parameters:
-      num_fewshot: 0
       apply_chat_template: true
-      pass_at_k: 1
+      num_fewshot: 0
       num_samples: 3
+      pass_at_k: 1
 
   - id: inspect/bigcodebench
     provider_id: inspect
-    weight: 1
+    weight: 0.25
     primary_score:
       metric: accuracy/accuracy
       lower_is_better: false
     pass_criteria:
       threshold: 0.20
+    parameters: {}
 
   - id: cruxeval_output
     provider_id: lm_evaluation_harness
-    weight: 1
+    weight: 0.50
     primary_score:
       metric: pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.15
+    parameters:
+      num_fewshot: 0
+      apply_chat_template: true
