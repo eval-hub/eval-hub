@@ -520,6 +520,9 @@ func TestHandleCreateCollection(t *testing.T) {
 	if got.Resource.ID == "" {
 		t.Error("expected non-empty resource ID")
 	}
+	if got.Status == nil || got.Status.RunCount != 0 {
+		t.Errorf("expected new custom collection status with run_count 0, got %+v", got.Status)
+	}
 	if got.Name != "My Collection" {
 		t.Errorf("expected name My Collection, got %s", got.Name)
 	}

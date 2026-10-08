@@ -3822,18 +3822,20 @@ benchmarks:
   pass_criteria:
     threshold: 0.30
 
-- id: jsonschema_bench
-  name: "JSONSchemaBench"
-  description: |-
-    Tests JSON schema compliance across easy, medium, and hard splits.
-    LM-only evaluation (no constrained decoding); scores vary drastically by split.
+- id: jsonschema_bench_easy
+  name: "JSONSchemaBench (Easy)"
+  description: >
+    Tests JSON schema compliance on the Github_easy split of JSONSchemaBench.
+    LM-only evaluation without constrained decoding.
   category: structured_output
   domains: [instruction_and_output_reliability]
   tasks: [structured_output]
   modalities: [text]
   evaluation_targets: [model]
   metrics:
+  - json_validity
   - schema_compliance
+  num_few_shot: 2
   tags:
   - instruction-following
   - structured-output
@@ -3844,6 +3846,52 @@ benchmarks:
     lower_is_better: false
   pass_criteria:
     threshold: 0.60
+
+- id: jsonschema_bench_medium
+  name: "JSONSchemaBench (Medium)"
+  description: >
+    Tests JSON schema compliance on the Github_medium split of JSONSchemaBench.
+    LM-only evaluation without constrained decoding.
+  category: structured_output
+  domains: [instruction_and_output_reliability]
+  tasks: [structured_output]
+  modalities: [text]
+  evaluation_targets: [model]
+  metrics:
+  - json_validity
+  - schema_compliance
+  num_few_shot: 2
+  tags:
+  - instruction-following
+  - structured-output
+  - json
+  - lm_eval
+  primary_score:
+    metric: schema_compliance
+    lower_is_better: false
+
+- id: jsonschema_bench_hard
+  name: "JSONSchemaBench (Hard)"
+  description: >
+    Tests JSON schema compliance on the Github_hard split of JSONSchemaBench.
+    LM-only evaluation without constrained decoding.
+  category: structured_output
+  domains: [instruction_and_output_reliability]
+  tasks: [structured_output]
+  modalities: [text]
+  evaluation_targets: [model]
+  metrics:
+  - json_validity
+  - schema_compliance
+  num_few_shot: 2
+  tags:
+  - instruction-following
+  - structured-output
+  - json
+  - lm_eval
+  primary_score:
+    metric: schema_compliance
+    lower_is_better: false
 
 - id: cruxeval_output
   name: "CRUXEval (Output Prediction)"

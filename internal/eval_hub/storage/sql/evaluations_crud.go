@@ -43,8 +43,11 @@ func (s *sqlStorage) CreateEvaluationJobAndUpdateCollection(evaluation *api.Eval
 		if err = s.createEvaluationJobTransactional(txn, evaluation); err != nil {
 			return err
 		}
-		if collection.Status == nil {
+		if collection.Resource.IsSystemResource() {
 			return nil
+		}
+		if collection.Status == nil {
+			collection.Status = &api.CollectionStatus{}
 		}
 		collection.Status.RunCount++
 		return s.updateCollectionTransactional(txn, collection.Resource.ID, collection)
