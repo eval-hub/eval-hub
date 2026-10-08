@@ -4,7 +4,7 @@ name: Instruction and Output Reliability v1
 description: >
   Evaluates bare-model instruction and output reliability across explicit
   instruction following, unconstrained JSON/schema compliance, and compound
-  constraint satisfaction. Balanced IFBench, JSONSchemaBench, and FollowBench
+  constraint satisfaction. Balanced IFBench, JSONSchemaBench Easy, and FollowBench
   coverage measures whether models can satisfy verifiable requirements without
   constrained decoding, tool execution, or multi-step agent scaffolding.
   Part of the Standard LLM Evaluation Suite.
@@ -40,7 +40,7 @@ benchmarks:
       threshold: 0.05
     parameters: {}
 
-  - id: jsonschema_bench
+  - id: jsonschema_bench_easy
     provider_id: lm_evaluation_harness
     weight: 0.3333333333333333
     primary_score:
