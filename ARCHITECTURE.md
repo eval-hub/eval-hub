@@ -62,6 +62,86 @@ Viper loads **`config/config.yaml`** with overrides from environment variables a
 
 ---
 
+## Workloads (`internal/eval_hub/workloads`)
+
+Every runnable workload is an **`EvaluationJobResource`** under the hood: its API maps a request to an `EvaluationJobConfig`, then uses the shared evaluation storage, status updates, and runtime. The [post-processing mapping](internal/eval_hub/postprocessing/mapping.go) shows both request-to-job and job-to-response conversion. The `evaluations.workload_type` column stores its type (`evaluation` by default; `post-processing` for standalone post-processing) when [SQL creates the job](internal/eval_hub/storage/sql/evaluations_crud.go). [`workloads.TypeForJob`](internal/eval_hub/workloads/workloads.go) identifies registered workloads from the stored job; an unmatched job is a conventional evaluation.
+
+The APIs keep different contracts over that shared representation. `/api/v1/evaluations/jobs` accepts model and benchmark configuration and resolves providers from the catalog. `/api/v1/evaluations/post-processing` accepts operations and data references, stores them as parameters of one internal benchmark, then returns a post-processing resource. The server assigns internal provider and benchmark IDs; public evaluation requests cannot select them. Each API must restrict reads and deletes to its own workload, and evaluation lists must exclude other workloads.
+
+### API and status flow for post processing workload
+
+```mermaid
+flowchart TB
+    client[Client] --> evalAPI["Evaluation job API<br/>/api/v1/evaluations/jobs"]
+    client --> ppAPI["Post-processing API (new)<br/>/api/v1/evaluations/post-processing"]
+    evalAPI --> evalHandlers["Evaluation handlers"]
+    ppAPI --> ppHandlers["Post-processing handlers (new)"]
+    evalHandlers -- create --> create["Shared evaluation job creation"]
+    ppHandlers --> ppMapping["ToEvaluationJob / ResourceFromJob (new)"]
+    ppMapping -- create --> create
+    evalHandlers -. GET/DELETE .-> db[("evaluations table<br/>job JSON + workload_type")]
+    ppHandlers -. GET/DELETE .-> db
+    create --> db
+    create --> runtime["Local / Kubernetes runtime"]
+    runtime --> resolver["ProviderForBenchmark"]
+    resolver --> catalog["Provider catalog (evaluation)"]
+    resolver --> registry["Workload registry (new)"]
+    registry --> ppProvider["Post-processing RuntimeProvider (new)"]
+    runtime --> evalAdapter["Evaluation adapter"]
+    runtime --> ppAdapter["Post-processing adapter (contrib)"]
+    catalog -. runtime settings .-> evalAdapter
+    ppProvider -. runtime settings .-> ppAdapter
+    evalAdapter --> events["POST /api/v1/evaluations/jobs/{id}/events"]
+    ppAdapter --> events
+    events --> update["HandleUpdateEvaluation + storage.UpdateEvaluationJob"]
+    update --> db
+    update -- "completed post-processing with eval_job source" --> link["Link result to source evaluation (new)"]
+    link --> db
+    classDef ppNew fill:#dbeafe,stroke:#2563eb,color:#111827;
+    class ppAPI,ppHandlers,ppMapping,registry,ppProvider,ppAdapter,link ppNew;
+```
+
+Blue nodes mark post-processing additions. Both workloads use the existing [status-event route](internal/eval_hub/server/server.go), [update handler](internal/eval_hub/handlers/evaluations.go), and [SQL status update](internal/eval_hub/storage/sql/evaluations_status.go); completed post-processing jobs with an `eval_job` source also use [SQL completion linking](internal/eval_hub/storage/sql/post_processing.go). The evaluation-job GET/DELETE routes still hide post-processing jobs.
+
+### Post-processing code call relationships
+
+The handler calls the mapping and registry directly. Both runtimes reach them through `shared.ProviderForBenchmark`, which looks up the registered workload and invokes its callbacks.
+
+```mermaid
+sequenceDiagram
+    participant H as handlers/post_processing.go
+    participant M as postprocessing/mapping.go
+    participant W as workloads/workloads.go
+    participant S as runtimes/shared/provider.go
+    participant K as k8s_runtime.go
+    participant L as local_runtime.go
+
+    Note over M,W: Startup registration
+    M->>W: Register(MatchesJob, RuntimeProvider)
+    Note over H,W: Post-processing API calls
+    H->>M: ToEvaluationJob / ResourceFromJob / IsPostProcessingJob
+    H->>W: TypeForJob (validate eval_job source)
+    Note over W,L: Runtime provider resolution
+    alt Kubernetes
+        K->>S: ProviderForBenchmark
+    else Local
+        L->>S: ProviderForBenchmark
+    end
+    S->>W: ForJob / ByType / IsInternalProviderID
+    W->>M: MatchesJob callback
+    S->>M: RuntimeProvider callback
+```
+
+### Steps to add a new workload
+
+For a server-managed workload outside the provider catalog, follow these steps:
+
+1. Define a stable workload type and internal provider/benchmark IDs. Implement `MatchesJob`, register a `workloads.Workload` with `Internal: true` in `init()`, and import the package from runtime wiring. See the [post-processing registration and matcher](internal/eval_hub/postprocessing/mapping.go) and its [startup import](internal/eval_hub/runtimes/shared/provider.go). Types are persisted, and the IDs identify stored jobs. Unregistered jobs default to `evaluation`.
+2. Implement `RuntimeProvider` to return an in-memory `ProviderResource` with settings for the supported runtime modes. See the [post-processing runtime provider](internal/eval_hub/postprocessing/mapping.go); [`ProviderForBenchmark`](internal/eval_hub/runtimes/shared/provider.go) uses it for registered workloads and the catalog for conventional evaluations.
+3. Add workload-specific [API types](pkg/api/post_processing.go), [handlers](internal/eval_hub/handlers/post_processing.go), and [route registration](internal/eval_hub/server/server.go) that map requests to backing evaluation jobs and stored jobs back to the public response. Scope each exposed GET/DELETE/list route to its workload, and cover cross-API resource isolation in tests.
+
+---
+
 ## Runtimes (`internal/eval_hub/runtimes`)
 
 - **`local`** — Runs benchmarks as local processes (job spec on disk, process tracking, cancellation).
