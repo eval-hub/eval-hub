@@ -1,52 +1,123 @@
-id: instruction-output-v1
+---
 name: Instruction & Output Reliability v1
-category: instruction_output
 description: >
-  Evaluates whether models produce outputs that conform to structural constraints.
-  JSONSchemaBench Easy tests JSON schema compliance on the easy split.
-  IFBench tests precise instruction-following generalization on 58 out-of-domain
-  verifiable constraints with programmatic scoring.
-  Note: lm-eval runs LM-only (no constrained decoding); scores vary drastically by split.
-  Part of the Curated Collections taxonomy (#916).
+  Evaluates bare-model instruction and output reliability across explicit
+  instruction following, unconstrained JSON/schema compliance, and compound
+  constraint satisfaction. Balanced IFBench, JSONSchemaBench, and FollowBench
+  coverage measures whether models can satisfy verifiable requirements without
+  constrained decoding, tool execution, or multi-step agent scaffolding.
+  Part of the Standard LLM Evaluation Suite.
+domains:
+  - instruction_and_output_reliability
+tasks:
+  - instruction_following
+  - structured_output
+  - constraint_following
+modalities:
+  - text
+evaluation_targets:
+  - model
+industries:
+  - enterprise
 tags:
   - instruction-following
   - structured-output
-  - json
-  - lm_eval
-  - ifbench
-  - curated
-domains: [instruction_and_output_reliability]
-tasks: [structured_output, instruction_following]
-modalities: [text]
-evaluation_targets: [model]
-curation_order: 3
+  - constraint-following
+  - json-schema
+  - bare-model
+  - standard
 pass_criteria:
-  threshold: 0.325
+  threshold: 0.283333
 benchmarks:
-  - id: jsonschema_bench_easy
-    provider_id: lm_evaluation_harness
-    weight: 1
-    primary_score:
-      metric: schema_compliance
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.60
-
   - id: ifbench
     provider_id: ifbench
-    weight: 1
+    weight: 0.3333333333333333
     primary_score:
       metric: accuracy
       lower_is_better: false
     pass_criteria:
       threshold: 0.05
+    parameters: {}
 
+  - id: jsonschema_bench
+    provider_id: lm_evaluation_harness
+    weight: 0.3333333333333333
+    primary_score:
+      metric: schema_compliance
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.60
+    parameters:
+      num_fewshot: 0
+      apply_chat_template: true
 
   - id: followbench
     provider_id: followbench
-    weight: 1
+    weight: 0.3333333333333333
     primary_score:
       metric: hsr
       lower_is_better: false
     pass_criteria:
       threshold: 0.20
+    parameters: {}
+
+custom:
+  design:
+    tool: design_collection
+    date: '2026-10-07'
+    evaluation_goal: >
+      Explicit verifiable instruction following; parseable JSON/schema output;
+      compound constraint following.
+    strictness: moderate
+    candidate_benchmark_count: 334
+
+  scope:
+    target: bare_model
+    agent_harness: false
+    tool_execution: false
+    multi_step_scaffolding: false
+    browsing: false
+    retrieval_execution: false
+    post_response_scoring_allowed: true
+
+  coverage_status: covered
+  coverage:
+    - subtask: instruction_following
+      status: covered
+      benchmark_indices:
+        - 0
+      note: >
+        IFBench prompt-level loose accuracy is the primary collection metric;
+        retain strict and instance-level metrics in reports.
+
+    - subtask: structured_output
+      status: covered
+      benchmark_indices:
+        - 1
+      note: >
+        Unconstrained model JSON/schema compliance; no grammar-enforced decoding.
+
+    - subtask: constraint_following
+      status: covered
+      benchmark_indices:
+        - 2
+      note: >
+        Normalized hard success rate; retain soft success rate and constraint
+        satisfaction level separately.
+
+  scoring:
+    threshold_status: provisional_not_empirically_calibrated
+    collection_threshold_method: >
+      Weighted mean of benchmark thresholds in higher-is-better space;
+      lower-is-better ceilings contribute 1 - threshold.
+    weight_policy: >
+      Equal weight per represented subtask/group.
+    interpretation: >
+      All represented benchmarks must meet their individual pass criteria.
+      The collection aggregate is a summary score and does not compensate for
+      a failed benchmark. Report benchmark/subtask scores alongside the
+      aggregate.
+
+  execution_status: configuration_validated_evaluations_not_run
+
+  notes: []

@@ -1,148 +1,235 @@
-id: document-understanding-v1
+---
 name: Grounded Document Understanding v1
-category: document_understanding
 description: >
-  Evaluates long-context retrieval, comprehension, and reasoning over extended documents.
-  RULER tests 13 synthetic tasks (needle-in-a-haystack, variable tracking, aggregation,
-  QA) at configurable context lengths. LongBench v2 provides real-world long-document
-  questions requiring multi-step reasoning.
-  Part of the Curated Collections taxonomy (#916).
+  Evaluates bare-model understanding of supplied long-context documents and
+  passages using RULER and LongBench v2. Coverage includes synthetic extraction,
+  passage QA, long-context retrieval and tracking, and broader long-context
+  reasoning. These benchmarks are proxies for enterprise document understanding;
+  summarization, schema-based extraction, citation/attribution, and explicit
+  grounding/faithfulness require additional datasets.
+domains:
+  - grounded_document_understanding
+tasks:
+  - long_context_understanding
+  - document_qa
+  - information_extraction
+modalities:
+  - text
+evaluation_targets:
+  - model
+industries:
+  - enterprise
 tags:
-  - long_context
-  - retrieval
-  - comprehension
+  - long-context
+  - document-understanding
+  - document-qa
+  - information-extraction
+  - bare-model
   - ruler
-  - curated
-domains: [grounded_document_understanding]
-tasks: [long_context_understanding, full_document_qa]
-modalities: [text]
-evaluation_targets: [model]
-curation_order: 2
+  - longbench
+  - standard
+
 pass_criteria:
-  threshold: 0.35
+  threshold: 0.2125
+
 benchmarks:
-  - id: niah-single-noise
-    provider_id: ruler
-    weight: 1
-    primary_score:
-      metric: string_match_all
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.50
-
-  - id: niah-single-essay
-    provider_id: ruler
-    weight: 1
-    primary_score:
-      metric: string_match_all
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.50
-
-  - id: niah-single-uuid
-    provider_id: ruler
-    weight: 1
-    primary_score:
-      metric: string_match_all
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.50
-
-  - id: niah-multikey
-    provider_id: ruler
-    weight: 1
-    primary_score:
-      metric: string_match_all
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.50
-
-  - id: niah-needle-bg
-    provider_id: ruler
-    weight: 1
-    primary_score:
-      metric: string_match_all
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.50
-
-  - id: niah-multikey-uuid
-    provider_id: ruler
-    weight: 1
-    primary_score:
-      metric: string_match_all
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.50
-
-  - id: niah-multivalue
-    provider_id: ruler
-    weight: 1
-    primary_score:
-      metric: string_match_all
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.50
-
-  - id: niah-multiquery
-    provider_id: ruler
-    weight: 1
-    primary_score:
-      metric: string_match_all
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.50
-
-  - id: variable-tracking
-    provider_id: ruler
-    weight: 1
-    primary_score:
-      metric: string_match_all
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.10
-
   - id: common-words-extraction
     provider_id: ruler
-    weight: 1
+    weight: 0.125
     primary_score:
       metric: string_match_all
       lower_is_better: false
     pass_criteria:
       threshold: 0.10
+    parameters:
+      context_lengths:
+        - 4096
+        - 8192
+        - 16384
+      num_samples: 100
 
   - id: frequency-words-extraction
     provider_id: ruler
-    weight: 1
+    weight: 0.125
     primary_score:
       metric: string_match_all
       lower_is_better: false
     pass_criteria:
       threshold: 0.10
+    parameters:
+      context_lengths:
+        - 4096
+        - 8192
+        - 16384
+      num_samples: 100
 
   - id: qa-squad
     provider_id: ruler
-    weight: 1
+    weight: 0.125
     primary_score:
       metric: string_match_part
       lower_is_better: false
     pass_criteria:
       threshold: 0.15
+    parameters:
+      context_lengths:
+        - 4096
+        - 8192
+        - 16384
+      num_samples: 100
 
   - id: qa-hotpotqa
     provider_id: ruler
-    weight: 1
+    weight: 0.125
     primary_score:
       metric: string_match_part
       lower_is_better: false
     pass_criteria:
       threshold: 0.15
+    parameters:
+      context_lengths:
+        - 4096
+        - 8192
+        - 16384
+      num_samples: 100
+
+  - id: niah-single-essay
+    provider_id: ruler
+    weight: 0.125
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.50
+    parameters:
+      context_lengths:
+        - 4096
+        - 8192
+        - 16384
+      num_samples: 100
+
+  - id: variable-tracking
+    provider_id: ruler
+    weight: 0.125
+    primary_score:
+      metric: string_match_all
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.10
+    parameters:
+      context_lengths:
+        - 4096
+        - 8192
+        - 16384
+      num_samples: 100
 
   - id: longbenchv2
     provider_id: lm_evaluation_harness
-    weight: 1
+    weight: 0.25
     primary_score:
       metric: accuracy
       lower_is_better: false
     pass_criteria:
       threshold: 0.30
+    parameters:
+      num_fewshot: 0
+      apply_chat_template: true
+
+custom:
+  design:
+    tool: design_collection
+    date: '2026-10-07'
+    evaluation_goal: >
+      Long-context document understanding, supplied-context QA, synthetic
+      extraction, long-context retrieval/tracking, and broader long-context
+      reasoning. Future expansion includes schema extraction, summarization,
+      citation/attribution, and explicit grounding/faithfulness.
+    strictness: moderate
+    candidate_benchmark_count: 334
+
+  scope:
+    target: bare_model
+    agent_harness: false
+    tool_execution: false
+    multi_step_scaffolding: false
+    browsing: false
+    retrieval_execution: false
+    post_response_scoring_allowed: true
+
+  coverage_status: partial
+
+  coverage:
+    - subtask: extraction
+      status: proxy
+      benchmark_indices:
+        - 0
+        - 1
+      note: >
+        Synthetic word/frequency extraction; does not establish coverage of
+        enterprise field extraction, classification, or schema-constrained extraction.
+
+    - subtask: summarization
+      status: gap
+      benchmark_indices: []
+      note: >
+        No representative fixed source-document summarization dataset is configured.
+
+    - subtask: full_document_qa
+      status: proxy
+      benchmark_indices:
+        - 2
+        - 3
+        - 6
+      note: >
+        QA over supplied long-context passages/documents; not a dedicated
+        complete-document understanding suite.
+
+    - subtask: long_context_understanding
+      status: covered
+      benchmark_indices:
+        - 4
+        - 5
+        - 6
+      note: >
+        RULER evaluates 4K/8K/16K context lengths; LongBench v2 adds broader
+        long-context reasoning. Report performance by context length as well
+        as aggregate scores.
+
+    - subtask: rag
+      status: proxy
+      benchmark_indices:
+        - 2
+        - 3
+      note: >
+        QA over supplied SQuAD/HotpotQA passages; retrieval is not executed or scored.
+
+    - subtask: citation_attribution
+      status: gap
+      benchmark_indices: []
+      note: >
+        No dedicated passage citation or attribution benchmark is configured.
+
+    - subtask: grounding_discipline
+      status: gap
+      benchmark_indices: []
+      note: >
+        Answer matching is not a faithfulness metric. Dedicated grounding or
+        faithfulness evaluation requires a fixed supplied-context dataset.
+
+  scoring:
+    threshold_status: provisional_not_empirically_calibrated
+    collection_threshold_method: >
+      Weighted mean of benchmark thresholds in higher-is-better space;
+      lower-is-better ceilings contribute 1 - threshold.
+    weight_policy: >
+      Equal total weight per represented subtask/group, split across related benchmarks.
+    interpretation: >
+      Report benchmark/subtask scores and coverage gaps alongside the aggregate.
+      Missing subtasks have no score; collection pass does not certify complete
+      domain coverage. Individual benchmark pass criteria should be treated as
+      required rather than allowing the aggregate to compensate for a failed
+      dimension.
+
+  execution_status: configuration_validated_evaluations_not_run
+
+  notes: []
