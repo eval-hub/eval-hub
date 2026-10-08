@@ -29,8 +29,8 @@ tags:
     x-internal: true
 paths:
   /api/v1/info:
-    x-internal: true
     get:
+      x-internal: true
       summary: Service information
       description: |
         Returns build metadata and enabled hardware profiles from

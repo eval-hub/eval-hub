@@ -1,4 +1,6 @@
 get:
+  # not yet documented publicly
+  x-internal: true
   summary: Service information
   description: |
     Returns build metadata and enabled hardware profiles from

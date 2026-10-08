@@ -30,8 +30,6 @@ tags:
 paths:
   /api/v1/info:
     $ref: paths/api_v1_info.yaml
-    # not yet documented publicly
-    x-internal: true
   /api/v1/health:
     $ref: paths/api_v1_health.yaml
   /metrics:
