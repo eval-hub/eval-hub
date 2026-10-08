@@ -1,29 +1,76 @@
 id: tool-use-v1
-name: Tool Use & Function Calling v1
-category: tool_use
+curation_order: 4
+name: Tool Use v1
 description: >
-  Evaluates LLM ability to correctly invoke APIs and tools. BFCL (Berkeley Function Calling
-  Leaderboard) tests simple, parallel, multiple, and executable API invocations.
-  Part of the Curated Collections taxonomy (#916).
+  Evaluates single-turn function-calling capability using supplied function
+  schemas, including function selection, argument generation and structural
+  correctness, together with relevance and no-call detection. BFCL categories
+  are explicitly restricted to non-agentic call-generation and relevance
+  tasks; executable, multi-turn, memory, and web-search workflows are excluded.
+  The collection evaluates tool-call generation only and does not execute tools
+  or measure multi-step agent behavior.
+  Part of the Standard LLM Evaluation Suite (standard-llm-evals-v1).
+
+domains:
+  - tool_use_and_function_calling
+
+tasks:
+  - call_generation
+  - parameter_type_correctness
+  - relevance_no_call_detection
+
+modalities:
+  - text
+
+evaluation_targets:
+  - model
+
 tags:
   - tool-use
   - function-calling
-  - api
+  - call-generation
+  - relevance
+  - bare-model
   - inspect-evals
-  - curated
-domains: [tool_use_and_function_calling]
-tasks: [call_generation, parameter_type_correctness, relevance_no_call_detection]
-modalities: [text]
-evaluation_targets: [model]
-curation_order: 4
+  - standard
+
 pass_criteria:
   threshold: 0.60
+
 benchmarks:
   - id: inspect/bfcl
     provider_id: inspect
-    weight: 1
+    weight: 0.5
     primary_score:
       metric: accuracy/accuracy
       lower_is_better: false
     pass_criteria:
       threshold: 0.60
+    parameters:
+      task_args:
+        categories:
+          - simple_python
+          - simple_java
+          - simple_javascript
+          - multiple
+          - parallel
+          - parallel_multiple
+          - live_simple
+          - live_multiple
+          - live_parallel
+          - live_parallel_multiple
+
+  - id: inspect/bfcl
+    provider_id: inspect
+    weight: 0.5
+    primary_score:
+      metric: accuracy/accuracy
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.60
+    parameters:
+      task_args:
+        categories:
+          - irrelevance
+          - live_irrelevance
+          - live_relevance
