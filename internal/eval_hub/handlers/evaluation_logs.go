@@ -58,17 +58,17 @@ func (h *Handlers) handleGetEvaluationLogs(
 		return
 	}
 
+	if h.runtime == nil {
+		w.Error(serviceerrors.NewServiceError(messages.InternalServerError, "Error", "no runtime configured"), ctx.RequestID)
+		return
+	}
+
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
 			scopedContext := storage.WithContextAndWorkloadType(runtimeCtx, workloads.Evaluation)
 			job, err := getEvaluationJob(scopedContext, evaluationJobID)
 			if err != nil {
-				w.Error(err, ctx.RequestID)
-				return err
-			}
-			if h.runtime == nil {
-				err := serviceerrors.NewServiceError(messages.InternalServerError, "Error", "no runtime configured")
 				w.Error(err, ctx.RequestID)
 				return err
 			}
