@@ -283,6 +283,22 @@ func (s *Server) setupPostProcessingRoutes(h *handlers.Handlers, router *http.Se
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
 	})
+	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/post-processing/{%s}", constants.PathParameterPostProcessingID), func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := s.newRequestWrapper(w, r)
+		if !s.canContinueRequest(ctx, resp) {
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			h.HandleGetPostProcessing(ctx, req, resp)
+		case http.MethodDelete:
+			h.HandleDeletePostProcessing(ctx, req, resp)
+		default:
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
+		}
+	})
 }
 
 func (s *Server) setupEvaluationJobLogsRoutes(h *handlers.Handlers, router *http.ServeMux) {
