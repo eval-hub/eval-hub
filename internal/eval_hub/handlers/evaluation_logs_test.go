@@ -825,9 +825,9 @@ func (s *logsJobStorage) WithContext(ctx context.Context) abstractions.Storage {
 	return c
 }
 
-func (s *logsJobStorage) WithContextAndWorkloadType(ctx context.Context, workloadType workloads.Type) abstractions.Storage {
+func (s *logsJobStorage) WithWorkloadType(workloadType workloads.Type) abstractions.Storage {
 	c := s.copy()
-	c.fakeStorage = *s.fakeStorage.WithContextAndWorkloadType(ctx, workloadType).(*fakeStorage)
+	c.fakeStorage = *s.fakeStorage.WithWorkloadType(workloadType).(*fakeStorage)
 	return c
 }
 
@@ -871,9 +871,9 @@ func (s *logsCollectionStorage) WithContext(ctx context.Context) abstractions.St
 	return c
 }
 
-func (s *logsCollectionStorage) WithContextAndWorkloadType(ctx context.Context, workloadType workloads.Type) abstractions.Storage {
+func (s *logsCollectionStorage) WithWorkloadType(workloadType workloads.Type) abstractions.Storage {
 	c := s.copy()
-	c.fakeStorage = *s.fakeStorage.WithContextAndWorkloadType(ctx, workloadType).(*fakeStorage)
+	c.fakeStorage = *s.fakeStorage.WithWorkloadType(workloadType).(*fakeStorage)
 	return c
 }
 
