@@ -537,6 +537,17 @@ func TestPostProcessingMethodsAndIdentity(t *testing.T) {
 			t.Fatalf("%s returned %d", method, response.Code)
 		}
 	}
+	itemMethod := postProcessingRequest(handler, http.MethodPut, postProcessingPath+"/post-processing-id", "")
+	if itemMethod.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("PUT to a post-processing item returned %d, want 405", itemMethod.Code)
+	}
+	missingItemIdentity := httptest.NewRequest(http.MethodGet, postProcessingPath+"/post-processing-id", nil)
+	missingItemIdentity.Header.Set("X-Tenant", "tenant-a")
+	missingItemResponse := httptest.NewRecorder()
+	handler.ServeHTTP(missingItemResponse, missingItemIdentity)
+	if missingItemResponse.Code < 400 {
+		t.Fatalf("GET post-processing item without X-User returned %d", missingItemResponse.Code)
+	}
 	for _, missing := range []string{"X-Tenant", "X-User"} {
 		req := httptest.NewRequest(http.MethodPost, postProcessingPath, strings.NewReader(postProcessingBody(`{"pvc":{"claim_name":"results"}}`)))
 		req.Header.Set("X-Tenant", "tenant-a")

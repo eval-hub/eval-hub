@@ -1,7 +1,10 @@
 package sql_test
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -9,6 +12,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/common"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -278,6 +282,249 @@ WHEN OLD.id = 'source-for-trigger' BEGIN SELECT RAISE(FAIL, 'reject post-process
 	}
 	if stored.Status.State != api.OverallStatePending {
 		t.Fatalf("state = %s, want pending after transaction rollback", stored.Status.State)
+	}
+}
+
+func TestDeletePostProcessingUnlinksSourceReference(t *testing.T) {
+	store, err := getTestStorage(t, drivers[0], getDBName())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	tenant := api.Tenant(common.GUID())
+	scoped := store.WithTenant(tenant).WithOwner("owner")
+	source := postProcessingTestJob(common.GUID(), tenant, api.EvaluationJobConfig{Name: "source"})
+	source.Status.State = api.OverallStateCompleted
+	source.Results = &api.EvaluationJobResults{
+		Benchmarks:          []api.BenchmarkResult{{ID: "accuracy", Metrics: map[string]any{"accuracy": 0.9}}},
+		MLFlowExperimentURL: "https://mlflow.example/experiment/1",
+	}
+	if err := scoped.CreateEvaluationJob(source); err != nil {
+		t.Fatal(err)
+	}
+	job := postProcessingTestJob(common.GUID(), tenant, postProcessingTestConfig(source.Resource.ID))
+	if err := scoped.CreateEvaluationJob(job); err != nil {
+		t.Fatal(err)
+	}
+	if err := scoped.UpdateEvaluationJob(job.Resource.ID, postProcessingCompletion()); err != nil {
+		t.Fatalf("complete post-processing job: %v", err)
+	}
+	linkedSource, err := scoped.GetEvaluationJob(source.Resource.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if linkedSource.Results == nil || linkedSource.Results.PostProcessingRef == nil || linkedSource.Results.PostProcessingRef.ID != job.Resource.ID {
+		t.Fatalf("source post-processing reference was not set: %+v", linkedSource.Results)
+	}
+
+	postProcessingStorage := scoped.WithContextAndWorkloadType(context.Background(), workloads.PostProcessing)
+	if err := postProcessingStorage.DeleteEvaluationJob(job.Resource.ID); err != nil {
+		t.Fatalf("delete post-processing job: %v", err)
+	}
+	updatedSource, err := scoped.GetEvaluationJob(source.Resource.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedSource.Results == nil || updatedSource.Results.PostProcessingRef != nil {
+		t.Fatalf("source reference was not cleared: %+v", updatedSource.Results)
+	}
+	if len(updatedSource.Results.Benchmarks) != 1 || updatedSource.Results.MLFlowExperimentURL != "https://mlflow.example/experiment/1" {
+		t.Fatalf("unlink changed other source results: %+v", updatedSource.Results)
+	}
+	if _, err := scoped.GetEvaluationJob(job.Resource.ID); err == nil {
+		t.Fatal("deleted post-processing job is still stored")
+	}
+}
+
+func TestDeletePostProcessingSkipsUnlinkWhenSourceReferenceDoesNotMatch(t *testing.T) {
+	store, err := getTestStorage(t, drivers[0], getDBName())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	tenant := api.Tenant(common.GUID())
+	scoped := store.WithTenant(tenant).WithOwner("owner")
+	source := postProcessingTestJob(common.GUID(), tenant, api.EvaluationJobConfig{Name: "source"})
+	source.Status.State = api.OverallStateCompleted
+	source.Results = &api.EvaluationJobResults{PostProcessingRef: &api.PostProcessingRef{ID: "newer-post-processing-job"}}
+	if err := scoped.CreateEvaluationJob(source); err != nil {
+		t.Fatal(err)
+	}
+	job := postProcessingTestJob(common.GUID(), tenant, postProcessingTestConfig(source.Resource.ID))
+	if err := scoped.CreateEvaluationJob(job); err != nil {
+		t.Fatal(err)
+	}
+	if err := scoped.WithContextAndWorkloadType(context.Background(), workloads.PostProcessing).DeleteEvaluationJob(job.Resource.ID); err != nil {
+		t.Fatalf("delete post-processing job: %v", err)
+	}
+	storedSource, err := scoped.GetEvaluationJob(source.Resource.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if storedSource.Results == nil || storedSource.Results.PostProcessingRef == nil || storedSource.Results.PostProcessingRef.ID != "newer-post-processing-job" {
+		t.Fatalf("unrelated source reference was changed: %+v", storedSource.Results)
+	}
+}
+
+func TestDeletePostProcessingSkipsMissingSelfAndExternalSources(t *testing.T) {
+	store, err := getTestStorage(t, drivers[0], getDBName())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	tenant := api.Tenant(common.GUID())
+	baseScoped := store.WithTenant(tenant).WithOwner("owner")
+	scoped := baseScoped.WithContextAndWorkloadType(context.Background(), workloads.PostProcessing)
+	externalConfig := *postprocessing.ToEvaluationJob(&api.StandalonePostProcessingRequest{
+		Operations: api.StandalonePostProcessingOperations{ConfidenceInterval: &api.StandaloneConfidenceIntervalConfig{
+			ConfidenceIntervalConfigCommon: api.ConfidenceIntervalConfigCommon{
+				CalibrationDataRef: []api.CalibrationDataRef{{PVC: &api.PVCTestDataRef{ClaimName: "calibration"}}},
+				SignificanceLevel:  0.05,
+			},
+			ResultsDataRef: &api.PostProcessingResultsDataRef{PVC: &api.PVCTestDataRef{ClaimName: "results"}},
+			PrimaryScore:   &api.PrimaryScore{Metric: "accuracy"},
+		}},
+	})
+	missingResultsRefConfig := *postprocessing.ToEvaluationJob(&api.StandalonePostProcessingRequest{
+		Operations: api.StandalonePostProcessingOperations{ConfidenceInterval: &api.StandaloneConfidenceIntervalConfig{
+			ConfidenceIntervalConfigCommon: api.ConfidenceIntervalConfigCommon{
+				CalibrationDataRef: []api.CalibrationDataRef{{PVC: &api.PVCTestDataRef{ClaimName: "calibration"}}},
+				SignificanceLevel:  0.05,
+			},
+		}},
+	})
+	tests := []struct {
+		name   string
+		id     string
+		config api.EvaluationJobConfig
+	}{
+		{name: "missing source", id: common.GUID(), config: postProcessingTestConfig("missing-source")},
+		{name: "self source", id: common.GUID()},
+		{name: "external source", id: common.GUID(), config: externalConfig},
+		{name: "missing results reference", id: common.GUID(), config: missingResultsRefConfig},
+	}
+	for i := range tests {
+		if tests[i].name == "self source" {
+			tests[i].config = postProcessingTestConfig(tests[i].id)
+		}
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			job := postProcessingTestJob(test.id, tenant, test.config)
+			if err := scoped.CreateEvaluationJob(job); err != nil {
+				t.Fatal(err)
+			}
+			if err := scoped.DeleteEvaluationJob(job.Resource.ID); err != nil {
+				t.Fatalf("delete post-processing job: %v", err)
+			}
+			if _, err := scoped.GetEvaluationJob(job.Resource.ID); err == nil {
+				t.Fatal("deleted post-processing job is still stored")
+			}
+		})
+	}
+
+	source := postProcessingTestJob(common.GUID(), tenant, api.EvaluationJobConfig{Name: "source without results"})
+	source.Status.State = api.OverallStateCompleted
+	if err := scoped.CreateEvaluationJob(source); err != nil {
+		t.Fatal(err)
+	}
+	job := postProcessingTestJob(common.GUID(), tenant, postProcessingTestConfig(source.Resource.ID))
+	if err := scoped.CreateEvaluationJob(job); err != nil {
+		t.Fatal(err)
+	}
+	if err := scoped.DeleteEvaluationJob(job.Resource.ID); err != nil {
+		t.Fatalf("delete job whose source has no results: %v", err)
+	}
+	storedSource, err := baseScoped.GetEvaluationJob(source.Resource.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if storedSource.Results != nil {
+		t.Fatalf("delete unexpectedly initialized source results: %+v", storedSource.Results)
+	}
+}
+
+func TestDeleteEvaluationJobSkipsMalformedPostProcessingAndOrdinaryJobs(t *testing.T) {
+	store, err := getTestStorage(t, drivers[0], getDBName())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	tenant := api.Tenant(common.GUID())
+	scoped := store.WithTenant(tenant).WithOwner("owner")
+	malformed := postProcessingTestJob(common.GUID(), tenant, api.EvaluationJobConfig{Benchmarks: []api.EvaluationBenchmarkConfig{{
+		ProviderID: postprocessing.ProviderID,
+		Ref:        api.Ref{ID: postprocessing.BenchmarkID},
+		Parameters: map[string]any{"operations": map[string]any{"confidence_interval": "invalid"}},
+	}}})
+	if err := scoped.CreateEvaluationJob(malformed); err != nil {
+		t.Fatal(err)
+	}
+	if err := scoped.DeleteEvaluationJob(malformed.Resource.ID); err == nil || !strings.Contains(err.Error(), "decode post-processing operations") {
+		t.Fatalf("DeleteEvaluationJob() error = %v, want malformed operations error", err)
+	}
+	if _, err := scoped.GetEvaluationJob(malformed.Resource.ID); err != nil {
+		t.Fatalf("malformed job was deleted despite unlink failure: %v", err)
+	}
+
+	ordinary := postProcessingTestJob(common.GUID(), tenant, api.EvaluationJobConfig{Name: "ordinary evaluation"})
+	ordinary.Results = &api.EvaluationJobResults{PostProcessingRef: &api.PostProcessingRef{ID: "unrelated"}}
+	if err := scoped.CreateEvaluationJob(ordinary); err != nil {
+		t.Fatal(err)
+	}
+	if err := scoped.WithContextAndWorkloadType(context.Background(), workloads.Evaluation).DeleteEvaluationJob(ordinary.Resource.ID); err != nil {
+		t.Fatalf("delete ordinary evaluation: %v", err)
+	}
+	if _, err := scoped.GetEvaluationJob(ordinary.Resource.ID); err == nil {
+		t.Fatal("ordinary evaluation is still stored after deletion")
+	}
+}
+
+func TestDeletePostProcessingRollsBackWhenSourceUnlinkFails(t *testing.T) {
+	databaseName := getDBName()
+	store, err := getTestStorage(t, drivers[0], databaseName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	tenant := api.Tenant(common.GUID())
+	scoped := store.WithTenant(tenant).WithOwner("owner")
+	const sourceID = "source-reject-unlink"
+	source := postProcessingTestJob(sourceID, tenant, api.EvaluationJobConfig{Name: "source"})
+	source.Status.State = api.OverallStateCompleted
+	if err := scoped.CreateEvaluationJob(source); err != nil {
+		t.Fatal(err)
+	}
+	job := postProcessingTestJob(common.GUID(), tenant, postProcessingTestConfig(sourceID))
+	if err := scoped.CreateEvaluationJob(job); err != nil {
+		t.Fatal(err)
+	}
+	if err := scoped.UpdateEvaluationJob(job.Resource.ID, postProcessingCompletion()); err != nil {
+		t.Fatalf("complete post-processing job: %v", err)
+	}
+	triggerDB, err := sql.Open("sqlite", getDBInMemoryURL(databaseName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = triggerDB.Close() })
+	_, err = triggerDB.Exec(fmt.Sprintf(`CREATE TRIGGER reject_source_unlink BEFORE UPDATE ON evaluations
+WHEN OLD.id = '%s' BEGIN SELECT RAISE(FAIL, 'reject post-processing source unlink'); END;`, sourceID))
+	if err != nil {
+		t.Fatalf("create source-update trigger: %v", err)
+	}
+	err = scoped.WithContextAndWorkloadType(context.Background(), workloads.PostProcessing).DeleteEvaluationJob(job.Resource.ID)
+	if err == nil || !strings.Contains(err.Error(), "reject post-processing source unlink") {
+		t.Fatalf("DeleteEvaluationJob() error = %v, want source unlink failure", err)
+	}
+	if _, err := scoped.GetEvaluationJob(job.Resource.ID); err != nil {
+		t.Fatalf("post-processing deletion was not rolled back: %v", err)
+	}
+	storedSource, err := scoped.GetEvaluationJob(sourceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if storedSource.Results == nil || storedSource.Results.PostProcessingRef == nil || storedSource.Results.PostProcessingRef.ID != job.Resource.ID {
+		t.Fatalf("source reference changed despite transaction rollback: %+v", storedSource.Results)
 	}
 }
 

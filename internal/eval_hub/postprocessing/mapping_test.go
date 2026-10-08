@@ -236,6 +236,72 @@ func TestResourceFromJobMapsConfidenceIntervalResults(t *testing.T) {
 	}
 }
 
+func TestResourceFromJobConfidenceIntervalResultEdgeCases(t *testing.T) {
+	tests := []struct {
+		name      string
+		results   *api.EvaluationJobResults
+		external  bool
+		wantError string
+	}{
+		{name: "no backing job results"},
+		{name: "no confidence interval output", results: &api.EvaluationJobResults{Benchmarks: []api.BenchmarkResult{{AdditionalInfo: map[string]any{}}}}},
+		{
+			name: "evaluation source ignores aggregate-only output",
+			results: &api.EvaluationJobResults{Benchmarks: []api.BenchmarkResult{{AdditionalInfo: map[string]any{
+				"confidence_interval": map[string]any{"confidence_interval": map[string]any{"lower": 0.1, "upper": 0.9}},
+			}}}},
+		},
+		{
+			name:     "external source ignores benchmark-only output",
+			external: true,
+			results: &api.EvaluationJobResults{Benchmarks: []api.BenchmarkResult{{AdditionalInfo: map[string]any{
+				"confidence_interval": map[string]any{"benchmarks": []any{map[string]any{"id": "bench"}}},
+			}}}},
+		},
+		{
+			name: "marshal failure",
+			results: &api.EvaluationJobResults{Benchmarks: []api.BenchmarkResult{{AdditionalInfo: map[string]any{
+				"confidence_interval": make(chan int),
+			}}}},
+			wantError: "marshal post-processing confidence interval results",
+		},
+		{
+			name: "decode failure",
+			results: &api.EvaluationJobResults{Benchmarks: []api.BenchmarkResult{{AdditionalInfo: map[string]any{
+				"confidence_interval": "not an object",
+			}}}},
+			wantError: "decode post-processing confidence interval results",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			operations := validOperations()
+			if test.external {
+				confidenceInterval := operations["confidence_interval"].(map[string]any)
+				confidenceInterval["results_data_ref"] = map[string]any{"pvc": map[string]any{"claim_name": "results"}}
+			}
+			job := &api.EvaluationJobResource{
+				EvaluationJobConfig: *postProcessingJob(map[string]any{"operations": operations}),
+				Results:             test.results,
+			}
+			resource, err := ResourceFromJob(job)
+			if test.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantError) {
+					t.Fatalf("ResourceFromJob() error = %v, want it to contain %q", err, test.wantError)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ResourceFromJob() error = %v", err)
+			}
+			if resource.Results != nil {
+				t.Fatalf("ResourceFromJob() results = %+v, want nil", resource.Results)
+			}
+		})
+	}
+}
+
 func postProcessingJob(parameters any) *api.EvaluationJobConfig {
 	var params map[string]any
 	if parameters != nil {
