@@ -399,8 +399,8 @@ func (s *sqlStorage) WithContext(ctx context.Context) abstractions.Storage {
 	}
 }
 
-func (s *sqlStorage) WithContextAndWorkloadType(ctx context.Context, workloadType workloads.Type) abstractions.Storage {
-	return s.WithContext(workloads.WithType(ctx, workloadType))
+func (s *sqlStorage) WithWorkloadType(workloadType workloads.Type) abstractions.Storage {
+	return s.WithContext(workloads.WithType(s.ctx, workloadType))
 }
 
 func (s *sqlStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
