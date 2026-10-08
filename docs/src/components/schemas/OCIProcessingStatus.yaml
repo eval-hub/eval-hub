@@ -1,0 +1,22 @@
+type: object
+description: >-
+  Common post-evaluation OCI workflow status for evaluation-card generation and
+  publication, evaluation-bundle generation and publication, and future signing.
+  Independent of the evaluation job status and completion message. Omit until
+  actual workflow information is available; no state or message is defaulted.
+required:
+  - state
+  - message
+properties:
+  state:
+    type: string
+    enum: [pending, generating_evaluation_card, generating_evaluation_bundle, signing, failed, completed]
+    description: >-
+      pending means OCI processing is initialized but card processing has not started.
+      generating_evaluation_card covers card generation, serialization, and publication.
+      generating_evaluation_bundle covers child artifact validation, index creation,
+      and publication. signing covers signing the published bundle and is reserved for
+      future execution. failed means a required stage failed, with the stage and cause
+      described in the message. completed means all applicable stages succeeded.
+  message:
+    $ref: ./MessageInfo.yaml
