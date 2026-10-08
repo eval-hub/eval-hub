@@ -857,7 +857,7 @@ func (tc *scenarioConfig) theAllBenchmarksShouldHaveAdditionalInfo() error {
 	// Load the config - benchmark_expected_fields.json
 	config, err := loadExpectedFieldsConfig()
 	if err != nil {
-		return err
+		return tc.logError(err)
 	}
 
 	for i, b := range benchmarks {
