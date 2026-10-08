@@ -678,7 +678,10 @@ paths:
       tags:
         - Evaluations
       summary: Create Post-Processing Computation
-      description: Create an asynchronous post-processing computation.
+      description: |
+        Create an asynchronous post-processing computation. Set `operation_order`
+        to control execution order. If it is omitted, no operation order is
+        guaranteed.
       operationId: create_evaluations_post_processing
       requestBody:
         required: true
@@ -698,28 +701,30 @@ paths:
                     memory:
                       request: 1Gi
                       limit: 4Gi
+                  operation_order:
+                    - confidence_interval
                   operations:
-                    - confidence_interval_config:
-                        results_data_ref:
-                          eval_job:
-                            id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
-                            num_parallel_threads: 2
-                        calibration_data_ref:
-                          - s3:
-                              bucket: evaluation-data
-                              key: calibration/accuracy
-                              secret_ref: s3-secret
-                            data_config:
-                              format: jsonl
-                              columns:
-                                sample_id: example_id
-                                label: human_score
-                                prediction: judge_score
-                                benchmark_id: benchmark_id
-                                provider_id: provider_id
-                              selection:
-                                metric: accuracy
-                        significance_level: 0.7
+                    confidence_interval:
+                      results_data_ref:
+                        eval_job:
+                          id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
+                          num_parallel_threads: 2
+                      calibration_data_ref:
+                        - s3:
+                            bucket: evaluation-data
+                            key: calibration/accuracy
+                            secret_ref: s3-secret
+                          data_config:
+                            format: jsonl
+                            columns:
+                              sample_id: example_id
+                              label: human_score
+                              prediction: judge_score
+                              benchmark_id: benchmark_id
+                              provider_id: provider_id
+                            selection:
+                              metric: accuracy
+                      significance_level: 0.7
       responses:
         '202':
           description: Post-processing computation accepted.
@@ -773,28 +778,30 @@ paths:
                       memory:
                         request: 1Gi
                         limit: 4Gi
+                    operation_order:
+                      - confidence_interval
                     operations:
-                      - confidence_interval_config:
-                          results_data_ref:
-                            eval_job:
-                              id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
-                              num_parallel_threads: 2
-                          calibration_data_ref:
-                            - s3:
-                                bucket: evaluation-data
-                                key: calibration/accuracy
-                                secret_ref: s3-secret
-                              data_config:
-                                format: jsonl
-                                columns:
-                                  sample_id: example_id
-                                  label: human_score
-                                  prediction: judge_score
-                                  benchmark_id: benchmark_id
-                                  provider_id: provider_id
-                                selection:
-                                  metric: accuracy
-                          significance_level: 0.7
+                      confidence_interval:
+                        results_data_ref:
+                          eval_job:
+                            id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
+                            num_parallel_threads: 2
+                        calibration_data_ref:
+                          - s3:
+                              bucket: evaluation-data
+                              key: calibration/accuracy
+                              secret_ref: s3-secret
+                            data_config:
+                              format: jsonl
+                              columns:
+                                sample_id: example_id
+                                label: human_score
+                                prediction: judge_score
+                                benchmark_id: benchmark_id
+                                provider_id: provider_id
+                              selection:
+                                metric: accuracy
+                        significance_level: 0.7
                     status:
                       state: completed
                       benchmarks:
@@ -827,31 +834,33 @@ paths:
                       memory:
                         request: 1Gi
                         limit: 4Gi
+                    operation_order:
+                      - confidence_interval
                     operations:
-                      - confidence_interval_config:
-                          results_data_ref:
-                            s3:
+                      confidence_interval:
+                        results_data_ref:
+                          s3:
+                            bucket: evaluation-data
+                            key: results/accuracy
+                            secret_ref: s3-secret
+                        primary_score:
+                          metric: accuracy
+                        calibration_data_ref:
+                          - s3:
                               bucket: evaluation-data
-                              key: results/accuracy
+                              key: calibration/accuracy
                               secret_ref: s3-secret
-                          primary_score:
-                            metric: accuracy
-                          calibration_data_ref:
-                            - s3:
-                                bucket: evaluation-data
-                                key: calibration/accuracy
-                                secret_ref: s3-secret
-                              data_config:
-                                format: jsonl
-                                columns:
-                                  sample_id: example_id
-                                  label: human_score
-                                  prediction: judge_score
-                                  benchmark_id: benchmark_id
-                                  provider_id: provider_id
-                                selection:
-                                  metric: accuracy
-                          significance_level: 0.7
+                            data_config:
+                              format: jsonl
+                              columns:
+                                sample_id: example_id
+                                label: human_score
+                                prediction: judge_score
+                                benchmark_id: benchmark_id
+                                provider_id: provider_id
+                              selection:
+                                metric: accuracy
+                        significance_level: 0.7
                     status:
                       state: completed
                     results:
@@ -896,9 +905,11 @@ paths:
         confidence interval computation, the existing post-processing resource is
         returned.
 
-        The computation runs independently for each benchmark. Each item in
-        `operations` describes one post-processing operation. `hardware_config`
-        applies to the post-processing job as a whole.
+        The computation runs independently for each benchmark. The `operations`
+        object is keyed by operation kind, so each kind can appear at most once.
+        Use `operation_order` to control execution order. If it is omitted, no
+        operation order is guaranteed.
+        `hardware_config` applies to the post-processing job as a whole.
       operationId: post_evaluations_jobs_job_id_post_processing
       parameters:
         - name: job_id
@@ -925,25 +936,27 @@ paths:
                     memory:
                       request: 1Gi
                       limit: 4Gi
+                  operation_order:
+                    - confidence_interval
                   operations:
-                    - confidence_interval_config:
-                        num_parallel_threads: 2
-                        calibration_data_ref:
-                          - s3:
-                              bucket: evaluation-data
-                              key: calibration/accuracy
-                              secret_ref: s3-secret
-                            data_config:
-                              format: jsonl
-                              columns:
-                                sample_id: example_id
-                                label: human_score
-                                prediction: judge_score
-                                benchmark_id: benchmark_id
-                                provider_id: provider_id
-                              selection:
-                                metric: accuracy
-                        significance_level: 0.7
+                    confidence_interval:
+                      num_parallel_threads: 2
+                      calibration_data_ref:
+                        - s3:
+                            bucket: evaluation-data
+                            key: calibration/accuracy
+                            secret_ref: s3-secret
+                          data_config:
+                            format: jsonl
+                            columns:
+                              sample_id: example_id
+                              label: human_score
+                              prediction: judge_score
+                              benchmark_id: benchmark_id
+                              provider_id: provider_id
+                            selection:
+                              metric: accuracy
+                      significance_level: 0.7
       responses:
         '200':
           description: The existing post-processing resource is returned.
@@ -966,25 +979,27 @@ paths:
                   memory:
                     request: 1Gi
                     limit: 4Gi
+                operation_order:
+                  - confidence_interval
                 operations:
-                  - confidence_interval_config:
-                      num_parallel_threads: 2
-                      calibration_data_ref:
-                        - s3:
-                            bucket: evaluation-data
-                            key: calibration/accuracy
-                            secret_ref: s3-secret
-                          data_config:
-                            format: jsonl
-                            columns:
-                              sample_id: example_id
-                              label: human_score
-                              prediction: judge_score
-                              benchmark_id: benchmark_id
-                              provider_id: provider_id
-                            selection:
-                              metric: accuracy
-                      significance_level: 0.7
+                  confidence_interval:
+                    num_parallel_threads: 2
+                    calibration_data_ref:
+                      - s3:
+                          bucket: evaluation-data
+                          key: calibration/accuracy
+                          secret_ref: s3-secret
+                        data_config:
+                          format: jsonl
+                          columns:
+                            sample_id: example_id
+                            label: human_score
+                            prediction: judge_score
+                            benchmark_id: benchmark_id
+                            provider_id: provider_id
+                          selection:
+                            metric: accuracy
+                    significance_level: 0.7
                 status:
                   state: completed
                   benchmarks:
@@ -1021,25 +1036,27 @@ paths:
                   memory:
                     request: 1Gi
                     limit: 4Gi
+                operation_order:
+                  - confidence_interval
                 operations:
-                  - confidence_interval_config:
-                      num_parallel_threads: 2
-                      calibration_data_ref:
-                        - s3:
-                            bucket: evaluation-data
-                            key: calibration/accuracy
-                            secret_ref: s3-secret
-                          data_config:
-                            format: jsonl
-                            columns:
-                              sample_id: example_id
-                              label: human_score
-                              prediction: judge_score
-                              benchmark_id: benchmark_id
-                              provider_id: provider_id
-                            selection:
-                              metric: accuracy
-                      significance_level: 0.7
+                  confidence_interval:
+                    num_parallel_threads: 2
+                    calibration_data_ref:
+                      - s3:
+                          bucket: evaluation-data
+                          key: calibration/accuracy
+                          secret_ref: s3-secret
+                        data_config:
+                          format: jsonl
+                          columns:
+                            sample_id: example_id
+                            label: human_score
+                            prediction: judge_score
+                            benchmark_id: benchmark_id
+                            provider_id: provider_id
+                          selection:
+                            metric: accuracy
+                    significance_level: 0.7
                 status:
                   state: pending
         '400':
@@ -1094,25 +1111,27 @@ paths:
                   memory:
                     request: 1Gi
                     limit: 4Gi
+                operation_order:
+                  - confidence_interval
                 operations:
-                  - confidence_interval_config:
-                      num_parallel_threads: 2
-                      calibration_data_ref:
-                        - s3:
-                            bucket: evaluation-data
-                            key: calibration/accuracy
-                            secret_ref: s3-secret
-                          data_config:
-                            format: jsonl
-                            columns:
-                              sample_id: example_id
-                              label: human_score
-                              prediction: judge_score
-                              benchmark_id: benchmark_id
-                              provider_id: provider_id
-                            selection:
-                              metric: accuracy
-                      significance_level: 0.7
+                  confidence_interval:
+                    num_parallel_threads: 2
+                    calibration_data_ref:
+                      - s3:
+                          bucket: evaluation-data
+                          key: calibration/accuracy
+                          secret_ref: s3-secret
+                        data_config:
+                          format: jsonl
+                          columns:
+                            sample_id: example_id
+                            label: human_score
+                            prediction: judge_score
+                            benchmark_id: benchmark_id
+                            provider_id: provider_id
+                          selection:
+                            metric: accuracy
+                    significance_level: 0.7
                 status:
                   state: completed
                   benchmarks:
@@ -3647,6 +3666,19 @@ components:
           $ref: '#/components/schemas/PostProcessingName'
         hardware_config:
           $ref: '#/components/schemas/PostProcessingHardwareConfig'
+        operation_order:
+          description: |
+            Optional execution order for operation kinds. When present, this must
+            list every configured operation kind exactly once. When omitted, no
+            execution order is guaranteed.
+          type: array
+          minItems: 1
+          maxItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - confidence_interval
     CalibrationDataConfig:
       type: object
       title: CalibrationDataConfig
@@ -3705,10 +3737,6 @@ components:
           $ref: '#/components/schemas/TestDataRefGit'
         hf:
           $ref: '#/components/schemas/TestDataRefHF'
-        resolved_sha:
-          $ref: '#/components/schemas/TestDataRefResolvedSHA'
-        type:
-          $ref: '#/components/schemas/TestDataRefType'
         data_config:
           $ref: '#/components/schemas/CalibrationDataConfig'
       required:
@@ -3819,12 +3847,43 @@ components:
         - oci
       additionalProperties: false
     ExternalResultsDataRef:
-      oneOf:
-        - $ref: '#/components/schemas/TestDataRef'
-        - $ref: '#/components/schemas/MLflowDataRef'
-        - $ref: '#/components/schemas/OCIDataRef'
       title: ExternalResultsDataRef
       description: Reference to result data outside an evaluation job.
+      oneOf:
+        - type: object
+          properties:
+            s3:
+              $ref: '#/components/schemas/TestDataRefS3'
+          required:
+            - s3
+          additionalProperties: false
+          title: S3
+        - type: object
+          properties:
+            pvc:
+              $ref: '#/components/schemas/TestDataRefPVC'
+          required:
+            - pvc
+          additionalProperties: false
+          title: PVC
+        - type: object
+          properties:
+            git:
+              $ref: '#/components/schemas/TestDataRefGit'
+          required:
+            - git
+          additionalProperties: false
+          title: Git
+        - type: object
+          properties:
+            hf:
+              $ref: '#/components/schemas/TestDataRefHF'
+          required:
+            - hf
+          additionalProperties: false
+          title: HuggingFace
+        - $ref: '#/components/schemas/MLflowDataRef'
+        - $ref: '#/components/schemas/OCIDataRef'
     StandaloneConfidenceIntervalConfig:
       type: object
       title: StandaloneConfidenceIntervalConfig
@@ -3855,21 +3914,18 @@ components:
               description: Direct external result references must identify the primary score metric.
           description: Result data reference. An evaluation job is supported only for result data.
       unevaluatedProperties: false
-    StandalonePostProcessingOperation:
+    StandalonePostProcessingOperations:
       type: object
-      title: StandalonePostProcessingOperation
-      description: Confidence interval operation executed by standalone post-processing.
+      title: StandalonePostProcessingOperations
+      description: |
+        Post-processing operations executed by a standalone resource. Each property
+        names an operation kind, so a kind can appear at most once. At least one
+        operation must be configured.
+      minProperties: 1
       properties:
-        confidence_interval_config:
+        confidence_interval:
           $ref: '#/components/schemas/StandaloneConfidenceIntervalConfig'
       additionalProperties: false
-    StandalonePostProcessingOperations:
-      type: array
-      title: StandalonePostProcessingOperations
-      description: Post-processing operations executed by a standalone resource.
-      minItems: 1
-      items:
-        $ref: '#/components/schemas/StandalonePostProcessingOperation'
     StandalonePostProcessingRequest:
       title: StandalonePostProcessingRequest
       description: Request to create post-processing operations.
@@ -3972,7 +4028,7 @@ components:
       additionalProperties: false
     PostProcessingResource:
       title: PostProcessingResource
-      description: Standalone confidence interval post-processing resource.
+      description: Standalone post-processing resource.
       allOf:
         - $ref: '#/components/schemas/PostProcessingCommon'
         - type: object
@@ -4004,21 +4060,18 @@ components:
             num_parallel_threads:
               $ref: '#/components/schemas/NumParallelThreads'
       unevaluatedProperties: false
-    JobPostProcessingOperation:
+    JobPostProcessingOperations:
       type: object
-      title: JobPostProcessingOperation
-      description: Confidence interval operation executed for an evaluation job.
+      title: JobPostProcessingOperations
+      description: |
+        Post-processing operations associated with an evaluation job. Each property
+        names an operation kind, so a kind can appear at most once. At least one
+        operation must be configured.
+      minProperties: 1
       properties:
-        confidence_interval_config:
+        confidence_interval:
           $ref: '#/components/schemas/ConfidenceIntervalConfig'
       additionalProperties: false
-    JobPostProcessingOperations:
-      type: array
-      title: JobPostProcessingOperations
-      description: Post-processing operations associated with an evaluation job.
-      minItems: 1
-      items:
-        $ref: '#/components/schemas/JobPostProcessingOperation'
     ConfidenceIntervalPostProcessingRequest:
       title: ConfidenceIntervalPostProcessingRequest
       description: Request to configure post-processing operations for an evaluation job.
@@ -4033,7 +4086,7 @@ components:
       unevaluatedProperties: false
     JobPostProcessingResource:
       title: JobPostProcessingResource
-      description: Confidence interval post-processing resource associated with an evaluation job.
+      description: Post-processing resource associated with an evaluation job.
       allOf:
         - $ref: '#/components/schemas/PostProcessingCommon'
         - type: object

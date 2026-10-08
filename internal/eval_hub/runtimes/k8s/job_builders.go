@@ -101,6 +101,7 @@ const (
 	labelProviderIDKey               = "provider_id"
 	labelBenchmarkIDKey              = "benchmark_id"
 	labelBenchmarkIndexKey           = "benchmark_index"
+	labelExecutionIDKey              = "eval-hub.github.io/execution-id"
 	labelAppValue                    = "evalhub"
 	labelComponentValue              = "evaluation-job"
 	capabilityDropAll                = "ALL"

@@ -8,9 +8,11 @@ post:
     confidence interval computation, the existing post-processing resource is
     returned.
 
-    The computation runs independently for each benchmark. Each item in
-    `operations` describes one post-processing operation. `hardware_config`
-    applies to the post-processing job as a whole.
+    The computation runs independently for each benchmark. The `operations`
+    object is keyed by operation kind, so each kind can appear at most once.
+    Use `operation_order` to control execution order. If it is omitted, no
+    operation order is guaranteed.
+    `hardware_config` applies to the post-processing job as a whole.
   operationId: post_evaluations_jobs_job_id_post_processing
   parameters:
     - name: job_id
@@ -37,25 +39,27 @@ post:
                 memory:
                   request: 1Gi
                   limit: "4Gi"
+              operation_order:
+                - confidence_interval
               operations:
-                - confidence_interval_config:
-                    num_parallel_threads: 2
-                    calibration_data_ref:
-                      - s3:
-                          bucket: evaluation-data
-                          key: calibration/accuracy
-                          secret_ref: s3-secret
-                        data_config:
-                          format: jsonl
-                          columns:
-                            sample_id: example_id
-                            label: human_score
-                            prediction: judge_score
-                            benchmark_id: benchmark_id
-                            provider_id: provider_id
-                          selection:
-                            metric: accuracy
-                    significance_level: 0.7
+                confidence_interval:
+                  num_parallel_threads: 2
+                  calibration_data_ref:
+                    - s3:
+                        bucket: evaluation-data
+                        key: calibration/accuracy
+                        secret_ref: s3-secret
+                      data_config:
+                        format: jsonl
+                        columns:
+                          sample_id: example_id
+                          label: human_score
+                          prediction: judge_score
+                          benchmark_id: benchmark_id
+                          provider_id: provider_id
+                        selection:
+                          metric: accuracy
+                  significance_level: 0.7
   responses:
     '200':
       description: The existing post-processing resource is returned.
@@ -78,25 +82,27 @@ post:
               memory:
                 request: 1Gi
                 limit: "4Gi"
+            operation_order:
+              - confidence_interval
             operations:
-              - confidence_interval_config:
-                  num_parallel_threads: 2
-                  calibration_data_ref:
-                    - s3:
-                        bucket: evaluation-data
-                        key: calibration/accuracy
-                        secret_ref: s3-secret
-                      data_config:
-                        format: jsonl
-                        columns:
-                          sample_id: example_id
-                          label: human_score
-                          prediction: judge_score
-                          benchmark_id: benchmark_id
-                          provider_id: provider_id
-                        selection:
-                          metric: accuracy
-                  significance_level: 0.7
+              confidence_interval:
+                num_parallel_threads: 2
+                calibration_data_ref:
+                  - s3:
+                      bucket: evaluation-data
+                      key: calibration/accuracy
+                      secret_ref: s3-secret
+                    data_config:
+                      format: jsonl
+                      columns:
+                        sample_id: example_id
+                        label: human_score
+                        prediction: judge_score
+                        benchmark_id: benchmark_id
+                        provider_id: provider_id
+                      selection:
+                        metric: accuracy
+                significance_level: 0.7
             status:
               state: completed
               benchmarks:
@@ -133,25 +139,27 @@ post:
               memory:
                 request: 1Gi
                 limit: "4Gi"
+            operation_order:
+              - confidence_interval
             operations:
-              - confidence_interval_config:
-                  num_parallel_threads: 2
-                  calibration_data_ref:
-                    - s3:
-                        bucket: evaluation-data
-                        key: calibration/accuracy
-                        secret_ref: s3-secret
-                      data_config:
-                        format: jsonl
-                        columns:
-                          sample_id: example_id
-                          label: human_score
-                          prediction: judge_score
-                          benchmark_id: benchmark_id
-                          provider_id: provider_id
-                        selection:
-                          metric: accuracy
-                  significance_level: 0.7
+              confidence_interval:
+                num_parallel_threads: 2
+                calibration_data_ref:
+                  - s3:
+                      bucket: evaluation-data
+                      key: calibration/accuracy
+                      secret_ref: s3-secret
+                    data_config:
+                      format: jsonl
+                      columns:
+                        sample_id: example_id
+                        label: human_score
+                        prediction: judge_score
+                        benchmark_id: benchmark_id
+                        provider_id: provider_id
+                      selection:
+                        metric: accuracy
+                significance_level: 0.7
             status:
               state: pending
     '400':

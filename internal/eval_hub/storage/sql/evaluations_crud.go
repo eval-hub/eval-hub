@@ -8,6 +8,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	se "github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/shared"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -42,8 +43,11 @@ func (s *sqlStorage) CreateEvaluationJobAndUpdateCollection(evaluation *api.Eval
 		if err = s.createEvaluationJobTransactional(txn, evaluation); err != nil {
 			return err
 		}
-		if collection.Status == nil {
+		if collection.Resource.IsSystemResource() {
 			return nil
+		}
+		if collection.Status == nil {
+			collection.Status = &api.CollectionStatus{}
 		}
 		collection.Status.RunCount++
 		return s.updateCollectionTransactional(txn, collection.Resource.ID, collection)
@@ -55,7 +59,8 @@ func (s *sqlStorage) createEvaluationJobTransactional(txn *sql.Tx, evaluation *a
 	if err != nil {
 		return se.WithRollback(err)
 	}
-	addEntityStatement, args := s.statementsFactory.CreateEvaluationAddEntityStatement(evaluation, string(evaluationJSON))
+	workloadType := workloads.TypeForJob(&evaluation.EvaluationJobConfig)
+	addEntityStatement, args := s.statementsFactory.CreateEvaluationAddEntityStatement(evaluation, string(evaluationJSON), workloadType)
 	_, err = s.exec(txn, addEntityStatement, args...)
 	if err != nil {
 		return se.WithRollback(err)

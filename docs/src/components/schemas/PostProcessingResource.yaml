@@ -1,5 +1,5 @@
 title: PostProcessingResource
-description: Standalone confidence interval post-processing resource.
+description: Standalone post-processing resource.
 allOf:
   - $ref: ./PostProcessingCommon.yaml
   - type: object

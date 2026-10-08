@@ -8,11 +8,12 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/shared"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 const (
-	insertEvaluationStatement = `INSERT INTO evaluations (id, tenant_id, owner, status, experiment_id, entity) VALUES (?, ?, ?, ?, ?, ?);`
+	insertEvaluationStatement = `INSERT INTO evaluations (id, tenant_id, owner, status, experiment_id, workload_type, entity) VALUES (?, ?, ?, ?, ?, ?, ?);`
 
 	insertCollectionStatement = `INSERT INTO collections (id, tenant_id, owner, created_at, updated_at, entity) VALUES (?, ?, ?, ?, ?, ?);`
 
@@ -27,6 +28,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
     owner VARCHAR(255) NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
     experiment_id VARCHAR(255) NOT NULL,
+    workload_type TEXT NOT NULL DEFAULT 'evaluation',
     entity TEXT NOT NULL,
     PRIMARY KEY (id)
 );
@@ -93,8 +95,8 @@ func (s *sqliteStatementsFactory) GetAllowedFilterColumns(tableName string) []st
 	}
 }
 
-func (s *sqliteStatementsFactory) CreateEvaluationAddEntityStatement(evaluation *api.EvaluationJobResource, entity string) (string, []any) {
-	return insertEvaluationStatement, []any{evaluation.Resource.ID, evaluation.Resource.Tenant, evaluation.Resource.Owner, evaluation.Status.State, evaluation.Resource.MLFlowExperimentID, entity}
+func (s *sqliteStatementsFactory) CreateEvaluationAddEntityStatement(evaluation *api.EvaluationJobResource, entity string, workloadType workloads.Type) (string, []any) {
+	return insertEvaluationStatement, []any{evaluation.Resource.ID, evaluation.Resource.Tenant, evaluation.Resource.Owner, evaluation.Status.State, evaluation.Resource.MLFlowExperimentID, string(workloadType), entity}
 }
 
 func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {

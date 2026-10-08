@@ -77,6 +77,7 @@ When running in local server mode, the tests will:
 | --- | :-- |
 | `@collections` | Used to run just the collections tests |
 | `@evaluations` | Used to run just the evaluations tests |
+| `@post_processing` | Standalone post-processing API scenarios in `standalone_post_processing.feature`; run with `GODOG_TAGS="@post_processing"` against the embedded local FVT server. |
 | `@providers` | Used to run just the providers tests |
 | `@info` | Authenticated service metadata and tenant queue tests in `info.feature` |
 | `@mcp` | MCP tool and resource scenarios in `mcp.feature` |
