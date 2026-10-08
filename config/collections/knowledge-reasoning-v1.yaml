@@ -49,7 +49,7 @@ benchmarks:
     provider_id: inspect
     weight: 0.3333333333333333
     primary_score:
-      metric: accuracy/accuracy
+      metric: regex_judge/accuracy
       lower_is_better: false
     pass_criteria:
       threshold: 0.12
