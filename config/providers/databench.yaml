@@ -1,0 +1,32 @@
+id: databench
+name: DataBench
+description: Direct-answer question answering over DataBench CSV tables, scored by the official DataBench evaluator.
+type: community
+runtime:
+  k8s:
+    image: quay.io/evalhub/community-databench:latest
+    image_pull_policy: always
+    entrypoint: [python, main.py]
+    cpu_request: 100m
+    memory_request: 1Gi
+    cpu_limit: 2000m
+    memory_limit: 8Gi
+benchmarks:
+  - id: databench_lite
+    name: DataBench Lite
+    description: English qa/train questions over sample.parquet tables, scored against sample_answer.
+    category: table_qa
+    domains: [knowledge_and_reasoning]
+    tasks: [data_analysis]
+    modalities: [text]
+    evaluation_targets: [model]
+    metrics: [accuracy]
+    primary_score: {metric: accuracy, lower_is_better: false}
+    tags: [databench, table-qa, lite]
+parameters:
+  - {name: num_examples, type: integer, description: Positive question limit; omitted means the entire selected split.}
+  - {name: table_id, type: string, description: Optional dataset table ID filter, e.g. 001_Forbes.}
+  - {name: max_tokens, type: integer, default: 2048, description: Output token limit.}
+  - {name: temperature, type: number, default: 0, description: Model sampling temperature.}
+  - {name: request_timeout, type: integer, default: 120, description: Timeout per model request in seconds.}
+  - {name: max_prompt_chars, type: integer, default: 1000000, description: Prompt character guard; oversized tables fail rather than silently truncate.}
