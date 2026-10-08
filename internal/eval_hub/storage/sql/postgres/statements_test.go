@@ -181,7 +181,7 @@ func TestCreateCountEntitiesStatement(t *testing.T) {
 		t.Errorf("expected COUNT(*), got: %s", stmt)
 	}
 	evaluationStmt, _ := f.CreateCountEntitiesStatement("t1", shared.TableEvaluations, map[string]any{})
-	if !strings.Contains(evaluationStmt, "evaluation-post-processor") {
+	if !strings.Contains(evaluationStmt, "workload_type = 'evaluation'") {
 		t.Errorf("evaluation-job count should exclude post-processing jobs, got: %s", evaluationStmt)
 	}
 }
@@ -193,7 +193,7 @@ func TestCreateListEntitiesStatement(t *testing.T) {
 		t.Errorf("default statement should preserve id ordering, got: %s", stmt)
 	}
 	evaluationStmt, _ := f.CreateListEntitiesStatement("t1", shared.TableEvaluations, 10, 0, map[string]any{}, "")
-	if !strings.Contains(evaluationStmt, "evaluation-post-processor") {
+	if !strings.Contains(evaluationStmt, "workload_type = 'evaluation'") {
 		t.Errorf("evaluation-job list should exclude post-processing jobs, got: %s", evaluationStmt)
 	}
 

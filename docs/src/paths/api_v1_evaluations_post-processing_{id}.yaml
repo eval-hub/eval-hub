@@ -5,7 +5,7 @@ get:
   description: Get a standalone confidence interval post-processing resource.
   operationId: get_evaluations_post_processing_id
   parameters:
-    - name: id
+    - name: post_processing_job_id
       in: path
       required: true
       schema:
@@ -132,7 +132,7 @@ delete:
   description: Delete a standalone confidence interval post-processing resource.
   operationId: delete_evaluations_post_processing_id
   parameters:
-    - name: id
+    - name: post_processing_job_id
       in: path
       required: true
       schema:

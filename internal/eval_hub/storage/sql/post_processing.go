@@ -7,6 +7,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	se "github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -29,7 +30,7 @@ func (s *sqlStorage) linkCompletedPostProcessing(txn *sql.Tx, job *api.Evaluatio
 	if sourceID == job.Resource.ID {
 		return se.NewServiceError(messages.RequestValidationFailed, "Error", "post-processing cannot reference itself")
 	}
-	source, err := s.getEvaluationJobTransactionalForUpdate(txn, sourceID)
+	source, err := s.getEvaluationJobTransactionalForUpdateWithType(txn, sourceID, workloads.Evaluation)
 	if err != nil {
 		var serviceErr *se.ServiceError
 		if errors.As(err, &serviceErr) && serviceErr.MessageCode() == messages.ResourceNotFound {
@@ -74,7 +75,7 @@ func (s *sqlStorage) unlinkDeletedPostProcessingJob(txn *sql.Tx, postProcessingJ
 	if sourceEvaluationJobID == postProcessingJob.Resource.ID {
 		return nil
 	}
-	sourceEvaluationJob, err := s.getEvaluationJobTransactionalForUpdate(txn, sourceEvaluationJobID)
+	sourceEvaluationJob, err := s.getEvaluationJobTransactionalForUpdateWithType(txn, sourceEvaluationJobID, workloads.Evaluation)
 	if err != nil {
 		var serviceErr *se.ServiceError
 		if errors.As(err, &serviceErr) && serviceErr.MessageCode() == messages.ResourceNotFound {

@@ -1260,7 +1260,7 @@
         }
       }
     },
-    "/api/v1/evaluations/post-processing/{id}": {
+    "/api/v1/evaluations/post-processing/{post_processing_job_id}": {
       "get": {
         "tags": [
           "Evaluations"
@@ -1270,7 +1270,7 @@
         "operationId": "get_evaluations_post_processing_id",
         "parameters": [
           {
-            "name": "id",
+            "name": "post_processing_job_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -1458,7 +1458,7 @@
         "operationId": "delete_evaluations_post_processing_id",
         "parameters": [
           {
-            "name": "id",
+            "name": "post_processing_job_id",
             "in": "path",
             "required": true,
             "schema": {

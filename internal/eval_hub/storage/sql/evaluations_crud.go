@@ -84,15 +84,22 @@ func (s *sqlStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, er
 }
 
 func (s *sqlStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api.EvaluationJobResource, error) {
-	return s.scanEvaluationJobTransactional(txn, id, false)
+	return s.scanEvaluationJobTransactional(txn, id, false, workloads.TypeFromContext(s.ctx))
 }
 
 func (s *sqlStorage) getEvaluationJobTransactionalForUpdate(txn *sql.Tx, id string) (*api.EvaluationJobResource, error) {
-	return s.scanEvaluationJobTransactional(txn, id, true)
+	return s.scanEvaluationJobTransactional(txn, id, true, workloads.TypeFromContext(s.ctx))
 }
 
-func (s *sqlStorage) scanEvaluationJobTransactional(txn *sql.Tx, id string, forUpdate bool) (*api.EvaluationJobResource, error) {
-	query := shared.EntityQuery{Resource: api.Resource{ID: id, Tenant: s.tenant}}
+func (s *sqlStorage) getEvaluationJobTransactionalForUpdateWithType(txn *sql.Tx, id string, workloadType workloads.Type) (*api.EvaluationJobResource, error) {
+	return s.scanEvaluationJobTransactional(txn, id, true, workloadType)
+}
+
+func (s *sqlStorage) scanEvaluationJobTransactional(txn *sql.Tx, id string, forUpdate bool, workloadType workloads.Type) (*api.EvaluationJobResource, error) {
+	query := shared.EntityQuery{
+		Resource:     api.Resource{ID: id, Tenant: s.tenant},
+		WorkloadType: workloadType,
+	}
 	var selectQuery string
 	var selectArgs, queryArgs []any
 	if forUpdate {
