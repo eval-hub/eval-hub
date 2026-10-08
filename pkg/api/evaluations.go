@@ -356,10 +356,11 @@ type BenchmarkResult struct {
 
 // EvaluationJobResults represents results section for EvaluationJobResource
 type EvaluationJobResults struct {
-	PostProcessingRef   *PostProcessingRef `json:"post_processing_ref,omitempty"`
-	Test                *EvaluationTest    `json:"test,omitempty"`
-	Benchmarks          []BenchmarkResult  `json:"benchmarks,omitempty" validate:"omitempty,dive"`
-	MLFlowExperimentURL string             `json:"mlflow_experiment_url,omitempty"`
+	OCI                 *EvaluationOCIResults `json:"oci,omitempty"`
+	PostProcessingRef   *PostProcessingRef    `json:"post_processing_ref,omitempty"`
+	Test                *EvaluationTest       `json:"test,omitempty"`
+	Benchmarks          []BenchmarkResult     `json:"benchmarks,omitempty" validate:"omitempty,dive"`
+	MLFlowExperimentURL string                `json:"mlflow_experiment_url,omitempty"`
 }
 
 // OCICoordinates represents OCI artifact coordinates for persistence
@@ -385,6 +386,7 @@ type OCIConnectionConfig struct {
 type EvaluationExportsOCI struct {
 	Coordinates OCICoordinates       `json:"coordinates" validate:"required"`
 	K8s         *OCIConnectionConfig `json:"k8s,omitempty"`
+	Signing     *OCISigningConfig    `json:"signing,omitempty"`
 }
 
 // EvaluationExports represents optional exports configuration for an evaluation job

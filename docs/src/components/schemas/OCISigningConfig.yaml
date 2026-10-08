@@ -1,0 +1,17 @@
+type: object
+description: >-
+  Optional signing configuration for the evaluation bundle, in local and Kubernetes
+  modes. For key-pair signing, secret_ref can reference a tenant namespace
+  Kubernetes Secret expected to contain private.key; the request never contains key material. This configuration does
+  not perform secret lookup, key loading, or signing execution.
+properties:
+  type:
+    type: string
+    enum: [key-pair]
+    description: Signing method. Only key-pair is currently supported.
+  secret_ref:
+    type: string
+    description: Optional name of the signing key Secret for key-pair signing. Must not be empty or whitespace-only when provided.
+required:
+  - type
+additionalProperties: false

@@ -1,6 +1,14 @@
 type: object
-description: Results section for an evaluation job
+description: >-
+  Results section shared by create, get, and list job resources. Unavailable OCI
+  outputs are omitted. A signing request alone does not produce OCI processing
+  status or signing results.
+examples:
+  - benchmarks: []
 properties:
+  oci:
+    $ref: ./EvaluationOCIResults.yaml
+    description: Optional job-level OCI reporting; omitted until values are available, including on completed jobs.
   benchmarks:
     type: array
     items:
