@@ -37,7 +37,7 @@ mkdir -p "$output_dir"
 
 # Check the tools needed to submit the job and retrieve its exported artifact.
 for tool in curl jq oras; do
-  command -v "$tool" >/dev/null
+  command -v "$tool" >/dev/null || { printf 'Missing required tool: %s\n' "$tool" >&2; exit 1; }
 done
 
 # Build a job request with anonymous OCI export over plain HTTP.
