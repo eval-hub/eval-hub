@@ -152,7 +152,7 @@ parameters:
   - name: api_name
     type: string
     default: ""
-    description: Preferred API for single-tool (empty defaults to echo_message).
+    description: Preferred API for single-tool (empty = first api_list entry from GET /tools; fixture fallback echo_message).
 
   - name: tool_input
     type: object
