@@ -65,8 +65,8 @@ func TestEvaluationJobWorkloadTypeScopesGetAndDelete(t *testing.T) {
 			t.Fatalf("create job %q: %v", job.Resource.ID, err)
 		}
 	}
-	evaluationStorage := scoped.WithContextAndWorkloadType(context.Background(), workloads.Evaluation)
-	postProcessingStorage := scoped.WithContextAndWorkloadType(context.Background(), workloads.PostProcessing)
+	evaluationStorage := scoped.WithContext(context.Background()).WithWorkloadType(workloads.Evaluation)
+	postProcessingStorage := scoped.WithContext(context.Background()).WithWorkloadType(workloads.PostProcessing)
 
 	if got, err := evaluationStorage.GetEvaluationJob(evaluation.Resource.ID); err != nil || got.Resource.ID != evaluation.Resource.ID {
 		t.Fatalf("evaluation-scoped GET evaluation: got=%+v err=%v", got, err)

@@ -148,8 +148,8 @@ func (f *fakeStorage) WithContext(ctx context.Context) abstractions.Storage {
 	}
 }
 
-func (f *fakeStorage) WithContextAndWorkloadType(ctx context.Context, workloadType workloads.Type) abstractions.Storage {
-	return f.WithContext(workloads.WithType(ctx, workloadType))
+func (f *fakeStorage) WithWorkloadType(workloadType workloads.Type) abstractions.Storage {
+	return f.WithContext(workloads.WithType(f.ctx, workloadType))
 }
 
 func (f *fakeStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
