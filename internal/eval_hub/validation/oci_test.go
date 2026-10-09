@@ -148,12 +148,13 @@ func TestOCIProcessingStates(t *testing.T) {
 		state api.OCIProcessingState
 		valid bool
 	}{
-		{api.OCIProcessingPending, true},
-		{api.OCIProcessingGeneratingEvaluationCard, true},
-		{api.OCIProcessingGeneratingEvaluationBundle, true},
-		{api.OCIProcessingSigning, true},
+		{api.OCIProcessingRunning, true},
+		{"generating_evaluation_card", false},
+		{"generating_evaluation_bundle", false},
+		{"signing", false},
 		{api.OCIProcessingFailed, true},
 		{api.OCIProcessingCompleted, true},
+		{"pending", false},
 		{"signed", false},
 		{"unsigned", false},
 		{"unknown", false},

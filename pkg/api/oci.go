@@ -18,18 +18,16 @@ type OCIArtifactReference struct {
 type OCIProcessingState string
 
 const (
-	OCIProcessingPending                    OCIProcessingState = "pending"
-	OCIProcessingGeneratingEvaluationCard   OCIProcessingState = "generating_evaluation_card"
-	OCIProcessingGeneratingEvaluationBundle OCIProcessingState = "generating_evaluation_bundle"
-	OCIProcessingSigning                    OCIProcessingState = "signing"
-	OCIProcessingFailed                     OCIProcessingState = "failed"
-	OCIProcessingCompleted                  OCIProcessingState = "completed"
+	OCIProcessingRunning   OCIProcessingState = "running"
+	OCIProcessingFailed    OCIProcessingState = "failed"
+	OCIProcessingCompleted OCIProcessingState = "completed"
 )
 
 // OCIProcessingStatus reports actual card, bundle, and signing workflow information.
 // It has no default state or message.
+// Workflow reporting uses running followed by completed or failed.
 type OCIProcessingStatus struct {
-	State   OCIProcessingState `json:"state" validate:"required,oneof=pending generating_evaluation_card generating_evaluation_bundle signing failed completed"`
+	State   OCIProcessingState `json:"state" validate:"required,oneof=running failed completed"`
 	Message *MessageInfo       `json:"message" validate:"required"`
 }
 

@@ -10,13 +10,12 @@ required:
 properties:
   state:
     type: string
-    enum: [pending, generating_evaluation_card, generating_evaluation_bundle, signing, failed, completed]
+    enum: [running, failed, completed]
     description: >-
-      pending means OCI processing is initialized but card processing has not started.
-      generating_evaluation_card covers card generation, serialization, and publication.
-      generating_evaluation_bundle covers child artifact validation, index creation,
-      and publication. signing covers signing the published bundle and is reserved for
-      future execution. failed means a required stage failed, with the stage and cause
-      described in the message. completed means all applicable stages succeeded.
+      running means OCI processing has started and remains in progress throughout all
+      applicable phases. Workflow reporting uses running followed by completed or failed.
+      failed means a required stage failed, with the stage and cause described in the
+      message. completed means all applicable stages succeeded; card-only completion
+      does not require bundle or signing outputs. No state is defaulted when status is absent.
   message:
     $ref: ./MessageInfo.yaml

@@ -2733,13 +2733,10 @@ components:
         state:
           type: string
           enum:
-            - pending
-            - generating_evaluation_card
-            - generating_evaluation_bundle
-            - signing
+            - running
             - failed
             - completed
-          description: pending means OCI processing is initialized but card processing has not started. generating_evaluation_card covers card generation, serialization, and publication. generating_evaluation_bundle covers child artifact validation, index creation, and publication. signing covers signing the published bundle and is reserved for future execution. failed means a required stage failed, with the stage and cause described in the message. completed means all applicable stages succeeded.
+          description: running means OCI processing has started and remains in progress throughout all applicable phases. Workflow reporting uses running followed by completed or failed. failed means a required stage failed, with the stage and cause described in the message. completed means all applicable stages succeeded; card-only completion does not require bundle or signing outputs. No state is defaulted when status is absent.
         message:
           $ref: '#/components/schemas/MessageInfo'
     OCIArtifactReference:
@@ -2776,7 +2773,7 @@ components:
       additionalProperties: false
     EvaluationOCIResults:
       type: object
-      description: Optional job-level OCI processing status, artifact references, and signing information. Unavailable objects are omitted, including on completed jobs. These fields are reserved for later OCI workflows; this delivery does not populate them, implement progress transitions or error reporting, or derive references from job IDs or registry tags. Status, artifacts, and signing are independently optional. The populated example illustrates future behavior only.
+      description: Optional job-level OCI processing status, artifact references, and signing information. Unavailable objects are omitted, including on completed jobs. Status, artifacts, and signing are independently optional. Artifact references identify published outputs and are not derived from job IDs or registry tags. OCI workflows report running once at the start and save available outputs together with the final completed or failed status, without intermediate phase writes.
       properties:
         status:
           $ref: '#/components/schemas/OCIProcessingStatus'
@@ -2793,10 +2790,15 @@ components:
       additionalProperties: false
       examples:
         - status:
+            state: running
+            message:
+              message: OCI processing is running.
+              message_code: oci_processing_running
+        - status:
             state: completed
             message:
               message: OCI processing completed.
-              message_code: oci_processing_success
+              message_code: oci_processing_completed
           evaluation_card:
             oci_digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
             oci_reference: quay.io/my-org/eval-results@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
@@ -3576,7 +3578,9 @@ components:
             - key-pair
           description: Signing method. Only key-pair is currently supported.
         secret_ref:
-          type: string
+          type:
+            - string
+            - 'null'
           minLength: 1
           pattern: \S
           description: Optional name of the signing key Secret for key-pair signing. Must not be empty or whitespace-only when provided.
