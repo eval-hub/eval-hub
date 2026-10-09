@@ -60,7 +60,7 @@ benchmarks:
     provider_id: lighteval
     weight: 2
     primary_score:
-      metric: pass@1
+      metric: math_500.pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.30
@@ -90,7 +90,7 @@ benchmarks:
     provider_id: lighteval
     weight: 2
     primary_score:
-      metric: gpqa_pass@1
+      metric: gpqa:diamond.gpqa_pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.35

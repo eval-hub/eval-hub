@@ -11,7 +11,10 @@ title: Inspect AI
 description: UK AISI Inspect AI framework — Petri/Bloom alignment auditing and inspect-evals benchmarks
 runtime:
   k8s:
-    image: quay.io/evalhub/community-inspect:latest
+    # Tested HLE contract: inspect-ai 0.3.276, inspect-evals 0.23.0, task 7-E.
+    # Keep the digest and examples/inspect-hle/README.md in sync when upgrading.
+    # Operator-managed deployments must set the same image in their provider config.
+    image: quay.io/evalhub/community-inspect:v0.6.9@sha256:ec2b0b59252a341413a81972ac6e57f63a28378d1e0c2db03ce677d117460182
     entrypoint:
       - python
       - main.py
@@ -1066,14 +1069,14 @@ benchmarks:
     metrics: [accuracy/accuracy]
     tags: [knowledge, factuality, inspect-evals]
 
-  # HLE requires a grader model for scoring. Pass model_roles.grader
-  # at run time via collection override, e.g.:
-  #   "parameters": { "model_roles": { "grader": "openai/gpt-4o-mini" } }
+  # knowledge-reasoning-v1 supplies the text-only, single-grader scorer settings;
+  # callers bind model_roles.grader and its credentials in the request.
+  # For standalone jobs, pass the full task_args too; see examples/inspect-hle/.
   - id: inspect/hle
     name: "Humanity's Last Exam"
     description: >
-      Frontier-difficulty questions across dozens of academic subjects. The source benchmark
-      includes image questions, but this configured run evaluates its text-only subset.
+      Frontier-difficulty questions across dozens of academic subjects, including image questions.
+      The knowledge-reasoning-v1 collection and standalone example select the text-only subset.
     category: knowledge
     domains: [knowledge_and_reasoning]
     tasks: [reasoning]
@@ -1085,22 +1088,6 @@ benchmarks:
       lower_is_better: false
     pass_criteria:
       threshold: 0.12
-    parameters:
-      task_args:
-        include_multi_modal: false
-        only_hle_verified_gold: false
-        scorer:
-          scorer: inspect_evals/hle/regex_judge
-          graders: [grader]
-          metrics:
-            - inspect_evals/hle/accuracy
-            - inspect_evals/hle/stderr
-            - inspect_evals/hle/cerr
-            - inspect_evals/hle/unscored
-          args:
-            template: regex_judge_template
-            instructions: regex_judge_instructions
-            max_grader_attempts: 3
     tags: [knowledge, reasoning, inspect-evals]
 
   # Agent capabilities

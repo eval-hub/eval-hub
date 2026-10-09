@@ -4,7 +4,7 @@ title: Lighteval
 description: Lightweight LLM evaluation framework from Hugging Face
 runtime:
   k8s:
-    image: quay.io/evalhub/community-lighteval:latest
+    image: quay.io/evalhub/community-lighteval:v0.6.3@sha256:9cd5a3a48b8d7a6f7f69eaca774c5bf659a32c6163c86b2d8e83f9cbc3f6beb1
     entrypoint:
       - python
       - main.py
