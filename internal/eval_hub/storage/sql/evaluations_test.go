@@ -2,6 +2,7 @@ package sql_test
 
 import (
 	"context"
+	stdsql "database/sql"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -13,7 +14,9 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/common"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -26,6 +29,116 @@ var (
 // to only the jobs belonging to that tenant.
 func TestGetEvaluationJobs_TenantFilter(t *testing.T) {
 	testGetEvaluationJobs_TenantFilter(t, drivers[0], getDBName())
+}
+
+func TestEvaluationJobWorkloadTypeScopesGetAndDelete(t *testing.T) {
+	store, err := getTestStorage(t, drivers[0], getDBName())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	tenant := api.Tenant(common.GUID())
+	scoped := store.WithTenant(tenant).WithOwner("owner")
+	evaluation := &api.EvaluationJobResource{
+		Resource:            api.EvaluationResource{Resource: api.Resource{ID: common.GUID(), Tenant: tenant, Owner: "owner"}},
+		EvaluationJobConfig: api.EvaluationJobConfig{Name: "ordinary evaluation"},
+		Status:              &api.EvaluationJobStatus{EvaluationJobState: api.EvaluationJobState{State: api.OverallStatePending}},
+	}
+	postProcessingConfig := postprocessing.ToEvaluationJob(&api.StandalonePostProcessingRequest{
+		PostProcessingCommon: api.PostProcessingCommon{Name: "standalone post-processing"},
+		Operations: api.StandalonePostProcessingOperations{ConfidenceInterval: &api.StandaloneConfidenceIntervalConfig{
+			ConfidenceIntervalConfigCommon: api.ConfidenceIntervalConfigCommon{
+				CalibrationDataRef: []api.CalibrationDataRef{{PVC: &api.PVCTestDataRef{ClaimName: "calibration"}}},
+				SignificanceLevel:  0.05,
+			},
+			ResultsDataRef: &api.PostProcessingResultsDataRef{PVC: &api.PVCTestDataRef{ClaimName: "results"}},
+			PrimaryScore:   &api.PrimaryScore{Metric: "accuracy"},
+		}},
+	})
+	postProcessingJob := &api.EvaluationJobResource{
+		Resource:            api.EvaluationResource{Resource: api.Resource{ID: common.GUID(), Tenant: tenant, Owner: "owner"}},
+		EvaluationJobConfig: *postProcessingConfig,
+		Status:              &api.EvaluationJobStatus{EvaluationJobState: api.EvaluationJobState{State: api.OverallStatePending}},
+	}
+	for _, job := range []*api.EvaluationJobResource{evaluation, postProcessingJob} {
+		if err := scoped.CreateEvaluationJob(job); err != nil {
+			t.Fatalf("create job %q: %v", job.Resource.ID, err)
+		}
+	}
+	evaluationStorage := scoped.WithContext(context.Background()).WithWorkloadType(workloads.Evaluation)
+	postProcessingStorage := scoped.WithContext(context.Background()).WithWorkloadType(workloads.PostProcessing)
+
+	if got, err := evaluationStorage.GetEvaluationJob(evaluation.Resource.ID); err != nil || got.Resource.ID != evaluation.Resource.ID {
+		t.Fatalf("evaluation-scoped GET evaluation: got=%+v err=%v", got, err)
+	}
+	if got, err := postProcessingStorage.GetEvaluationJob(postProcessingJob.Resource.ID); err != nil || got.Resource.ID != postProcessingJob.Resource.ID {
+		t.Fatalf("post-processing-scoped GET post-processing: got=%+v err=%v", got, err)
+	}
+	for _, test := range []struct {
+		name  string
+		store abstractions.Storage
+		id    string
+	}{
+		{name: "evaluation scope cannot fetch post-processing", store: evaluationStorage, id: postProcessingJob.Resource.ID},
+		{name: "post-processing scope cannot fetch evaluation", store: postProcessingStorage, id: evaluation.Resource.ID},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := test.store.GetEvaluationJob(test.id); err == nil {
+				t.Fatalf("typed GET for wrong workload %q succeeded", test.id)
+			}
+			if err := test.store.DeleteEvaluationJob(test.id); err == nil {
+				t.Fatalf("typed DELETE for wrong workload %q succeeded", test.id)
+			}
+		})
+	}
+	if _, err := evaluationStorage.GetEvaluationJob(evaluation.Resource.ID); err != nil {
+		t.Fatalf("cross-workload DELETE removed the evaluation: %v", err)
+	}
+	if _, err := postProcessingStorage.GetEvaluationJob(postProcessingJob.Resource.ID); err != nil {
+		t.Fatalf("cross-workload DELETE removed the post-processing job: %v", err)
+	}
+	if err := evaluationStorage.DeleteEvaluationJob(evaluation.Resource.ID); err != nil {
+		t.Fatalf("delete evaluation with matching workload: %v", err)
+	}
+	if err := postProcessingStorage.DeleteEvaluationJob(postProcessingJob.Resource.ID); err != nil {
+		t.Fatalf("delete post-processing job with matching workload: %v", err)
+	}
+}
+
+func TestDeleteEvaluationJobRollsBackWhenDatabaseDeleteFails(t *testing.T) {
+	databaseName := getDBName()
+	store, err := getTestStorage(t, drivers[0], databaseName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	tenant := api.Tenant(common.GUID())
+	scoped := store.WithTenant(tenant).WithOwner("owner")
+	const jobID = "job-reject-delete"
+	job := &api.EvaluationJobResource{
+		Resource:            api.EvaluationResource{Resource: api.Resource{ID: jobID, Tenant: tenant, Owner: "owner"}},
+		EvaluationJobConfig: api.EvaluationJobConfig{Name: "ordinary evaluation"},
+		Status:              &api.EvaluationJobStatus{EvaluationJobState: api.EvaluationJobState{State: api.OverallStatePending}},
+	}
+	if err := scoped.CreateEvaluationJob(job); err != nil {
+		t.Fatal(err)
+	}
+	triggerDB, err := stdsql.Open("sqlite", getDBInMemoryURL(databaseName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = triggerDB.Close() })
+	_, err = triggerDB.Exec(fmt.Sprintf(`CREATE TRIGGER reject_job_delete BEFORE DELETE ON evaluations
+WHEN OLD.id = '%s' BEGIN SELECT RAISE(FAIL, 'reject evaluation delete'); END;`, jobID))
+	if err != nil {
+		t.Fatalf("create delete trigger: %v", err)
+	}
+	if err := scoped.DeleteEvaluationJob(jobID); err == nil {
+		t.Fatal("DeleteEvaluationJob() succeeded despite the database trigger")
+	}
+	if _, err := scoped.GetEvaluationJob(jobID); err != nil {
+		t.Fatalf("job was deleted despite the transaction failure: %v", err)
+	}
 }
 
 func TestUpdateEvaluationJob_PreservesProviderID(t *testing.T) {

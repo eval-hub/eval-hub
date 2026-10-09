@@ -190,14 +190,14 @@ func TestPostProcessingCreate(t *testing.T) {
 				t.Fatal(err)
 			}
 			completed, err := store.GetEvaluationJob(result.Resource.ID)
-			if err != nil || completed.Status.State != api.OverallStateCompleted || completed.Results.PostProcessingRef != nil {
+			if err != nil || completed.Status.State != api.OverallStateCompleted {
 				t.Fatalf("external-data computation did not complete independently: %v, %+v", err, completed)
 			}
 		})
 	}
 }
 
-func TestPostProcessingCompletionLink(t *testing.T) {
+func TestPostProcessingCompletionDoesNotUpdateSource(t *testing.T) {
 	handler, store, runtime := newPostProcessingServer(t)
 	source := createPostProcessingSource(t, store, api.OverallStateCompleted)
 	body := postProcessingBody(fmt.Sprintf(`{"eval_job":{"id":%q}}`, source.Resource.ID))
@@ -213,35 +213,31 @@ func TestPostProcessingCompletionLink(t *testing.T) {
 		}
 		return result.Resource.ID
 	}
-	assertLink := func(want string) {
+	assertSourceUnchanged := func() {
 		t.Helper()
 		stored, err := store.GetEvaluationJob(source.Resource.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := ""
-		if stored.Results.PostProcessingRef != nil {
-			got = stored.Results.PostProcessingRef.ID
-		}
-		if got != want || stored.Status.State != api.OverallStateCompleted || !reflect.DeepEqual(stored.Results.Benchmarks, source.Results.Benchmarks) || stored.Results.MLFlowExperimentURL != source.Results.MLFlowExperimentURL {
-			t.Fatalf("source reference/data changed incorrectly: %+v", stored)
+		if stored.Status.State != api.OverallStateCompleted || !reflect.DeepEqual(stored.Results, source.Results) {
+			t.Fatalf("source evaluation changed during post-processing: %+v", stored)
 		}
 	}
 	first := submit()
-	assertLink("")
+	assertSourceUnchanged()
 	event := &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{ProviderID: postprocessing.ProviderID, ID: postprocessing.BenchmarkID, Status: api.StateRunning}}
 	if err := runtime.storage.UpdateEvaluationJob(first, event); err != nil {
 		t.Fatal(err)
 	}
-	assertLink("")
+	assertSourceUnchanged()
 	event.BenchmarkStatusEvent.Status = api.StateCompleted
 	if err := runtime.storage.UpdateEvaluationJob(first, event); err != nil {
 		t.Fatal(err)
 	}
-	assertLink(first)
+	assertSourceUnchanged()
 
 	second := submit()
-	assertLink(first)
+	assertSourceUnchanged()
 	eventBody, err := json.Marshal(event)
 	if err != nil {
 		t.Fatal(err)
@@ -250,23 +246,23 @@ func TestPostProcessingCompletionLink(t *testing.T) {
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("completion status %d: %s", response.Code, response.Body.String())
 	}
-	assertLink(second)
-	// A replay from an older completed computation cannot replace the latest link.
+	assertSourceUnchanged()
+	// A replay from an older completed computation must not change its source.
 	_ = runtime.storage.UpdateEvaluationJob(first, event)
-	assertLink(second)
+	assertSourceUnchanged()
 
 	failed := submit()
 	event.BenchmarkStatusEvent.Status = api.StateFailed
 	if err := runtime.storage.UpdateEvaluationJob(failed, event); err != nil {
 		t.Fatal(err)
 	}
-	assertLink(second)
+	assertSourceUnchanged()
 	cancelled := submit()
 	response = postProcessingRequest(handler, http.MethodDelete, "/api/v1/evaluations/jobs/"+cancelled, "")
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("cancel status %d: %s", response.Code, response.Body.String())
 	}
-	assertLink(second)
+	assertSourceUnchanged()
 }
 
 func TestPostProcessingSourceValidation(t *testing.T) {
