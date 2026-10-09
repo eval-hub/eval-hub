@@ -7,7 +7,9 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -807,6 +809,118 @@ func (tc *scenarioConfig) theAllBenchmarksHaveTestBlock() error {
 	}
 	if len(failures) > 0 {
 		return tc.logError(fmt.Errorf("benchmark test block validation failures:\n%s\nin %s",
+			strings.Join(failures, "\n"), asPrettyJson(string(tc.body))))
+	}
+	return nil
+}
+
+type expectedFieldsConfig map[string]map[string]expectedBenchmarkFields
+
+type expectedBenchmarkFields struct {
+	AdditionalInfo map[string]any `json:"additional_info"`
+}
+
+func loadExpectedFieldsConfig() (expectedFieldsConfig, error) {
+	path := filepath.Join(
+		testDataRoot(),
+		"benchmark_expected_fields.json",
+	)
+
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read expected fields: %w", err)
+	}
+
+	var config expectedFieldsConfig
+	if err := json.Unmarshal(contents, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse expected fields: %w", err)
+	}
+
+	return config, nil
+}
+
+func (tc *scenarioConfig) theAllBenchmarksShouldHaveAdditionalInfo() error {
+	raw, err := tc.getJsonPathValue("$.results.benchmarks")
+	var failures []string
+
+	if err != nil {
+		return tc.logError(err)
+	}
+	benchmarks, ok := raw.([]any)
+	if !ok {
+		return tc.logError(fmt.Errorf("$.results.benchmarks is not an array, got %T", raw))
+	}
+	if len(benchmarks) == 0 {
+		return tc.logError(fmt.Errorf("$.results.benchmarks is empty"))
+	}
+
+	// Load the config - benchmark_expected_fields.json
+	config, err := loadExpectedFieldsConfig()
+	if err != nil {
+		return tc.logError(err)
+	}
+
+	for i, b := range benchmarks {
+		bm, ok := b.(map[string]any)
+		if !ok {
+			failures = append(failures, fmt.Sprintf("benchmark at index %d: expected object, got %T", i, b))
+			continue
+		}
+		id, _ := bm["id"].(string)
+		displayID := id
+		if displayID == "" {
+			displayID = fmt.Sprintf("<unnamed@index %d>", i)
+		}
+		providerID, _ := bm["provider_id"].(string)
+		if providerID == "" {
+			failures = append(failures, fmt.Sprintf("benchmark %q at index %d: missing provider_id in response", displayID, i))
+			continue
+		}
+		providerConfig, ok := config[providerID]
+		if !ok {
+			failures = append(failures, fmt.Sprintf("provider %q, benchmark %q: provider not found in expected fields config", providerID, displayID))
+			continue
+		}
+
+		if id == "" {
+			failures = append(failures, fmt.Sprintf("provider %q, benchmark at index %d: missing id in response", providerID, i))
+			continue
+		}
+		benchmarkConfig, ok := providerConfig[id]
+		if !ok {
+			failures = append(failures, fmt.Sprintf("provider %q, benchmark %q: benchmark not found in expected fields config", providerID, displayID))
+			continue
+		}
+
+		expectedKeys := benchmarkConfig.AdditionalInfo
+		expectedFieldNames := make([]string, 0, len(expectedKeys))
+		for expectedKey := range expectedKeys {
+			expectedFieldNames = append(expectedFieldNames, expectedKey)
+		}
+		sort.Strings(expectedFieldNames)
+
+		additionalInfo, exists := bm["additional_info"].(map[string]any)
+		if !exists || len(additionalInfo) == 0 {
+			if len(expectedFieldNames) > 0 {
+				failures = append(failures, fmt.Sprintf(
+					"provider %q, benchmark %q: additional_info is missing or empty; expected fields: %s",
+					providerID,
+					displayID,
+					strings.Join(expectedFieldNames, ", "),
+				))
+			}
+			continue
+		}
+
+		for _, expectedKey := range expectedFieldNames {
+			if _, exists := additionalInfo[expectedKey]; !exists {
+				failures = append(failures, fmt.Sprintf("provider %q, benchmark %q: missing additional_info field %q", providerID, displayID, expectedKey))
+			}
+		}
+
+	}
+	if len(failures) > 0 {
+		return tc.logError(fmt.Errorf("benchmark additional_info validation failures:\n%s\nin %s",
 			strings.Join(failures, "\n"), asPrettyJson(string(tc.body))))
 	}
 	return nil

@@ -626,7 +626,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^the response should be JSON$`, tc.theResponseShouldBeJSON)
 	ctx.Step(`^the response should contain Prometheus metrics$`, tc.theResponseShouldContainPrometheusMetrics)
 	ctx.Step(`^service info metadata matches configured environment variables$`, tc.infoMetadataMatchesConfiguredEnvironment)
-	ctx.Step(`^the configured tenant queue should be returned$`, tc.configuredTenantQueueShouldBeReturned)
+	ctx.Step(`^the configured tenant hardware profile should be returned$`, tc.configuredTenantHardwareProfileShouldBeReturned)
 	ctx.Step(`^the metrics should include "([^"]*)"$`, tc.theMetricsShouldInclude)
 	ctx.Step(`^the metrics should show request count for "([^"]*)"$`, tc.theMetricsShouldShowRequestCountFor)
 	// Responses
@@ -648,6 +648,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^all benchmarks in the response should have status "([^"]*)"$`, tc.theAllBenchmarksInStatusShouldBe)
 	ctx.Step(`^all benchmarks in the response should have metrics$`, tc.theAllBenchmarksHaveMetrics)
 	ctx.Step(`^the benchmark "([^"]*)" in the response should have metric "([^"]*)"$`, tc.theBenchmarkShouldHaveMetric)
+	ctx.Step(`^all benchmarks in the response should have additional_info matching the expected fields$`, tc.theAllBenchmarksShouldHaveAdditionalInfo)
 	ctx.Step(`^all benchmarks in the response should have metrics matching the provider config$`, tc.theAllBenchmarksHaveMetricsMatchingProviderConfig)
 	ctx.Step(`^all benchmarks in the response should have a test block with pass criteria$`, tc.theAllBenchmarksHaveTestBlock)
 	ctx.Step(`^I wait for the evaluation job status to be "([^"]*)"$`, tc.iWaitForEvaluationJobStatus)

@@ -1,0 +1,227 @@
+# ToolEval / ToolBench Provider Configuration
+# Tool-use sequencing and multi-step planning (StableToolBench / ToolEval)
+# Reference: https://github.com/eval-hub/eval-hub-contrib (adapters/tooleval)
+
+id: tooleval
+name: ToolEval
+description: >
+  Tool-use sequencing evaluation against a simulated tool library
+  (StableToolBench / ToolEval). Categories: single-tool (G1), multi-tool (G2),
+  multi-step (G3). MUT via EvalHub sidecar; judge via judge_api-key / judge_url
+  in the same model secret. Tool server is a separate user-deployed image
+  (tool_server_url).
+type: community
+
+runtime:
+  k8s:
+    image: quay.io/evalhub/community-tooleval:latest
+    image_pull_policy: always
+    entrypoint:
+      - python
+      - main.py
+    cpu_request: 100m
+    memory_request: 256Mi
+    cpu_limit: 2000m
+    memory_limit: 4Gi
+  # No in-tree local adapter: the FVT stub reports fake scores and must not
+  # stand in for ToolEval. Use k8s (community-tooleval) or point local.command
+  # at eval-hub-contrib/adapters/tooleval/main.py when running locally.
+  local: null
+
+benchmarks:
+  - id: single-tool
+    name: ToolEval Single-Tool
+    description: >
+      Single-tool (G1-style) tasks. One MUT tool call, then /virtual + judge.
+    category: tool_use
+    domains: [tool_use_and_function_calling]
+    tasks: [call_generation]
+    modalities: [text]
+    evaluation_targets: [model]
+    metrics:
+      - pass_rate
+      - win_rate
+    primary_score:
+      metric: pass_rate
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.05
+    tags:
+      - tooleval
+      - toolbench
+      - single-tool
+      - g1
+
+  - id: multi-tool
+    name: ToolEval Multi-Tool
+    description: >
+      Multi-tool (G2-style) tasks. MUT may call several tools (default max_steps=3)
+      then finish; judge scores the trajectory vs reference_calls.
+    category: tool_use
+    domains: [tool_use_and_function_calling]
+    tasks: [call_generation, multi_step_task_completion]
+    modalities: [text]
+    evaluation_targets: [model]
+    metrics:
+      - pass_rate
+      - win_rate
+    primary_score:
+      metric: pass_rate
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.05
+    tags:
+      - tooleval
+      - toolbench
+      - multi-tool
+      - g2
+
+  - id: multi-step
+    name: ToolEval Multi-Step
+    description: >
+      Multi-step (G3-style) planning. Iterative select → /virtual → observe → next
+      step (default max_steps=5) until finish or step budget.
+    category: tool_use
+    domains: [tool_use_and_function_calling]
+    tasks: [multi_step_task_completion]
+    modalities: [text]
+    evaluation_targets: [model]
+    metrics:
+      - pass_rate
+      - win_rate
+    primary_score:
+      metric: pass_rate
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.05
+    tags:
+      - tooleval
+      - toolbench
+      - multi-step
+      - g3
+
+parameters:
+  - name: tool_server_url
+    type: string
+    default: ""
+    description: >
+      In-cluster ToolBench tool server ClusterIP URL, e.g.
+      http://toolbench-server.my-tenant.svc:8080. Required at runtime; jobs
+      without it fail in the adapter.
+
+  - name: num_tasks
+    type: integer
+    default: 5
+    description: Number of tasks to run.
+
+  - name: max_steps
+    type: integer
+    default: null
+    description: >
+      Max agent steps per task. Defaults: single-tool=1, multi-tool=3, multi-step=5.
+      Forced to 1 for single-tool.
+
+  - name: seed
+    type: integer
+    default: 42
+    description: Random seed reserved for future task sampling.
+
+  - name: tool_subset
+    type: string
+    default: "default"
+    description: Named subset label recorded in evaluation metadata.
+
+  - name: instruction
+    type: string
+    default: null
+    description: >
+      User instruction for the MUT. Defaults differ per benchmark (echo for
+      single-tool; echo+uppercase for multi-tool/multi-step).
+
+  - name: category
+    type: string
+    default: "Tools"
+    description: Preferred tool category for single-tool resolution.
+
+  - name: tool_name
+    type: string
+    default: ""
+    description: Preferred tool for single-tool (empty = first matching from /tools).
+
+  - name: api_name
+    type: string
+    default: ""
+    description: Preferred API for single-tool (empty = first api_list entry from GET /tools; fixture fallback echo_message).
+
+  - name: tool_input
+    type: object
+    default: {"message": "hello"}
+    description: Reference tool_input for single-tool scoring / cache hit.
+
+  - name: reference_calls
+    type: array
+    default: null
+    description: >
+      Reference tool-call list for multi-tool / multi-step win_rate structural
+      match and judge prompts. Each item:
+      {category, tool_name, api_name, tool_input}.
+
+  - name: tasks
+    type: array
+    default: null
+    description: >
+      Optional list of {instruction, reference_calls, tool_input, ...} overrides.
+
+  - name: toolbench_key
+    type: string
+    default: "evalhub-local"
+    description: toolbench_key field for StableToolBench /virtual requests.
+
+  - name: tool_server_timeout_seconds
+    type: number
+    default: 30
+    description: HTTP timeout when calling the tool server.
+
+  - name: mut_timeout_seconds
+    type: number
+    default: 300
+    description: HTTP timeout for MUT chat completions via the sidecar.
+
+  - name: judge_timeout_seconds
+    type: number
+    default: 300
+    description: HTTP timeout for judge chat completions.
+
+  - name: judge_model
+    type: string
+    default: null
+    description: Judge model id (defaults to config.model.name).
+
+  - name: enable_judge
+    type: boolean
+    default: true
+    description: >
+      When false, score by structural match of predicted calls vs reference_calls
+      plus successful /virtual responses.
+
+  - name: probe_models
+    type: boolean
+    default: true
+    description: Fail-fast probe of MUT (and judge when enabled) before tasks.
+
+  - name: debug_io
+    type: boolean
+    default: false
+    description: >
+      When true, log truncated MUT /virtual / judge request+response payloads
+      (same as env TOOLEVAL_DEBUG_IO=1). For debugging only.
+
+  - name: max_tokens
+    type: integer
+    default: 512
+    description: max_tokens for MUT and judge chat completions.
+
+  - name: temperature
+    type: number
+    default: 0.0
+    description: temperature for MUT chat completions (judge uses 0).

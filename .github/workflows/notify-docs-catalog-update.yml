@@ -1,0 +1,36 @@
+name: Notify documentation of catalog changes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'config/collections/**'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  notify-docs:
+    if: github.repository == 'eval-hub/eval-hub' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
+
+      - name: Send catalog update event to documentation repository
+        env:
+          GH_TOKEN: ${{ secrets.DOCS_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Set DOCS_DISPATCH_TOKEN with Contents: write access to eval-hub/eval-hub.github.io. See .github/docs-catalog-dispatch.md."
+            exit 1
+          fi
+          gh api --method POST repos/eval-hub/eval-hub.github.io/dispatches \
+            -H 'Accept: application/vnd.github+json' \
+            -f event_type=catalogs-updated \
+            -f "client_payload[repository]=$GITHUB_REPOSITORY" \
+            -f "client_payload[sha]=$GITHUB_SHA"
