@@ -17,7 +17,7 @@ type OCIPublisherFactory interface {
 	NewPublisher(ctx context.Context, job *api.EvaluationJobResource) (OCIPublisher, error)
 }
 
-// noopOCIPublisherFactory is used in local mode or when OCI export dependencies are unavailable.
+// noopOCIPublisherFactory is an explicit discard implementation used by tests and optional callers.
 type noopOCIPublisherFactory struct{}
 
 // NewNoopOCIPublisherFactory returns a factory that discards OCI exports without error.

@@ -100,6 +100,14 @@ stop-service:
 	-./scripts/stop_server.sh "${SERVER_PID_FILE}"
 	! grep -i -F panic "${SERVICE_LOG}"
 
+.PHONY: start-oci-registry stop-oci-registry
+start-oci-registry: ## Start an anonymous OCI registry at http://localhost:5001
+	$(DOCKER) run -d -p 5001:5000 --name eval-hub-oci-registry docker.io/library/registry:2
+
+stop-oci-registry: ## Stop and remove the local OCI registry
+	$(DOCKER) stop eval-hub-oci-registry
+	$(DOCKER) rm eval-hub-oci-registry
+
 # Sidecar (eval-runtime-sidecar) starter/stopper
 SIDECAR_PID_FILE ?= $(BIN_DIR)/sidecar.pid
 SIDECAR_LOG ?= $(BIN_DIR)/sidecar.log
