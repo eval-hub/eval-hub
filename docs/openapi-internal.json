@@ -769,9 +769,6 @@
                           "score": 0.85,
                           "threshold": 0.5,
                           "pass": true
-                        },
-                        "post_processing_ref": {
-                          "id": "pp-1234567890ab"
                         }
                       },
                       "name": "granite-3.1-8b-safety-eval",
@@ -4445,21 +4442,6 @@
           }
         }
       },
-      "PostProcessingRef": {
-        "type": "object",
-        "title": "PostProcessingRef",
-        "description": "Reference to post-processing associated with an evaluation job.",
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "Identifier of the post-processing resource."
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "additionalProperties": false
-      },
       "EvaluationJobResults": {
         "type": "object",
         "description": "Results section for an evaluation job",
@@ -4478,10 +4460,6 @@
           "test": {
             "$ref": "#/components/schemas/EvaluationTest",
             "description": "Test result"
-          },
-          "post_processing_ref": {
-            "$ref": "#/components/schemas/PostProcessingRef",
-            "description": "Reference to the post-processing resource for this evaluation job"
           }
         }
       },

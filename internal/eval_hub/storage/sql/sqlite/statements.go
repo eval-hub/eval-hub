@@ -101,6 +101,10 @@ func (s *sqliteStatementsFactory) CreateEvaluationAddEntityStatement(evaluation 
 
 func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
 	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, query.Resource.ID)
+	if query.WorkloadType != "" {
+		where += " AND workload_type = ?"
+		whereArgs = append(whereArgs, string(query.WorkloadType))
+	}
 	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
 }
 
@@ -167,6 +171,7 @@ func (s *sqliteStatementsFactory) CreateEntityFilterCondition(key string, value 
 
 func (s *sqliteStatementsFactory) CreateCountEntitiesStatement(tenant api.Tenant, tableName string, filter map[string]any) (string, []any) {
 	where, whereArgs := s.getWhereStatement(tenant, "") // we don't need to filter by id as we want to count all entities
+	where = shared.AddEvaluationWorkloadTypeFilter(tableName, where)
 	filterClause, args := shared.CreateFilterStatement(s, where, whereArgs, filter, "", 0, 0, tableName)
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, tableName, filterClause)
 	return query, args
@@ -174,6 +179,7 @@ func (s *sqliteStatementsFactory) CreateCountEntitiesStatement(tenant api.Tenant
 
 func (s *sqliteStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant, tableName string, limit, offset int, filter map[string]any, sortBy string) (string, []any) {
 	where, whereArgs := s.getWhereStatement(tenant, "") // we don't need to filter by id as we want to count all entities
+	where = shared.AddEvaluationWorkloadTypeFilter(tableName, where)
 	orderBy := "id DESC"
 	if tableName == shared.TableCollections && sortBy == "curation_order" {
 		orderBy = "CASE WHEN json_extract(entity, '$.curation_order') > 0 THEN 0 ELSE 1 END, CASE WHEN json_extract(entity, '$.curation_order') > 0 THEN json_extract(entity, '$.curation_order') END ASC, id DESC"

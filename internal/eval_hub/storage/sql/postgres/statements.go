@@ -81,11 +81,19 @@ func (s *postgresStatementsFactory) CreateEvaluationAddEntityStatement(evaluatio
 }
 
 func (s *postgresStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
-	// SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE id = $1;
-	if query.Resource.Tenant.IsEmpty() {
-		return `SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE id = $1;`, []any{&query.Resource.ID}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
+	where := "id = $1"
+	args := []any{&query.Resource.ID}
+	if !query.Resource.Tenant.IsEmpty() {
+		where += " AND tenant_id = $2"
+		args = append(args, query.Resource.Tenant.String())
 	}
-	return `SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE id = $1 AND tenant_id = $2;`, []any{&query.Resource.ID, query.Resource.Tenant.String()}, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
+	if query.WorkloadType != "" {
+		where += fmt.Sprintf(" AND workload_type = $%d", len(args)+1)
+		args = append(args, string(query.WorkloadType))
+	}
+	statement := fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE %s;`, where)
+	scanArgs := []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
+	return statement, args, scanArgs
 }
 
 func (s *postgresStatementsFactory) CreateEvaluationGetEntityForUpdateStatement(query *shared.EntityQuery) (string, []any, []any) {
@@ -168,6 +176,7 @@ func (s *postgresStatementsFactory) CreateEntityFilterCondition(key string, valu
 
 func (s *postgresStatementsFactory) CreateCountEntitiesStatement(tenant api.Tenant, tableName string, filter map[string]any) (string, []any) {
 	where, whereArgs := s.getWhereStatement(tenant, "", 1) // we don't need to filter by id as we want to count all entities
+	where = shared.AddEvaluationWorkloadTypeFilter(tableName, where)
 	filterClause, args := shared.CreateFilterStatement(s, where, whereArgs, filter, "", 0, 0, tableName)
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s%s;`, tableName, filterClause)
 	return query, args
@@ -175,6 +184,7 @@ func (s *postgresStatementsFactory) CreateCountEntitiesStatement(tenant api.Tena
 
 func (s *postgresStatementsFactory) CreateListEntitiesStatement(tenant api.Tenant, tableName string, limit, offset int, filter map[string]any, sortBy string) (string, []any) {
 	where, whereArgs := s.getWhereStatement(tenant, "", 1) // we don't need to filter by id as we want to list all entities
+	where = shared.AddEvaluationWorkloadTypeFilter(tableName, where)
 	orderBy := "id DESC"
 	if tableName == shared.TableCollections && sortBy == "curation_order" {
 		orderBy = "NULLIF((entity->>'curation_order')::bigint, 0) ASC NULLS LAST, id DESC"

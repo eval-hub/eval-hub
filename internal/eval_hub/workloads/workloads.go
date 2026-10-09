@@ -2,6 +2,7 @@
 package workloads
 
 import (
+	"context"
 	"log/slog"
 	"sync"
 
@@ -12,7 +13,26 @@ import (
 // evaluations.workload_type and must remain stable.
 type Type string
 
-const Evaluation Type = "evaluation"
+const (
+	Evaluation     Type = "evaluation"
+	PostProcessing Type = "post-processing"
+)
+
+type workloadTypeContextKey struct{}
+
+// WithType adds an optional workload scope to ctx for storage lookups.
+func WithType(ctx context.Context, workloadType Type) context.Context {
+	return context.WithValue(ctx, workloadTypeContextKey{}, workloadType)
+}
+
+// TypeFromContext returns the optional workload scope carried by ctx.
+func TypeFromContext(ctx context.Context) Type {
+	if ctx == nil {
+		return ""
+	}
+	workloadType, _ := ctx.Value(workloadTypeContextKey{}).(Type)
+	return workloadType
+}
 
 // Workload describes a workload that supplies its own runtime provider.
 type Workload struct {

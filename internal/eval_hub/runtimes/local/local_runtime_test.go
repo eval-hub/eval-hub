@@ -19,6 +19,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -146,6 +147,10 @@ func (f *fakeStorage) WithContext(ctx context.Context) abstractions.Storage {
 		runStatusChan: f.runStatusChan,
 		updateErr:     f.updateErr,
 	}
+}
+
+func (f *fakeStorage) WithWorkloadType(workloadType workloads.Type) abstractions.Storage {
+	return f.WithContext(workloads.WithType(f.ctx, workloadType))
 }
 
 func (f *fakeStorage) WithOwner(owner api.User) abstractions.Storage {
