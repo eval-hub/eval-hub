@@ -1,5 +1,5 @@
 id: instruction-output-v1
-curation_order: 3
+curation_order: 2
 name: Instruction and Output Reliability v1
 description: >
   Evaluates bare-model instruction and output reliability across explicit
@@ -7,7 +7,9 @@ description: >
   constraint satisfaction. Balanced IFBench, JSONSchemaBench Easy, and FollowBench
   coverage measures whether models can satisfy verifiable requirements without
   constrained decoding, tool execution, or multi-step agent scaffolding.
-  Part of the Standard LLM Evaluation Suite.
+  IFBench uses loose prompt-level scoring; schema compliance covers the Easy
+  split with zero-shot prompting. Scores are diagnostic summaries, not
+  production reliability criteria.
 domains:
   - instruction_and_output_reliability
 tasks:
@@ -38,7 +40,14 @@ benchmarks:
       lower_is_better: false
     pass_criteria:
       threshold: 0.05
-    parameters: {}
+    parameters:
+      scoring_mode: loose
+      # The provider describes a 299-prompt test set; verify n_evaluated.
+      num_examples: 299
+      max_concurrent: 4
+      max_tokens: 2048
+      temperature: 0.0
+      request_timeout: 120
 
   - id: jsonschema_bench_easy
     provider_id: lm_evaluation_harness
@@ -49,6 +58,7 @@ benchmarks:
     pass_criteria:
       threshold: 0.60
     parameters:
+      # Deliberate zero-shot profile; the provider metadata declares two shots.
       num_fewshot: 0
       apply_chat_template: true
 
@@ -60,4 +70,159 @@ benchmarks:
       lower_is_better: false
     pass_criteria:
       threshold: 0.20
-    parameters: {}
+    # Select an independent judge_model and judge_url before finalizing the protocol.
+    # The sample budget counts complete example groups and remains unspecified.
+    parameters:
+      max_tokens: 2048
+      temperature: 0.0
+      request_timeout: 120
+
+documentation:
+  purpose: >-
+    Diagnose bare-model instruction following, unconstrained JSON/schema compliance, and compound
+    constraint satisfaction without tool execution or agent scaffolding.
+  selection:
+  - provider_id: ifbench
+    benchmark_id: ifbench
+    rationale: IFBench tests generalization to out-of-domain verifiable instructions.
+  - provider_id: lm_evaluation_harness
+    benchmark_id: jsonschema_bench_easy
+    rationale: >-
+      JSONSchemaBench Easy isolates schema compliance without constrained decoding; Medium and Hard
+      are intentionally outside this selected profile.
+  - provider_id: followbench
+    benchmark_id: followbench
+    rationale: FollowBench adds compound and multi-level constraints beyond the other two signals.
+  scoring:
+    rows:
+    - provider_id: ifbench
+      benchmark_id: ifbench
+      metric: accuracy
+      lower_is_better: false
+      weight: 0.3333333333333333
+      threshold: 0.05
+    - provider_id: lm_evaluation_harness
+      benchmark_id: jsonschema_bench_easy
+      metric: schema_compliance
+      lower_is_better: false
+      weight: 0.3333333333333333
+      threshold: 0.6
+    - provider_id: followbench
+      benchmark_id: followbench
+      metric: hsr
+      lower_is_better: false
+      weight: 0.3333333333333333
+      threshold: 0.2
+    units: >-
+      Primary scores are interpreted as fractions on a 0-1 scale for these targets. Verify actual
+      emitted units; metric names and catalog agreement alone do not establish them.
+    aggregation: >-
+      Use raw score for higher-is-better metrics and 1 - raw score for lower-is-better metrics, then
+      take the weighted mean. The configured aggregate threshold is a diagnostic target.
+    weight_rationale: >-
+      Equal weights allocate one-third to each capability; success in one dimension can compensate
+      for failure in another.
+    threshold_provenance: >-
+      Existing row targets match the selected provider targets and are retained as permissive diagnostic
+      baselines, not production reliability guarantees.
+    collection_threshold: 0.283333
+    threshold_formula: "(0.05 + 0.60 + 0.20) / 3 = 0.283333..., rounded to 0.283333."
+    interpretation: >-
+      A weighted aggregate does not guarantee that every benchmark passes or that every required metric
+      is present. The review reports missing scores can be omitted and remaining weights renormalized.
+      Inspect completeness and per-benchmark results before interpreting a summary.
+  runtime:
+    rows:
+    - provider_id: ifbench
+      benchmark_id: ifbench
+      configured_parameters:
+        scoring_mode: loose
+        num_examples: 299
+        max_concurrent: 4
+        max_tokens: 2048
+        temperature: 0.0
+        request_timeout: 120
+    - provider_id: lm_evaluation_harness
+      benchmark_id: jsonschema_bench_easy
+      configured_parameters:
+        num_fewshot: 0
+        apply_chat_template: true
+    - provider_id: followbench
+      benchmark_id: followbench
+      configured_parameters:
+        max_tokens: 2048
+        temperature: 0.0
+        request_timeout: 120
+    choices:
+    - >-
+      IFBench explicitly adopts provider defaults scoring_mode=loose, max_concurrent=4, max_tokens=2048,
+      temperature=0.0, and request_timeout=120 seconds. This makes the scoring mode, concurrency,
+      output budget, and request timeout visible.
+    - >-
+      IFBench num_examples=299 matches the provider-described test-set size and is intended to cover
+      that set. It is a cap; check n_evaluated before claiming all prompts were scored.
+    - >-
+      JSONSchemaBench Easy retains zero-shot prompting with apply_chat_template=true. This deliberately
+      differs from the provider metadata num_few_shot=2 and measures unconstrained output in the existing
+      zero-shot profile.
+    - >-
+      FollowBench explicitly adopts provider defaults max_tokens=2048, temperature=0.0, and request_timeout=120
+      seconds for model and judge requests.
+    - >-
+      FollowBench judge_model and judge_url remain unspecified. Its num_examples counts complete example
+      groups, so the IFBench prompt count is not reused as its budget.
+    verification_status: >-
+      Configured values document intent, not measured execution. No model evaluations were run as
+      part of this configuration change. Unspecified settings remain deployment or provider/task defaults,
+      not a pinned reproducibility contract.
+  limitations:
+  - >-
+    Loose IFBench scoring is not strict compliance. Schema-valid JSON can still contain incorrect
+    values; Easy-only coverage does not establish handling of harder schemas.
+  - >-
+    The review reports that an unspecified FollowBench judge falls back to the evaluated model in
+    the inspected adapter. These defaults do not establish an independent measuring instrument.
+  - >-
+    The schema prompt protocol differs from the provider few-shot metadata, so scores must not be
+    compared as if the protocols were identical.
+  - >-
+    Provider runtime definitions must be distinguished from real benchmark evidence: configured local
+    simulator commands do not validate benchmark execution. Repository YAML documentation is not currently
+    persisted or exposed as a documentation field by the service API.
+  unresolved_inputs:
+  - >-
+    Supply a fixed independent FollowBench judge_model and judge_url, then verify the actual judge
+    used in execution logs.
+  - >-
+    Choose a FollowBench complete-example-group budget and verify evaluated group and constraint counts.
+  - >-
+    Verify IFBench n_evaluated, the selected loose metric, and output truncation; validate schema
+    scoring dependencies and the zero-shot protocol in the deployed Harness image.
+  - >-
+    Record the actual adapter image, task/dataset revisions, selection policy, and relevant model/generation
+    settings with real run results; no missing identifiers or settings are fabricated here.
+  provenance:
+  - path: config/providers/ifbench.yaml
+    supports: >-
+      Declared benchmark IDs, metrics, directions, provider defaults, and runtime configuration; not
+      proof of deployed behavior.
+  - path: config/providers/lm_evaluation_harness.yaml
+    supports: >-
+      Declared benchmark IDs, metrics, directions, provider defaults, and runtime configuration; not
+      proof of deployed behavior.
+  - path: config/providers/followbench.yaml
+    supports: >-
+      Declared benchmark IDs, metrics, directions, provider defaults, and runtime configuration; not
+      proof of deployed behavior.
+  - path: config/collections/instruction-output-v1.yaml
+    supports: >-
+      Executable benchmark selection, weights, thresholds, parameters, and current curation_order;
+      documentation mirrors those settings.
+  - source: Collection review summarized in the pull request description
+    supports: >-
+      Scoring limitations and review-reported adapter/task concerns; deployed-image equivalence was
+      not established.
+  - source: Implementation plan in the pull request description
+    supports: >-
+      Approved membership, runtime-input choices, diagnostic interpretation, and the final curation policy
+      (seven existing target collections at 2, two new at 1, other collections unchanged at 0).

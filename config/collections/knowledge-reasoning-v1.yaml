@@ -1,5 +1,5 @@
 id: knowledge-reasoning-v1
-curation_order: 1
+curation_order: 2
 name: Knowledge and Reasoning v1
 description: >
   Evaluates closed-book, text-only knowledge and reasoning across difficult
@@ -7,6 +7,8 @@ description: >
   MATH-500. The collection measures bare-model reasoning without browsing,
   retrieval or tool assistance. Structured-table and structured-data analysis
   remain coverage gaps.
+  HLE is capped at 50 examples for screening.
+  Scores are diagnostic summaries, not deployment qualification criteria.
 domains:
   - knowledge_and_reasoning
 tasks:
@@ -31,6 +33,8 @@ pass_criteria:
   threshold: 0.256667
 
 benchmarks:
+  # LightEval metric keys and sampling controls still require runtime verification.
+  # Existing parameters are retained; they do not establish repeated seeded runs.
   - id: gpqa:diamond
     provider_id: lighteval
     weight: 0.3333333333333333
@@ -54,6 +58,9 @@ benchmarks:
     pass_criteria:
       threshold: 0.12
     parameters:
+      # Screening cap; verify the actual evaluated count.
+      num_examples: 50
+      # Grader binding and task-argument compatibility remain unresolved.
       task_args:
         include_multi_modal: false
         graders:
@@ -72,3 +79,150 @@ benchmarks:
       num_fewshot: 0
       num_samples: 3
       pass_at_k: 1
+
+documentation:
+  purpose: >-
+    Diagnose difficult closed-book, text-only scientific, academic, and mathematical reasoning by
+    a bare model, without browsing, retrieval, or tools.
+  selection:
+  - provider_id: lighteval
+    benchmark_id: gpqa:diamond
+    rationale: GPQA Diamond contributes difficult scientific questions.
+  - provider_id: inspect
+    benchmark_id: inspect/hle
+    rationale: >-
+      HLE contributes frontier-difficulty academic questions with the configured text-only restriction.
+  - provider_id: lighteval
+    benchmark_id: math_500
+    rationale: MATH-500 contributes competition-level mathematical reasoning.
+  scoring:
+    rows:
+    - provider_id: lighteval
+      benchmark_id: gpqa:diamond
+      metric: gpqa_pass@1
+      lower_is_better: false
+      weight: 0.3333333333333333
+      threshold: 0.35
+    - provider_id: inspect
+      benchmark_id: inspect/hle
+      metric: regex_judge/accuracy
+      lower_is_better: false
+      weight: 0.3333333333333333
+      threshold: 0.12
+    - provider_id: lighteval
+      benchmark_id: math_500
+      metric: pass@1
+      lower_is_better: false
+      weight: 0.3333333333333333
+      threshold: 0.3
+    units: >-
+      Primary scores are interpreted as fractions on a 0-1 scale for these targets. Verify actual
+      emitted units; metric names and catalog agreement alone do not establish them.
+    aggregation: >-
+      Use raw score for higher-is-better metrics and 1 - raw score for lower-is-better metrics, then
+      take the weighted mean. The configured aggregate threshold is a diagnostic target.
+    weight_rationale: >-
+      Equal weights give each benchmark one-third of the summary, rather than weighting by dataset
+      size.
+    threshold_provenance: >-
+      Existing collection targets are retained; the three row targets also match their provider declarations.
+      They are not calibrated deployment acceptance criteria.
+    collection_threshold: 0.256667
+    threshold_formula: "(0.35 + 0.12 + 0.30) / 3 = 0.256666..., rounded to 0.256667."
+    interpretation: >-
+      A weighted aggregate does not guarantee that every benchmark passes or that every required metric
+      is present. The review reports missing scores can be omitted and remaining weights renormalized.
+      Inspect completeness and per-benchmark results before interpreting a summary.
+  runtime:
+    rows:
+    - provider_id: lighteval
+      benchmark_id: gpqa:diamond
+      configured_parameters:
+        apply_chat_template: true
+        num_fewshot: 0
+        num_samples: 3
+        pass_at_k: 1
+    - provider_id: inspect
+      benchmark_id: inspect/hle
+      configured_parameters:
+        num_examples: 50
+        task_args:
+          include_multi_modal: false
+          graders:
+          - grader
+    - provider_id: lighteval
+      benchmark_id: math_500
+      configured_parameters:
+        apply_chat_template: true
+        num_fewshot: 0
+        num_samples: 3
+        pass_at_k: 1
+    choices:
+    - >-
+      LightEval rows retain apply_chat_template=true, num_fewshot=0, num_samples=3, and pass_at_k=1
+      from the existing collection to preserve the intended prompt and sampling choices. Their effect
+      is unverified; these values do not establish three independently seeded runs.
+    - >-
+      HLE uses num_examples=50 as an approved screening cap, borrowing the budget already used in
+      config/collections/open-telco-v1.yaml. This is not a full-evaluation protocol or a verified
+      count.
+    - >-
+      HLE retains task_args.include_multi_modal=false and task_args.graders=[grader], also documented
+      in config/providers/inspect.yaml. The grader model is not bound in this collection.
+    verification_status: >-
+      Configured values document intent, not measured execution. No model evaluations were run as
+      part of this configuration change. Unspecified settings remain deployment or provider/task defaults,
+      not a pinned reproducibility contract.
+  limitations:
+  - >-
+    Configured scope excludes structured-table and structured-data analysis and is not a broad enterprise
+    knowledge assessment; difficult tasks may give little discrimination among smaller models.
+  - >-
+    The review reports LightEval result-key and parameter-handling discrepancies, including the few-shot
+    spelling and sampling controls. Provider agreement alone does not resolve the deployed adapter
+    contract.
+  - >-
+    The review reports HLE task-version compatibility concerns for graders and scorer configuration.
+    Those findings require verification against the deployed image.
+  - >-
+    Provider runtime definitions must be distinguished from real benchmark evidence: configured local
+    simulator commands do not validate benchmark execution. Repository YAML documentation is not currently
+    persisted or exposed as a documentation field by the service API.
+  unresolved_inputs:
+  - >-
+    Verify emitted metric keys and actual LightEval prompting/sampling with deployed-adapter result
+    fixtures and execution logs.
+  - >-
+    Supply a fixed independent HLE grader and its credentials/endpoint through a supported role binding;
+    validate text-only selection and task arguments against the deployed task.
+  - >-
+    Verify the HLE cap and actual unique evaluated count; establish the supported complete-dataset
+    setting before final evaluation.
+  - >-
+    Record the actual adapter image, task/dataset revisions, selection policy, and relevant model/generation
+    settings with real run results; no missing identifiers or settings are fabricated here.
+  provenance:
+  - path: config/providers/lighteval.yaml
+    supports: >-
+      Declared benchmark IDs, metrics, directions, provider defaults, and runtime configuration; not
+      proof of deployed behavior.
+  - path: config/providers/inspect.yaml
+    supports: >-
+      Declared benchmark IDs, metrics, directions, provider defaults, and runtime configuration; not
+      proof of deployed behavior.
+  - path: config/collections/knowledge-reasoning-v1.yaml
+    supports: >-
+      Executable benchmark selection, weights, thresholds, parameters, and current curation_order;
+      documentation mirrors those settings.
+  - path: config/collections/open-telco-v1.yaml
+    supports: >-
+      Existing num_examples=50 precedent used for the approved screening budget, not a reference full-evaluation
+      protocol.
+  - source: Collection review summarized in the pull request description
+    supports: >-
+      Scoring limitations and review-reported adapter/task concerns; deployed-image equivalence was
+      not established.
+  - source: Implementation plan in the pull request description
+    supports: >-
+      Approved membership, runtime-input choices, diagnostic interpretation, and the final curation policy
+      (seven existing target collections at 2, two new at 1, other collections unchanged at 0).
