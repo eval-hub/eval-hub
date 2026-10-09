@@ -21,16 +21,23 @@ const (
 	TargetOCI    Target = "oci"
 )
 
+// ExportResult retains each destination's outcome independently.
+type ExportResult struct {
+	CardURL     string
+	OCIArtifact *api.OCIArtifactReference
+	OCIError    error
+}
+
 // ResultsExporter exports evaluation cards to configured targets.
 type ResultsExporter interface {
-	Export(ctx context.Context, job *api.EvaluationJobResource, card *cards.EvaluationCard) (cardURL string, err error)
+	Export(ctx context.Context, job *api.EvaluationJobResource, card *cards.EvaluationCard) (ExportResult, error)
 }
 
 // ExportTarget exports an evaluation card to a single target.
 type ExportTarget interface {
 	Target() Target
 	Enabled(job *api.EvaluationJobResource) bool
-	Export(ctx context.Context, job *api.EvaluationJobResource, card *cards.EvaluationCard) (cardURL string, err error)
+	Export(ctx context.Context, job *api.EvaluationJobResource, card *cards.EvaluationCard) (ExportResult, error)
 }
 
 // ManagerConfig configures shared dependencies for export targets.
@@ -63,25 +70,28 @@ func NewManager(logger *slog.Logger, cfg ManagerConfig) *Manager {
 }
 
 // Export writes the evaluation card to all targets enabled by the job configuration.
-// It returns the card URL from the first successful target that produces one.
+// It retains the OCI artifact or error independently of the first successful card URL.
 // Errors from individual targets are joined; callers may log and ignore them.
-func (m *Manager) Export(ctx context.Context, job *api.EvaluationJobResource, card *cards.EvaluationCard) (string, error) {
+func (m *Manager) Export(ctx context.Context, job *api.EvaluationJobResource, card *cards.EvaluationCard) (ExportResult, error) {
 	if job == nil || card == nil {
-		return "", nil
+		return ExportResult{}, nil
 	}
 	logger := m.logger
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
 
-	var cardURL string
+	var result ExportResult
 	var errs []error
 	for _, target := range m.targets {
 		if !target.Enabled(job) {
 			continue
 		}
-		url, err := target.Export(ctx, job, card)
+		outcome, err := target.Export(ctx, job, card)
 		if err != nil {
+			if target.Target() == TargetOCI {
+				result.OCIError = err
+			}
 			logger.Error(
 				"Failed to export evaluation results",
 				"target", target.Target(),
@@ -91,8 +101,11 @@ func (m *Manager) Export(ctx context.Context, job *api.EvaluationJobResource, ca
 			errs = append(errs, fmt.Errorf("%s: %w", target.Target(), err))
 			continue
 		}
-		if url != "" && cardURL == "" {
-			cardURL = url
+		if outcome.CardURL != "" && result.CardURL == "" {
+			result.CardURL = outcome.CardURL
+		}
+		if target.Target() == TargetOCI {
+			result.OCIArtifact = outcome.OCIArtifact
 		}
 		logger.Info(
 			"Exported evaluation results",
@@ -100,7 +113,7 @@ func (m *Manager) Export(ctx context.Context, job *api.EvaluationJobResource, ca
 			"job_id", job.Resource.ID,
 		)
 	}
-	return cardURL, errors.Join(errs...)
+	return result, errors.Join(errs...)
 }
 
 type mlflowTarget struct {
@@ -121,14 +134,14 @@ func (t *mlflowTarget) Enabled(job *api.EvaluationJobResource) bool {
 	return evalhubmlflow.HasExperimentName(&job.EvaluationJobConfig) && job.Resource.MLFlowExperimentID != ""
 }
 
-func (t *mlflowTarget) Export(ctx context.Context, job *api.EvaluationJobResource, card *cards.EvaluationCard) (string, error) {
+func (t *mlflowTarget) Export(ctx context.Context, job *api.EvaluationJobResource, card *cards.EvaluationCard) (ExportResult, error) {
 	if t.client == nil {
-		return "", fmt.Errorf("mlflow client is not configured")
+		return ExportResult{}, fmt.Errorf("mlflow client is not configured")
 	}
 
 	cardJSON, err := json.Marshal(card)
 	if err != nil {
-		return "", fmt.Errorf("marshal evaluation card: %w", err)
+		return ExportResult{}, fmt.Errorf("marshal evaluation card: %w", err)
 	}
 
 	client := t.client.WithContext(ctx)
@@ -154,7 +167,7 @@ func (t *mlflowTarget) Export(ctx context.Context, job *api.EvaluationJobResourc
 		cardJSON,
 	)
 	if err != nil {
-		return "", err
+		return ExportResult{}, err
 	}
 	if t.logger != nil {
 		t.logger.Info(
@@ -164,19 +177,18 @@ func (t *mlflowTarget) Export(ctx context.Context, job *api.EvaluationJobResourc
 			"artifact_url", artifactURL,
 		)
 	}
-	return artifactURL, nil
+	return ExportResult{CardURL: artifactURL}, nil
 }
 
 type ociTarget struct {
 	factory OCIPublisherFactory
-	logger  *slog.Logger
 }
 
-func NewOCITarget(factory OCIPublisherFactory, logger *slog.Logger) ExportTarget {
+func NewOCITarget(factory OCIPublisherFactory, _ *slog.Logger) ExportTarget {
 	if factory == nil {
 		factory = NewNoopOCIPublisherFactory()
 	}
-	return &ociTarget{factory: factory, logger: logger}
+	return &ociTarget{factory: factory}
 }
 
 func (t *ociTarget) Target() Target {
@@ -187,23 +199,28 @@ func (t *ociTarget) Enabled(job *api.EvaluationJobResource) bool {
 	return job.Exports != nil && job.Exports.OCI != nil
 }
 
-func (t *ociTarget) Export(ctx context.Context, job *api.EvaluationJobResource, card *cards.EvaluationCard) (string, error) {
-	publisher, err := t.factory.NewPublisher(ctx, job)
-	if err != nil {
-		return "", err
+func (t *ociTarget) Export(ctx context.Context, job *api.EvaluationJobResource, card *cards.EvaluationCard) (ExportResult, error) {
+	if card == nil || card.Metadata.EvaluationJobID == "" {
+		return ExportResult{}, &OCIExportError{Code: "OCI_CARD_GENERATION_FAILED", Operation: "generate evaluation card", Cause: "card is missing or has no evaluation job identity"}
 	}
-	defer func() { _ = publisher.Close() }()
-
 	cardJSON, err := json.Marshal(card)
 	if err != nil {
-		return "", fmt.Errorf("marshal evaluation card: %w", err)
+		return ExportResult{}, &OCIExportError{Code: "OCI_CARD_SERIALIZATION_FAILED", Operation: "serialize evaluation card", Cause: safeOCICause(err)}
 	}
-
-	if err := publisher.PublishEvalCard(ctx, cardJSON); err != nil {
-		return "", err
+	publisher, err := t.factory.NewPublisher(ctx, job)
+	if err != nil {
+		return ExportResult{}, &OCIExportError{Code: "OCI_CARD_ACCESS_FAILED", Operation: "initialize OCI publisher and resolve registry credentials", Cause: safeOCICause(err)}
 	}
-	if t.logger != nil {
-		t.logger.Info("Exported evaluation card to OCI", "job_id", job.Resource.ID)
+	if publisher == nil {
+		return ExportResult{}, &OCIExportError{Code: "OCI_CARD_ACCESS_FAILED", Operation: "initialize OCI publisher", Cause: "publisher is unavailable"}
 	}
-	return "", nil
+	defer func() { _ = publisher.Close() }()
+	artifact, err := publisher.PublishEvalCard(ctx, cardJSON)
+	if err != nil {
+		return ExportResult{}, &OCIExportError{Code: "OCI_CARD_PUBLICATION_FAILED", Operation: "publish evaluation card to OCI", Cause: safeOCICause(err)}
+	}
+	if artifact == nil || artifact.OCIDigest == "" || artifact.OCIReference == "" {
+		return ExportResult{}, &OCIExportError{Code: "OCI_CARD_PUBLICATION_FAILED", Operation: "publish evaluation card to OCI", Cause: "publisher returned no usable manifest reference"}
+	}
+	return ExportResult{OCIArtifact: artifact}, nil
 }

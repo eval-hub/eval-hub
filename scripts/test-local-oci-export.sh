@@ -32,6 +32,7 @@ base_url=${EVALHUB_BASE_URL:-http://localhost:8080}
 registry=${OCI_REGISTRY:-localhost:5001}
 repository=${OCI_REPOSITORY:-myorg/eval-results}
 output_dir=${OUTPUT_DIR:-./bin/local-oci/}
+oci_tag=${OCI_TAG:-}
 
 mkdir -p "$output_dir"
 
@@ -45,6 +46,7 @@ done
 jq -n \
   --arg host "http://$registry" \
   --arg repo "$repository" \
+  --arg tag "$oci_tag" \
   '{
     name: "local-oci-export-check",
     model: {
@@ -65,6 +67,7 @@ jq -n \
         coordinates: {
           oci_host: $host,
           oci_repository: $repo,
+          oci_tag: $tag,
           annotations: {
             "local.test": "true"
           }
@@ -93,12 +96,14 @@ for ((attempt = 0; attempt < 120; attempt++)); do
 
   state=$(jq -r '.status.state' "$output_dir/job.json")
 
-  if [[ "$state" == completed ]]; then
+  oci_state=$(jq -r '.results.oci.status.state // ""' "$output_dir/job.json")
+
+  if [[ "$state" == completed && "$oci_state" == completed ]]; then
     completed=true
     break
   fi
 
-  if [[ "$state" == failed || "$state" == cancelled ]]; then
+  if [[ "$state" == failed || "$state" == cancelled || "$oci_state" == failed ]]; then
     cat "$output_dir/job.json"
     exit 1
   fi
@@ -124,6 +129,19 @@ for ((attempt = 0; attempt < 60; attempt++)); do
 done
 
 [[ "$exported" == true ]]
+
+# Verify the API reports the actual manifest digest, independently of the card layer.
+manifest_digest=$(oras manifest fetch --plain-http --descriptor "$ref" | jq -er '.digest')
+jq -e --arg digest "$manifest_digest" --arg ref "$ref@$manifest_digest" '
+  .status.state == "completed" and
+  .results.oci.status.state == "completed" and
+  (.results.oci.status.message.message | length > 0) and
+  (.results.oci.status.message.message_code | length > 0) and
+  .results.oci.evaluation_card.oci_digest == $digest and
+  .results.oci.evaluation_card.oci_reference == $ref and
+  .results.oci.evaluation_bundle == null and .results.oci.signing == null
+' "$output_dir/job.json" >/dev/null
+[[ "$manifest_digest" != "$(jq -er '.layers[0].digest' "$output_dir/manifest.json")" ]]
 
 # Pull the evaluation card layer and fetch the separate OCI config blob.
 oras pull --plain-http "$ref" -o "$output_dir"

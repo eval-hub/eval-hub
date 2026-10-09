@@ -16,17 +16,13 @@ const (
 )
 
 // EvaluationCardManifestTag returns the OCI manifest tag for an evaluation card artifact.
-// The evaluation job id is always included so each job maps to a distinct tagged manifest.
-func EvaluationCardManifestTag(jobID, ociTag string) string {
+// The card tag is independent of the configured tag reserved for the evaluation bundle.
+func EvaluationCardManifestTag(jobID, _ string) string {
 	jobID = strings.TrimSpace(jobID)
-	ociTag = strings.TrimSpace(ociTag)
 	if jobID == "" {
-		return ociTag
+		return ""
 	}
-	if ociTag == "" {
-		return evaluationCardArtifactPrefix + "-" + jobID
-	}
-	return ociTag + "-" + jobID
+	return evaluationCardArtifactPrefix + "-" + jobID
 }
 
 // EvaluationCardLayerTitle returns the OCI layer title for the evaluation card JSON blob.

@@ -243,7 +243,19 @@ make build-wheel
 Developers can use `scripts/test-local-oci-export.sh` to simulate a quick OCI evaluation card
 generation during development. It runs an evaluation with the local test adapter,
 downloads the exported card from a local OCI registry, and verifies it against
-the completed job. No model server is required.
+the completed job, including the recorded OCI status and manifest reference. No model server is required.
+
+Successful OCI-enabled evaluations record `results.oci.status` as `pending`, then
+`generating_evaluation_card`, and finally `completed` or `failed`. At present,
+OCI completion covers evaluation-card generation and publication only. Bundle
+creation and signing are deferred, and their result fields remain absent. The
+published card always uses `evaluation-card-<job-id>`, independently of `oci_tag`;
+`results.oci.evaluation_card` contains the manifest digest and digest-qualified reference.
+
+OCI failures preserve the completed evaluation and its completion message. MLflow
+and OCI exports are attempted independently. Reporting failures are logged; if storage
+remains unavailable, retrieval may retain the last stored progress. Unchanged terminal
+callbacks do not repeat exports. Automatic retries and restart recovery are deferred.
 
 Install these dependencies before starting:
 
@@ -266,6 +278,7 @@ Run the check:
 
 ```sh
 bash scripts/test-local-oci-export.sh
+OCI_TAG=custom OUTPUT_DIR=/tmp/local-oci-custom bash scripts/test-local-oci-export.sh
 ```
 
 A successful run prints a verification message and saves these files in

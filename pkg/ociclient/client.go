@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 const (
@@ -60,30 +62,30 @@ func NewClient(registryHost, repository string, creds Credentials, httpClient *h
 
 // PushEvaluationCard uploads cardJSON as an OCI artifact for the given evaluation job. The manifest
 // tag and blob descriptor annotations always include jobID so each job is addressable and identifiable
-// in the registry.
-func (c *Client) PushEvaluationCard(ctx context.Context, jobID string, cardJSON []byte, ociTag string, annotations map[string]string) error {
+// in the registry. The returned digest identifies the exact manifest bytes accepted by the registry.
+func (c *Client) PushEvaluationCard(ctx context.Context, jobID string, cardJSON []byte, ociTag string, annotations map[string]string) (*api.OCIArtifactReference, error) {
 	if err := validateEvaluationJobID(jobID); err != nil {
-		return err
+		return nil, err
 	}
 	tag := EvaluationCardManifestTag(jobID, ociTag)
 	if tag == "" {
-		return fmt.Errorf("manifest tag is required")
+		return nil, fmt.Errorf("manifest tag is required")
 	}
 	if len(cardJSON) == 0 {
-		return fmt.Errorf("evaluation card content is empty")
+		return nil, fmt.Errorf("evaluation card content is empty")
 	}
 
 	configBlob, err := artifactConfigBlobForJob(jobID)
 	if err != nil {
-		return fmt.Errorf("build artifact config: %w", err)
+		return nil, fmt.Errorf("build artifact config: %w", err)
 	}
 	configDigest, configSize, err := c.ensureBlob(ctx, configBlob)
 	if err != nil {
-		return fmt.Errorf("upload artifact config: %w", err)
+		return nil, fmt.Errorf("upload artifact config: %w", err)
 	}
 	layerDigest, layerSize, err := c.ensureBlob(ctx, cardJSON)
 	if err != nil {
-		return fmt.Errorf("upload evaluation card layer: %w", err)
+		return nil, fmt.Errorf("upload evaluation card layer: %w", err)
 	}
 
 	manifestBytes, err := json.Marshal(manifest{
@@ -104,13 +106,17 @@ func (c *Client) PushEvaluationCard(ctx context.Context, jobID string, cardJSON 
 		Annotations: mergeEvaluationCardAnnotations(jobID, tag, annotations),
 	})
 	if err != nil {
-		return fmt.Errorf("marshal manifest: %w", err)
+		return nil, fmt.Errorf("marshal manifest: %w", err)
 	}
 
 	if err := c.putManifest(ctx, tag, manifestBytes); err != nil {
-		return fmt.Errorf("push manifest: %w", err)
+		return nil, fmt.Errorf("push manifest: %w", err)
 	}
-	return nil
+	digest := blobDigest(manifestBytes)
+	return &api.OCIArtifactReference{
+		OCIDigest:    digest,
+		OCIReference: strings.TrimPrefix(strings.TrimPrefix(c.registry, "https://"), "http://") + "/" + c.repository + ":" + tag + "@" + digest,
+	}, nil
 }
 
 // UploadBlob streams content to the registry using chunked PATCH uploads. The digest is computed

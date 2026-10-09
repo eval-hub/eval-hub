@@ -139,10 +139,10 @@ type ociPublisher struct {
 	annotations map[string]string
 }
 
-// PublishEvalCard pushes the marshaled evaluation card JSON to the configured OCI registry tag.
-func (p *ociPublisher) PublishEvalCard(ctx context.Context, cardJSON []byte) error {
+// PublishEvalCard publishes the card and returns the identity of its accepted OCI manifest.
+func (p *ociPublisher) PublishEvalCard(ctx context.Context, cardJSON []byte) (*api.OCIArtifactReference, error) {
 	if p == nil || p.client == nil {
-		return fmt.Errorf("oci publisher is not configured")
+		return nil, fmt.Errorf("oci publisher is not configured")
 	}
 	return p.client.PushEvaluationCard(ctx, p.jobID, cardJSON, p.ociTag, p.annotations)
 }

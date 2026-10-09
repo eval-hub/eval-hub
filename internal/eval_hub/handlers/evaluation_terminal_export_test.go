@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/evalcards"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/testhelpers"
@@ -20,9 +21,9 @@ type recordingResultsExporter struct {
 	cardURL string
 }
 
-func (r *recordingResultsExporter) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (string, error) {
+func (r *recordingResultsExporter) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (evalcards.ExportResult, error) {
 	r.called = true
-	return r.cardURL, nil
+	return evalcards.ExportResult{CardURL: r.cardURL}, nil
 }
 
 type terminalExportStorage struct {
