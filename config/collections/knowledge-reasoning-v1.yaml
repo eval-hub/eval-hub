@@ -40,7 +40,7 @@ benchmarks:
     provider_id: lighteval
     weight: 0.3333333333333333
     primary_score:
-      metric: gpqa_pass@1
+      metric: gpqa:diamond.gpqa_pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.35
@@ -54,7 +54,7 @@ benchmarks:
     provider_id: inspect
     weight: 0.3333333333333333
     primary_score:
-      metric: regex_judge/accuracy
+      metric: hle/regex_judge/hle/accuracy
       lower_is_better: false
     pass_criteria:
       threshold: 0.12
@@ -64,14 +64,25 @@ benchmarks:
       # Grader binding and task-argument compatibility remain unresolved.
       task_args:
         include_multi_modal: false
-        graders:
-          - grader
+        only_hle_verified_gold: false
+        scorer:
+          scorer: inspect_evals/hle/regex_judge
+          graders: [grader]
+          metrics:
+            - inspect_evals/hle/accuracy
+            - inspect_evals/hle/stderr
+            - inspect_evals/hle/cerr
+            - inspect_evals/hle/unscored
+          args:
+            template: regex_judge_template
+            instructions: regex_judge_instructions
+            max_grader_attempts: 3
 
   - id: math_500
     provider_id: lighteval
     weight: 0.3333333333333333
     primary_score:
-      metric: pass@1
+      metric: math_500.pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.30
