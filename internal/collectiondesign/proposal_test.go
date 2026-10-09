@@ -461,6 +461,155 @@ func TestProposalSchemaNestedAndCollectionThresholdValidation(t *testing.T) {
 	}
 }
 
+func TestProposalFormattingAndReferenceHelpers(t *testing.T) {
+	t.Parallel()
+
+	if got := jsonPath("CollectionConfig.Name"); got != "Name" {
+		t.Fatalf("jsonPath() = %q, want Name", got)
+	}
+	if got := jsonPath("Name"); got != "Name" {
+		t.Fatalf("jsonPath() without a namespace = %q, want Name", got)
+	}
+
+	issues := []Issue{
+		{Path: "benchmarks[0]", Code: "schema_invalid", Message: "z"},
+		{Path: "benchmarks[0]", Code: "schema_invalid", Message: "a"},
+		{Path: "benchmarks[0]", Code: "required_field", Message: "missing"},
+	}
+	sorted := sortedIssues(issues)
+	if sorted[0].Code != "required_field" || sorted[1].Message != "a" || sorted[2].Message != "z" {
+		t.Fatalf("sortedIssues() order = %+v", sorted)
+	}
+
+	if got := uniqueSorted(nil); got != nil {
+		t.Fatalf("uniqueSorted(nil) = %v, want nil", got)
+	}
+	if got := uniqueSorted([]string{"b", "a", "b", "c", "a"}); !reflect.DeepEqual(got, []string{"a", "b", "c"}) {
+		t.Fatalf("uniqueSorted() = %v, want [a b c]", got)
+	}
+
+	key := benchmarkKey{providerID: "p1", benchmarkID: "b1"}
+	matching := testBenchmark("p1", "b1")
+	references := []api.CollectionResource{
+		systemReference("same", matching),
+		systemReference("same", matching),
+		systemReference("ambiguous", matching, matching),
+		{Resource: api.Resource{ID: "tenant", Owner: "alice"}, CollectionConfig: api.CollectionConfig{Benchmarks: []api.CollectionBenchmarkConfig{matching}}},
+		systemReference("unrelated", testBenchmark("p1", "other")),
+	}
+	got := matchingReferenceBenchmarks(references, key)
+	if len(got) != 1 || got[0].collectionID != "same" {
+		t.Fatalf("matchingReferenceBenchmarks() = %+v, want only the unique system reference", got)
+	}
+}
+
+func TestCalibratedThresholdFiltersIncomparableReferenceEvidence(t *testing.T) {
+	t.Parallel()
+
+	provider := api.BenchmarkResource{
+		Metrics:      []string{"accuracy", "loss"},
+		PrimaryScore: &api.PrimaryScore{Metric: "accuracy"},
+	}
+	refs := []referenceBenchmark{
+		{collectionID: "default-score", benchmark: testBenchmarkWithThreshold("p1", "b1", 0.4)},
+		{collectionID: "different-score", benchmark: testBenchmarkWithScoreAndThreshold("p1", "b1", "loss", false, 0.6)},
+		{collectionID: "missing-pass-criteria", benchmark: testBenchmarkWithScore("p1", "b1", "accuracy", false)},
+		{collectionID: "missing-threshold", benchmark: func() api.CollectionBenchmarkConfig {
+			benchmark := testBenchmarkWithScore("p1", "b1", "accuracy", false)
+			benchmark.PassCriteria = &api.PassCriteria{}
+			return benchmark
+		}()},
+	}
+
+	threshold, ids := calibratedThreshold(refs, provider, &api.PrimaryScore{Metric: "accuracy"}, StrictnessModerate)
+	if threshold == nil || *threshold != 0.4 || !reflect.DeepEqual(ids, []string{"default-score"}) {
+		t.Fatalf("calibratedThreshold() = (%v, %v), want (0.4, [default-score])", threshold, ids)
+	}
+}
+
+func TestCloneTestDataRefCopiesEverySourceAndHandlesNil(t *testing.T) {
+	t.Parallel()
+
+	if cloneTestDataRef(nil) != nil {
+		t.Fatal("cloneTestDataRef(nil) should return nil")
+	}
+	original := &api.TestDataRef{
+		S3:  &api.S3TestDataRef{Bucket: "bucket", Key: "key", SecretRef: "secret"},
+		PVC: &api.PVCTestDataRef{ClaimName: "claim", SubPath: "data"},
+		Git: &api.GitTestDataRef{URL: "https://example.com/repo", Ref: "main", SubPath: "data", SecretRef: "git-secret"},
+		HF:  &api.HFTestDataRef{RepoID: "org/repo", Revision: "main", SubPath: "data", SecretRef: "hf-secret"},
+	}
+	cloned := cloneTestDataRef(original)
+	cloned.S3.Bucket = "changed"
+	cloned.PVC.ClaimName = "changed"
+	cloned.Git.Ref = "changed"
+	cloned.HF.RepoID = "changed"
+	if original.S3.Bucket != "bucket" || original.PVC.ClaimName != "claim" || original.Git.Ref != "main" || original.HF.RepoID != "org/repo" {
+		t.Fatal("cloned test-data sources share mutable pointers with the original")
+	}
+}
+
+func TestCloneAnyValueHandlesNestedKindsAndNilValues(t *testing.T) {
+	t.Parallel()
+
+	if cloneAnyValue(reflect.Value{}).IsValid() {
+		t.Fatal("invalid reflect.Value should remain invalid")
+	}
+	var nilInterface any
+	clonedInterface := cloneAnyValue(reflect.ValueOf(&nilInterface).Elem())
+	if clonedInterface.Kind() != reflect.Interface || !clonedInterface.IsNil() {
+		t.Fatalf("nil interface clone = %#v, want a nil interface", clonedInterface.Interface())
+	}
+
+	var nilMap map[string][]int
+	if cloned := cloneAnyValue(reflect.ValueOf(nilMap)); !cloned.IsNil() {
+		t.Fatalf("nil map clone = %#v, want nil", cloned.Interface())
+	}
+	var nilSlice []int
+	if cloned := cloneAnyValue(reflect.ValueOf(nilSlice)); !cloned.IsNil() {
+		t.Fatalf("nil slice clone = %#v, want nil", cloned.Interface())
+	}
+	var nilPointer *int
+	if cloned := cloneAnyValue(reflect.ValueOf(nilPointer)); !cloned.IsNil() {
+		t.Fatalf("nil pointer clone = %#v, want nil", cloned.Interface())
+	}
+
+	type nested struct {
+		Values []int
+	}
+	originalArray := [1]map[string][]int{{"values": {1}}}
+	clonedArray := cloneAnyValue(reflect.ValueOf(originalArray)).Interface().([1]map[string][]int)
+	clonedArray[0]["values"][0] = 2
+	if originalArray[0]["values"][0] != 1 {
+		t.Fatal("array clone shares nested map or slice data with the original")
+	}
+
+	originalPointer := &[]int{3}
+	clonedPointer := cloneAnyValue(reflect.ValueOf(originalPointer)).Interface().(*[]int)
+	(*clonedPointer)[0] = 4
+	if (*originalPointer)[0] != 3 {
+		t.Fatal("pointer clone shares nested slice data with the original")
+	}
+
+	originalStruct := nested{Values: []int{5}}
+	clonedStruct := cloneAnyValue(reflect.ValueOf(originalStruct)).Interface().(nested)
+	clonedStruct.Values[0] = 6
+	if originalStruct.Values[0] != 5 {
+		t.Fatal("struct clone shares nested slice data with the original")
+	}
+
+	interfaceValue := any(map[string][]int{"values": {7}})
+	clonedValue := cloneAnyValue(reflect.ValueOf(&interfaceValue).Elem()).Interface().(map[string][]int)
+	clonedValue["values"][0] = 8
+	if interfaceValue.(map[string][]int)["values"][0] != 7 {
+		t.Fatal("non-nil interface clone shares nested data with the original")
+	}
+
+	if got := cloneAnyValue(reflect.ValueOf("scalar")).Interface(); got != "scalar" {
+		t.Fatalf("scalar clone = %v, want scalar", got)
+	}
+}
+
 func proposalTestOptions(t *testing.T, filter string, max int, strictness string) Options {
 	t.Helper()
 	options, err := ParseOptions("design a collection", filter, strconv.Itoa(max), strictness)
