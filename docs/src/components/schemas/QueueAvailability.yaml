@@ -1,0 +1,13 @@
+type: object
+description: Tenant LocalQueue Active condition; omitted for profiles without queue scheduling.
+required:
+  - status
+properties:
+  status:
+    type: string
+    enum: [active, inactive, unknown]
+    description: Returns active when the LocalQueue Active condition is True, inactive when False, and unknown when missing or unrecognized.
+  reason:
+    type: string
+  message:
+    type: string
