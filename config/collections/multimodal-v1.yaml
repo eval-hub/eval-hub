@@ -1,12 +1,13 @@
 id: multimodal-v1
-curation_order: 7
-name: Multimodal v1
+curation_order: 2
+name: Multimodal Document VQA v1
 description: >
   Evaluates vision-language understanding on scanned-document visual question
   answering using DocVQA. Requires a vision-capable model. The collection
   currently measures document VQA using ANLS; dedicated chart and table-image
-  QA and general natural-image reasoning are not yet covered.
-  Part of the Standard LLM Evaluation Suite (standard-llm-evals-v1).
+  QA, general natural-image reasoning, audio, and video are not covered.
+  DocVQA is capped at 50 examples for screening.
+  Scores are diagnostic summaries, not broad multimodal qualification criteria.
 
 domains:
   - multimodal
@@ -36,4 +37,106 @@ benchmarks:
       lower_is_better: false
     pass_criteria:
       threshold: 0.50
-    parameters: {}
+    # ANLS result-key mapping and image-input protocol need verification.
+    parameters:
+      # Screening cap; verify the actual evaluated count.
+      num_examples: 50
+
+documentation:
+  purpose: >-
+    Diagnose vision-language question answering over scanned document images using a vision-capable
+    model.
+  selection:
+  - provider_id: inspect
+    benchmark_id: inspect/docvqa
+    rationale: >-
+      DocVQA provides a focused document-image reading and reasoning signal; this version deliberately
+      contains only that benchmark.
+  scoring:
+    rows:
+    - provider_id: inspect
+      benchmark_id: inspect/docvqa
+      metric: anls
+      lower_is_better: false
+      weight: 1
+      threshold: 0.5
+    units: >-
+      Primary scores are interpreted as fractions on a 0-1 scale for these targets. Verify actual
+      emitted units; metric names and catalog agreement alone do not establish them.
+    aggregation: >-
+      Use raw score for higher-is-better metrics and 1 - raw score for lower-is-better metrics, then
+      take the weighted mean. The configured aggregate threshold is a diagnostic target.
+    weight_rationale: The only benchmark has weight 1; there is no cross-benchmark capability balancing.
+    threshold_provenance: >-
+      The existing 0.50 target matches the provider declaration and is retained as an uncalibrated
+      diagnostic target.
+    collection_threshold: 0.5
+    threshold_formula: >-
+      1 * 0.50 / 1 = 0.50; the row and aggregate targets are identical, with no decimal rounding required.
+    interpretation: >-
+      A weighted aggregate does not guarantee that every benchmark passes or that every required metric
+      is present. The review reports missing scores can be omitted and remaining weights renormalized.
+      Inspect completeness and per-benchmark results before interpreting a summary.
+  runtime:
+    rows:
+    - provider_id: inspect
+      benchmark_id: inspect/docvqa
+      configured_parameters:
+        num_examples: 50
+    choices:
+    - >-
+      num_examples=50 is an approved screening cap based on the existing Open-Telco budget; it is
+      not proof that 50 documents or unique examples were successfully evaluated.
+    - >-
+      The declared anls primary metric is retained pending deployed-result verification. No image
+      preprocessing, split, or generation override is invented.
+    verification_status: >-
+      Configured values document intent, not measured execution. No model evaluations were run as
+      part of this configuration change. Unspecified settings remain deployment or provider/task defaults,
+      not a pinned reproducibility contract.
+  limitations:
+  - >-
+    Dedicated chart/table-image QA, general natural-image reasoning, audio, and video are excluded;
+    this collection is not a general multimodal assessment.
+  - >-
+    The review reports a potential mismatch between bare anls and Inspect scorer-qualified output.
+    Image preprocessing, answer formatting, and split selection can affect comparability.
+  - >-
+    Endpoint text compatibility does not prove that image content reaches the evaluated vision model
+    intact.
+  - >-
+    Provider runtime definitions must be distinguished from real benchmark evidence: configured local
+    simulator commands do not validate benchmark execution. Repository YAML documentation is not currently
+    persisted or exposed as a documentation field by the service API.
+  unresolved_inputs:
+  - >-
+    Verify the emitted ANLS result key, units, split, image preprocessing, and answer format using
+    deployed task fixtures.
+  - >-
+    Verify that the endpoint accepts the document images and inspect the actual evaluated count and
+    failures.
+  - Establish the supported complete-dataset setting before final evaluation.
+  - >-
+    Record the actual adapter image, task/dataset revisions, selection policy, and relevant model/generation
+    settings with real run results; no missing identifiers or settings are fabricated here.
+  provenance:
+  - path: config/providers/inspect.yaml
+    supports: >-
+      Declared benchmark IDs, metrics, directions, provider defaults, and runtime configuration; not
+      proof of deployed behavior.
+  - path: config/collections/multimodal-v1.yaml
+    supports: >-
+      Executable benchmark selection, weights, thresholds, parameters, and current curation_order;
+      documentation mirrors those settings.
+  - path: config/collections/open-telco-v1.yaml
+    supports: >-
+      Existing num_examples=50 precedent used for the approved screening budget, not a reference full-evaluation
+      protocol.
+  - source: Collection review summarized in the pull request description
+    supports: >-
+      Scoring limitations and review-reported adapter/task concerns; deployed-image equivalence was
+      not established.
+  - source: Implementation plan in the pull request description
+    supports: >-
+      Approved membership, runtime-input choices, diagnostic interpretation, and the final curation policy
+      (seven existing target collections at 2, two new at 1, other collections unchanged at 0).
