@@ -1079,16 +1079,28 @@ benchmarks:
     tasks: [reasoning]
     modalities: [text]
     evaluation_targets: [model]
-    metrics: [regex_judge/accuracy]
+    metrics: [hle/regex_judge/hle/accuracy]
     primary_score:
-      metric: regex_judge/accuracy
+      metric: hle/regex_judge/hle/accuracy
       lower_is_better: false
     pass_criteria:
       threshold: 0.12
     parameters:
       task_args:
         include_multi_modal: false
-        graders: [grader]
+        only_hle_verified_gold: false
+        scorer:
+          scorer: inspect_evals/hle/regex_judge
+          graders: [grader]
+          metrics:
+            - inspect_evals/hle/accuracy
+            - inspect_evals/hle/stderr
+            - inspect_evals/hle/cerr
+            - inspect_evals/hle/unscored
+          args:
+            template: regex_judge_template
+            instructions: regex_judge_instructions
+            max_grader_attempts: 3
     tags: [knowledge, reasoning, inspect-evals]
 
   # Agent capabilities
