@@ -66,7 +66,7 @@ func (filter *QueryFilter) String() string {
 type Storage interface {
 	WithLogger(logger *slog.Logger) Storage
 	WithContext(ctx context.Context) Storage
-	WithContextAndWorkloadType(ctx context.Context, workloadType workloads.Type) Storage
+	WithWorkloadType(workloadType workloads.Type) Storage
 	WithTenant(tenant api.Tenant) Storage
 	WithOwner(owner api.User) Storage
 

@@ -17,12 +17,10 @@ func (noopStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return noop
 func (noopStorage) WithContext(_ context.Context) abstractions.Storage {
 	return noopStorage{}
 }
-func (noopStorage) WithContextAndWorkloadType(_ context.Context, _ workloads.Type) abstractions.Storage {
-	return noopStorage{}
-}
-func (noopStorage) WithTenant(_ api.Tenant) abstractions.Storage { return noopStorage{} }
-func (noopStorage) WithOwner(_ api.User) abstractions.Storage    { return noopStorage{} }
-func (noopStorage) Ping(_ time.Duration) error                   { return nil }
+func (noopStorage) WithWorkloadType(_ workloads.Type) abstractions.Storage { return noopStorage{} }
+func (noopStorage) WithTenant(_ api.Tenant) abstractions.Storage           { return noopStorage{} }
+func (noopStorage) WithOwner(_ api.User) abstractions.Storage              { return noopStorage{} }
+func (noopStorage) Ping(_ time.Duration) error                             { return nil }
 func (noopStorage) CreateEvaluationJob(_ *api.EvaluationJobResource) error {
 	return nil
 }
