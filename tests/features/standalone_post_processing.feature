@@ -92,3 +92,63 @@ Feature: Post-Processing Endpoint
     Then the response code should be 204
     When I send a GET request to "/api/v1/evaluations/jobs/{{value:source_job_id}}"
     Then the response code should be 404
+
+  @local
+  Scenario: Evaluation jobs list excludes standalone post-processing jobs
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:list_source_job_id"
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_running.json"
+    Then the response code should be 204
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body:
+    """
+    {
+      "benchmark_status_event": {
+        "id": "arc_easy",
+        "provider_id": "lm_evaluation_harness",
+        "status": "completed",
+        "metrics": {"accuracy": 0.7},
+        "metrics_schema": [{"name": "accuracy", "type": "numeric"}]
+      }
+    }
+    """
+    Then the response code should be 204
+    When I send a POST request to "/api/v1/evaluations/post-processing" with body:
+    """
+    {
+      "name": "confidence-interval-list-fvt",
+      "operations": {
+        "confidence_interval": {
+          "results_data_ref": {
+            "eval_job": {
+              "id": "{{value:list_source_job_id}}"
+            }
+          },
+          "calibration_data_ref": [
+            {
+              "pvc": {"claim_name": "calibration-data"},
+              "data_config": {
+                "format": "jsonl",
+                "columns": {
+                  "label": "label",
+                  "prediction": "prediction"
+                }
+              }
+            }
+          ],
+          "significance_level": 0.05
+        }
+      }
+    }
+    """
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:list_post_processing_id"
+    When I send a GET request to "/api/v1/evaluations/jobs?limit=100"
+    Then the response code should be 200
+    And the response should contain the value "{{value:list_source_job_id}}" at path "$.items[*].resource.id"
+    And the response should not contain the value "{{value:list_post_processing_id}}" at path "$.items[*].resource.id"
+    When I send a DELETE request to "/api/v1/evaluations/post-processing/{{value:list_post_processing_id}}?hard_delete=true"
+    Then the response code should be 204
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{{value:list_source_job_id}}?hard_delete=true"
+    Then the response code should be 204
