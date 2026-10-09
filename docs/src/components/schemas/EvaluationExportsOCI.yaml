@@ -1,5 +1,20 @@
 type: object
-description: OCI export configuration for an evaluation job.
+description: >-
+  OCI export configuration for local and Kubernetes evaluation jobs. Signing
+  configuration is retained only; accepting it does not perform or schedule signing.
+examples:
+  - coordinates:
+      oci_host: quay.io
+      oci_repository: my-org/eval-results
+  - coordinates:
+      oci_host: quay.io
+      oci_repository: my-org/eval-results
+      oci_tag: final
+    k8s:
+      connection: my-oci-secret
+    signing:
+      type: key-pair
+      secret_ref: my-cosign-secret
 properties:
   coordinates:
     $ref: ./OCICoordinates.yaml
@@ -7,6 +22,9 @@ properties:
   k8s:
     $ref: ./OCIConnectionConfig.yaml
     description: Optional Kubernetes connection for OCI registry authentication
+  signing:
+    $ref: ./OCISigningConfig.yaml
+    description: Optional signing configuration. Signing is disabled when omitted.
 required:
   - coordinates
 additionalProperties: false

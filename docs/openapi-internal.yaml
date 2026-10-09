@@ -2978,6 +2978,88 @@ components:
               items:
                 $ref: '#/components/schemas/BenchmarkStatus'
               description: Per-benchmark status
+    OCIProcessingStatus:
+      type: object
+      description: Common post-evaluation OCI workflow status for evaluation-card generation and publication, evaluation-bundle generation and publication, and future signing. Independent of the evaluation job status and completion message. Omit until actual workflow information is available; no state or message is defaulted.
+      required:
+        - state
+        - message
+      properties:
+        state:
+          type: string
+          enum:
+            - pending
+            - generating_evaluation_card
+            - generating_evaluation_bundle
+            - signing
+            - failed
+            - completed
+          description: pending means OCI processing is initialized but card processing has not started. generating_evaluation_card covers card generation, serialization, and publication. generating_evaluation_bundle covers child artifact validation, index creation, and publication. signing covers signing the published bundle and is reserved for future execution. failed means a required stage failed, with the stage and cause described in the message. completed means all applicable stages succeeded.
+        message:
+          $ref: '#/components/schemas/MessageInfo'
+    OCIArtifactReference:
+      type: object
+      description: OCI artifact reference.
+      properties:
+        oci_digest:
+          type: string
+          minLength: 1
+          pattern: \S
+          description: Artifact digest.
+          examples:
+            - sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+        oci_reference:
+          type: string
+          minLength: 1
+          pattern: \S
+          description: Registry reference identifying the artifact by digest.
+      required:
+        - oci_digest
+        - oci_reference
+      additionalProperties: false
+    OCISigningResult:
+      type: object
+      description: Signing information associated with the evaluation bundle digest. Omit until an actual signing outcome is available. Processing status is reported separately in results.oci.status; it does not change the evaluation job status.
+      properties:
+        type:
+          type: string
+          enum:
+            - key-pair
+          description: Signing method. Only key-pair is currently supported.
+      required:
+        - type
+      additionalProperties: false
+    EvaluationOCIResults:
+      type: object
+      description: Optional job-level OCI processing status, artifact references, and signing information. Unavailable objects are omitted, including on completed jobs. These fields are reserved for later OCI workflows; this delivery does not populate them, implement progress transitions or error reporting, or derive references from job IDs or registry tags. Status, artifacts, and signing are independently optional. The populated example illustrates future behavior only.
+      properties:
+        status:
+          $ref: '#/components/schemas/OCIProcessingStatus'
+          description: Optional common OCI workflow status; omit until actual workflow information is available.
+        evaluation_card:
+          $ref: '#/components/schemas/OCIArtifactReference'
+          description: Optional evaluation card artifact; omit until available.
+        evaluation_bundle:
+          $ref: '#/components/schemas/OCIArtifactReference'
+          description: Optional OCI index grouping the evaluation card and benchmark artifacts; omit until available.
+        signing:
+          $ref: '#/components/schemas/OCISigningResult'
+          description: Optional signing information; omitted when no outcome is available.
+      additionalProperties: false
+      examples:
+        - status:
+            state: completed
+            message:
+              message: OCI processing completed.
+              message_code: oci_processing_success
+          evaluation_card:
+            oci_digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+            oci_reference: quay.io/my-org/eval-results@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          evaluation_bundle:
+            oci_digest: sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
+            oci_reference: quay.io/my-org/eval-results@sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
+          signing:
+            type: key-pair
     MetricSchema:
       type: object
       description: One entry in metrics_schema that names a metric and its result type.
@@ -3097,8 +3179,13 @@ components:
       additionalProperties: false
     EvaluationJobResults:
       type: object
-      description: Results section for an evaluation job
+      description: Results section shared by create, get, and list job resources. Unavailable OCI outputs are omitted. A signing request alone does not produce OCI processing status or signing results.
+      examples:
+        - benchmarks: []
       properties:
+        oci:
+          $ref: '#/components/schemas/EvaluationOCIResults'
+          description: Optional job-level OCI reporting; omitted until values are available, including on completed jobs.
         benchmarks:
           type: array
           items:
@@ -3748,9 +3835,41 @@ components:
         - connection
       additionalProperties: false
       title: OCIConnectionConfig
+    OCISigningConfig:
+      type: object
+      description: Optional signing configuration for the evaluation bundle, in local and Kubernetes modes. For key-pair signing, secret_ref can reference a tenant namespace Kubernetes Secret expected to contain private.key; the request never contains key material. This configuration does not perform secret lookup, key loading, or signing execution.
+      properties:
+        type:
+          type: string
+          enum:
+            - key-pair
+          description: Signing method. Only key-pair is currently supported.
+        secret_ref:
+          type:
+            - string
+            - 'null'
+          minLength: 1
+          pattern: \S
+          description: Optional name of the signing key Secret for key-pair signing. Must not be empty or whitespace-only when provided.
+      required:
+        - type
+      additionalProperties: false
     EvaluationExportsOCI:
       type: object
-      description: OCI export configuration for an evaluation job.
+      description: OCI export configuration for local and Kubernetes evaluation jobs. Signing configuration is retained only; accepting it does not perform or schedule signing.
+      examples:
+        - coordinates:
+            oci_host: quay.io
+            oci_repository: my-org/eval-results
+        - coordinates:
+            oci_host: quay.io
+            oci_repository: my-org/eval-results
+            oci_tag: final
+          k8s:
+            connection: my-oci-secret
+          signing:
+            type: key-pair
+            secret_ref: my-cosign-secret
       properties:
         coordinates:
           $ref: '#/components/schemas/OCICoordinates'
@@ -3758,6 +3877,9 @@ components:
         k8s:
           $ref: '#/components/schemas/OCIConnectionConfig'
           description: Optional Kubernetes connection for OCI registry authentication
+        signing:
+          $ref: '#/components/schemas/OCISigningConfig'
+          description: Optional signing configuration. Signing is disabled when omitted.
       required:
         - coordinates
       additionalProperties: false
