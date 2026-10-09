@@ -4,12 +4,13 @@ name: Instruction and Output Reliability v1
 description: >
   Evaluates bare-model instruction and output reliability across explicit
   instruction following, unconstrained JSON/schema compliance, and compound
-  constraint satisfaction. Balanced IFBench, JSONSchemaBench Easy, and FollowBench
-  coverage measures whether models can satisfy verifiable requirements without
-  constrained decoding, tool execution, or multi-step agent scaffolding.
-  IFBench uses loose prompt-level scoring; schema compliance covers the Easy
-  split with zero-shot prompting. Scores are diagnostic summaries, not
-  production reliability criteria.
+  constraint satisfaction.
+# Balanced IFBench, JSONSchemaBench Easy, and FollowBench
+# coverage measures whether models can satisfy verifiable requirements without
+# constrained decoding, tool execution, or multi-step agent scaffolding.
+# IFBench uses loose prompt-level scoring; schema compliance covers the Easy
+# split with zero-shot prompting. Scores are diagnostic summaries, not
+# production reliability criteria.
 domains:
   - instruction_and_output_reliability
 tasks:

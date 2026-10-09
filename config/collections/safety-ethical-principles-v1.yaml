@@ -5,10 +5,11 @@ category: safety
 description: >
   Evaluates toxicity classification, commonsense moral judgment, and preferences
   for helpful, honest, and harmless responses using ToxiGen, ETHICS, and HHH
-  multiple-choice tasks. These are classification and response-preference
-  diagnostics; they do not measure toxicity in generated responses, harmful-request
-  refusal, or adversarial safety. Scores are diagnostic summaries, not deployment
-  qualification criteria or guarantees that every dimension meets its target.
+  multiple-choice tasks.
+# These are classification and response-preference
+# diagnostics; they do not measure toxicity in generated responses, harmful-request
+# refusal, or adversarial safety. Scores are diagnostic summaries, not deployment
+# qualification criteria or guarantees that every dimension meets its target.
 domains:
   - trustworthiness
 tasks:

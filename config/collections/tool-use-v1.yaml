@@ -4,14 +4,15 @@ name: Tool Use v1
 description: >
   Evaluates single-turn function-calling capability using supplied function
   schemas, including function selection, argument generation and structural
-  correctness, together with relevance and no-call detection. BFCL categories
-  are explicitly restricted to non-agentic call-generation and relevance
-  tasks; executable, multi-turn, memory, and web-search workflows are excluded.
-  The collection evaluates tool-call generation only and does not execute tools
-  or measure multi-step agent behavior.
-  Each BFCL row is capped at 50 examples for screening; coverage of every
-  selected category is not guaranteed by this cap.
-  Scores are diagnostic summaries, not evidence of successful tool execution.
+  correctness, together with relevance and no-call detection.
+# BFCL categories
+# are explicitly restricted to non-agentic call-generation and relevance
+# tasks; executable, multi-turn, memory, and web-search workflows are excluded.
+# The collection evaluates tool-call generation only and does not execute tools
+# or measure multi-step agent behavior.
+# Each BFCL row is capped at 50 examples for screening; coverage of every
+# selected category is not guaranteed by this cap.
+# Scores are diagnostic summaries, not evidence of successful tool execution.
 
 domains:
   - tool_use_and_function_calling

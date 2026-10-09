@@ -5,15 +5,15 @@ name: Trustworthiness v1
 description: >
   Evaluates selected trustworthiness dimensions for bare models, including
   prompt-injection resistance and multiple-choice misconception resistance.
-  CyberSecEval prompt injection is scored lower-is-better and receives two-thirds
-  of the weight; TruthfulQA MC1 receives one-third and provides a limited
-  truthfulness diagnostic.
-
-  The collection does not currently measure toxicity in
-  generated responses, harmful-request refusal, jailbreak resistance,
-  confidence calibration, or explicit abstention.
-  Prompt injection is capped at 50 examples for screening.
-  Scores are diagnostic summaries, not deployment qualification criteria.
+# CyberSecEval prompt injection is scored lower-is-better and receives two-thirds
+# of the weight; TruthfulQA MC1 receives one-third and provides a limited
+# truthfulness diagnostic.
+#
+# The collection does not currently measure toxicity in
+# generated responses, harmful-request refusal, jailbreak resistance,
+# confidence calibration, or explicit abstention.
+# Prompt injection is capped at 50 examples for screening.
+# Scores are diagnostic summaries, not deployment qualification criteria.
 
 domains:
   - trustworthiness
