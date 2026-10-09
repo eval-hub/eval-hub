@@ -3641,7 +3641,9 @@ benchmarks:
 - id: toxigen
   name: Implicit toxicity detection
   description: >
-    Tests whether the model generates subtle, adversarial toxic language targeting 13 minority groups—implicit hate speech that evades simple keyword filters—as well as explicit hateful or abusive language toward individuals and groups.
+    Tests whether the model identifies toxic or hateful language in supplied text,
+    including implicit hate speech targeting 13 minority groups. Classification
+    accuracy does not measure toxicity in the model's generated responses.
   category: safety
   domains: [trustworthiness]
   tasks: [safety]

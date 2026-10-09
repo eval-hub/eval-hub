@@ -100,6 +100,14 @@ stop-service:
 	-./scripts/stop_server.sh "${SERVER_PID_FILE}"
 	! grep -i -F panic "${SERVICE_LOG}"
 
+.PHONY: start-oci-registry stop-oci-registry
+start-oci-registry: ## Start an anonymous OCI registry at http://localhost:5001
+	$(DOCKER) run -d -p 5001:5000 --name eval-hub-oci-registry docker.io/library/registry:2
+
+stop-oci-registry: ## Stop and remove the local OCI registry
+	$(DOCKER) stop eval-hub-oci-registry
+	$(DOCKER) rm eval-hub-oci-registry
+
 # Sidecar (eval-runtime-sidecar) starter/stopper
 SIDECAR_PID_FILE ?= $(BIN_DIR)/sidecar.pid
 SIDECAR_LOG ?= $(BIN_DIR)/sidecar.log
@@ -175,7 +183,7 @@ vet: ## Run go vet
 FUZZTIME ?= 10000x
 GO_TEST_TIMEOUT ?= 10m
 # Packages that define Fuzz* tests. Keep in sync when adding new fuzz targets.
-FUZZ_PACKAGES ?= ./pkg/ociclient ./pkg/mlflowclient ./pkg/api ./internal/eval_hub/handlers ./internal/eval_hub/storage/sql/shared ./internal/eval_hub/config ./internal/eval_runtime_sidecar/handlers ./internal/eval_runtime_sidecar/proxy ./internal/evalhub_mcp/server ./internal/safefile ./cmd/eval_runtime_init
+FUZZ_PACKAGES ?= ./internal/eval_hub/runtimes/k8s ./pkg/ociclient ./pkg/mlflowclient ./pkg/api ./internal/eval_hub/handlers ./internal/eval_hub/storage/sql/shared ./internal/eval_hub/config ./internal/eval_runtime_sidecar/handlers ./internal/eval_runtime_sidecar/proxy ./internal/evalhub_mcp/server ./internal/safefile ./cmd/eval_runtime_init
 
 test: ## Run unit tests (including fuzz seed corpora and a short fuzzing pass)
 	@echo "Running unit tests..."

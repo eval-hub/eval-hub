@@ -14,7 +14,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     # This is mandatory for the tests to run successfully
     And the value "{{env:MODEL_AUTH_SECRET_REF}}" is not empty
 
-  # https://redhat.atlassian.net/browse/RHOAIENG-84701 - Garak intents benchmark fails
+  # https://redhat.atlassian.net/browse/RHOAIENG-99472
   Scenario: Verifying results returned for Evaluation job - garak
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_garak.json"
@@ -53,6 +53,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 4
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have additional_info matching the expected fields
     And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
@@ -74,12 +75,15 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 3
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have additional_info matching the expected fields
     And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
   # vLLM chat completions endpoint (/v1/chat/completions) supports greedy_until
   # https://github.com/huggingface/lighteval/issues/1130
+  # https://redhat.atlassian.net/browse/RHOAIENG-99618
+  # https://redhat.atlassian.net/browse/RHOAIENG-99621
   Scenario: Verifying results returned for Evaluation job - lighteval - greedy_until
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_lighteval_greedy_until.json"
@@ -97,11 +101,15 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 11
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have additional_info matching the expected fields
     And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
   # https://redhat.atlassian.net/browse/RHOAIENG-84704
+  # https://redhat.atlassian.net/browse/RHOAIENG-99488
+  # https://redhat.atlassian.net/browse/RHOAIENG-99618
+  # https://redhat.atlassian.net/browse/RHOAIENG-99621
   # needs an endpoint that support loglikelihood
   Scenario: Verifying results returned for Evaluation job - lighteval - loglikelihood
     Given the service is running
@@ -120,6 +128,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 17
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have additional_info matching the expected fields
     And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
@@ -144,13 +153,14 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 25
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have additional_info matching the expected fields
     And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
-  # https://redhat.atlassian.net/browse/RHOAIENG-85386
   # https://redhat.atlassian.net/browse/RHOAIENG-85389
-  # https://redhat.atlassian.net/browse/RHOAIENG-85388
+  # https://redhat.atlassian.net/browse/RHOAIENG-99094
+  # https://redhat.atlassian.net/browse/RHOAIENG-99100
   Scenario: Verifying results returned for Evaluation job - lm_evaluation_harness - group 2
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_lm_evaluation_harness_2.json"
@@ -168,12 +178,14 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 26
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have additional_info matching the expected fields
     And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
   # https://redhat.atlassian.net/browse/RHOAIENG-85389
-  # https://redhat.atlassian.net/browse/RHOAIENG-85386
+  # https://redhat.atlassian.net/browse/RHOAIENG-97629
+  # https://redhat.atlassian.net/browse/RHOAIENG-99094
   Scenario: Verifying results returned for Evaluation job - lm_evaluation_harness - group 3
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_lm_evaluation_harness_3.json"
@@ -191,11 +203,14 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 26
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have additional_info matching the expected fields
     And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
   # https://redhat.atlassian.net/browse/RHOAIENG-90798 - bbh benchmark
+  # https://redhat.atlassian.net/browse/RHOAIENG-99094
+  # https://redhat.atlassian.net/browse/RHOAIENG-99100
   Scenario: Verifying results returned for Evaluation job - lm_evaluation_harness - group 4
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_lm_evaluation_harness_4.json"
@@ -213,14 +228,15 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 30
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have additional_info matching the expected fields
     And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
   # https://redhat.atlassian.net/browse/RHOAIENG-85389
-  # https://redhat.atlassian.net/browse/RHOAIENG-85386
-  # https://redhat.atlassian.net/browse/RHOAIENG-85388
   # https://redhat.atlassian.net/browse/RHOAIENG-85393 - careqa_open_perplexity
+  # https://redhat.atlassian.net/browse/RHOAIENG-99094
+  # https://redhat.atlassian.net/browse/RHOAIENG-99100
   Scenario: Verifying results returned for Evaluation job - lm_evaluation_harness - group 5
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_lm_evaluation_harness_5.json"
@@ -238,14 +254,16 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 28
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have additional_info matching the expected fields
     And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
-  # https://redhat.atlassian.net/browse/RHOAIENG-85386
-  # https://redhat.atlassian.net/browse/RHOAIENG-85388
   # https://redhat.atlassian.net/browse/RHOAIENG-85393 - tinyTruthfulQA
   # https://redhat.atlassian.net/browse/RHOAIENG-85410 - humaneval, mbpp
+  # https://redhat.atlassian.net/browse/RHOAIENG-97651
+  # https://redhat.atlassian.net/browse/RHOAIENG-99094
+  # https://redhat.atlassian.net/browse/RHOAIENG-99100
   Scenario: Verifying results returned for Evaluation job - lm_evaluation_harness - group 6
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_lm_evaluation_harness_6.json"
@@ -263,6 +281,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 22
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have additional_info matching the expected fields
     And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
@@ -284,12 +303,13 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the array at path "results.benchmarks" in the response should have length 5
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
+    And all benchmarks in the response should have additional_info matching the expected fields
     And all benchmarks in the response should have a test block with pass criteria
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
-  # https://redhat.atlassian.net/browse/RHOAIENG-89382 - Fails for meta-llama/Llama-3.1-8B-Instruct
-  # https://redhat.atlassian.net/browse/RHOAIENG-89395
+  # https://redhat.atlassian.net/browse/RHOAIENG-97740
+  # https://redhat.atlassian.net/browse/RHOAIENG-99504
   Scenario: Verifying results returned for Evaluation job - ragas
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_ragas.json"
@@ -311,7 +331,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
-  # MTEB not implemented due to https://redhat.atlassian.net/browse/RHOAIENG-85265
+ # https://redhat.atlassian.net/browse/RHOAIENG-97760
   @ignore
   Scenario: Verifying results returned for Evaluation job - MTEB
     Given the service is running

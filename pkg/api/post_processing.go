@@ -186,7 +186,3 @@ type ConfidenceInterval struct {
 	Lower float64 `json:"lower"`
 	Upper float64 `json:"upper"`
 }
-
-type PostProcessingRef struct {
-	ID string `json:"id"`
-}

@@ -1,0 +1,72 @@
+type: object
+required:
+  - version
+  - build
+  - build_date
+  - git_hash
+  - hardware_profiles
+properties:
+  version:
+    type: string
+  build:
+    type: string
+  build_date:
+    type: string
+  git_hash:
+    type: string
+  hardware_profiles:
+    type: array
+    description: Enabled hardware profiles available to the caller's tenant, sorted by name.
+    items:
+      type: object
+      required:
+        - name
+        - identifiers
+      properties:
+        name:
+          type: string
+          description: Profile name for hardware_config.hardware_profile_name.
+        display_name:
+          type: string
+          description: Optional opendatahub.io/display-name annotation.
+        description:
+          type: string
+          description: Optional opendatahub.io/description annotation.
+        scheduling_type:
+          type: string
+          enum: [node, queue]
+          description: Scheduling method; omitted when the profile does not configure scheduling.
+        identifiers:
+          type: array
+          description: Profile resource identifiers; an empty array when none are configured. Counts are represented as strings for both integer counts and Kubernetes quantities.
+          items:
+            type: object
+            required:
+              - identifier
+            properties:
+              identifier:
+                type: string
+                description: Kubernetes resource name, such as cpu, memory, or nvidia.com/gpu.
+              display_name:
+                type: string
+              resource_type:
+                type: string
+                enum: [cpu, memory, accelerator]
+                description: Resource category; omitted for uncategorized resources.
+              min_count:
+                type: string
+                description: Minimum quantity; omitted when unspecified.
+              default_count:
+                type: string
+                description: Default quantity; omitted when unspecified.
+              max_count:
+                type: string
+                description: Maximum quantity; omitted when unspecified.
+        queue_name:
+          type: string
+          description: Tenant LocalQueue name for queue-backed profiles; omitted for node-scheduled profiles.
+        priority_class_name:
+          type: string
+          description: WorkloadPriorityClass name for queue scheduling; omitted when unspecified or set to None in the profile.
+        queue_availability:
+          $ref: ./QueueAvailability.yaml

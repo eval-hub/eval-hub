@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -126,7 +127,7 @@ func TestCollections_BenchmarksExist(t *testing.T) {
 
 	filter := &abstractions.QueryFilter{Limit: 50, Offset: 0, Params: map[string]any{"scope": "system"}}
 
-	t.Run("get system collections and check pass criteria", func(t *testing.T) {
+	t.Run("get system collections and check benchmark IDs and curated metrics", func(t *testing.T) {
 		res, err := store.GetCollections(filter)
 		if err != nil {
 			t.Fatalf("GetCollections: %v", err)
@@ -153,11 +154,20 @@ func TestCollections_BenchmarksExist(t *testing.T) {
 				for _, pbenchmark := range provider.Benchmarks {
 					if pbenchmark.ID == benchmark.ID {
 						found = true
+						// Curated collections use fixed benchmark metrics; custom tasks
+						// in other collections can select metrics at runtime.
+						if coll.CurationOrder > 0 && benchmark.PrimaryScore != nil {
+							metric := benchmark.PrimaryScore.Metric
+							matchesPrimary := pbenchmark.PrimaryScore != nil && pbenchmark.PrimaryScore.Metric == metric
+							if !matchesPrimary && !slices.Contains(pbenchmark.Metrics, metric) {
+								t.Errorf("collection %s benchmark %s provider %s: primary score metric %q is not declared by the provider", coll.Resource.ID, benchmark.ID, benchmark.ProviderID, metric)
+							}
+						}
 						break
 					}
 				}
 				if !found {
-					t.Errorf("expected benchmark %s for provider %s, got none", benchmark.ID, benchmark.ProviderID)
+					t.Errorf("collection %s: expected benchmark %s for provider %s, got none", coll.Resource.ID, benchmark.ID, benchmark.ProviderID)
 				}
 			}
 		}

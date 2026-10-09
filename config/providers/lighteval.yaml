@@ -557,8 +557,9 @@ benchmarks:
     description: |-
       500 hand-picked problems from the MATH dataset spanning 7 subject areas (algebra,
       counting, geometry, number theory, probability, pre-calculus, intermediate algebra).
-      Tests competition-level mathematical reasoning with multi-step solutions. Primary
-      metric is pass@1 averaged over 3 random seeds (k=1, n=3 in lighteval syntax).
+      Tests competition-level mathematical reasoning with multi-step solutions.
+      Declared primary metric is pass@1; repeated seeded sampling must be verified
+      against the configured adapter before interpreting results as repeated runs.
     category: math
     domains: [knowledge_and_reasoning]
     tasks: [reasoning]
@@ -584,7 +585,8 @@ benchmarks:
       Expert-crafted PhD-level multiple-choice questions in biology, chemistry, and physics
       requiring deep domain synthesis across topics rarely co-occurring in training data.
       Diamond subset is the hardest tier — domain experts answer correctly ~65% of the time.
-      Primary metric is gpqa_pass@1 averaged over 3 random seeds.
+      Declared primary metric is gpqa_pass@1; repeated seeded sampling must be
+      verified against the configured adapter.
     category: reasoning
     domains: [knowledge_and_reasoning]
     tasks: [reasoning]
@@ -609,9 +611,11 @@ benchmarks:
     name: LiveCodeBench v6 — code generation
     description: |-
       Real-world competitive programming problems collected from Codeforces, LeetCode, and
-      AtCoder after the model knowledge cutoff — eliminates data contamination risk.
+      AtCoder. The fixed v6 release does not establish whether problems postdate
+      the evaluated model's knowledge cutoff or exclude training contamination.
       Execution-based evaluation: generated code is run against hidden test cases.
-      Primary metric is codegen_pass@1 averaged over 3 random seeds.
+      Declared primary metric is codegen_pass@1; repeated seeded sampling must be
+      verified against the configured adapter.
     category: code
     domains: [software]
     tasks: [code_generation]
@@ -624,7 +628,6 @@ benchmarks:
       - code
       - competitive-programming
       - execution
-      - contamination-free
       - lighteval
     primary_score:
       metric: codegen_pass@1

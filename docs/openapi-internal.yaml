@@ -28,6 +28,34 @@ tags:
     description: API documentation endpoints
     x-internal: true
 paths:
+  /api/v1/info:
+    get:
+      x-internal: true
+      summary: Service information
+      description: |
+        Returns build metadata and enabled hardware profiles from
+        EVALHUB_HARDWARE_PROFILES_NAMESPACE. Queue-backed profiles are visible only
+        when their LocalQueue exists in the caller's X-Tenant namespace, regardless
+        of queue active state. Each profile includes resource identifiers and its
+        configured scheduling type. Queue-backed profiles also include the tenant
+        LocalQueue Active condition in queue_availability. Node-scheduled profiles are shared across tenants.
+        Users in the same tenant see the same profiles, matching evaluation job
+        visibility. Local runtimes return an empty hardware_profiles array.
+        X-Tenant and X-User are required in cluster mode, as for evaluation jobs.
+      operationId: get_info
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service metadata and available hardware profiles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InfoResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          description: Failed to discover available hardware profiles
   /api/v1/health:
     get:
       summary: Health Check
@@ -507,8 +535,6 @@ paths:
                         score: 0.85
                         threshold: 0.5
                         pass: true
-                      post_processing_ref:
-                        id: pp-1234567890ab
                     name: granite-3.1-8b-safety-eval
                     description: Safety and reasoning evaluation for Granite 3.1 8B Instruct
                     tags:
@@ -2663,20 +2689,101 @@ paths:
           $ref: '#/components/responses/NotFound'
 components:
   schemas:
-    HealthResponse:
+    QueueAvailability:
       type: object
-      description: Health check response
+      description: Tenant LocalQueue Active condition; omitted for profiles without queue scheduling.
+      required:
+        - status
       properties:
         status:
           type: string
-          description: Overall status (e.g. healthy, degraded)
-        timestamp:
+          enum:
+            - active
+            - inactive
+            - unknown
+          description: Returns active when the LocalQueue Active condition is True, inactive when False, and unknown when missing or unrecognized.
+        reason:
           type: string
-          format: date-time
-          description: Server timestamp
+        message:
+          type: string
+    InfoResponse:
+      type: object
       required:
-        - status
-        - timestamp
+        - version
+        - build
+        - build_date
+        - git_hash
+        - hardware_profiles
+      properties:
+        version:
+          type: string
+        build:
+          type: string
+        build_date:
+          type: string
+        git_hash:
+          type: string
+        hardware_profiles:
+          type: array
+          description: Enabled hardware profiles available to the caller's tenant, sorted by name.
+          items:
+            type: object
+            required:
+              - name
+              - identifiers
+            properties:
+              name:
+                type: string
+                description: Profile name for hardware_config.hardware_profile_name.
+              display_name:
+                type: string
+                description: Optional opendatahub.io/display-name annotation.
+              description:
+                type: string
+                description: Optional opendatahub.io/description annotation.
+              scheduling_type:
+                type: string
+                enum:
+                  - node
+                  - queue
+                description: Scheduling method; omitted when the profile does not configure scheduling.
+              identifiers:
+                type: array
+                description: Profile resource identifiers; an empty array when none are configured. Counts are represented as strings for both integer counts and Kubernetes quantities.
+                items:
+                  type: object
+                  required:
+                    - identifier
+                  properties:
+                    identifier:
+                      type: string
+                      description: Kubernetes resource name, such as cpu, memory, or nvidia.com/gpu.
+                    display_name:
+                      type: string
+                    resource_type:
+                      type: string
+                      enum:
+                        - cpu
+                        - memory
+                        - accelerator
+                      description: Resource category; omitted for uncategorized resources.
+                    min_count:
+                      type: string
+                      description: Minimum quantity; omitted when unspecified.
+                    default_count:
+                      type: string
+                      description: Default quantity; omitted when unspecified.
+                    max_count:
+                      type: string
+                      description: Maximum quantity; omitted when unspecified.
+              queue_name:
+                type: string
+                description: Tenant LocalQueue name for queue-backed profiles; omitted for node-scheduled profiles.
+              priority_class_name:
+                type: string
+                description: WorkloadPriorityClass name for queue scheduling; omitted when unspecified or set to None in the profile.
+              queue_availability:
+                $ref: '#/components/schemas/QueueAvailability'
     Error:
       type: object
       description: Error response
@@ -2693,6 +2800,20 @@ components:
       required:
         - message_code
         - message
+    HealthResponse:
+      type: object
+      description: Health check response
+      properties:
+        status:
+          type: string
+          description: Overall status (e.g. healthy, degraded)
+        timestamp:
+          type: string
+          format: date-time
+          description: Server timestamp
+      required:
+        - status
+        - timestamp
     HRef:
       type: object
       description: Hypermedia reference
@@ -2955,17 +3076,6 @@ components:
         pass:
           type: boolean
           description: Whether the entire evaluation passed
-    PostProcessingRef:
-      type: object
-      title: PostProcessingRef
-      description: Reference to post-processing associated with an evaluation job.
-      properties:
-        id:
-          type: string
-          description: Identifier of the post-processing resource.
-      required:
-        - id
-      additionalProperties: false
     EvaluationJobResults:
       type: object
       description: Results section for an evaluation job
@@ -2981,9 +3091,6 @@ components:
         test:
           $ref: '#/components/schemas/EvaluationTest'
           description: Test result
-        post_processing_ref:
-          $ref: '#/components/schemas/PostProcessingRef'
-          description: Reference to the post-processing resource for this evaluation job
     ModelAuth:
       type: object
       description: The model authentication configuration
@@ -4986,17 +5093,17 @@ components:
           $ref: '#/components/schemas/CollectionAgentMetadata'
           description: Override agent metadata for AI agent consumption.
   examples:
-    NotFoundError:
-      summary: Not found error with status code 404
-      value:
-        message: The resource was not found.
-        message_code: not_found
-        trace: b12692e1-8582-4628-88ca-7a13fefb73e2
     BadRequestError:
       summary: Bad request error with status code 400
       value:
         message: The field 'state' is not valid.
         message_code: invalid_value
+        trace: b12692e1-8582-4628-88ca-7a13fefb73e2
+    NotFoundError:
+      summary: Not found error with status code 404
+      value:
+        message: The resource was not found.
+        message_code: not_found
         trace: b12692e1-8582-4628-88ca-7a13fefb73e2
     AuthenticationError:
       summary: Authentication error with status code 401
@@ -5017,15 +5124,6 @@ components:
         message_code: conflict
         trace: b12692e1-8582-4628-88ca-7a13fefb73e2
   responses:
-    NotFound:
-      description: Not Found
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-          examples:
-            NotFoundError:
-              $ref: '#/components/examples/NotFoundError'
     BadRequest:
       description: Bad Request
       content:
@@ -5035,6 +5133,15 @@ components:
           examples:
             BadRequestError:
               $ref: '#/components/examples/BadRequestError'
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            NotFoundError:
+              $ref: '#/components/examples/NotFoundError'
     Unauthorized:
       description: Unauthorized
       content:

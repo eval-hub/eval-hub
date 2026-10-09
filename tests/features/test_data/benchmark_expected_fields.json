@@ -1,0 +1,3530 @@
+{
+  "garak": {
+    "quick": {
+      "additional_info": {}
+    }
+  },
+  "ragas": {
+    "ragas_rag_default": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_ragas: https://redhat.atlassian.net/browse/RHOAIENG-97740"
+    },
+    "ragas_rag_full": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_ragas: https://redhat.atlassian.net/browse/RHOAIENG-97740"
+    }
+  },
+  "lm_evaluation_harness": {
+    "aclue_ancient_chinese_culture": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
+    },
+    "african_flores": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_2"
+    },
+    "afrixnli-irokobench": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_2"
+    },
+    "afrixnli_amh_prompt_2": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_2"
+    },
+    "afrixnli_amh_prompt_5": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_2"
+    },
+    "cmmlu_college_mathematics": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
+    },
+    "cmmlu_high_school_mathematics": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
+    },
+    "AraDiCE_openbookqa_eng": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_leaderboard_arabic_mt_boolq": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_leaderboard_arabic_mt_boolq_light": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_mt_boolq_light": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "leaderboard_bbh_salient_translation_error_detection": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "description": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "afrixnli_en_direct_ewe": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "afrixnli_en_direct_ibo": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "afrixnli_en_direct_lug": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "afrixnli_en_direct_sot": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "afrixnli_en_direct_wol": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "afrixnli_en_direct_zul": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_primary_stem_math_egy": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_leaderboard_arabic_mmlu_college_mathematics_light": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_leaderboard_arabic_mmlu_high_school_mathematics": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "global_mmlu_full_am_high_school_mathematics": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "global_mmlu_full_ar_high_school_mathematics": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "global_mmlu_full_bn_high_school_mathematics": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "global_mmlu_full_cs_high_school_mathematics": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "global_mmlu_full_de_high_school_mathematics": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "global_mmlu_full_el_high_school_mathematics": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "global_mmlu_full_en_high_school_mathematics": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "global_mmlu_full_es_high_school_mathematics": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "global_mmlu_full_fa_high_school_mathematics": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arc_easy": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_boolq_lev": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "blimp_anaphor_gender_agreement": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "blimp_animate_subject_trans": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "blimp_coordinate_structure_constraint_complex_left_branch": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "blimp_determiner_noun_agreement_2": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "blimp_determiner_noun_agreement_with_adj_2": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "blimp_determiner_noun_agreement_with_adjective_1": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "blimp_existential_there_object_raising": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "blimp_existential_there_subject_raising": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "blimp_intransitive": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "blimp_irregular_plural_subject_verb_agreement_1": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "blimp_left_branch_island_simple_question": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "blimp_npi_present_2": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "blimp_passive_1": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_egy": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_high_humanities_history_lev": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_high_humanities_philosophy_egy": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_high_language_arabic-language_lev": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_lev": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_middle_humanities_islamic-studies_egy": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_middle_language_arabic-language_lev": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_na_humanities_islamic-studies_egy": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_na_language_arabic-language-general_lev": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_na_other_driving-test_egy": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_na_other_general-knowledge_lev": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_primary_humanities_islamic-studies_egy": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_univ_other_management_egy": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_primary_language_arabic-language_lev": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "blimp": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_piqa_lev": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "global_mmlu_full_fil_high_school_mathematics": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_winogrande_eng": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_leaderboard_arabic_mt_copa": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_leaderboard_arabic_mt_copa_light": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_leaderboard_arabic_mt_piqa": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_leaderboard_arabic_mt_hellaswag": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_leaderboard_arabic_mt_hellaswag_light": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_leaderboard_arabic_mt_piqa_light": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_mt_hellaswag": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_mt_piqa": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "copa_ar": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "copal_id_colloquial": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_leaderboard_arabic_mt_race": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "hellaswag_ar": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_leaderboard_arabic_mt_race_light": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_mt_race_light": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "blimp_drop_argument": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "bigbench_gre_reading_comprehension_multiple_choice": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "eus_reading": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "qasper_freeform": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_high_social-science_economics_egy": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_high_social-science_geography_lev": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_high_stem_computer-science_egy": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_high_stem_physics_lev": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_middle_social-science_civics_egy": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_middle_social-science_economics_lev": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_middle_social-science_social-science_egy": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_middle_stem_computer-science_lev": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_primary_social-science_geography_egy": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_primary_social-science_social-science_lev": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_primary_stem_natural-science_lev": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_univ_social-science_accounting_lev": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_univ_social-science_political-science_egy": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_ArabicMMLU_univ_stem_computer-science_lev": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_leaderboard_arabic_mmlu_college_biology_light": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "agieval_logiqa_zh": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "bbh": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {}
+      }
+    },
+    "bbh_cot_fewshot": {
+      "additional_info": {
+        "alt_prompting_description": {},
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {}
+      }
+    },
+    "bbh_cot_fewshot_causal_judgement": {
+      "additional_info": {
+        "alt_prompting_description": {},
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "description": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {}
+      }
+    },
+    "bbh_cot_fewshot_dyck_languages": {
+      "additional_info": {
+        "alt_prompting_description": {},
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "description": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {}
+      }
+    },
+    "bbh_cot_fewshot_hyperbaton": {
+      "additional_info": {
+        "alt_prompting_description": {},
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "description": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {}
+      }
+    },
+    "bbh_cot_fewshot_logical_deduction_three_objects": {
+      "additional_info": {
+        "alt_prompting_description": {},
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "description": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {}
+      }
+    },
+    "bbh_cot_fewshot_navigate": {
+      "additional_info": {
+        "alt_prompting_description": {},
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "description": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {}
+      }
+    },
+    "bbh_cot_fewshot_reasoning_about_colored_objects": {
+      "additional_info": {
+        "alt_prompting_description": {},
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "description": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {}
+      }
+    },
+    "bbh_cot_fewshot_snarks": {
+      "additional_info": {
+        "alt_prompting_description": {},
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "description": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {}
+      }
+    },
+    "bbh_cot_fewshot_tracking_shuffled_objects_five_objects": {
+      "additional_info": {
+        "alt_prompting_description": {},
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "description": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {}
+      }
+    },
+    "bbh_cot_fewshot_web_of_lies": {
+      "additional_info": {
+        "alt_prompting_description": {},
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "description": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {}
+      }
+    },
+    "bbh_cot_zeroshot_causal_judgement": {
+      "additional_info": {
+        "alt_prompting_description": {},
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "description": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {}
+      }
+    },
+    "bbh_cot_zeroshot_dyck_languages": {
+      "additional_info": {
+        "alt_prompting_description": {},
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "description": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {}
+      }
+    },
+    "bbh_cot_zeroshot": {
+      "additional_info": {
+        "alt_prompting_description": {},
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {}
+      }
+    },
+    "arabic_leaderboard_arabic_mmlu_anatomy": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_leaderboard_arabic_mmlu_clinical_knowledge": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_leaderboard_arabic_mmlu_medical_genetics": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "arabic_leaderboard_arabic_mmlu_professional_medicine": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "global_mmlu_full_am_anatomy": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "global_mmlu_full_am_clinical_knowledge": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "global_mmlu_full_am_medical_genetics": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "global_mmlu_full_am_professional_medicine": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "global_mmlu_full_ar_anatomy": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "global_mmlu_full_ar_clinical_knowledge": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "global_mmlu_full_ar_medical_genetics": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "global_mmlu_full_ar_professional_medicine": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "global_mmlu_full_bn_anatomy": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "lambada_openai": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "lambada_openai_mt_en": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "lambada_openai_mt_it": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "lambada_openai_mt_stablelm_es": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "lambada_openai_mt_stablelm_nl": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "lambada_standard_cloze_yaml": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "paloma_wikitext_103": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "wikitext": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "AraDiCE_truthfulqa_mc1_lev": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "metabench_truthfulqa_permute": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "cmmlu_professional_medicine": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
+    },
+    "cmmlu_traditional_chinese_medicine": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
+    },
+    "pile_arxiv": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
+    },
+    "pile_freelaw": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
+    },
+    "pile_hackernews": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
+    },
+    "pile_openwebtext2": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
+    },
+    "pile_ubuntu-irc": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
+    },
+    "pile_youtubesubtitles": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
+    },
+    "careqa_open_perplexity": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85393"
+    },
+    "bigbench_code_line_description_multiple_choice": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "ceval-valid_college_programming": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "description": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "code2text_ruby": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "code2text_javascript": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "leaderboard_ifeval": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "leaderboard_gpqa": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "leaderboard_mmlu_pro": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "leaderboard_musr": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "crows_pairs_english": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "leaderboard_bbh": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "toxigen": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "ethics_cm": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "truthfulqa_mc1": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "bigbench_hhh_alignment_multiple_choice": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "winogender": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "ifeval": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "leaderboard_math_hard": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "bbq": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
+    "nortruthfulqa_gen_nob_p1": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
+    },
+    "nortruthfulqa_gen_nob_p4": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
+    },
+    "nortruthfulqa_mc_nno_p2": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
+    },
+    "nortruthfulqa_mc_nob_p0": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
+    },
+    "nortruthfulqa_mc_nob_p3": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
+    },
+    "tinyTruthfulQA": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85393"
+    },
+    "truthfulqa-multi_gen_ca": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
+    },
+    "truthfulqa-multi_gen_eu": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
+    },
+    "truthfulqa-multi_mc1_en": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
+    },
+    "truthfulqa-multi_mc1_gl": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
+    },
+    "truthfulqa-multi_mc2_es": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
+    },
+    "humaneval": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85410"
+    },
+    "humaneval_instruct": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_6: Evaluation failed: 'humaneval_instruct' https://redhat.atlassian.net/browse/RHOAIENG-97651"
+    },
+    "mbpp": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85410"
+    },
+    "gsm8k_platinum_cot_llama": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
+    },
+    "mmlu_cot_llama": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
+    },
+    "mrcr": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
+    },
+    "mrcr_2needle": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
+    },
+    "mrcr_4needle": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
+    },
+    "mrcr_8needle": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
+    },
+    "darijahellaswag": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_3"
+    },
+    "egyhellaswag": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_3:https://redhat.atlassian.net/browse/RHOAIENG-97629"
+    },
+    "longbench_qasper": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_3:https://redhat.atlassian.net/browse/RHOAIENG-97629"
+    },
+    "ruler_qa_squad": {
+      "additional_info": {},
+      "note": "run failed with evaluation_job_lm_evaluation_harness_3:https://redhat.atlassian.net/browse/RHOAIENG-97629"
+    },
+    "scrolls_qasper": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
+    }
+  },
+  "lighteval": {
+    "knowledge": {
+      "additional_info": {
+        "dataset": {},
+        "generation_parameters": {},
+        "zero_shot": {}
+      }
+    },
+    "hellaswag": {
+      "additional_info": {
+        "dataset": {},
+        "generation_parameters": {},
+        "zero_shot": {}
+      }
+    },
+    "openbookqa": {
+      "additional_info": {
+        "dataset": {},
+        "generation_parameters": {},
+        "zero_shot": {}
+      }
+    },
+    "gsm8k": {
+      "additional_info": {
+        "dataset": {},
+        "generation_parameters": {},
+        "zero_shot": {}
+      }
+    },
+    "aime24": {
+      "additional_info": {
+        "dataset": {},
+        "generation_parameters": {},
+        "zero_shot": {}
+      }
+    },
+    "aime25": {
+      "additional_info": {
+        "dataset": {},
+        "generation_parameters": {},
+        "zero_shot": {}
+      }
+    },
+    "mmlu": {
+      "additional_info": {
+        "dataset": {},
+        "generation_parameters": {},
+        "zero_shot": {}
+      }
+    },
+    "triviaqa": {
+      "additional_info": {
+        "dataset": {},
+        "generation_parameters": {},
+        "zero_shot": {}
+      }
+    },
+    "math_500": {
+      "additional_info": {
+        "dataset": {},
+        "generation_parameters": {},
+        "zero_shot": {}
+      }
+    },
+    "lcb:codegeneration_v6": {
+      "additional_info": {
+        "dataset": {},
+        "generation_parameters": {},
+        "zero_shot": {}
+      }
+    },
+    "math": {
+      "additional_info": {
+        "dataset": {},
+        "generation_parameters": {},
+        "zero_shot": {}
+      }
+    },
+    "math:algebra": {
+      "additional_info": {
+        "dataset": {},
+        "generation_parameters": {},
+        "zero_shot": {}
+      }
+    },
+    "math:counting_and_probability": {
+      "additional_info": {
+        "dataset": {},
+        "generation_parameters": {},
+        "zero_shot": {}
+      }
+    },
+    "gpqa:diamond": {
+      "additional_info": {
+        "dataset": {},
+        "generation_parameters": {},
+        "zero_shot": {}
+      }
+    },
+    "commonsense_reasoning": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
+    },
+    "scientific_reasoning": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
+    },
+    "language_understanding": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
+    },
+    "winogrande": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
+    },
+    "arc:easy": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
+    },
+    "arc:challenge": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
+    },
+    "truthfulqa:mc": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
+    },
+    "glue:cola": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
+    },
+    "glue:sst2": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
+    },
+    "glue:mrpc": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
+    },
+    "physical_commonsense": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99488"
+    },
+    "piqa": {
+      "additional_info": {},
+      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99488"
+    },
+    "truthfulness": {
+      "additional_info": {},
+      "note": "blocked by https://github.com/huggingface/lighteval/issues/1130"
+    },
+    "truthfulqa:gen": {
+      "additional_info": {},
+      "note": "blocked by https://github.com/huggingface/lighteval/issues/1130"
+    }
+  },
+  "guidellm": {
+    "sweep": {
+      "additional_info": {}
+    },
+    "throughput": {
+      "additional_info": {}
+    },
+    "constant": {
+      "additional_info": {}
+    },
+    "concurrent": {
+      "additional_info": {}
+    },
+    "poisson": {
+      "additional_info": {}
+    },
+    "quick_perf_test": {
+      "additional_info": {}
+    },
+    "comprehensive_perf_test": {
+      "additional_info": {}
+    }
+  }
+}

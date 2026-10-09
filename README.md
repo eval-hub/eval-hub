@@ -238,6 +238,63 @@ make cross-compile
 make build-wheel
 ```
 
+### Quick local OCI evaluation card check
+
+Developers can use `scripts/test-local-oci-export.sh` to simulate a quick OCI evaluation card
+generation during development. It runs an evaluation with the local test adapter,
+downloads the exported card from a local OCI registry, and verifies it against
+the completed job. No model server is required.
+
+Install these dependencies before starting:
+
+- `curl`, `jq`, and `oras`, available on your `PATH`.
+- Go (the version specified in `go.mod`) and `uv` for the service setup.
+- A running container engine: Podman by default, or Docker with `DOCKER=docker`.
+
+From the repository root, start the registry and service:
+
+```sh
+make start-oci-registry
+make start-service
+```
+
+These targets start the registry at `localhost:5001` and build and start the
+service in local mode at `http://localhost:8080`, including the test adapter setup.
+For Docker, use `make start-oci-registry DOCKER=docker`.
+
+Run the check:
+
+```sh
+bash scripts/test-local-oci-export.sh
+```
+
+A successful run prints a verification message and saves these files in
+`./bin/local-oci/` by default:
+
+| File | Contents |
+| --- | --- |
+| `request.json` | Submitted evaluation job request |
+| `created.json` | Job creation response, including the job ID |
+| `job.json` | Latest job status response, with results on completion |
+| `manifest.json` | Exported OCI artifact manifest |
+| `artifact-config.json` | OCI artifact configuration |
+| `evaluation-card-<job-id>.json` | Downloaded evaluation card |
+
+Set `OUTPUT_DIR` to save verification files elsewhere:
+
+```sh
+OUTPUT_DIR=/tmp/local-oci-check bash scripts/test-local-oci-export.sh
+```
+
+When finished, stop the service and remove the registry container:
+
+```sh
+make stop-service
+make stop-oci-registry
+```
+
+If using Docker, use `make stop-oci-registry DOCKER=docker`.
+
 ### Exposing private functions for tests
 
 Create a file called `export_test.go` in the package under test and re-export symbols needed by `_test.go` files in other packages.

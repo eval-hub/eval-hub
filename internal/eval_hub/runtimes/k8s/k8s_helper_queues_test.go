@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"errors"
+	"github.com/eval-hub/eval-hub/pkg/api"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -91,4 +92,35 @@ func TestListLocalQueuesErrors(t *testing.T) {
 			t.Fatal("expected Kubernetes list error")
 		}
 	})
+}
+
+func TestListLocalQueuesAvailabilityStatus(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		condition map[string]any
+		want      api.QueueAvailabilityStatus
+	}{
+		{name: "active", condition: map[string]any{"type": "Active", "status": "True"}, want: api.QueueAvailabilityActive},
+		{name: "inactive", condition: map[string]any{"type": "Active", "status": "False"}, want: api.QueueAvailabilityInactive},
+		{name: "unknown", condition: map[string]any{"type": "Active", "status": "Unknown"}, want: api.QueueAvailabilityUnknown},
+		{name: "missing condition", want: api.QueueAvailabilityUnknown},
+		{name: "missing status", condition: map[string]any{"type": "Active"}, want: api.QueueAvailabilityUnknown},
+		{name: "invalid status", condition: map[string]any{"type": "Active", "status": "invalid"}, want: api.QueueAvailabilityUnknown},
+		{name: "unrelated condition", condition: map[string]any{"type": "Ready", "status": "True"}, want: api.QueueAvailabilityUnknown},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := fake.NewSimpleDynamicClient(k8sruntime.NewScheme(), testLocalQueue("tenant-a", "gpu", tc.condition))
+			got, err := (&KubernetesHelper{dynamicClient: client}).ListLocalQueues(context.Background(), "tenant-a")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != 1 {
+				t.Fatalf("queues = %#v, want one", got)
+			}
+			if got[0].Status != tc.want || got[0].Active != (tc.want == api.QueueAvailabilityActive) {
+				t.Fatalf("queue = %#v, want status %s", got[0], tc.want)
+			}
+		})
+	}
 }

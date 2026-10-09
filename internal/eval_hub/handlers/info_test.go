@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -20,23 +21,25 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
-type infoQueueRuntime struct {
+type infoHardwareProfileRuntime struct {
 	abstractions.Runtime
-	queues []api.QueueInfo
-	err    error
-	tenant string
+	profiles []api.HardwareProfileInfo
+	err      error
+	tenant   string
 }
 
-func (r *infoQueueRuntime) ListQueues(_ context.Context, namespace string) ([]api.QueueInfo, error) {
+func (r *infoHardwareProfileRuntime) ListHardwareProfiles(_ context.Context, namespace string) ([]api.HardwareProfileInfo, error) {
 	r.tenant = namespace
-	return r.queues, r.err
+	return r.profiles, r.err
 }
 
 func TestHandleGetInfo(t *testing.T) {
-	t.Run("returns metadata and tenant queues", func(t *testing.T) {
-		runtime := &infoQueueRuntime{queues: []api.QueueInfo{
-			{Name: "gpu", Active: true, Reason: "Ready", Message: "Can admit new workloads"},
-			{Name: "paused", Active: false, Reason: "ClusterQueueIsInactive", Message: "queue is paused"},
+	t.Run("returns metadata and tenant profiles", func(t *testing.T) {
+		runtime := &infoHardwareProfileRuntime{profiles: []api.HardwareProfileInfo{
+			{Name: "gpu", QueueName: "gpu-queue", PriorityClassName: "high-priority", DisplayName: "GPU", Description: "GPU profile",
+				SchedulingType: api.HardwareProfileSchedulingQueue, Identifiers: []api.HardwareProfileIdentifier{{Identifier: "nvidia.com/gpu", ResourceType: api.HardwareProfileResourceAccelerator, MinCount: "0", DefaultCount: "1", MaxCount: "4"}},
+				QueueAvailability: &api.QueueAvailability{Status: api.QueueAvailabilityInactive, Reason: "Paused", Message: "queue paused"}},
+			{Name: "cpu", SchedulingType: api.HardwareProfileSchedulingNode, Identifiers: []api.HardwareProfileIdentifier{}},
 		}}
 		h := handlers.New(nil, nil, runtime, nil, nil, &config.Config{Service: &config.ServiceConfig{
 			Version: "1.2.3", Build: "release", BuildDate: "2026-10-02", GitHash: "abc123",
@@ -59,30 +62,62 @@ func TestHandleGetInfo(t *testing.T) {
 			t.Fatalf("metadata = %#v", got)
 		}
 		if runtime.tenant != "tenant-a" {
-			t.Fatalf("queue namespace = %q, want tenant-a", runtime.tenant)
+			t.Fatalf("profile namespace = %q, want tenant-a", runtime.tenant)
 		}
-		if len(got.Queues) != len(runtime.queues) {
-			t.Fatalf("queues = %#v", got.Queues)
+		if len(got.HardwareProfiles) != len(runtime.profiles) {
+			t.Fatalf("profiles = %#v", got.HardwareProfiles)
 		}
-		for i, want := range runtime.queues {
-			if got.Queues[i] != want {
-				t.Errorf("queues[%d] = %#v, want %#v", i, got.Queues[i], want)
+		for i, want := range runtime.profiles {
+			if !reflect.DeepEqual(got.HardwareProfiles[i], want) {
+				t.Errorf("profiles[%d] = %#v, want %#v", i, got.HardwareProfiles[i], want)
 			}
 		}
+		if strings.Contains(recorder.Body.String(), `"queues"`) {
+			t.Fatal("response still includes queues")
+		}
 		var wire struct {
-			Queues []map[string]json.RawMessage `json:"queues"`
+			HardwareProfiles []map[string]json.RawMessage `json:"hardware_profiles"`
 		}
 		if err := json.Unmarshal(recorder.Body.Bytes(), &wire); err != nil {
-			t.Fatalf("decode queue fields: %v", err)
+			t.Fatalf("decode profile fields: %v", err)
 		}
-		for i, queue := range wire.Queues {
-			if _, ok := queue["active"]; !ok {
-				t.Errorf("queues[%d] does not include active state", i)
+		if string(wire.HardwareProfiles[0]["queue_name"]) != `"gpu-queue"` {
+			t.Fatal("queue-backed profile does not include queue_name")
+		}
+		if !strings.Contains(string(wire.HardwareProfiles[0]["queue_availability"]), `"status":"inactive"`) {
+			t.Fatal("queue availability must include enum status")
+		}
+		var availability map[string]json.RawMessage
+		if err := json.Unmarshal(wire.HardwareProfiles[0]["queue_availability"], &availability); err != nil {
+			t.Fatalf("decode queue availability: %v", err)
+		}
+		if _, ok := availability["active"]; ok {
+			t.Fatal("queue availability must omit active")
+		}
+		if string(wire.HardwareProfiles[1]["identifiers"]) != "[]" {
+			t.Fatal("profile without identifiers must return an empty array")
+		}
+		if _, ok := wire.HardwareProfiles[1]["queue_availability"]; ok {
+			t.Fatal("node profile should omit queue availability")
+		}
+		if string(wire.HardwareProfiles[0]["priority_class_name"]) != `"high-priority"` {
+			t.Fatal("queue-backed profile must include configured priority class")
+		}
+		if _, ok := wire.HardwareProfiles[1]["priority_class_name"]; ok {
+			t.Fatal("profile without priority class must omit priority_class_name")
+		}
+
+		if _, ok := wire.HardwareProfiles[1]["queue_name"]; ok {
+			t.Fatal("node profile should omit queue_name")
+		}
+		for i, profile := range wire.HardwareProfiles {
+			if _, ok := profile["name"]; !ok {
+				t.Errorf("profiles[%d] does not include name", i)
 			}
 		}
 	})
 
-	t.Run("runtimes without queue discovery return an empty array", func(t *testing.T) {
+	t.Run("runtimes without profile discovery return an empty array", func(t *testing.T) {
 		h := handlers.New(nil, nil, nil, nil, nil, &config.Config{Service: &config.ServiceConfig{}}, nil)
 		recorder := httptest.NewRecorder()
 		ctx := &executioncontext.ExecutionContext{Ctx: context.Background()}
@@ -92,13 +127,13 @@ func TestHandleGetInfo(t *testing.T) {
 		if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
-		if string(got["queues"]) != "[]" {
-			t.Fatalf("queues = %s, want []", got["queues"])
+		if string(got["hardware_profiles"]) != "[]" {
+			t.Fatalf("profiles = %s, want []", got["hardware_profiles"])
 		}
 	})
 
-	t.Run("queue lister returning nil queues produces an empty array", func(t *testing.T) {
-		runtime := &infoQueueRuntime{}
+	t.Run("profile lister returning nil profiles produces an empty array", func(t *testing.T) {
+		runtime := &infoHardwareProfileRuntime{}
 		h := handlers.New(nil, nil, runtime, nil, nil, &config.Config{Service: &config.ServiceConfig{}}, nil)
 		recorder := httptest.NewRecorder()
 		ctx := &executioncontext.ExecutionContext{Ctx: context.Background(), Tenant: api.Tenant("tenant-a")}
@@ -108,14 +143,14 @@ func TestHandleGetInfo(t *testing.T) {
 		if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
-		if string(got["queues"]) != "[]" {
-			t.Fatalf("queues = %s, want []", got["queues"])
+		if string(got["hardware_profiles"]) != "[]" {
+			t.Fatalf("profiles = %s, want []", got["hardware_profiles"])
 		}
 	})
 
-	t.Run("unexpected queue lookup errors are logged and redacted", func(t *testing.T) {
-		const rawError = "queue lookup denied"
-		runtime := &infoQueueRuntime{err: errors.New(rawError)}
+	t.Run("unexpected profile lookup errors are logged and redacted", func(t *testing.T) {
+		const rawError = "profile lookup denied"
+		runtime := &infoHardwareProfileRuntime{err: errors.New(rawError)}
 		h := handlers.New(nil, nil, runtime, nil, nil, &config.Config{Service: &config.ServiceConfig{}}, nil)
 		recorder := httptest.NewRecorder()
 		var logs bytes.Buffer
@@ -142,7 +177,7 @@ func TestHandleGetInfo(t *testing.T) {
 	})
 
 	t.Run("service errors retain their client message", func(t *testing.T) {
-		runtime := &infoQueueRuntime{err: serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "queue", "ResourceId", "gpu")}
+		runtime := &infoHardwareProfileRuntime{err: serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "profile", "ResourceId", "gpu")}
 		h := handlers.New(nil, nil, runtime, nil, nil, &config.Config{Service: &config.ServiceConfig{}}, nil)
 		recorder := httptest.NewRecorder()
 		ctx := &executioncontext.ExecutionContext{Ctx: context.Background(), RequestID: "request-1", Tenant: api.Tenant("tenant-a")}

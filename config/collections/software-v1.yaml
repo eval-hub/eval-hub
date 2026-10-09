@@ -1,52 +1,229 @@
 id: software-v1
+curation_order: 2
 name: Software v1
-category: software
+
 description: >
-  Evaluates code generation and program comprehension. LiveCodeBench uses post-cutoff
-  competitive programming problems (contamination-free). BigCodeBench tests practical
-  coding tasks. CRUXEval tests code output prediction.
-  Part of the Curated Collections taxonomy (#916).
-tags:
-  - code
+  Evaluates non-agentic software capabilities across code generation and code
+  understanding. Code generation receives 50% of the collection weight, split
+  equally between LiveCodeBench and BigCodeBench; code understanding receives
+  50% through CRUXEval output prediction. Generated code may be executed for
+  scoring after the model response, but execution results are not fed back to
+  the model. Code repair and repository-level agent workflows remain outside
+  the current collection scope.
+  BigCodeBench is capped at 50 examples for screening.
+  Scores are diagnostic summaries, not software-development readiness criteria.
+
+domains:
   - software
-  - competitive-programming
-  - curated
-domains: [software]
-tasks: [code_generation, code_understanding]
-modalities: [text]
-evaluation_targets: [model]
-curation_order: 5
+
+tasks:
+  - code_generation
+  - code_understanding
+
+modalities:
+  - text
+
+evaluation_targets:
+  - model
+
+tags:
+  - software
+  - code-generation
+  - code-understanding
+  - execution
+  - bare-model
+  - lighteval
+  - inspect-evals
+  - lm-evaluation-harness
+  - standard
+
 pass_criteria:
-  threshold: 0.20
+  threshold: 0.1875
+
 benchmarks:
+  # LightEval metric keys and sampling controls still require runtime verification.
+  # Existing parameters are retained; they do not establish repeated seeded runs.
   - id: lcb:codegeneration_v6
     provider_id: lighteval
-    weight: 1
+    weight: 0.25
     primary_score:
       metric: codegen_pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
     parameters:
-      num_fewshot: 0
       apply_chat_template: true
-      pass_at_k: 1
+      num_fewshot: 0
       num_samples: 3
+      pass_at_k: 1
 
   - id: inspect/bigcodebench
     provider_id: inspect
-    weight: 1
+    weight: 0.25
     primary_score:
       metric: accuracy/accuracy
       lower_is_better: false
     pass_criteria:
       threshold: 0.20
+    # Scorer key and scoring sandbox remain unresolved.
+    # Set sandbox: docker only after confirming runtime support and task libraries.
+    parameters:
+      # Screening cap; verify the actual evaluated count.
+      num_examples: 50
 
   - id: cruxeval_output
     provider_id: lm_evaluation_harness
-    weight: 1
+    weight: 0.50
     primary_score:
       metric: pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.15
+    parameters:
+      num_fewshot: 0
+      apply_chat_template: true
+
+documentation:
+  purpose: >-
+    Diagnose non-agentic code generation and code understanding. Generated code may be executed for
+    scoring, without returning execution feedback to the model.
+  selection:
+  - provider_id: lighteval
+    benchmark_id: lcb:codegeneration_v6
+    rationale: LiveCodeBench v6 contributes competitive-programming code generation.
+  - provider_id: inspect
+    benchmark_id: inspect/bigcodebench
+    rationale: BigCodeBench adds library/API-oriented generation to complement contest problems.
+  - provider_id: lm_evaluation_harness
+    benchmark_id: cruxeval_output
+    rationale: >-
+      CRUXEval output prediction provides code understanding without requiring the model to generate
+      a solution.
+  scoring:
+    rows:
+    - provider_id: lighteval
+      benchmark_id: lcb:codegeneration_v6
+      metric: codegen_pass@1
+      lower_is_better: false
+      weight: 0.25
+      threshold: 0.25
+    - provider_id: inspect
+      benchmark_id: inspect/bigcodebench
+      metric: accuracy/accuracy
+      lower_is_better: false
+      weight: 0.25
+      threshold: 0.2
+    - provider_id: lm_evaluation_harness
+      benchmark_id: cruxeval_output
+      metric: pass@1
+      lower_is_better: false
+      weight: 0.5
+      threshold: 0.15
+    units: >-
+      Primary scores are interpreted as fractions on a 0-1 scale for these targets. Verify actual
+      emitted units; metric names and catalog agreement alone do not establish them.
+    aggregation: >-
+      Use raw score for higher-is-better metrics and 1 - raw score for lower-is-better metrics, then
+      take the weighted mean. The configured aggregate threshold is a diagnostic target.
+    weight_rationale: >-
+      Generation receives 50%, divided equally between LiveCodeBench and BigCodeBench; output prediction
+      receives 50% through CRUXEval.
+    threshold_provenance: >-
+      All existing row targets are retained. LiveCodeBench and CRUXEval match provider targets; BigCodeBench
+      0.20 is an existing collection override, not a declared provider pass threshold.
+    collection_threshold: 0.1875
+    threshold_formula: 0.25 * 0.25 + 0.25 * 0.20 + 0.50 * 0.15 = 0.1875; no decimal rounding required.
+    interpretation: >-
+      A weighted aggregate does not guarantee that every benchmark passes or that every required metric
+      is present. The review reports missing scores can be omitted and remaining weights renormalized.
+      Inspect completeness and per-benchmark results before interpreting a summary.
+  runtime:
+    rows:
+    - provider_id: lighteval
+      benchmark_id: lcb:codegeneration_v6
+      configured_parameters:
+        apply_chat_template: true
+        num_fewshot: 0
+        num_samples: 3
+        pass_at_k: 1
+    - provider_id: inspect
+      benchmark_id: inspect/bigcodebench
+      configured_parameters:
+        num_examples: 50
+    - provider_id: lm_evaluation_harness
+      benchmark_id: cruxeval_output
+      configured_parameters:
+        num_fewshot: 0
+        apply_chat_template: true
+    choices:
+    - >-
+      LiveCodeBench retains apply_chat_template=true, num_fewshot=0, num_samples=3, and pass_at_k=1.
+      The intended zero-shot sampling profile is retained, but the review reports these controls are
+      not all consumed by the inspected LightEval path.
+    - >-
+      BigCodeBench uses num_examples=50 as an approved screening cap derived from the existing Open-Telco
+      budget; actual counts remain unverified.
+    - >-
+      BigCodeBench sandbox is not selected in the collection. The Inspect provider documents a none
+      default; sandbox=docker is a conditional proposal only after runtime support and task libraries
+      are verified.
+    - >-
+      CRUXEval retains num_fewshot=0 and apply_chat_template=true to preserve the existing zero-shot
+      comprehension profile.
+    verification_status: >-
+      Configured values document intent, not measured execution. No model evaluations were run as
+      part of this configuration change. Unspecified settings remain deployment or provider/task defaults,
+      not a pinned reproducibility contract.
+  limitations:
+  - >-
+    A fixed LiveCodeBench v6 release does not establish that problems postdate the evaluated model
+    knowledge cutoff or exclude training contamination.
+  - >-
+    The review reports LightEval metric/sampling discrepancies and a BigCodeBench scorer-key mismatch.
+    Missing scoring libraries can be confused with model errors unless execution failures are identified.
+  - >-
+    A single output-prediction benchmark contributes half the score and is not broad evidence across
+    languages or repositories. Code repair and repository-agent workflows are excluded.
+  - >-
+    Provider runtime definitions must be distinguished from real benchmark evidence: configured local
+    simulator commands do not validate benchmark execution. Repository YAML documentation is not currently
+    persisted or exposed as a documentation field by the service API.
+  unresolved_inputs:
+  - Verify LiveCodeBench result keys and actual sampling behavior against the deployed adapter.
+  - >-
+    Verify BigCodeBench scorer keys, prompt variant, evaluated counts, sandbox support, and required
+    libraries; separate infrastructure failures from incorrect code.
+  - Verify CRUXEval task availability and output in the configured Harness image.
+  - Establish the supported complete-dataset setting for final BigCodeBench evaluation.
+  - >-
+    Record the actual adapter image, task/dataset revisions, selection policy, and relevant model/generation
+    settings with real run results; no missing identifiers or settings are fabricated here.
+  provenance:
+  - path: config/providers/lighteval.yaml
+    supports: >-
+      Declared benchmark IDs, metrics, directions, provider defaults, and runtime configuration; not
+      proof of deployed behavior.
+  - path: config/providers/inspect.yaml
+    supports: >-
+      Declared benchmark IDs, metrics, directions, provider defaults, and runtime configuration; not
+      proof of deployed behavior.
+  - path: config/providers/lm_evaluation_harness.yaml
+    supports: >-
+      Declared benchmark IDs, metrics, directions, provider defaults, and runtime configuration; not
+      proof of deployed behavior.
+  - path: config/collections/software-v1.yaml
+    supports: >-
+      Executable benchmark selection, weights, thresholds, parameters, and current curation_order;
+      documentation mirrors those settings.
+  - path: config/collections/open-telco-v1.yaml
+    supports: >-
+      Existing num_examples=50 precedent used for the approved screening budget, not a reference full-evaluation
+      protocol.
+  - source: Collection review summarized in the pull request description
+    supports: >-
+      Scoring limitations and review-reported adapter/task concerns; deployed-image equivalence was
+      not established.
+  - source: Implementation plan in the pull request description
+    supports: >-
+      Approved membership, runtime-input choices, diagnostic interpretation, and the final curation policy
+      (seven existing target collections at 2, two new at 1, other collections unchanged at 0).

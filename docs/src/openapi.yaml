@@ -28,6 +28,8 @@ tags:
     description: API documentation endpoints
     x-internal: true
 paths:
+  /api/v1/info:
+    $ref: paths/api_v1_info.yaml
   /api/v1/health:
     $ref: paths/api_v1_health.yaml
   /metrics:

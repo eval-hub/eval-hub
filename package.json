@@ -1,7 +1,7 @@
 {
   "devDependencies": {
     "@mermaid-js/mermaid-cli": "12.0.0",
-    "@redocly/cli": "2.57.0"
+    "@redocly/cli": "2.58.1"
   },
   "scripts": {
     "lint-openapi": "redocly lint docs/src/openapi.yaml",
