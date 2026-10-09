@@ -3845,7 +3845,9 @@ components:
             - key-pair
           description: Signing method. Only key-pair is currently supported.
         secret_ref:
-          type: string
+          type:
+            - string
+            - 'null'
           minLength: 1
           pattern: \S
           description: Optional name of the signing key Secret for key-pair signing. Must not be empty or whitespace-only when provided.
