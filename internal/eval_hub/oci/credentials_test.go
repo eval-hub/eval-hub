@@ -12,10 +12,12 @@ import (
 
 type secretGetterFunc func(context.Context, string, string) ([]byte, error)
 
+// GetDockerConfigJSON delegates secret lookup to the test callback.
 func (f secretGetterFunc) GetDockerConfigJSON(ctx context.Context, namespace, secretName string) ([]byte, error) {
 	return f(ctx, namespace, secretName)
 }
 
+// TestKubernetesCredentialResolverSelectsRegistryAndScopesLookup verifies tenant-scoped lookup and registry-specific credential selection.
 func TestKubernetesCredentialResolverSelectsRegistryAndScopesLookup(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -38,6 +40,7 @@ func TestKubernetesCredentialResolverSelectsRegistryAndScopesLookup(t *testing.T
 	}
 }
 
+// TestKubernetesCredentialResolverRejectsIncompleteLookup verifies missing connection or tenant data prevents secret lookup.
 func TestKubernetesCredentialResolverRejectsIncompleteLookup(t *testing.T) {
 	for _, req := range []OCICredentialRequest{
 		{RegistryHost: "quay.io", Tenant: "tenant-a"},
@@ -54,6 +57,7 @@ func TestKubernetesCredentialResolverRejectsIncompleteLookup(t *testing.T) {
 	}
 }
 
+// TestKubernetesCredentialResolverPreservesLookupError verifies callers can identify the original secret lookup error.
 func TestKubernetesCredentialResolverPreservesLookupError(t *testing.T) {
 	want := errors.New("secret unavailable")
 	resolver := NewKubernetesCredentialResolver(secretGetterFunc(func(context.Context, string, string) ([]byte, error) {
@@ -67,6 +71,7 @@ func TestKubernetesCredentialResolverPreservesLookupError(t *testing.T) {
 	}
 }
 
+// TestKubernetesCredentialResolverRejectsUnconfiguredGetter verifies nil receivers and getters fail with empty credentials.
 func TestKubernetesCredentialResolverRejectsUnconfiguredGetter(t *testing.T) {
 	for name, resolver := range map[string]OCICredentialResolver{
 		"nil receiver": (*kubernetesCredentialResolver)(nil),
@@ -84,6 +89,7 @@ func TestKubernetesCredentialResolverRejectsUnconfiguredGetter(t *testing.T) {
 	}
 }
 
+// TestKubernetesCredentialResolverWrapsParseError verifies malformed secrets return empty credentials and preserve the JSON error.
 func TestKubernetesCredentialResolverWrapsParseError(t *testing.T) {
 	resolver := NewKubernetesCredentialResolver(secretGetterFunc(func(context.Context, string, string) ([]byte, error) {
 		return []byte(`invalid-json`), nil
@@ -100,6 +106,7 @@ func TestKubernetesCredentialResolverWrapsParseError(t *testing.T) {
 	}
 }
 
+// TestLocalCredentialResolver verifies anonymous access requires no tenant and ignores Kubernetes connections.
 func TestLocalCredentialResolver(t *testing.T) {
 	resolver := NewLocalCredentialResolver()
 	creds, err := resolver.Resolve(context.Background(), OCICredentialRequest{RegistryHost: "http://localhost:5001"})

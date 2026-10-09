@@ -19,6 +19,7 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+// TestNewOCIPublisherFactoryLocalModeUsesAnonymousPublisher verifies local mode creates publishers without tenant secrets and validates exports.
 func TestNewOCIPublisherFactoryLocalModeUsesAnonymousPublisher(t *testing.T) {
 	t.Parallel()
 	factory, cleanup := newOCIPublisherFactory(nil, &config.Config{
@@ -57,6 +58,7 @@ func TestNewOCIPublisherFactoryNilConfigReturnsNoop(t *testing.T) {
 	}
 }
 
+// TestNewOCIPublisherFactoryReturnsErrorWhenHTTPClientInitFails verifies invalid cluster CA configuration surfaces during publisher creation.
 func TestNewOCIPublisherFactoryReturnsErrorWhenHTTPClientInitFails(t *testing.T) {
 	configureOCITestKubernetesAPI(t)
 
@@ -122,6 +124,7 @@ func TestKubernetesDockerConfigSecretGetter(t *testing.T) {
 	})
 }
 
+// TestNewOCIPublisherFactoryClusterModeUsesRealFactory verifies cluster publishing attempts the configured tenant secret lookup.
 func TestNewOCIPublisherFactoryClusterModeUsesRealFactory(t *testing.T) {
 	configureOCITestKubernetesAPI(t)
 
@@ -148,7 +151,7 @@ func TestNewOCIPublisherFactoryClusterModeUsesRealFactory(t *testing.T) {
 	}
 }
 
-// Use a temporary kubeconfig and API so factory tests run without a developer cluster.
+// configureOCITestKubernetesAPI installs a temporary kubeconfig and API stub so factory tests need no developer cluster.
 func configureOCITestKubernetesAPI(t *testing.T) {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -183,6 +186,7 @@ users:
 	t.Setenv("KUBERNETES_SERVICE_PORT", "")
 }
 
+// TestLocalOCIPublisherFactoryHTTPClientInitFailure verifies invalid local CA configuration surfaces during publisher creation.
 func TestLocalOCIPublisherFactoryHTTPClientInitFailure(t *testing.T) {
 	badCA := filepath.Join(t.TempDir(), "bad-ca.crt")
 	if err := os.WriteFile(badCA, []byte("invalid"), 0o600); err != nil {
