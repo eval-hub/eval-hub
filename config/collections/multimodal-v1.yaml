@@ -3,11 +3,12 @@ curation_order: 2
 name: Multimodal Document VQA v1
 description: >
   Evaluates vision-language understanding on scanned-document visual question
-  answering using DocVQA. Requires a vision-capable model. The collection
-  currently measures document VQA using ANLS; dedicated chart and table-image
-  QA, general natural-image reasoning, audio, and video are not covered.
-  DocVQA is capped at 50 examples for screening.
-  Scores are diagnostic summaries, not broad multimodal qualification criteria.
+  answering using DocVQA.
+# Requires a vision-capable model. The collection
+# currently measures document VQA using ANLS; dedicated chart and table-image
+# QA, general natural-image reasoning, audio, and video are not covered.
+# DocVQA is capped at 50 examples for screening.
+# Scores are diagnostic summaries, not broad multimodal qualification criteria.
 
 domains:
   - multimodal

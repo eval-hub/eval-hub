@@ -4,14 +4,15 @@ name: Software v1
 
 description: >
   Evaluates non-agentic software capabilities across code generation and code
-  understanding. Code generation receives 50% of the collection weight, split
-  equally between LiveCodeBench and BigCodeBench; code understanding receives
-  50% through CRUXEval output prediction. Generated code may be executed for
-  scoring after the model response, but execution results are not fed back to
-  the model. Code repair and repository-level agent workflows remain outside
-  the current collection scope.
-  BigCodeBench is capped at 50 examples for screening.
-  Scores are diagnostic summaries, not software-development readiness criteria.
+  understanding.
+# Code generation receives 50% of the collection weight, split
+# equally between LiveCodeBench and BigCodeBench; code understanding receives
+# 50% through CRUXEval output prediction. Generated code may be executed for
+# scoring after the model response, but execution results are not fed back to
+# the model. Code repair and repository-level agent workflows remain outside
+# the current collection scope.
+# BigCodeBench is capped at 50 examples for screening.
+# Scores are diagnostic summaries, not software-development readiness criteria.
 
 domains:
   - software

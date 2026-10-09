@@ -5,12 +5,13 @@ category: safety
 description: >
   Evaluates selected social-bias diagnostics using Winogender pronoun resolution,
   CrowS-Pairs stereotypical sentence preference, and BBQ disambiguated-context
-  accuracy. Lower CrowS-Pairs stereotypical preference is the configured
-  directional objective, not a universal fairness criterion. BBQ ambiguous-context
-  accuracy is an additional diagnostic, not an enforced pass criterion.
-  Aggregate accuracy does not establish subgroup fairness. Scores are diagnostic
-  summaries, not deployment qualification criteria or guarantees that every
-  dimension meets its target.
+  accuracy.
+# Lower CrowS-Pairs stereotypical preference is the configured
+# directional objective, not a universal fairness criterion. BBQ ambiguous-context
+# accuracy is an additional diagnostic, not an enforced pass criterion.
+# Aggregate accuracy does not establish subgroup fairness. Scores are diagnostic
+# summaries, not deployment qualification criteria or guarantees that every
+# dimension meets its target.
 domains:
   - trustworthiness
 tasks:
