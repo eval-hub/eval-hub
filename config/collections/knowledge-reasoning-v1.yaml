@@ -1,40 +1,53 @@
 id: knowledge-reasoning-v1
-name: Knowledge & Reasoning v1
-category: knowledge_reasoning
+curation_order: 1
+name: Knowledge and Reasoning v1
 description: >
-  Evaluates broad academic knowledge and expert-level reasoning. GPQA-Diamond tests
-  graduate-level science questions that resist internet lookup. HLE (Humanity's Last Exam)
-  is a frontier benchmark across dozens of subjects; this collection uses its text-only subset.
-  DataBench Lite tests tabular question answering over official sample tables
-  using direct answers without generated-code execution.
-  Part of the Curated Collections taxonomy (#916).
+  Evaluates closed-book, text-only knowledge and reasoning across difficult
+  scientific, academic and mathematical problems using GPQA Diamond, HLE and
+  MATH-500. The collection measures bare-model reasoning without browsing,
+  retrieval or tool assistance. Structured-table and structured-data analysis
+  remain coverage gaps.
+domains:
+  - knowledge_and_reasoning
+tasks:
+  - reasoning
+modalities:
+  - text
+evaluation_targets:
+  - model
+industries:
+  - enterprise
 tags:
   - knowledge
   - reasoning
-  - science
-  - inspect-evals
-  - table-qa
-  - curated
-domains: [knowledge_and_reasoning]
-tasks: [reasoning, data_analysis]
-modalities: [text]
-evaluation_targets: [model]
-curation_order: 1
+  - scientific-reasoning
+  - mathematical-reasoning
+  - bare-model
+  - lighteval
+  - inspect
+  - standard
+
 pass_criteria:
-  threshold: 0.235
+  threshold: 0.256667
+
 benchmarks:
   - id: gpqa:diamond
     provider_id: lighteval
-    weight: 1
+    weight: 0.3333333333333333
     primary_score:
       metric: gpqa_pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.35
+    parameters:
+      apply_chat_template: true
+      num_fewshot: 0
+      num_samples: 3
+      pass_at_k: 1
 
   - id: inspect/hle
     provider_id: inspect
-    weight: 1
+    weight: 0.3333333333333333
     primary_score:
       metric: regex_judge/accuracy
       lower_is_better: false
@@ -43,16 +56,19 @@ benchmarks:
     parameters:
       task_args:
         include_multi_modal: false
-        graders: [grader]
+        graders:
+          - grader
 
-  - id: databench_lite
-    provider_id: databench
-    weight: 1
+  - id: math_500
+    provider_id: lighteval
+    weight: 0.3333333333333333
     primary_score:
-      metric: accuracy
+      metric: pass@1
       lower_is_better: false
-    # Provisional internal gate based on published GPT-4o Lite test accuracy
-    # (56.32%, TeleAI SemEval-2025, Table 5); not an official pass threshold
-    # or a controlled reproduction of the paper's evaluation protocol.
     pass_criteria:
-      threshold: 0.56
+      threshold: 0.30
+    parameters:
+      apply_chat_template: true
+      num_fewshot: 0
+      num_samples: 3
+      pass_at_k: 1
