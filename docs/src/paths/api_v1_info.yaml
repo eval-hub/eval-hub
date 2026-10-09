@@ -1,0 +1,28 @@
+get:
+  # not yet documented publicly
+  x-internal: true
+  summary: Service information
+  description: |
+    Returns build metadata and enabled hardware profiles from
+    EVALHUB_HARDWARE_PROFILES_NAMESPACE. Queue-backed profiles are visible only
+    when their LocalQueue exists in the caller's X-Tenant namespace, regardless
+    of queue active state. Each profile includes resource identifiers and its
+    configured scheduling type. Queue-backed profiles also include the tenant
+    LocalQueue Active condition in queue_availability. Node-scheduled profiles are shared across tenants.
+    Users in the same tenant see the same profiles, matching evaluation job
+    visibility. Local runtimes return an empty hardware_profiles array.
+    X-Tenant and X-User are required in cluster mode, as for evaluation jobs.
+  operationId: get_info
+  tags:
+    - Health
+  responses:
+    '200':
+      description: Service metadata and available hardware profiles
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/InfoResponse.yaml
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '500':
+      description: Failed to discover available hardware profiles

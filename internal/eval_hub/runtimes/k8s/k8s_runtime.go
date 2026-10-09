@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -466,9 +467,67 @@ func (r *K8sRuntime) Name() string {
 	return "kubernetes"
 }
 
-// ListQueues returns the tenant's Kueue LocalQueues.
-func (r *K8sRuntime) ListQueues(ctx context.Context, namespace string) ([]api.QueueInfo, error) {
-	return r.helper.ListLocalQueues(ctx, namespace)
+// ListHardwareProfiles discovers enabled platform profiles. Queue-backed profiles
+// are visible only when their LocalQueue exists in the request tenant namespace.
+func (r *K8sRuntime) ListHardwareProfiles(ctx context.Context, namespace string) ([]api.HardwareProfileInfo, error) {
+	if namespace == "" {
+		return nil, fmt.Errorf("tenant namespace is required")
+	}
+	profileNamespace, err := hardwareProfilesNamespace()
+	if err != nil {
+		return nil, err
+	}
+	profiles, err := r.helper.ListHardwareProfiles(ctx, profileNamespace)
+	if err != nil {
+		return nil, err
+	}
+	var queues map[string]api.QueueInfo
+	result := make([]api.HardwareProfileInfo, 0, len(profiles.Items))
+	for _, profile := range profiles.Items {
+		if isHardwareProfileDisabled(&profile) {
+			continue
+		}
+		parsed, err := parseHardwareProfileResources(&profile)
+		if err != nil {
+			return nil, fmt.Errorf("parse hardware profile %q: %w", profile.GetName(), err)
+		}
+		var availability *api.QueueAvailability
+		if parsed.schedulingType == hardwareProfileSchedulingQueue {
+			if parsed.queueName == "" {
+				continue
+			}
+			if queues == nil {
+				listed, err := r.helper.ListLocalQueues(ctx, namespace)
+				if err != nil {
+					return nil, err
+				}
+				queues = make(map[string]api.QueueInfo, len(listed))
+				for _, queue := range listed {
+					queues[queue.Name] = queue
+				}
+			}
+			queue, ok := queues[parsed.queueName]
+			if !ok {
+				continue
+			}
+			availability = &api.QueueAvailability{Status: queue.Status, Reason: queue.Reason, Message: queue.Message}
+		}
+		annotations := profile.GetAnnotations()
+		result = append(result, api.HardwareProfileInfo{
+			Name:              profile.GetName(),
+			QueueName:         parsed.queueName,
+			PriorityClassName: parsed.priorityClassName,
+			SchedulingType:    api.HardwareProfileSchedulingType(strings.ToLower(parsed.schedulingType)),
+			Identifiers:       parsed.identifiers,
+			QueueAvailability: availability,
+			DisplayName:       annotations["opendatahub.io/display-name"],
+			Description:       annotations["opendatahub.io/description"],
+		})
+	}
+	slices.SortFunc(result, func(a, b api.HardwareProfileInfo) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+	return result, nil
 }
 
 // ValidateHardwareProfiles ensures referenced HardwareProfiles exist, are enabled,
