@@ -560,3 +560,91 @@ func TestPostProcessingMethodsAndIdentity(t *testing.T) {
 		}
 	}
 }
+
+func TestPostProcessingResultDataConfigRoundTrip(t *testing.T) {
+	configs := map[string]string{
+		"object":                `{"format":"json","columns":{"sample_id":"id","prediction":"scores.judge.value"},"value_mappings":{"prediction":{"C":1,"I":0}}}`,
+		"selected array":        `[{"selection":{"provider_id":"provider-a"},"columns":{"prediction":"score"}},{"selection":{"provider_id":"provider-b"},"columns":{"prediction":"metrics.value"}}]`,
+		"single selected entry": `[{"selection":{"provider_id":"provider-a"},"columns":{"sample_id":"id"}}]`,
+		"automatic":             `{}`,
+	}
+	for name, config := range configs {
+		t.Run(name, func(t *testing.T) {
+			handler, store, runtime := newPostProcessingServer(t)
+			source := createPostProcessingSource(t, store, api.OverallStateCompleted)
+			body := postProcessingBody(fmt.Sprintf(`{"eval_job":{"id":%q},"data_config":%s}`, source.Resource.ID, config))
+			response := postProcessingRequest(handler, http.MethodPost, postProcessingPath, body)
+			if response.Code != http.StatusAccepted {
+				t.Fatalf("submit status %d: %s", response.Code, response.Body.String())
+			}
+			var submitted api.PostProcessingResource
+			if err := json.Unmarshal(response.Body.Bytes(), &submitted); err != nil {
+				t.Fatal(err)
+			}
+			checkConfig := func(got *api.ResultsDataConfig) {
+				t.Helper()
+				encoded, err := json.Marshal(got)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var actual, expected any
+				if err := json.Unmarshal(encoded, &actual); err != nil {
+					t.Fatal(err)
+				}
+				if err := json.Unmarshal([]byte(config), &expected); err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(actual, expected) {
+					t.Fatalf("data_config = %s, want %s", encoded, config)
+				}
+			}
+			checkConfig(submitted.Operations.ConfidenceInterval.ResultsDataRef.DataConfig)
+			operations, err := postprocessing.OperationsFromJob(&runtime.job.EvaluationJobConfig)
+			if err != nil {
+				t.Fatal(err)
+			}
+			checkConfig(operations.ConfidenceInterval.ResultsDataRef.DataConfig)
+			fetched := postProcessingRequest(handler, http.MethodGet, postProcessingPath+"/"+submitted.Resource.ID, "")
+			if fetched.Code != http.StatusOK {
+				t.Fatalf("get status %d: %s", fetched.Code, fetched.Body.String())
+			}
+			var resource api.PostProcessingResource
+			if err := json.Unmarshal(fetched.Body.Bytes(), &resource); err != nil {
+				t.Fatal(err)
+			}
+			checkConfig(resource.Operations.ConfidenceInterval.ResultsDataRef.DataConfig)
+		})
+	}
+}
+
+func TestPostProcessingRejectsInvalidResultDataConfig(t *testing.T) {
+	configs := map[string]string{
+		"scalar":                  `"json"`,
+		"empty array":             `[]`,
+		"array without selection": `[{"format":"json"}]`,
+		"invalid format":          `{"format":"xml"}`,
+		"unknown column role":     `{"columns":{"unknown":"x"}}`,
+		"blank column":            `{"columns":{"prediction":" "}}`,
+		"unknown selection":       `{"selection":{"unknown":"x"}}`,
+		"empty selection":         `{"selection":{}}`,
+		"unknown mapped role":     `{"value_mappings":{"sample_id":{"x":1}}}`,
+		"empty value map":         `{"value_mappings":{"prediction":{}}}`,
+		"boolean target":          `{"value_mappings":{"prediction":{"yes":true}}}`,
+		"string target":           `{"value_mappings":{"prediction":{"yes":"1"}}}`,
+		"nonfinite target":        `{"value_mappings":{"prediction":{"yes":1e999}}}`,
+		"invalid selected entry":  `[{"selection":{"provider_id":"p"},"columns":{"prediction":""}}]`,
+	}
+	for name, config := range configs {
+		t.Run(name, func(t *testing.T) {
+			handler, _, runtime := newPostProcessingServer(t)
+			body := postProcessingBody(fmt.Sprintf(`{"pvc":{"claim_name":"results"},"data_config":%s}`, config))
+			response := postProcessingRequest(handler, http.MethodPost, postProcessingPath, body)
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("status %d: %s", response.Code, response.Body.String())
+			}
+			if runtime.job != nil {
+				t.Fatal("invalid mapping launched a job")
+			}
+		})
+	}
+}

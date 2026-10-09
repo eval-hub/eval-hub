@@ -62,11 +62,6 @@ get:
                 significance_level: 0.7
             status:
               state: completed
-              benchmarks:
-                - id: accuracy-benchmark
-                  provider_id: inspect
-                  benchmark_index: 0
-                  status: completed
             results:
               benchmarks:
                 - id: accuracy-benchmark

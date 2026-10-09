@@ -709,6 +709,15 @@ paths:
                         eval_job:
                           id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
                           num_parallel_threads: 2
+                        data_config:
+                          format: json
+                          columns:
+                            sample_id: id
+                            prediction: scores.telemath_scorer.value
+                          value_mappings:
+                            prediction:
+                              C: 1
+                              I: 0
                       calibration_data_ref:
                         - s3:
                             bucket: evaluation-data
@@ -740,7 +749,7 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
-  /api/v1/evaluations/post-processing/{id}:
+  /api/v1/evaluations/post-processing/{post_processing_job_id}:
     get:
       tags:
         - Evaluations
@@ -748,7 +757,7 @@ paths:
       description: Get a standalone confidence interval post-processing resource.
       operationId: get_evaluations_post_processing_id
       parameters:
-        - name: id
+        - name: post_processing_job_id
           in: path
           required: true
           schema:
@@ -804,11 +813,6 @@ paths:
                         significance_level: 0.7
                     status:
                       state: completed
-                      benchmarks:
-                        - id: accuracy-benchmark
-                          provider_id: inspect
-                          benchmark_index: 0
-                          status: completed
                     results:
                       benchmarks:
                         - id: accuracy-benchmark
@@ -880,7 +884,7 @@ paths:
       description: Delete a standalone confidence interval post-processing resource.
       operationId: delete_evaluations_post_processing_id
       parameters:
-        - name: id
+        - name: post_processing_job_id
           in: path
           required: true
           schema:
@@ -1002,11 +1006,6 @@ paths:
                     significance_level: 0.7
                 status:
                   state: completed
-                  benchmarks:
-                    - id: accuracy-benchmark
-                      provider_id: inspect
-                      benchmark_index: 0
-                      status: completed
                 results:
                   benchmarks:
                     - id: accuracy-benchmark
@@ -1134,11 +1133,6 @@ paths:
                     significance_level: 0.7
                 status:
                   state: completed
-                  benchmarks:
-                    - id: accuracy-benchmark
-                      provider_id: inspect
-                      benchmark_index: 0
-                      status: completed
                 results:
                   benchmarks:
                     - id: accuracy-benchmark
@@ -3771,6 +3765,101 @@ components:
       required:
         - calibration_data_ref
         - significance_level
+    ResultsDataConfigEntry:
+      type: object
+      title: ResultsDataConfigEntry
+      description: Mapping from a result artifact to per-example scores for post-processing.
+      properties:
+        format:
+          type: string
+          enum:
+            - auto
+            - json
+            - jsonl
+            - csv
+            - parquet
+          default: auto
+          description: File serialization format. JSON may contain a samples or records array.
+        path:
+          type: string
+          minLength: 1
+          description: Relative file or directory inside the downloaded artifact.
+        columns:
+          type: object
+          description: Logical fields mapped to literal column names or dotted paths into nested JSON.
+          properties:
+            sample_id:
+              type: string
+              minLength: 1
+            prediction:
+              type: string
+              minLength: 1
+            label:
+              type: string
+              minLength: 1
+            metric:
+              type: string
+              minLength: 1
+            benchmark_id:
+              type: string
+              minLength: 1
+            provider_id:
+              type: string
+              minLength: 1
+          additionalProperties: false
+        selection:
+          type: object
+          minProperties: 1
+          description: Source benchmark identity used for selection and row filtering.
+          properties:
+            benchmark_id:
+              type: string
+              minLength: 1
+            provider_id:
+              type: string
+              minLength: 1
+            metric:
+              type: string
+              minLength: 1
+          additionalProperties: false
+        value_mappings:
+          type: object
+          description: |
+            Explicit conversion of string categories to finite numeric scores, after
+            column lookup. When configured for a role, every present value must be
+            a declared string category; unknown values fail the computation.
+          properties:
+            prediction:
+              type: object
+              minProperties: 1
+              additionalProperties:
+                type: number
+            label:
+              type: object
+              minProperties: 1
+              additionalProperties:
+                type: number
+          additionalProperties: false
+      additionalProperties: false
+    ResultsDataConfig:
+      title: ResultsDataConfig
+      description: |
+        Optional result format and field mappings, placed beside the source inside
+        results_data_ref. Omit this to use automatic format detection and canonical
+        sample_id/prediction fields. An object applies to every result artifact.
+        For heterogeneous evaluation jobs, an array selects a configuration using
+        benchmark_id, provider_id, and/or metric; exactly one entry must match each
+        source benchmark. An array is intended for eval_job sources.
+      oneOf:
+        - $ref: '#/components/schemas/ResultsDataConfigEntry'
+        - type: array
+          minItems: 1
+          items:
+            allOf:
+              - $ref: '#/components/schemas/ResultsDataConfigEntry'
+              - type: object
+                required:
+                  - selection
     NumParallelThreads:
       type: integer
       title: NumParallelThreads
@@ -3782,6 +3871,8 @@ components:
       title: EvaluationJobDataRef
       description: Reference to a completed evaluation job whose stored results are consumed.
       properties:
+        data_config:
+          $ref: '#/components/schemas/ResultsDataConfig'
         eval_job:
           type: object
           description: Evaluation job identifier and benchmark processing options.
@@ -3802,6 +3893,8 @@ components:
       title: MLflowDataRef
       description: Reference to a result artifact stored in MLflow.
       properties:
+        data_config:
+          $ref: '#/components/schemas/ResultsDataConfig'
         mlflow:
           type: object
           properties:
@@ -3823,6 +3916,8 @@ components:
       title: OCIDataRef
       description: Reference to a result artifact stored in an OCI registry.
       properties:
+        data_config:
+          $ref: '#/components/schemas/ResultsDataConfig'
         oci:
           type: object
           properties:
@@ -3852,6 +3947,8 @@ components:
       oneOf:
         - type: object
           properties:
+            data_config:
+              $ref: '#/components/schemas/ResultsDataConfig'
             s3:
               $ref: '#/components/schemas/TestDataRefS3'
           required:
@@ -3860,6 +3957,8 @@ components:
           title: S3
         - type: object
           properties:
+            data_config:
+              $ref: '#/components/schemas/ResultsDataConfig'
             pvc:
               $ref: '#/components/schemas/TestDataRefPVC'
           required:
@@ -3868,6 +3967,8 @@ components:
           title: PVC
         - type: object
           properties:
+            data_config:
+              $ref: '#/components/schemas/ResultsDataConfig'
             git:
               $ref: '#/components/schemas/TestDataRefGit'
           required:
@@ -3876,6 +3977,8 @@ components:
           title: Git
         - type: object
           properties:
+            data_config:
+              $ref: '#/components/schemas/ResultsDataConfig'
             hf:
               $ref: '#/components/schemas/TestDataRefHF'
           required:
@@ -3957,11 +4060,6 @@ components:
           type: string
           format: date-time
           description: RFC3339 completion time.
-        benchmarks:
-          type: array
-          items:
-            $ref: '#/components/schemas/BenchmarkStatus'
-          description: Per-benchmark status when benchmark metadata is available.
       required:
         - state
       additionalProperties: false

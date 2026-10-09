@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -84,6 +85,20 @@ func buildEnvVars(jc *jobConfig, serviceConfig *config.Config) []corev1.EnvVar {
 			Value: ociAuthMountPath,
 		})
 		seen[envOCIAuthConfigPathName] = true
+	}
+
+	if len(jc.postProcessorPVCs) > 0 {
+		mountPaths := make(map[string]string, len(jc.postProcessorPVCs))
+		for _, pvc := range jc.postProcessorPVCs {
+			mountPaths[pvc.claimName] = pvc.mountPath
+		}
+		// A map of strings cannot fail JSON encoding.
+		encodedMountPaths, _ := json.Marshal(mountPaths)
+		env = append(env, corev1.EnvVar{
+			Name:  envPostProcessorPVCMountsName,
+			Value: string(encodedMountPaths),
+		})
+		seen[envPostProcessorPVCMountsName] = true
 	}
 
 	// Set MLFLOW_TRACKING_SERVER_CERT_PATH so mlflow's tracking client trusts the

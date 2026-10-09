@@ -317,7 +317,7 @@ func TestDeletePostProcessingUnlinksSourceReference(t *testing.T) {
 		t.Fatalf("source post-processing reference was not set: %+v", linkedSource.Results)
 	}
 
-	postProcessingStorage := scoped.WithContextAndWorkloadType(context.Background(), workloads.PostProcessing)
+	postProcessingStorage := scoped.WithContext(context.Background()).WithWorkloadType(workloads.PostProcessing)
 	if err := postProcessingStorage.DeleteEvaluationJob(job.Resource.ID); err != nil {
 		t.Fatalf("delete post-processing job: %v", err)
 	}
@@ -354,7 +354,7 @@ func TestDeletePostProcessingSkipsUnlinkWhenSourceReferenceDoesNotMatch(t *testi
 	if err := scoped.CreateEvaluationJob(job); err != nil {
 		t.Fatal(err)
 	}
-	if err := scoped.WithContextAndWorkloadType(context.Background(), workloads.PostProcessing).DeleteEvaluationJob(job.Resource.ID); err != nil {
+	if err := scoped.WithContext(context.Background()).WithWorkloadType(workloads.PostProcessing).DeleteEvaluationJob(job.Resource.ID); err != nil {
 		t.Fatalf("delete post-processing job: %v", err)
 	}
 	storedSource, err := scoped.GetEvaluationJob(source.Resource.ID)
@@ -374,7 +374,7 @@ func TestDeletePostProcessingSkipsMissingSelfAndExternalSources(t *testing.T) {
 	t.Cleanup(func() { _ = store.Close() })
 	tenant := api.Tenant(common.GUID())
 	baseScoped := store.WithTenant(tenant).WithOwner("owner")
-	scoped := baseScoped.WithContextAndWorkloadType(context.Background(), workloads.PostProcessing)
+	scoped := baseScoped.WithContext(context.Background()).WithWorkloadType(workloads.PostProcessing)
 	externalConfig := *postprocessing.ToEvaluationJob(&api.StandalonePostProcessingRequest{
 		Operations: api.StandalonePostProcessingOperations{ConfidenceInterval: &api.StandaloneConfidenceIntervalConfig{
 			ConfidenceIntervalConfigCommon: api.ConfidenceIntervalConfigCommon{
@@ -472,7 +472,7 @@ func TestDeleteEvaluationJobSkipsMalformedPostProcessingAndOrdinaryJobs(t *testi
 	if err := scoped.CreateEvaluationJob(ordinary); err != nil {
 		t.Fatal(err)
 	}
-	if err := scoped.WithContextAndWorkloadType(context.Background(), workloads.Evaluation).DeleteEvaluationJob(ordinary.Resource.ID); err != nil {
+	if err := scoped.WithContext(context.Background()).WithWorkloadType(workloads.Evaluation).DeleteEvaluationJob(ordinary.Resource.ID); err != nil {
 		t.Fatalf("delete ordinary evaluation: %v", err)
 	}
 	if _, err := scoped.GetEvaluationJob(ordinary.Resource.ID); err == nil {
@@ -512,7 +512,7 @@ WHEN OLD.id = '%s' BEGIN SELECT RAISE(FAIL, 'reject post-processing source unlin
 	if err != nil {
 		t.Fatalf("create source-update trigger: %v", err)
 	}
-	err = scoped.WithContextAndWorkloadType(context.Background(), workloads.PostProcessing).DeleteEvaluationJob(job.Resource.ID)
+	err = scoped.WithContext(context.Background()).WithWorkloadType(workloads.PostProcessing).DeleteEvaluationJob(job.Resource.ID)
 	if err == nil || !strings.Contains(err.Error(), "reject post-processing source unlink") {
 		t.Fatalf("DeleteEvaluationJob() error = %v, want source unlink failure", err)
 	}
