@@ -23,6 +23,7 @@ func (s stubDockerConfigSecretGetter) GetDockerConfigJSON(_ context.Context, _, 
 	return s.data, s.err
 }
 
+// TestOCIPublisherFactoryNewPublisher verifies a tenant-authenticated publisher uploads a card with the configured tag.
 func TestOCIPublisherFactoryNewPublisher(t *testing.T) {
 	t.Parallel()
 
@@ -85,6 +86,7 @@ func TestOCIPublisherFactoryNewPublisher(t *testing.T) {
 	}
 }
 
+// TestOCIPublisherFactoryRequiresTenantSecret verifies cluster publishing rejects a missing tenant or connection secret.
 func TestOCIPublisherFactoryRequiresTenantSecret(t *testing.T) {
 	factory := NewOCIPublisherFactory(oci.NewKubernetesCredentialResolver(stubDockerConfigSecretGetter{}), http.DefaultClient)
 	job := &api.EvaluationJobResource{
@@ -105,6 +107,7 @@ func TestOCIPublisherFactoryRequiresTenantSecret(t *testing.T) {
 	}
 }
 
+// TestOCIPublisherFactoryDefaultsTagToJobID verifies exports without an explicit tag use the evaluation job ID.
 func TestOCIPublisherFactoryDefaultsTagToJobID(t *testing.T) {
 	t.Parallel()
 
@@ -159,6 +162,7 @@ func TestOCIPublisherFactoryDefaultsTagToJobID(t *testing.T) {
 	}
 }
 
+// TestOCIPublisherFactoryNewPublisherValidationErrors verifies incomplete exports and missing factory dependencies fail explicitly.
 func TestOCIPublisherFactoryNewPublisherValidationErrors(t *testing.T) {
 	t.Parallel()
 
@@ -214,6 +218,7 @@ func TestOCIPublisherFactoryNewPublisherValidationErrors(t *testing.T) {
 	}
 }
 
+// TestOCIPublisherFactorySecretGetterError verifies publisher creation reports secret lookup failures.
 func TestOCIPublisherFactorySecretGetterError(t *testing.T) {
 	t.Parallel()
 
@@ -262,6 +267,7 @@ func TestNoopOCIPublisherFactory(t *testing.T) {
 	}
 }
 
+// TestOCIPublisherFactoryInvalidCredentials verifies publisher creation rejects secrets without credentials for the registry.
 func TestOCIPublisherFactoryInvalidCredentials(t *testing.T) {
 	t.Parallel()
 
@@ -288,6 +294,7 @@ func TestOCIPublisherFactoryInvalidCredentials(t *testing.T) {
 	}
 }
 
+// TestOCIPublisherFactoryInvalidRepository verifies publisher creation rejects invalid repository coordinates.
 func TestOCIPublisherFactoryInvalidRepository(t *testing.T) {
 	t.Parallel()
 
@@ -319,6 +326,7 @@ func TestOCIPublisherFactoryInvalidRepository(t *testing.T) {
 	}
 }
 
+// TestLocalOCIPublisherFactoryUpload verifies anonymous card uploads retain configured annotations and the evaluation job ID.
 func TestLocalOCIPublisherFactoryUpload(t *testing.T) {
 	t.Parallel()
 
@@ -389,6 +397,7 @@ func TestLocalOCIPublisherFactoryUpload(t *testing.T) {
 	}
 }
 
+// TestLocalOCIPublisherTransportAndErrors verifies registry failures, TLS trust, and HTTPS defaults without automatic HTTP downgrade.
 func TestLocalOCIPublisherTransportAndErrors(t *testing.T) {
 	for _, tc := range []struct {
 		name               string
@@ -443,6 +452,7 @@ func TestLocalOCIPublisherTransportAndErrors(t *testing.T) {
 	}
 }
 
+// TestLocalOCIPublisherIgnoresKubernetesCredentials verifies local publisher creation ignores connection secrets and needs no tenant.
 func TestLocalOCIPublisherIgnoresKubernetesCredentials(t *testing.T) {
 	job := &api.EvaluationJobResource{EvaluationJobConfig: api.EvaluationJobConfig{
 		Exports: &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{
