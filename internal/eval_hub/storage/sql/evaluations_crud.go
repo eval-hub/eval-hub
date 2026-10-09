@@ -87,15 +87,22 @@ func (s *sqlStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, er
 }
 
 func (s *sqlStorage) getEvaluationJobTransactional(txn *sql.Tx, id string) (*api.EvaluationJobResource, error) {
-	return s.scanEvaluationJobTransactional(txn, id, false)
+	return s.scanEvaluationJobTransactional(txn, id, false, workloads.TypeFromContext(s.ctx))
 }
 
 func (s *sqlStorage) getEvaluationJobTransactionalForUpdate(txn *sql.Tx, id string) (*api.EvaluationJobResource, error) {
-	return s.scanEvaluationJobTransactional(txn, id, true)
+	return s.scanEvaluationJobTransactional(txn, id, true, workloads.TypeFromContext(s.ctx))
 }
 
-func (s *sqlStorage) scanEvaluationJobTransactional(txn *sql.Tx, id string, forUpdate bool) (*api.EvaluationJobResource, error) {
-	query := shared.EntityQuery{Resource: api.Resource{ID: id, Tenant: s.tenant}}
+func (s *sqlStorage) getEvaluationJobTransactionalForUpdateWithType(txn *sql.Tx, id string, workloadType workloads.Type) (*api.EvaluationJobResource, error) {
+	return s.scanEvaluationJobTransactional(txn, id, true, workloadType)
+}
+
+func (s *sqlStorage) scanEvaluationJobTransactional(txn *sql.Tx, id string, forUpdate bool, workloadType workloads.Type) (*api.EvaluationJobResource, error) {
+	query := shared.EntityQuery{
+		Resource:     api.Resource{ID: id, Tenant: s.tenant},
+		WorkloadType: workloadType,
+	}
 	var selectQuery string
 	var selectArgs, queryArgs []any
 	if forUpdate {
@@ -133,16 +140,24 @@ func (s *sqlStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstr
 	return listEntities[api.EvaluationJobResource](s, txn, shared.TableEvaluations, filter)
 }
 
+// DeleteEvaluationJob deletes the evaluation job identified by id.
 func (s *sqlStorage) DeleteEvaluationJob(id string) error {
-	// Build the DELETE query
-	deleteQuery, args := s.statementsFactory.CreateDeleteEntityStatement(s.tenant, shared.TableEvaluations, id)
+	return s.withTransaction("delete evaluation job", id, func(txn *sql.Tx) error {
+		if _, err := s.getEvaluationJobTransactionalForUpdate(txn, id); err != nil {
+			return err
+		}
 
-	// Execute the DELETE query
-	result, err := s.exec(nil, deleteQuery, args...)
-	if err != nil {
-		s.logger.Error("Failed to delete evaluation job", "error", err, "id", id)
-		return se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error()))
-	}
+		deleteQuery, args := s.statementsFactory.CreateDeleteEntityStatement(s.tenant, shared.TableEvaluations, id)
+		result, err := s.exec(txn, deleteQuery, args...)
+		if err != nil {
+			s.logger.Error("Failed to delete evaluation job", "error", err, "id", id)
+			return se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error()))
+		}
+		return s.evaluationJobDeleteResultError(id, result)
+	})
+}
+
+func (s *sqlStorage) evaluationJobDeleteResultError(id string, result sql.Result) error {
 	rows, rowsErr := result.RowsAffected()
 	if rowsErr != nil {
 		s.logger.Error("Failed to determine rows affected", "error", rowsErr, "id", id)
@@ -153,6 +168,5 @@ func (s *sqlStorage) DeleteEvaluationJob(id string) error {
 		return se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
 	}
 	s.logger.Info("Deleted evaluation job", "id", id)
-
 	return nil
 }

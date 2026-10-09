@@ -7,6 +7,7 @@ import (
 	"maps"
 	"time"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -65,6 +66,7 @@ func (filter *QueryFilter) String() string {
 type Storage interface {
 	WithLogger(logger *slog.Logger) Storage
 	WithContext(ctx context.Context) Storage
+	WithWorkloadType(workloadType workloads.Type) Storage
 	WithTenant(tenant api.Tenant) Storage
 	WithOwner(owner api.User) Storage
 

@@ -14,6 +14,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -145,6 +146,10 @@ func (f *fakeStorage) WithContext(ctx context.Context) abstractions.Storage {
 		providerConfigs:   f.providerConfigs,
 		collectionConfigs: f.collectionConfigs,
 	}
+}
+
+func (f *fakeStorage) WithWorkloadType(workloadType workloads.Type) abstractions.Storage {
+	return f.WithContext(workloads.WithType(f.ctx, workloadType))
 }
 
 func (f *fakeStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
