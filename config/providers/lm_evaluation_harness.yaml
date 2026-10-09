@@ -2159,6 +2159,7 @@ benchmarks:
       meaning: Random baseline for 4-choice questions
     - range: 0.25-1.0
       meaning: Meets default pass threshold (0.25 or above)
+# The LMES adapter removes filter suffixes from callback metric names.
 - id: bbh
   name: Hard multi-step reasoning
   description: 23 challenging tasks where LLMs previously failed to match average human raters.
@@ -2168,14 +2169,14 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match,get-answer
+  - exact_match
   num_few_shot: 0
   dataset_size: 1000
   tags:
   - logic_reasoning
   - lm_eval
   primary_score:
-    metric: exact_match,get-answer
+    metric: exact_match
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2188,14 +2189,14 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match,get-answer
+  - exact_match
   num_few_shot: 5
   dataset_size: 1000
   tags:
   - logic_reasoning
   - lm_eval
   primary_score:
-    metric: exact_match,get-answer
+    metric: exact_match
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2208,14 +2209,14 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match,get-answer
+  - exact_match
   num_few_shot: 5
   dataset_size: 1000
   tags:
   - logic_reasoning
   - lm_eval
   primary_score:
-    metric: exact_match,get-answer
+    metric: exact_match
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2228,14 +2229,14 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match,get-answer
+  - exact_match
   num_few_shot: 5
   dataset_size: 1000
   tags:
   - logic_reasoning
   - lm_eval
   primary_score:
-    metric: exact_match,get-answer
+    metric: exact_match
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2249,14 +2250,14 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match,get-answer
+  - exact_match
   num_few_shot: 5
   dataset_size: 1000
   tags:
   - logic_reasoning
   - lm_eval
   primary_score:
-    metric: exact_match,get-answer
+    metric: exact_match
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2269,14 +2270,14 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match,get-answer
+  - exact_match
   num_few_shot: 5
   dataset_size: 1000
   tags:
   - logic_reasoning
   - lm_eval
   primary_score:
-    metric: exact_match,get-answer
+    metric: exact_match
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2289,14 +2290,14 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match,get-answer
+  - exact_match
   num_few_shot: 5
   dataset_size: 1000
   tags:
   - logic_reasoning
   - lm_eval
   primary_score:
-    metric: exact_match,get-answer
+    metric: exact_match
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2309,14 +2310,14 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match,get-answer
+  - exact_match
   num_few_shot: 5
   dataset_size: 1000
   tags:
   - logic_reasoning
   - lm_eval
   primary_score:
-    metric: exact_match,get-answer
+    metric: exact_match
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2329,14 +2330,14 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match,get-answer
+  - exact_match
   num_few_shot: 5
   dataset_size: 1000
   tags:
   - logic_reasoning
   - lm_eval
   primary_score:
-    metric: exact_match,get-answer
+    metric: exact_match
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2349,14 +2350,14 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match,get-answer
+  - exact_match
   num_few_shot: 5
   dataset_size: 1000
   tags:
   - logic_reasoning
   - lm_eval
   primary_score:
-    metric: exact_match,get-answer
+    metric: exact_match
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2369,14 +2370,14 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match,get-answer
+  - exact_match
   num_few_shot: 5
   dataset_size: 1000
   tags:
   - logic_reasoning
   - lm_eval
   primary_score:
-    metric: exact_match,get-answer
+    metric: exact_match
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2389,14 +2390,14 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match,flexible-extract
+  - exact_match
   num_few_shot: 0
   dataset_size: 1000
   tags:
   - logic_reasoning
   - lm_eval
   primary_score:
-    metric: exact_match,flexible-extract
+    metric: exact_match
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2409,14 +2410,14 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match,flexible-extract
+  - exact_match
   num_few_shot: 0
   dataset_size: 1000
   tags:
   - logic_reasoning
   - lm_eval
   primary_score:
-    metric: exact_match,flexible-extract
+    metric: exact_match
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2429,14 +2430,14 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match,flexible-extract
+  - exact_match
   num_few_shot: 0
   dataset_size: 1000
   tags:
   - logic_reasoning
   - lm_eval
   primary_score:
-    metric: exact_match,flexible-extract
+    metric: exact_match
     lower_is_better: false
   pass_criteria:
     threshold: 0.25

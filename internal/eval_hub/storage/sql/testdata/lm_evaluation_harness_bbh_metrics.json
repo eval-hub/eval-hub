@@ -1,0 +1,42 @@
+{
+  "source": "https://github.com/opendatahub-io/lm-evaluation-harness/blob/05825670f9718f942ffb1f84d5d624cb13192a85/main.py#L342",
+  "description": "Synthetic lm-eval scores processed by the stable adapter's _extract_lmeval_metrics; filter suffixes are removed from callback metric names.",
+  "cases": [
+    {
+      "benchmark_ids": [
+        "bbh",
+        "bbh_cot_fewshot",
+        "bbh_cot_fewshot_causal_judgement",
+        "bbh_cot_fewshot_dyck_languages",
+        "bbh_cot_fewshot_hyperbaton",
+        "bbh_cot_fewshot_logical_deduction_three_objects",
+        "bbh_cot_fewshot_navigate",
+        "bbh_cot_fewshot_reasoning_about_colored_objects",
+        "bbh_cot_fewshot_snarks",
+        "bbh_cot_fewshot_tracking_shuffled_objects_five_objects",
+        "bbh_cot_fewshot_web_of_lies"
+      ],
+      "lm_eval_metrics": {
+        "exact_match,get-answer": 0.75
+      },
+      "callback_metrics": {
+        "exact_match": 0.75
+      },
+      "expected_score": 0.75
+    },
+    {
+      "benchmark_ids": [
+        "bbh_cot_zeroshot",
+        "bbh_cot_zeroshot_causal_judgement",
+        "bbh_cot_zeroshot_dyck_languages"
+      ],
+      "lm_eval_metrics": {
+        "exact_match,flexible-extract": 0.75
+      },
+      "callback_metrics": {
+        "exact_match": 0.75
+      },
+      "expected_score": 0.75
+    }
+  ]
+}

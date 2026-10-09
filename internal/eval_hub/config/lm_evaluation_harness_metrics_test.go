@@ -10,8 +10,8 @@ import (
 	"github.com/eval-hub/eval-hub/internal/testhelpers"
 )
 
-// These tasks previously produced metrics without a test result because their
-// configured primary metric did not match the metric reported by the harness.
+// Primary metrics must match the adapter's callback names, which can differ from
+// raw lm-eval metric keys that include a filter suffix.
 func TestLMEvaluationHarnessPrimaryMetrics(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	providers, err := config.LoadProviderConfigs(logger, testhelpers.NewValidator(t), "../../../config")
@@ -33,20 +33,20 @@ func TestLMEvaluationHarnessPrimaryMetrics(t *testing.T) {
 	expected["bigbench_gre_reading_comprehension_multiple_choice"] = "acc"
 	expected["qasper_freeform"] = "f1_abstractive"
 	expected["agieval_logiqa_zh"] = "acc_norm"
-	expected["bbh"] = "exact_match,get-answer"
-	expected["bbh_cot_fewshot"] = "exact_match,get-answer"
-	expected["bbh_cot_fewshot_causal_judgement"] = "exact_match,get-answer"
-	expected["bbh_cot_fewshot_dyck_languages"] = "exact_match,get-answer"
-	expected["bbh_cot_fewshot_hyperbaton"] = "exact_match,get-answer"
-	expected["bbh_cot_fewshot_logical_deduction_three_objects"] = "exact_match,get-answer"
-	expected["bbh_cot_fewshot_navigate"] = "exact_match,get-answer"
-	expected["bbh_cot_fewshot_reasoning_about_colored_objects"] = "exact_match,get-answer"
-	expected["bbh_cot_fewshot_snarks"] = "exact_match,get-answer"
-	expected["bbh_cot_fewshot_tracking_shuffled_objects_five_objects"] = "exact_match,get-answer"
-	expected["bbh_cot_fewshot_web_of_lies"] = "exact_match,get-answer"
-	expected["bbh_cot_zeroshot"] = "exact_match,flexible-extract"
-	expected["bbh_cot_zeroshot_causal_judgement"] = "exact_match,flexible-extract"
-	expected["bbh_cot_zeroshot_dyck_languages"] = "exact_match,flexible-extract"
+	expected["bbh"] = "exact_match"
+	expected["bbh_cot_fewshot"] = "exact_match"
+	expected["bbh_cot_fewshot_causal_judgement"] = "exact_match"
+	expected["bbh_cot_fewshot_dyck_languages"] = "exact_match"
+	expected["bbh_cot_fewshot_hyperbaton"] = "exact_match"
+	expected["bbh_cot_fewshot_logical_deduction_three_objects"] = "exact_match"
+	expected["bbh_cot_fewshot_navigate"] = "exact_match"
+	expected["bbh_cot_fewshot_reasoning_about_colored_objects"] = "exact_match"
+	expected["bbh_cot_fewshot_snarks"] = "exact_match"
+	expected["bbh_cot_fewshot_tracking_shuffled_objects_five_objects"] = "exact_match"
+	expected["bbh_cot_fewshot_web_of_lies"] = "exact_match"
+	expected["bbh_cot_zeroshot"] = "exact_match"
+	expected["bbh_cot_zeroshot_causal_judgement"] = "exact_match"
+	expected["bbh_cot_zeroshot_dyck_languages"] = "exact_match"
 	for _, benchmark := range provider.Benchmarks {
 		metric, affected := expected[benchmark.ID]
 		if !affected {
