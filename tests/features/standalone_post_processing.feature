@@ -67,3 +67,28 @@ Feature: Post-Processing Endpoint
     And the response should contain the value "pending" at path "$.status.state"
     And the response should contain the value "{{value:source_job_id}}" at path "$.operations.confidence_interval.results_data_ref.eval_job.id"
     And the "resource.id" field in the response should be saved as "value:post_processing_id"
+    When I send a GET request to "/api/v1/evaluations/post-processing/{{value:post_processing_id}}"
+    Then the response code should be 200
+    And the response should contain the value "confidence-interval-fvt" at path "$.name"
+    When I send a GET request to "/api/v1/evaluations/post-processing/{{value:source_job_id}}"
+    Then the response code should be 404
+    When I send a GET request to "/api/v1/evaluations/jobs/{{value:post_processing_id}}"
+    Then the response code should be 404
+    When I send a GET request to "/api/v1/evaluations/jobs/{{value:source_job_id}}"
+    Then the response code should be 200
+    When I send a DELETE request to "/api/v1/evaluations/post-processing/{{value:source_job_id}}"
+    Then the response code should be 404
+    When I send a GET request to "/api/v1/evaluations/jobs/{{value:source_job_id}}"
+    Then the response code should be 200
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{{value:post_processing_id}}"
+    Then the response code should be 404
+    When I send a GET request to "/api/v1/evaluations/post-processing/{{value:post_processing_id}}"
+    Then the response code should be 200
+    When I send a DELETE request to "/api/v1/evaluations/post-processing/{{value:post_processing_id}}?hard_delete=true"
+    Then the response code should be 204
+    When I send a GET request to "/api/v1/evaluations/post-processing/{{value:post_processing_id}}"
+    Then the response code should be 404
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{{value:source_job_id}}?hard_delete=true"
+    Then the response code should be 204
+    When I send a GET request to "/api/v1/evaluations/jobs/{{value:source_job_id}}"
+    Then the response code should be 404
