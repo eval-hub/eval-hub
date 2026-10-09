@@ -3,12 +3,13 @@ curation_order: 2
 name: Long-Context Document Comprehension v1
 description: >
   Evaluates bare-model understanding of supplied long-context documents and
-  passages using RULER and LongBench v2. Coverage includes synthetic extraction,
-  passage QA, long-context retrieval and tracking, and broader long-context
-  reasoning. These benchmarks are proxies for enterprise document understanding;
-  summarization, schema-based extraction, citation/attribution, and explicit
-  grounding/faithfulness require additional datasets.
-  Scores are diagnostic summaries, not deployment qualification criteria.
+  passages using RULER and LongBench v2.
+# Coverage includes synthetic extraction,
+# passage QA, long-context retrieval and tracking, and broader long-context
+# reasoning. These benchmarks are proxies for enterprise document understanding;
+# summarization, schema-based extraction, citation/attribution, and explicit
+# grounding/faithfulness require additional datasets.
+# Scores are diagnostic summaries, not deployment qualification criteria.
 domains:
   - grounded_document_understanding
 tasks:
