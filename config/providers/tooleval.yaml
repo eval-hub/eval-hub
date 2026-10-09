@@ -23,11 +23,10 @@ runtime:
     memory_request: 256Mi
     cpu_limit: 2000m
     memory_limit: 4Gi
-  local:
-    # used for local mode tests (FVT)
-    # To run real benchmarks locally, override with the actual adapter path:
-    #   command: python /path/to/eval-hub-contrib/adapters/tooleval/main.py
-    command: python tests/features/test_data/runtime/main.py
+  # No in-tree local adapter: the FVT stub reports fake scores and must not
+  # stand in for ToolEval. Use k8s (community-tooleval) or point local.command
+  # at eval-hub-contrib/adapters/tooleval/main.py when running locally.
+  local: null
 
 benchmarks:
   - id: single-tool
