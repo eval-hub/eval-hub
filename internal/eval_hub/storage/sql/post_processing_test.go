@@ -528,6 +528,43 @@ WHEN OLD.id = '%s' BEGIN SELECT RAISE(FAIL, 'reject post-processing source unlin
 	}
 }
 
+func TestDeletePostProcessingReturnsSourceReadError(t *testing.T) {
+	databaseName := getDBName()
+	store, err := getTestStorage(t, drivers[0], databaseName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	tenant := api.Tenant(common.GUID())
+	scoped := store.WithTenant(tenant).WithOwner("owner")
+	source := postProcessingTestJob(common.GUID(), tenant, api.EvaluationJobConfig{Name: "source"})
+	source.Status.State = api.OverallStateCompleted
+	if err := scoped.CreateEvaluationJob(source); err != nil {
+		t.Fatal(err)
+	}
+	job := postProcessingTestJob(common.GUID(), tenant, postProcessingTestConfig(source.Resource.ID))
+	if err := scoped.CreateEvaluationJob(job); err != nil {
+		t.Fatal(err)
+	}
+
+	corruptDB, err := sql.Open("sqlite", getDBInMemoryURL(databaseName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = corruptDB.Close() })
+	if _, err := corruptDB.Exec(`UPDATE evaluations SET entity = '{' WHERE id = ?`, source.Resource.ID); err != nil {
+		t.Fatalf("corrupt source entity: %v", err)
+	}
+
+	err = scoped.WithContext(context.Background()).WithWorkloadType(workloads.PostProcessing).DeleteEvaluationJob(job.Resource.ID)
+	if err == nil || !strings.Contains(err.Error(), "unexpected end of JSON input") {
+		t.Fatalf("DeleteEvaluationJob() error = %v, want source JSON decode error", err)
+	}
+	if _, err := scoped.GetEvaluationJob(job.Resource.ID); err != nil {
+		t.Fatalf("post-processing job was deleted despite source read error: %v", err)
+	}
+}
+
 func testPostProcessingConcurrentCompletions(t *testing.T, driver, databaseName string) {
 	store, err := getTestStorage(t, driver, databaseName)
 	if err != nil {

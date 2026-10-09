@@ -159,16 +159,20 @@ func (s *sqlStorage) DeleteEvaluationJob(id string) error {
 			s.logger.Error("Failed to delete evaluation job", "error", err, "id", id)
 			return se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error()))
 		}
-		rows, rowsErr := result.RowsAffected()
-		if rowsErr != nil {
-			s.logger.Error("Failed to determine rows affected", "error", rowsErr, "id", id)
-			return se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", rowsErr.Error()))
-		}
-		if rows == 0 {
-			s.logger.Debug("Evaluation job not found", "id", id)
-			return se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
-		}
-		s.logger.Info("Deleted evaluation job", "id", id)
-		return nil
+		return s.evaluationJobDeleteResultError(id, result)
 	})
+}
+
+func (s *sqlStorage) evaluationJobDeleteResultError(id string, result sql.Result) error {
+	rows, rowsErr := result.RowsAffected()
+	if rowsErr != nil {
+		s.logger.Error("Failed to determine rows affected", "error", rowsErr, "id", id)
+		return se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", rowsErr.Error()))
+	}
+	if rows == 0 {
+		s.logger.Debug("Evaluation job not found", "id", id)
+		return se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
+	}
+	s.logger.Info("Deleted evaluation job", "id", id)
+	return nil
 }
