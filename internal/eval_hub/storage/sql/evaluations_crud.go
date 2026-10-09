@@ -140,16 +140,10 @@ func (s *sqlStorage) GetEvaluationJobs(filter *abstractions.QueryFilter) (*abstr
 	return listEntities[api.EvaluationJobResource](s, txn, shared.TableEvaluations, filter)
 }
 
-// DeleteEvaluationJob deletes the evaluation job identified by id. For a
-// post-processing job, its source evaluation's matching post_processing_ref is
-// cleared in the same transaction before the post-processing job is deleted.
+// DeleteEvaluationJob deletes the evaluation job identified by id.
 func (s *sqlStorage) DeleteEvaluationJob(id string) error {
 	return s.withTransaction("delete evaluation job", id, func(txn *sql.Tx) error {
-		jobToDelete, err := s.getEvaluationJobTransactionalForUpdate(txn, id)
-		if err != nil {
-			return err
-		}
-		if err := s.unlinkDeletedPostProcessingJob(txn, jobToDelete); err != nil {
+		if _, err := s.getEvaluationJobTransactionalForUpdate(txn, id); err != nil {
 			return err
 		}
 
