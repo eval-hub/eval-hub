@@ -1,5 +1,5 @@
 id: tool-use-v1
-curation_order: 4
+curation_order: 2
 name: Tool Use v1
 description: >
   Evaluates single-turn function-calling capability using supplied function
@@ -9,7 +9,9 @@ description: >
   tasks; executable, multi-turn, memory, and web-search workflows are excluded.
   The collection evaluates tool-call generation only and does not execute tools
   or measure multi-step agent behavior.
-  Part of the Standard LLM Evaluation Suite (standard-llm-evals-v1).
+  Each BFCL row is capped at 50 examples for screening; coverage of every
+  selected category is not guaranteed by this cap.
+  Scores are diagnostic summaries, not evidence of successful tool execution.
 
 domains:
   - tool_use_and_function_calling
@@ -38,6 +40,9 @@ pass_criteria:
   threshold: 0.60
 
 benchmarks:
+  # Scorer-key verification and full-category coverage remain unresolved.
+  # A 50-example cap per row is a screening budget, not a per-category quota.
+  # Call construction: 50% of the collection weight.
   - id: inspect/bfcl
     provider_id: inspect
     weight: 0.5
@@ -47,6 +52,7 @@ benchmarks:
     pass_criteria:
       threshold: 0.60
     parameters:
+      num_examples: 50
       task_args:
         categories:
           - simple_python
@@ -60,6 +66,7 @@ benchmarks:
           - live_parallel
           - live_parallel_multiple
 
+  # Relevance and abstention: 50% of the collection weight.
   - id: inspect/bfcl
     provider_id: inspect
     weight: 0.5
@@ -69,8 +76,160 @@ benchmarks:
     pass_criteria:
       threshold: 0.60
     parameters:
+      num_examples: 50
       task_args:
         categories:
           - irrelevance
           - live_irrelevance
           - live_relevance
+
+
+documentation:
+  purpose: >-
+    Diagnose single-turn function selection, argument construction, and relevance/no-call decisions
+    from supplied schemas, without executing tools or running a multi-step agent.
+  selection:
+  - provider_id: inspect
+    benchmark_id: inspect/bfcl
+    rationale: Call construction covers the ten configured simple, multiple, parallel, and live variants.
+    categories:
+    - simple_python
+    - simple_java
+    - simple_javascript
+    - multiple
+    - parallel
+    - parallel_multiple
+    - live_simple
+    - live_multiple
+    - live_parallel
+    - live_parallel_multiple
+  - provider_id: inspect
+    benchmark_id: inspect/bfcl
+    rationale: >-
+      Relevance and abstention covers irrelevance, live_irrelevance, and live_relevance so restraint
+      receives its own contribution.
+    categories:
+    - irrelevance
+    - live_irrelevance
+    - live_relevance
+  scoring:
+    rows:
+    - provider_id: inspect
+      benchmark_id: inspect/bfcl
+      metric: accuracy/accuracy
+      lower_is_better: false
+      weight: 0.5
+      threshold: 0.6
+    - provider_id: inspect
+      benchmark_id: inspect/bfcl
+      metric: accuracy/accuracy
+      lower_is_better: false
+      weight: 0.5
+      threshold: 0.6
+    units: >-
+      Primary scores are interpreted as fractions on a 0-1 scale for these targets. Verify actual
+      emitted units; metric names and catalog agreement alone do not establish them.
+    aggregation: >-
+      Use raw score for higher-is-better metrics and 1 - raw score for lower-is-better metrics, then
+      take the weighted mean. The configured aggregate threshold is a diagnostic target.
+    weight_rationale: >-
+      The two rows receive 50% each. Equal row weights do not imply equal category counts or balance
+      between positive and negative relevance cases.
+    threshold_provenance: >-
+      Both rows retain the provider-declared 0.60 target and identical metric/direction. Repeated
+      IDs represent different category selections, not distinct benchmark definitions.
+    collection_threshold: 0.6
+    threshold_formula: 0.5 * 0.60 + 0.5 * 0.60 = 0.60; no decimal rounding required.
+    interpretation: >-
+      A weighted aggregate does not guarantee that every benchmark passes or that every required metric
+      is present. The review reports missing scores can be omitted and remaining weights renormalized.
+      Inspect completeness and per-benchmark results before interpreting a summary.
+  runtime:
+    rows:
+    - provider_id: inspect
+      benchmark_id: inspect/bfcl
+      configured_parameters:
+        num_examples: 50
+        task_args:
+          categories:
+          - simple_python
+          - simple_java
+          - simple_javascript
+          - multiple
+          - parallel
+          - parallel_multiple
+          - live_simple
+          - live_multiple
+          - live_parallel
+          - live_parallel_multiple
+    - provider_id: inspect
+      benchmark_id: inspect/bfcl
+      configured_parameters:
+        num_examples: 50
+        task_args:
+          categories:
+          - irrelevance
+          - live_irrelevance
+          - live_relevance
+    choices:
+    - >-
+      Each row uses num_examples=50 as an approved screening cap based on the configured Open-Telco
+      budget. It is neither a per-category quota nor a verified evaluated count.
+    - >-
+      Existing task_args.categories are preserved verbatim for both rows. Row identity must include
+      the category selection; the shared benchmark ID alone is insufficient.
+    - >-
+      No execution, multi-turn, memory, or web-search categories are added. Successful generated calls
+      are not evidence of tool execution or recovery.
+    verification_status: >-
+      Configured values document intent, not measured execution. No model evaluations were run as
+      part of this configuration change. Unspecified settings remain deployment or provider/task defaults,
+      not a pinned reproducibility contract.
+  limitations:
+  - >-
+    The two screening caps may leave categories untested and can hide always-call or never-call behavior
+    in subpopulations.
+  - >-
+    The review reports a potential BFCL scorer-name mismatch with accuracy/accuracy and a repeated-ID
+    threshold lookup issue. Identical row scoring settings avoid the reported threshold difference,
+    but row/category identity still matters.
+  - >-
+    Native API tool calling versus prompted call generation is not established by these category settings
+    alone.
+  - >-
+    Provider runtime definitions must be distinguished from real benchmark evidence: configured local
+    simulator commands do not validate benchmark execution. Repository YAML documentation is not currently
+    persisted or exposed as a documentation field by the service API.
+  unresolved_inputs:
+  - >-
+    Verify scorer keys, category names, and row/category attribution using results from the deployed
+    task version.
+  - >-
+    Report actual per-category counts and relevance outcomes; establish the supported full-selected-dataset
+    setting before final evaluation.
+  - >-
+    Verify whether the task uses native tool calling or prompted call generation and record that protocol.
+  - >-
+    Record the actual adapter image, task/dataset revisions, selection policy, and relevant model/generation
+    settings with real run results; no missing identifiers or settings are fabricated here.
+  provenance:
+  - path: config/providers/inspect.yaml
+    supports: >-
+      Declared benchmark IDs, metrics, directions, provider defaults, and runtime configuration; not
+      proof of deployed behavior.
+  - path: config/collections/tool-use-v1.yaml
+    supports: >-
+      Executable benchmark selection, weights, thresholds, parameters, and current curation_order;
+      documentation mirrors those settings.
+  - path: config/collections/open-telco-v1.yaml
+    supports: >-
+      Existing num_examples=50 precedent used for the approved screening budget, not a reference full-evaluation
+      protocol.
+  - source: Collection review summarized in the pull request description
+    supports: >-
+      Scoring limitations and review-reported adapter/task concerns; deployed-image equivalence was
+      not established.
+  - source: Implementation plan in the pull request description
+    supports: >-
+      Approved membership, runtime-input choices, diagnostic interpretation, and the final curation policy
+      (seven existing target collections at 2, two new at 1, other collections unchanged at 0).
