@@ -1,6 +1,6 @@
 id: document-understanding-v1
 curation_order: 2
-name: Grounded Document Understanding v1
+name: Long-Context Document Comprehension v1
 description: >
   Evaluates bare-model understanding of supplied long-context documents and
   passages using RULER and LongBench v2. Coverage includes synthetic extraction,
@@ -8,6 +8,7 @@ description: >
   reasoning. These benchmarks are proxies for enterprise document understanding;
   summarization, schema-based extraction, citation/attribution, and explicit
   grounding/faithfulness require additional datasets.
+  Scores are diagnostic summaries, not deployment qualification criteria.
 domains:
   - grounded_document_understanding
 tasks:
@@ -34,6 +35,7 @@ pass_criteria:
   threshold: 0.2125
 
 benchmarks:
+  # Retain provider-declared keys pending verification of RULER's emitted metrics.
   - id: common-words-extraction
     provider_id: ruler
     weight: 0.125
@@ -48,6 +50,8 @@ benchmarks:
         - 8192
         - 16384
       num_samples: 100
+      random_seed: 42
+      batch_size: 1
 
   - id: frequency-words-extraction
     provider_id: ruler
@@ -63,6 +67,8 @@ benchmarks:
         - 8192
         - 16384
       num_samples: 100
+      random_seed: 42
+      batch_size: 1
 
   - id: qa-squad
     provider_id: ruler
@@ -78,6 +84,8 @@ benchmarks:
         - 8192
         - 16384
       num_samples: 100
+      random_seed: 42
+      batch_size: 1
 
   - id: qa-hotpotqa
     provider_id: ruler
@@ -93,6 +101,8 @@ benchmarks:
         - 8192
         - 16384
       num_samples: 100
+      random_seed: 42
+      batch_size: 1
 
   - id: niah-single-essay
     provider_id: ruler
@@ -108,6 +118,8 @@ benchmarks:
         - 8192
         - 16384
       num_samples: 100
+      random_seed: 42
+      batch_size: 1
 
   - id: variable-tracking
     provider_id: ruler
@@ -123,6 +135,8 @@ benchmarks:
         - 8192
         - 16384
       num_samples: 100
+      random_seed: 42
+      batch_size: 1
 
   - id: longbenchv2
     provider_id: lm_evaluation_harness
@@ -133,5 +147,236 @@ benchmarks:
     pass_criteria:
       threshold: 0.30
     parameters:
+      # Input-length and truncation settings remain unresolved.
       num_fewshot: 0
       apply_chat_template: true
+
+documentation:
+  purpose: >-
+    Diagnose bare-model comprehension of supplied long text, including retrieval, tracking, aggregation,
+    passage QA, and broader long-document reasoning.
+  selection:
+  - provider_id: ruler
+    benchmark_id: common-words-extraction
+    rationale: Common-word extraction tests aggregation over long synthetic inputs.
+  - provider_id: ruler
+    benchmark_id: frequency-words-extraction
+    rationale: Frequency-word extraction complements common-word aggregation with frequency-based
+      selection.
+  - provider_id: ruler
+    benchmark_id: qa-squad
+    rationale: SQuAD passages provide long-context question answering.
+  - provider_id: ruler
+    benchmark_id: qa-hotpotqa
+    rationale: HotpotQA passages add multi-hop question answering.
+  - provider_id: ruler
+    benchmark_id: niah-single-essay
+    rationale: Single-needle essay retrieval provides a focused retrieval signal.
+  - provider_id: ruler
+    benchmark_id: variable-tracking
+    rationale: Variable tracking tests propagation of assignments through long inputs.
+  - provider_id: lm_evaluation_harness
+    benchmark_id: longbenchv2
+    rationale: LongBench v2 adds broader long-document reasoning to the synthetic RULER diagnostics.
+  scoring:
+    rows:
+    - provider_id: ruler
+      benchmark_id: common-words-extraction
+      metric: string_match_all
+      lower_is_better: false
+      weight: 0.125
+      threshold: 0.1
+    - provider_id: ruler
+      benchmark_id: frequency-words-extraction
+      metric: string_match_all
+      lower_is_better: false
+      weight: 0.125
+      threshold: 0.1
+    - provider_id: ruler
+      benchmark_id: qa-squad
+      metric: string_match_part
+      lower_is_better: false
+      weight: 0.125
+      threshold: 0.15
+    - provider_id: ruler
+      benchmark_id: qa-hotpotqa
+      metric: string_match_part
+      lower_is_better: false
+      weight: 0.125
+      threshold: 0.15
+    - provider_id: ruler
+      benchmark_id: niah-single-essay
+      metric: string_match_all
+      lower_is_better: false
+      weight: 0.125
+      threshold: 0.5
+    - provider_id: ruler
+      benchmark_id: variable-tracking
+      metric: string_match_all
+      lower_is_better: false
+      weight: 0.125
+      threshold: 0.1
+    - provider_id: lm_evaluation_harness
+      benchmark_id: longbenchv2
+      metric: accuracy
+      lower_is_better: false
+      weight: 0.25
+      threshold: 0.3
+    units: >-
+      Primary scores are interpreted as fractions on a 0-1 scale for these targets. Verify actual
+      emitted units; metric names and catalog agreement alone do not establish them.
+    aggregation: >-
+      Use raw score for higher-is-better metrics and 1 - raw score for lower-is-better metrics, then
+      take the weighted mean. The configured aggregate threshold is a diagnostic target.
+    weight_rationale: >-
+      Six RULER rows each receive 0.125, totaling 75%; LongBench receives 25%. This intentionally
+      emphasizes synthetic long-context diagnostics.
+    threshold_provenance: >-
+      Existing row and aggregate targets are retained and match the selected provider row targets.
+      Low targets are baseline diagnostics, not enterprise acceptance criteria.
+    collection_threshold: 0.2125
+    threshold_formula: >-
+      0.125 * (0.10 + 0.10 + 0.15 + 0.15 + 0.50 + 0.10) + 0.25 * 0.30 = 0.2125; no decimal rounding
+      required.
+    interpretation: >-
+      A weighted aggregate does not guarantee that every benchmark passes or that every required metric
+      is present. The review reports missing scores can be omitted and remaining weights renormalized.
+      Inspect completeness and per-benchmark results before interpreting a summary.
+  runtime:
+    rows:
+    - provider_id: ruler
+      benchmark_id: common-words-extraction
+      configured_parameters:
+        context_lengths:
+        - 4096
+        - 8192
+        - 16384
+        num_samples: 100
+        random_seed: 42
+        batch_size: 1
+    - provider_id: ruler
+      benchmark_id: frequency-words-extraction
+      configured_parameters:
+        context_lengths:
+        - 4096
+        - 8192
+        - 16384
+        num_samples: 100
+        random_seed: 42
+        batch_size: 1
+    - provider_id: ruler
+      benchmark_id: qa-squad
+      configured_parameters:
+        context_lengths:
+        - 4096
+        - 8192
+        - 16384
+        num_samples: 100
+        random_seed: 42
+        batch_size: 1
+    - provider_id: ruler
+      benchmark_id: qa-hotpotqa
+      configured_parameters:
+        context_lengths:
+        - 4096
+        - 8192
+        - 16384
+        num_samples: 100
+        random_seed: 42
+        batch_size: 1
+    - provider_id: ruler
+      benchmark_id: niah-single-essay
+      configured_parameters:
+        context_lengths:
+        - 4096
+        - 8192
+        - 16384
+        num_samples: 100
+        random_seed: 42
+        batch_size: 1
+    - provider_id: ruler
+      benchmark_id: variable-tracking
+      configured_parameters:
+        context_lengths:
+        - 4096
+        - 8192
+        - 16384
+        num_samples: 100
+        random_seed: 42
+        batch_size: 1
+    - provider_id: lm_evaluation_harness
+      benchmark_id: longbenchv2
+      configured_parameters:
+        num_fewshot: 0
+        apply_chat_template: true
+    choices:
+    - >-
+      Every RULER row explicitly requests context_lengths=[4096,8192,16384] tokens and num_samples=100
+      per length. This retains the original context coverage and overrides the provider default of
+      10 samples, for 1,800 requested synthetic examples across six tasks and three lengths; actual
+      successful counts must be checked.
+    - >-
+      random_seed=42 and batch_size=1 explicitly adopt config/providers/ruler.yaml defaults for reproducible
+      generation and conservative request concurrency.
+    - >-
+      Tokenizer and template fields remain unset. The RULER provider documents tokenizer_path falling
+      back to job model.name, tokenizer_type=hf, and model_template=base; their suitability for the
+      target model remains unverified.
+    - >-
+      tokens_to_generate remains unset to preserve the provider-documented per-task generation budget,
+      rather than imposing a universal cap.
+    - >-
+      LongBench retains num_fewshot=0 and apply_chat_template=true from the existing collection. Its
+      input-length and truncation settings are not specified.
+    verification_status: >-
+      Configured values document intent, not measured execution. No model evaluations were run as
+      part of this configuration change. Unspecified settings remain deployment or provider/task defaults,
+      not a pinned reproducibility contract.
+  limitations:
+  - >-
+    Configured coverage stops at 16,384 tokens for RULER and does not establish quality at longer
+    deployment contexts; an average can hide degradation at the longest length.
+  - >-
+    Answer matching and multiple-choice accuracy do not establish citation quality or faithfulness.
+    Summarization, schema-based extraction, attribution, and explicit grounding remain gaps.
+  - >-
+    The review reports that RULER emits task-qualified overall/per-length keys rather than the declared
+    string-match keys. Deployed-result verification remains outstanding.
+  - >-
+    Provider runtime definitions must be distinguished from real benchmark evidence: configured local
+    simulator commands do not validate benchmark execution. Repository YAML documentation is not currently
+    persisted or exposed as a documentation field by the service API.
+  unresolved_inputs:
+  - >-
+    Obtain deployed RULER fixtures proving exact result keys, units, evaluated counts, and per-length
+    behavior.
+  - >-
+    Select a tokenizer and prompt template appropriate for the evaluated model and verify actual input
+    token lengths.
+  - >-
+    Establish supported LongBench input-length and truncation behavior from the deployed task and
+    model context window.
+  - >-
+    Record the actual adapter image, task/dataset revisions, selection policy, and relevant model/generation
+    settings with real run results; no missing identifiers or settings are fabricated here.
+  provenance:
+  - path: config/providers/ruler.yaml
+    supports: >-
+      Declared benchmark IDs, metrics, directions, provider defaults, and runtime configuration; not
+      proof of deployed behavior.
+  - path: config/providers/lm_evaluation_harness.yaml
+    supports: >-
+      Declared benchmark IDs, metrics, directions, provider defaults, and runtime configuration; not
+      proof of deployed behavior.
+  - path: config/collections/document-understanding-v1.yaml
+    supports: >-
+      Executable benchmark selection, weights, thresholds, parameters, and current curation_order;
+      documentation mirrors those settings.
+  - source: Collection review summarized in the pull request description
+    supports: >-
+      Scoring limitations and review-reported adapter/task concerns; deployed-image equivalence was
+      not established.
+  - source: Implementation plan in the pull request description
+    supports: >-
+      Approved membership, runtime-input choices, diagnostic interpretation, and the final curation policy
+      (seven existing target collections at 2, two new at 1, other collections unchanged at 0).
