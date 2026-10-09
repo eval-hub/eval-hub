@@ -4,11 +4,12 @@ name: Knowledge and Reasoning v1
 description: >
   Evaluates closed-book, text-only knowledge and reasoning across difficult
   scientific, academic and mathematical problems using GPQA Diamond, HLE and
-  MATH-500. The collection measures bare-model reasoning without browsing,
-  retrieval or tool assistance. Structured-table and structured-data analysis
-  remain coverage gaps.
-  HLE is capped at 50 examples for screening.
-  Scores are diagnostic summaries, not deployment qualification criteria.
+  MATH-500.
+# The collection measures bare-model reasoning without browsing,
+# retrieval or tool assistance. Structured-table and structured-data analysis
+# remain coverage gaps.
+# HLE is capped at 50 examples for screening.
+# Scores are diagnostic summaries, not deployment qualification criteria.
 domains:
   - knowledge_and_reasoning
 tasks:
