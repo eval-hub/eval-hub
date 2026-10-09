@@ -153,6 +153,47 @@ func TestPostProcessingCompletionWithUnavailableSource(t *testing.T) {
 	}
 }
 
+func TestPostProcessingCompletionReturnsSourceReadError(t *testing.T) {
+	databaseName := getDBName()
+	store, err := getTestStorage(t, drivers[0], databaseName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	tenant := api.Tenant(common.GUID())
+	scoped := store.WithTenant(tenant).WithOwner("owner")
+	source := postProcessingTestJob(common.GUID(), tenant, api.EvaluationJobConfig{Name: "source"})
+	source.Status.State = api.OverallStateCompleted
+	if err := scoped.CreateEvaluationJob(source); err != nil {
+		t.Fatal(err)
+	}
+	job := postProcessingTestJob(common.GUID(), tenant, postProcessingTestConfig(source.Resource.ID))
+	if err := scoped.CreateEvaluationJob(job); err != nil {
+		t.Fatal(err)
+	}
+
+	corruptDB, err := sql.Open("sqlite", getDBInMemoryURL(databaseName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = corruptDB.Close() })
+	if _, err := corruptDB.Exec(`UPDATE evaluations SET entity = '{' WHERE id = ?`, source.Resource.ID); err != nil {
+		t.Fatalf("corrupt source entity: %v", err)
+	}
+
+	err = scoped.UpdateEvaluationJob(job.Resource.ID, postProcessingCompletion())
+	if err == nil || !strings.Contains(err.Error(), "unexpected end of JSON input") {
+		t.Fatalf("UpdateEvaluationJob() error = %v, want source JSON decode error", err)
+	}
+	storedJob, err := scoped.GetEvaluationJob(job.Resource.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if storedJob.Status.State != api.OverallStatePending || storedJob.Results != nil {
+		t.Fatalf("completion was not rolled back after source read error: %+v", storedJob)
+	}
+}
+
 func TestPostProcessingConcurrentCompletions(t *testing.T) {
 	testPostProcessingConcurrentCompletions(t, drivers[0], getDBName())
 }
