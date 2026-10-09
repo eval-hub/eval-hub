@@ -4,7 +4,7 @@ title: Lighteval
 description: Lightweight LLM evaluation framework from Hugging Face
 runtime:
   k8s:
-    image: quay.io/evalhub/community-lighteval:latest
+    image: quay.io/evalhub/community-lighteval:v0.6.3@sha256:9cd5a3a48b8d7a6f7f69eaca774c5bf659a32c6163c86b2d8e83f9cbc3f6beb1
     entrypoint:
       - python
       - main.py
@@ -566,7 +566,7 @@ benchmarks:
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - pass@1
+      - math_500.pass@1
     num_few_shot: 0
     dataset_size: 500
     tags:
@@ -575,7 +575,7 @@ benchmarks:
       - competition
       - lighteval
     primary_score:
-      metric: pass@1
+      metric: math_500.pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.30
@@ -593,7 +593,7 @@ benchmarks:
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - gpqa_pass@1
+      - gpqa:diamond.gpqa_pass@1
     num_few_shot: 0
     dataset_size: 198
     tags:
@@ -603,7 +603,7 @@ benchmarks:
       - competition
       - lighteval
     primary_score:
-      metric: gpqa_pass@1
+      metric: gpqa:diamond.gpqa_pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.35

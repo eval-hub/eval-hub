@@ -1,0 +1,28 @@
+{
+  "name": "HLE text-only standalone smoke",
+  "description": "Standalone HLE request template; prepare_request.py supplies scorer and dataset settings from knowledge-reasoning-v1.",
+  "model": {
+    "url": "https://model.example/v1",
+    "name": "meta-llama/Llama-3.3-70B-Instruct",
+    "auth": {
+      "secret_ref": "secretfile"
+    }
+  },
+  "benchmarks": [
+    {
+      "id": "inspect/hle",
+      "provider_id": "inspect",
+      "parameters": {
+        "num_examples": 3,
+        "sandbox": "none",
+        "max_tasks": 1,
+        "model_args": {
+          "responses_api": false
+        },
+        "model_roles": {
+          "grader": "{\"model\": \"openai/gpt-4o-mini\", \"max_tokens\": 2048, \"temperature\": 0, \"model_args\": {\"base_url\": \"http://localhost:8080/v1\", \"api_key\": \"judge_api-key:ref\", \"responses_api\": false}}"
+        }
+      }
+    }
+  ]
+}
