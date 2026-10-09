@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/oci"
 	"github.com/eval-hub/eval-hub/internal/safefile"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/ociclient"
@@ -22,13 +23,6 @@ const (
 	defaultOCIHTTPTimeout = 30 * time.Second
 	defaultOCICACertPath  = "/etc/pki/ca-trust/source/anchors/service-ca.crt"
 )
-
-// DockerConfigSecretGetter reads kubernetes.io/dockerconfigjson secret payloads.
-// The interface keeps evalcards independent of Kubernetes client details while still allowing
-// on-demand secret lookup from the tenant namespace at export time.
-type DockerConfigSecretGetter interface {
-	GetDockerConfigJSON(ctx context.Context, namespace, secretName string) ([]byte, error)
-}
 
 // NewOCIHTTPClient creates an HTTP client for OCI registry export using optional sidecar.oci TLS
 // settings. Cluster registries often use private CAs; this mirrors the sidecar OCI proxy TLS
@@ -91,60 +85,50 @@ func buildOCIHTTPClientTLS(caCertPath string, logger *slog.Logger) (*tls.Config,
 }
 
 type ociPublisherFactory struct {
-	secretGetter DockerConfigSecretGetter
-	httpClient   *http.Client
+	credentialResolver oci.OCICredentialResolver
+	httpClient         *http.Client
 }
 
-// NewOCIPublisherFactory creates per-job OCI publishers that resolve credentials from tenant secrets.
-// Each evaluation job may target a different registry/repository and secret, so publishers are
+// NewOCIPublisherFactory creates per-job OCI publishers using the supplied credential resolver.
+// Each evaluation job may target a different registry/repository and connection, so publishers are
 // constructed per export rather than shared globally.
-func NewOCIPublisherFactory(secretGetter DockerConfigSecretGetter, httpClient *http.Client) OCIPublisherFactory {
+func NewOCIPublisherFactory(resolver oci.OCICredentialResolver, httpClient *http.Client) OCIPublisherFactory {
 	return &ociPublisherFactory{
-		secretGetter: secretGetter,
-		httpClient:   httpClient,
+		credentialResolver: resolver,
+		httpClient:         httpClient,
 	}
 }
 
-// NewPublisher builds a per-job OCI publisher from export coordinates and tenant-scoped credentials.
-// It fetches the dockerconfigjson secret on demand, parses registry auth, and prepares a client
-// tagged for this evaluation job.
+// NewPublisher resolves credentials and builds a client tagged for this evaluation job.
 func (f *ociPublisherFactory) NewPublisher(ctx context.Context, job *api.EvaluationJobResource) (OCIPublisher, error) {
 	if job == nil || job.Exports == nil || job.Exports.OCI == nil {
 		return nil, fmt.Errorf("oci export configuration is required")
 	}
-	if f == nil || f.secretGetter == nil {
-		return nil, fmt.Errorf("oci secret getter is not configured")
+	if f == nil || f.credentialResolver == nil {
+		return nil, fmt.Errorf("oci credential resolver is not configured")
 	}
 	if f.httpClient == nil {
 		return nil, fmt.Errorf("oci http client is not configured")
 	}
 
-	oci := job.Exports.OCI
-	if oci.K8s == nil || oci.K8s.Connection == "" {
-		return nil, fmt.Errorf("oci k8s connection secret is required")
-	}
-	namespace := job.Resource.Tenant.String()
-	if namespace == "" {
-		return nil, fmt.Errorf("tenant namespace is required for oci secret lookup")
-	}
-
-	secretData, err := f.secretGetter.GetDockerConfigJSON(ctx, namespace, oci.K8s.Connection)
+	export := job.Exports.OCI
+	creds, err := f.credentialResolver.Resolve(ctx, oci.OCICredentialRequest{
+		RegistryHost: export.Coordinates.OCIHost,
+		Tenant:       job.Resource.Tenant.String(),
+		Connection:   export.K8s,
+	})
 	if err != nil {
 		return nil, err
 	}
-	creds, err := ociclient.ParseDockerConfigJSON(secretData, oci.Coordinates.OCIHost)
-	if err != nil {
-		return nil, fmt.Errorf("parse oci credentials: %w", err)
-	}
-	client, err := ociclient.NewClient(oci.Coordinates.OCIHost, oci.Coordinates.OCIRepository, creds, f.httpClient)
+	client, err := ociclient.NewClient(export.Coordinates.OCIHost, export.Coordinates.OCIRepository, creds, f.httpClient)
 	if err != nil {
 		return nil, err
 	}
 	return &ociPublisher{
 		client:      client,
 		jobID:       job.Resource.ID,
-		ociTag:      oci.Coordinates.OCITag,
-		annotations: oci.Coordinates.Annotations,
+		ociTag:      export.Coordinates.OCITag,
+		annotations: export.Coordinates.Annotations,
 	}, nil
 }
 
