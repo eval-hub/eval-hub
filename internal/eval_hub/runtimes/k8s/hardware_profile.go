@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/eval-hub/eval-hub/pkg/api"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -30,6 +31,7 @@ var standardHardwareProfileResources = map[string]struct{}{
 // hardwareProfileResources holds resource and scheduling values extracted from a HardwareProfile CR.
 // Empty strings and zero counts mean the field was not set in the profile.
 type hardwareProfileResources struct {
+	identifiers   []api.HardwareProfileIdentifier
 	cpuRequest    string
 	cpuLimit      string
 	memoryRequest string
@@ -48,7 +50,7 @@ func parseHardwareProfileResources(profile *unstructured.Unstructured) (*hardwar
 	if profile == nil {
 		return nil, fmt.Errorf("hardware profile is required")
 	}
-	out := &hardwareProfileResources{}
+	out := &hardwareProfileResources{identifiers: make([]api.HardwareProfileIdentifier, 0)}
 	if err := parseHardwareProfileIdentifiers(profile, out); err != nil {
 		return nil, err
 	}
@@ -74,8 +76,17 @@ func parseHardwareProfileIdentifiers(profile *unstructured.Unstructured, out *ha
 		}
 		identifier := strings.TrimSpace(stringFromUnstructured(identifierMap["identifier"]))
 		resourceType := strings.TrimSpace(stringFromUnstructured(identifierMap["resourceType"]))
+		minCount, _ := quantityStringFromUnstructured(identifierMap["minCount"])
 		defaultCount, hasDefault := quantityStringFromUnstructured(identifierMap["defaultCount"])
 		maxCount, hasMax := quantityStringFromUnstructured(identifierMap["maxCount"])
+		out.identifiers = append(out.identifiers, api.HardwareProfileIdentifier{
+			Identifier:   identifier,
+			DisplayName:  stringFromUnstructured(identifierMap["displayName"]),
+			ResourceType: api.HardwareProfileResourceType(strings.ToLower(resourceType)),
+			MinCount:     minCount,
+			DefaultCount: defaultCount,
+			MaxCount:     maxCount,
+		})
 
 		switch {
 		case resourceType == "CPU" || identifier == "cpu":
