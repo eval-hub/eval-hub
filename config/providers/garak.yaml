@@ -30,9 +30,9 @@ runtime:
       - -m
       - llama_stack_provider_trustyai_garak.evalhub
     cpu_request: 500m
-    memory_request: 512Mi
+    memory_request: 4Gi
     cpu_limit: 2000m
-    memory_limit: 4Gi
+    memory_limit: 8Gi
     env:
       - name: VAR_NAME
         value: VALUE
