@@ -30,7 +30,7 @@ const (
 	issueInvalidOptions         = "invalid_options"
 )
 
-// Issue is a stable, field-addressable proposal finding. Catalog transport and
+// Issue is a stable, field-addressable collection finding. Catalog transport and
 // cancellation failures are returned as errors instead of Issues.
 type Issue struct {
 	Code    string `json:"code"`
@@ -59,34 +59,29 @@ type providerCatalog struct {
 	benchmarks map[benchmarkKey]api.BenchmarkResource
 }
 
-// ValidateProposal checks a proposed collection against the same registered
-// request validator used by collection POST and the tenant-scoped catalog.
+// ValidateCollection checks the registered collection request rules and
+// provider/benchmark consistency against a tenant-scoped catalog. It does not
+// apply collection-generation options or mutate the candidate. Callers must
+// supply a catalog source scoped to the current tenant.
+func ValidateCollection(ctx context.Context, source CatalogSource, candidate api.CollectionConfig) ([]Issue, error) {
+	_, issues, err := validateCollectionWithCatalog(ctx, source, candidate, nil)
+	return issues, err
+}
+
+// ValidateProposal adds generation-specific checks to ValidateCollection.
 // The returned config is a deep copy with server-enriched benchmark URLs
 // removed. If issues are returned, the config must not be submitted.
 func ValidateProposal(ctx context.Context, source CatalogSource, options Options, candidate api.CollectionConfig) (api.CollectionConfig, []Issue, error) {
 	proposal := cloneCollectionConfig(candidate)
-	if err := ctx.Err(); err != nil {
-		return proposal, nil, err
-	}
-	if source == nil {
-		return proposal, nil, fmt.Errorf("catalog source is nil")
-	}
-
 	normalized, optionIssues := normalizeProposalOptions(options)
-	configIssues, err := validateCollectionConfig(proposal)
+	preflightIssues := append(optionIssues, validateProposalFields(proposal)...)
+	catalog, issues, err := validateCollectionWithCatalog(ctx, source, proposal, preflightIssues)
 	if err != nil {
 		return proposal, nil, err
 	}
-	issues := append(optionIssues, configIssues...)
-	if len(issues) != 0 {
-		return proposal, sortedIssues(issues), nil
+	if catalog != nil {
+		issues = append(issues, validateProposalAgainstCatalog(proposal, normalized, catalog)...)
 	}
-
-	catalog, err := readProviderCatalog(ctx, source)
-	if err != nil {
-		return proposal, nil, err
-	}
-	issues = validateAgainstCatalog(proposal, normalized, catalog)
 	return proposal, sortedIssues(issues), nil
 }
 
@@ -96,28 +91,15 @@ func ValidateProposal(ctx context.Context, source CatalogSource, options Options
 // values.
 func CalibrateProposal(ctx context.Context, source CatalogSource, options Options, validated api.CollectionConfig) (api.CollectionConfig, []CalibrationDecision, error) {
 	proposal := cloneCollectionConfig(validated)
-	if err := ctx.Err(); err != nil {
-		return proposal, nil, err
-	}
-	if source == nil {
-		return proposal, nil, fmt.Errorf("catalog source is nil")
-	}
-
 	normalized, optionIssues := normalizeProposalOptions(options)
-	configIssues, err := validateCollectionConfig(proposal)
+	preflightIssues := append(optionIssues, validateProposalFields(proposal)...)
+	catalog, issues, err := validateCollectionWithCatalog(ctx, source, proposal, preflightIssues)
 	if err != nil {
 		return proposal, nil, err
 	}
-	issues := append(optionIssues, configIssues...)
-	if len(issues) != 0 {
-		return proposal, nil, proposalIssuesError(sortedIssues(issues))
+	if catalog != nil {
+		issues = append(issues, validateProposalAgainstCatalog(proposal, normalized, catalog)...)
 	}
-
-	catalog, err := readProviderCatalog(ctx, source)
-	if err != nil {
-		return proposal, nil, err
-	}
-	issues = validateAgainstCatalog(proposal, normalized, catalog)
 	if len(issues) != 0 {
 		return proposal, nil, proposalIssuesError(sortedIssues(issues))
 	}
@@ -227,6 +209,33 @@ func normalizeProposalOptions(options Options) (Options, []Issue) {
 	return Options{}, []Issue{{Code: issueInvalidOptions, Path: path, Message: err.Error()}}
 }
 
+// validateCollectionWithCatalog runs the shared rules once and returns the
+// catalog so proposal-only checks and calibration can reuse the same snapshot.
+// Preflight findings prevent catalog reads but are reported alongside field
+// validation findings.
+func validateCollectionWithCatalog(ctx context.Context, source CatalogSource, candidate api.CollectionConfig, preflightIssues []Issue) (*providerCatalog, []Issue, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	if source == nil {
+		return nil, nil, fmt.Errorf("catalog source is nil")
+	}
+	configIssues, err := validateCollectionConfig(candidate)
+	if err != nil {
+		return nil, nil, err
+	}
+	issues := append(configIssues, preflightIssues...)
+	if len(issues) != 0 {
+		return nil, sortedIssues(issues), nil
+	}
+
+	catalog, err := readProviderCatalog(ctx, source)
+	if err != nil {
+		return nil, nil, err
+	}
+	return catalog, sortedIssues(validateAgainstCatalog(candidate, catalog)), nil
+}
+
 func validateCollectionConfig(candidate api.CollectionConfig) ([]Issue, error) {
 	instance, err := validation.NewValidator()
 	if err != nil {
@@ -252,9 +261,6 @@ func validateCollectionConfig(candidate api.CollectionConfig) ([]Issue, error) {
 			}
 		}
 	}
-	if candidate.CurationOrder > 0 {
-		issues = append(issues, Issue{Code: issueAdminOnlyField, Path: "curation_order", Message: "curation_order is server-managed and cannot be set in a generated collection"})
-	}
 	for i, benchmark := range candidate.Benchmarks {
 		if !finite(float64(benchmark.Weight)) {
 			issues = append(issues, Issue{Code: issueInvalidNumber, Path: fmt.Sprintf("benchmarks[%d].weight", i), Message: "weight must be finite"})
@@ -267,6 +273,13 @@ func validateCollectionConfig(candidate api.CollectionConfig) ([]Issue, error) {
 		issues = append(issues, Issue{Code: issueInvalidNumber, Path: "pass_criteria.threshold", Message: "threshold must be finite"})
 	}
 	return issues, nil
+}
+
+func validateProposalFields(candidate api.CollectionConfig) []Issue {
+	if candidate.CurationOrder > 0 {
+		return []Issue{{Code: issueAdminOnlyField, Path: "curation_order", Message: "curation_order is server-managed and cannot be set in a generated collection"}}
+	}
+	return nil
 }
 
 func readProviderCatalog(ctx context.Context, source CatalogSource) (*providerCatalog, error) {
@@ -295,27 +308,8 @@ func readProviderCatalog(ctx context.Context, source CatalogSource) (*providerCa
 	return result, nil
 }
 
-func validateAgainstCatalog(candidate api.CollectionConfig, options Options, catalog *providerCatalog) []Issue {
+func validateAgainstCatalog(candidate api.CollectionConfig, catalog *providerCatalog) []Issue {
 	issues := make([]Issue, 0)
-	requestedProviderIDs := sortedMapKeys(options.ProviderIDs)
-	if options.ProviderFilter != "" && len(requestedProviderIDs) == 0 {
-		issues = append(issues, Issue{Code: issueUnknownProvider, Path: "provider_filter", Message: "provider filter contains no provider IDs"})
-	}
-	for _, id := range requestedProviderIDs {
-		if _, exists := catalog.providers[id]; !exists {
-			issues = append(issues, Issue{Code: issueUnknownProvider, Path: "provider_filter", Message: fmt.Sprintf("provider %q is not present in the tenant catalog", id)})
-		}
-	}
-	if options.MaxBenchmarks <= 0 {
-		issues = append(issues, Issue{Code: issueInvalidOptions, Path: "max_benchmarks", Message: "max_benchmarks must be positive"})
-	}
-	if options.Strictness != StrictnessLenient && options.Strictness != StrictnessModerate && options.Strictness != StrictnessStrict {
-		issues = append(issues, Issue{Code: issueInvalidOptions, Path: "strictness", Message: "strictness is invalid"})
-	}
-	if len(candidate.Benchmarks) > options.MaxBenchmarks && options.MaxBenchmarks > 0 {
-		issues = append(issues, Issue{Code: issueBenchmarkCap, Path: "benchmarks", Message: fmt.Sprintf("proposal contains %d benchmarks; maximum is %d", len(candidate.Benchmarks), options.MaxBenchmarks)})
-	}
-
 	seen := make(map[benchmarkKey]struct{}, len(candidate.Benchmarks))
 	for i, selected := range candidate.Benchmarks {
 		path := fmt.Sprintf("benchmarks[%d]", i)
@@ -335,12 +329,6 @@ func validateAgainstCatalog(candidate api.CollectionConfig, options Options, cat
 			issues = append(issues, Issue{Code: issueUnknownBenchmark, Path: path + ".id", Message: fmt.Sprintf("benchmark %q is not advertised by provider %q", selected.ID, selected.ProviderID)})
 			continue
 		}
-		if options.ProviderFilter != "" {
-			if _, allowed := options.ProviderIDs[selected.ProviderID]; !allowed {
-				issues = append(issues, Issue{Code: issueProviderFilter, Path: path + ".provider_id", Message: "benchmark provider is outside provider_filter"})
-			}
-		}
-
 		if selected.PrimaryScore != nil && !contains(metadata.Metrics, selected.PrimaryScore.Metric) {
 			issues = append(issues, Issue{Code: issueMetricNotAdvertised, Path: path + ".primary_score.metric", Message: fmt.Sprintf("metric %q is not advertised by provider %q for this benchmark", selected.PrimaryScore.Metric, selected.ProviderID)})
 		}
@@ -356,6 +344,32 @@ func validateAgainstCatalog(candidate api.CollectionConfig, options Options, cat
 		}
 		if selected.PassCriteria != nil && selected.PassCriteria.Threshold != nil && effectiveScore == nil {
 			issues = append(issues, Issue{Code: issueMetricNotAdvertised, Path: path + ".pass_criteria.threshold", Message: "a threshold requires a verifiable advertised primary-score metric"})
+		}
+	}
+	return issues
+}
+
+func validateProposalAgainstCatalog(candidate api.CollectionConfig, options Options, catalog *providerCatalog) []Issue {
+	issues := make([]Issue, 0)
+	requestedProviderIDs := sortedMapKeys(options.ProviderIDs)
+	if options.ProviderFilter != "" && len(requestedProviderIDs) == 0 {
+		issues = append(issues, Issue{Code: issueUnknownProvider, Path: "provider_filter", Message: "provider filter contains no provider IDs"})
+	}
+	for _, id := range requestedProviderIDs {
+		if _, exists := catalog.providers[id]; !exists {
+			issues = append(issues, Issue{Code: issueUnknownProvider, Path: "provider_filter", Message: fmt.Sprintf("provider %q is not present in the tenant catalog", id)})
+		}
+	}
+	if len(candidate.Benchmarks) > options.MaxBenchmarks {
+		issues = append(issues, Issue{Code: issueBenchmarkCap, Path: "benchmarks", Message: fmt.Sprintf("proposal contains %d benchmarks; maximum is %d", len(candidate.Benchmarks), options.MaxBenchmarks)})
+	}
+	if options.ProviderFilter != "" {
+		for i, selected := range candidate.Benchmarks {
+			if _, allowed := options.ProviderIDs[selected.ProviderID]; !allowed {
+				if _, exists := catalog.benchmarks[benchmarkKey{providerID: selected.ProviderID, benchmarkID: selected.ID}]; exists {
+					issues = append(issues, Issue{Code: issueProviderFilter, Path: fmt.Sprintf("benchmarks[%d].provider_id", i), Message: "benchmark provider is outside provider_filter"})
+				}
+			}
 		}
 	}
 	return issues

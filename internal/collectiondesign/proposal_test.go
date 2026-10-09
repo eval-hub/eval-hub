@@ -14,6 +14,89 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+func TestValidateCollectionSharedRules(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		candidate api.CollectionConfig
+		wantCode  string
+		wantPath  string
+	}{
+		{name: "valid", candidate: validProposal()},
+		{name: "missing classification", candidate: api.CollectionConfig{Name: "valid", Benchmarks: []api.CollectionBenchmarkConfig{testBenchmark("p1", "b1")}}, wantCode: issueClassificationRequired, wantPath: "domains"},
+		{name: "unknown provider", candidate: proposalWithBenchmarks(testBenchmark("missing", "b1")), wantCode: issueUnknownProvider, wantPath: "benchmarks[0].provider_id"},
+		{name: "unknown benchmark", candidate: proposalWithBenchmarks(testBenchmark("p1", "missing")), wantCode: issueUnknownBenchmark, wantPath: "benchmarks[0].id"},
+		{name: "duplicate pair", candidate: proposalWithBenchmarks(testBenchmark("p1", "b1"), testBenchmark("p1", "b1")), wantCode: issueDuplicateBenchmark, wantPath: "benchmarks[1]"},
+		{name: "unadvertised metric", candidate: proposalWithBenchmarks(testBenchmarkWithScore("p1", "b1", "missing", false)), wantCode: issueMetricNotAdvertised, wantPath: "benchmarks[0].primary_score.metric"},
+		{name: "wrong direction", candidate: proposalWithBenchmarks(testBenchmarkWithScore("p1", "b1", "accuracy", true)), wantCode: issueDirectionConflict, wantPath: "benchmarks[0].primary_score.lower_is_better"},
+		{name: "threshold without metric", candidate: proposalWithBenchmarks(testBenchmarkWithThreshold("p2", "b2", 0.5)), wantCode: issueMetricNotAdvertised, wantPath: "benchmarks[0].pass_criteria.threshold"},
+		{name: "nonfinite weight", candidate: proposalWithBenchmarks(testBenchmarkWithWeight("p1", "b1", float32(math.Inf(1)))), wantCode: issueInvalidNumber, wantPath: "benchmarks[0].weight"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			issues, err := ValidateCollection(context.Background(), proposalTestSource(), test.candidate)
+			if err != nil {
+				t.Fatalf("ValidateCollection() error = %v", err)
+			}
+			if test.wantCode == "" {
+				if len(issues) != 0 {
+					t.Fatalf("valid collection has issues: %+v", issues)
+				}
+			} else if !hasIssue(issues, test.wantCode, test.wantPath) {
+				t.Fatalf("issues %+v do not contain (%s, %s)", issues, test.wantCode, test.wantPath)
+			}
+		})
+	}
+}
+
+func TestValidateCollectionDoesNotApplyGenerationOptions(t *testing.T) {
+	t.Parallel()
+	candidate := proposalWithBenchmarks(testBenchmark("p1", "b1"), testBenchmark("p2", "b2"))
+	candidate.CurationOrder = 2
+	candidate.Benchmarks[0].URL = "https://server.example/benchmark"
+	issues, err := ValidateCollection(context.Background(), proposalTestSource(), candidate)
+	if err != nil || len(issues) != 0 {
+		t.Fatalf("ValidateCollection() issues=%+v err=%v", issues, err)
+	}
+	if candidate.CurationOrder != 2 || candidate.Benchmarks[0].URL != "https://server.example/benchmark" {
+		t.Fatal("ValidateCollection mutated the caller's config")
+	}
+	options := proposalTestOptions(t, "p1", 1, StrictnessModerate)
+	_, issues, err = ValidateProposal(context.Background(), proposalTestSource(), options, candidate)
+	if err != nil || !hasIssue(issues, issueAdminOnlyField, "curation_order") {
+		t.Fatalf("admin-only finding: issues=%+v err=%v", issues, err)
+	}
+	candidate.CurationOrder = 0
+	_, issues, err = ValidateProposal(context.Background(), proposalTestSource(), options, candidate)
+	if err != nil || !hasIssue(issues, issueBenchmarkCap, "benchmarks") || !hasIssue(issues, issueProviderFilter, "benchmarks[1].provider_id") {
+		t.Fatalf("generation-option findings: issues=%+v err=%v", issues, err)
+	}
+}
+
+func TestValidateCollectionErrorsAndShortCircuitsInvalidFields(t *testing.T) {
+	t.Parallel()
+	if _, err := ValidateCollection(context.Background(), nil, validProposal()); err == nil || !strings.Contains(err.Error(), "catalog source is nil") {
+		t.Fatalf("nil catalog error = %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := ValidateCollection(ctx, proposalTestSource(), validProposal()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled context error = %v", err)
+	}
+
+	providerErr := errors.New("provider catalog unavailable")
+	source := &fakeCatalogSource{providerErr: providerErr}
+	if _, err := ValidateCollection(context.Background(), source, validProposal()); !errors.Is(err, providerErr) {
+		t.Fatalf("provider catalog error = %v", err)
+	}
+	source = proposalTestSource()
+	issues, err := ValidateCollection(context.Background(), source, api.CollectionConfig{})
+	if err != nil || !hasIssue(issues, issueRequiredField, "name") || len(source.providerOffsets) != 0 {
+		t.Fatalf("invalid config: issues=%+v err=%v provider reads=%v", issues, err, source.providerOffsets)
+	}
+}
+
 func TestValidateProposalReturnsIndependentPostableCopy(t *testing.T) {
 	t.Parallel()
 	options := proposalTestOptions(t, "", 3, StrictnessModerate)
