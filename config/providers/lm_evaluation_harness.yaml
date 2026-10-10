@@ -705,22 +705,21 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - mc1
-  - mc2
-  - bleu
-  - rouge
+  - acc
+  - acc_norm
+  - f1
   num_few_shot: 0
   dataset_size: 500
   tags:
   - knowledge
   - lm_eval
   primary_score:
-    metric: mc1
+    metric: acc_norm
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Multiple-choice accuracy (mc1) on multiple-choice questions; higher is better.
+    result_interpretation: Length-normalized accuracy on multiple-choice questions; higher is better.
     score_ranges:
     - range: 0.0-0.25
       meaning: Below random chance for 4-choice questions
@@ -806,20 +805,19 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - bleu
-  - chrf
+  - acc_norm
   num_few_shot: 0
   dataset_size: 2000
   tags:
   - multilingual
   - lm_eval
   primary_score:
-    metric: bleu
+    metric: acc_norm
     lower_is_better: false
   pass_criteria:
     threshold: 0.1
   agent:
-    result_interpretation: Bleu; higher is better.
+    result_interpretation: Length-normalized accuracy; higher is better.
     score_ranges:
     - range: 0.0-0.1
       meaning: Below default pass threshold
@@ -1298,22 +1296,20 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - mc1
-  - mc2
-  - bleu
-  - rouge
+  - acc
+  - acc_norm
   num_few_shot: 0
   dataset_size: 1838
   tags:
   - reasoning
   - lm_eval
   primary_score:
-    metric: mc1
+    metric: acc_norm
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Multiple-choice accuracy (mc1) on multiple-choice questions; higher is better.
+    result_interpretation: Length-normalized accuracy on multiple-choice questions; higher is better.
     score_ranges:
     - range: 0.0-0.25
       meaning: Below random chance for 4-choice questions
@@ -1441,22 +1437,20 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - mc1
-  - mc2
-  - bleu
-  - rouge
+  - acc
+  - acc_norm
   num_few_shot: 0
   dataset_size: 1838
   tags:
   - reasoning
   - lm_eval
   primary_score:
-    metric: mc1
+    metric: acc_norm
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Multiple-choice accuracy (mc1); higher is better.
+    result_interpretation: Length-normalized accuracy; higher is better.
     score_ranges:
     - range: 0.0-0.25
       meaning: Below random chance for 4-choice questions
@@ -1473,22 +1467,20 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - mc1
-  - mc2
-  - bleu
-  - rouge
+  - acc
+  - acc_norm
   num_few_shot: 0
   dataset_size: 1838
   tags:
   - reasoning
   - lm_eval
   primary_score:
-    metric: mc1
+    metric: acc_norm
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Multiple-choice accuracy (mc1); higher is better.
+    result_interpretation: Length-normalized accuracy; higher is better.
     score_ranges:
     - range: 0.0-0.25
       meaning: Below random chance for 4-choice questions
@@ -1535,22 +1527,20 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - mc1
-  - mc2
-  - bleu
-  - rouge
+  - acc
+  - acc_norm
   num_few_shot: 0
   dataset_size: 1838
   tags:
   - reasoning
   - lm_eval
   primary_score:
-    metric: mc1
+    metric: acc_norm
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Multiple-choice accuracy (mc1) on multiple-choice questions; higher is better.
+    result_interpretation: Length-normalized accuracy on multiple-choice questions; higher is better.
     score_ranges:
     - range: 0.0-0.25
       meaning: Below random chance for 4-choice questions
@@ -1727,14 +1717,13 @@ benchmarks:
   evaluation_targets: [model]
   metrics:
   - acc
-  - acc_norm
   num_few_shot: 0
   dataset_size: 3000
   tags:
   - reading_comprehension
   - lm_eval
   primary_score:
-    metric: acc_norm
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -1776,22 +1765,19 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - mc1
-  - mc2
-  - bleu
-  - rouge
+  - f1_abstractive
   num_few_shot: 0
   dataset_size: 3000
   tags:
   - reading_comprehension
   - lm_eval
   primary_score:
-    metric: rouge
+    metric: f1_abstractive
     lower_is_better: false
   pass_criteria:
     threshold: 0.1
   agent:
-    result_interpretation: Rouge; higher is better.
+    result_interpretation: Abstractive answer F1; higher is better.
     score_ranges:
     - range: 0.0-0.1
       meaning: Below default pass threshold
@@ -2152,22 +2138,20 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - mc1
-  - mc2
-  - bleu
-  - rouge
+  - acc
+  - acc_norm
   num_few_shot: 0
   dataset_size: 651
   tags:
   - logic_reasoning
   - lm_eval
   primary_score:
-    metric: mc1
+    metric: acc_norm
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Multiple-choice accuracy (mc1); higher is better.
+    result_interpretation: Length-normalized accuracy; higher is better.
     score_ranges:
     - range: 0.0-0.25
       meaning: Below random chance for 4-choice questions
@@ -2175,6 +2159,7 @@ benchmarks:
       meaning: Random baseline for 4-choice questions
     - range: 0.25-1.0
       meaning: Meets default pass threshold (0.25 or above)
+# The LMES adapter removes filter suffixes from callback metric names.
 - id: bbh
   name: Hard multi-step reasoning
   description: 23 challenging tasks where LLMs previously failed to match average human raters.
