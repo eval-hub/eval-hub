@@ -1,6 +1,10 @@
 package ociclient
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"testing"
 )
 
@@ -40,9 +44,11 @@ func TestParseDockerConfigJSONDockerAlias(t *testing.T) {
 }
 
 func TestDockerConfigJSONFromSecret(t *testing.T) {
-	_, err := DockerConfigJSONFromSecret(map[string][]byte{"other": []byte("x")})
-	if err == nil {
-		t.Fatal("expected error for missing dockerconfigjson key")
+	for _, data := range []map[string][]byte{nil, {}, {"other": []byte("x")}, {dockerConfigJSONKey: {}}} {
+		_, err := DockerConfigJSONFromSecret(data)
+		if !errors.Is(err, ErrDockerConfigMissing) {
+			t.Fatalf("expected missing Docker configuration, got %v", err)
+		}
 	}
 	raw, err := DockerConfigJSONFromSecret(map[string][]byte{dockerConfigJSONKey: []byte(`{"auths":{}}`)})
 	if err != nil || len(raw) == 0 {
@@ -66,21 +72,42 @@ func TestParseDockerConfigJSONErrors(t *testing.T) {
 		name string
 		data []byte
 		host string
+		want error
 	}{
-		{name: "invalid json", data: []byte("{"), host: "quay.io"},
-		{name: "missing auths", data: []byte("{}"), host: "quay.io"},
+		{name: "invalid json", data: []byte("{"), host: "quay.io", want: ErrRegistryCredentialsInvalid},
+		{name: "invalid json shape", data: []byte(`{"auths":[]}`), host: "quay.io", want: ErrRegistryCredentialsInvalid},
+		{name: "missing auths", data: []byte("{}"), host: "quay.io", want: ErrRegistryCredentialsMissing},
+		{name: "empty auths", data: []byte(`{"auths":{}}`), host: "quay.io", want: ErrRegistryCredentialsMissing},
 		{name: "missing registry", data: []byte(`{"auths":{"https://quay.io":{"username":"u","password":"p"}}}`), host: ""},
-		{name: "unknown registry", data: []byte(`{"auths":{"https://quay.io":{"username":"u","password":"p"}}}`), host: "unknown.example"},
-		{name: "invalid auth encoding", data: []byte(`{"auths":{"https://quay.io":{"auth":"!!!"}}}`), host: "quay.io"},
-		{name: "missing credentials", data: []byte(`{"auths":{"https://quay.io":{}}}`), host: "quay.io"},
+		{name: "unknown registry", data: []byte(`{"auths":{"https://quay.io":{"username":"u","password":"p"}}}`), host: "unknown.example", want: ErrRegistryCredentialsMissing},
+		{name: "invalid auth encoding", data: []byte(`{"auths":{"https://quay.io":{"auth":"!!!"}}}`), host: "quay.io", want: ErrRegistryCredentialsInvalid},
+		{name: "missing credentials", data: []byte(`{"auths":{"https://quay.io":{}}}`), host: "quay.io", want: ErrRegistryCredentialsInvalid},
+		{name: "incomplete decoded credentials", data: []byte(`{"auths":{"quay.io":{"auth":"dXNlcjo="}}}`), host: "quay.io", want: ErrRegistryCredentialsInvalid},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if _, err := ParseDockerConfigJSON(tc.data, tc.host); err == nil {
+			_, err := ParseDockerConfigJSON(tc.data, tc.host)
+			if err == nil {
 				t.Fatal("expected error")
 			}
+			if tc.want != nil && !errors.Is(fmt.Errorf("resolve credentials: %w", err), tc.want) {
+				t.Fatalf("expected %v through wrapping, got %v", tc.want, err)
+			}
 		})
+	}
+}
+
+func TestParseDockerConfigJSONPreservesUnderlyingErrors(t *testing.T) {
+	_, err := ParseDockerConfigJSON([]byte("{"), "quay.io")
+	var syntax *json.SyntaxError
+	if !errors.As(err, &syntax) {
+		t.Fatalf("expected underlying JSON syntax error, got %v", err)
+	}
+	_, err = ParseDockerConfigJSON([]byte(`{"auths":{"quay.io":{"auth":"!!!"}}}`), "quay.io")
+	var corrupt base64.CorruptInputError
+	if !errors.As(err, &corrupt) {
+		t.Fatalf("expected underlying base64 error, got %v", err)
 	}
 }
 

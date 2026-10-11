@@ -243,7 +243,16 @@ make build-wheel
 Developers can use `scripts/test-local-oci-export.sh` to simulate a quick OCI evaluation card
 generation during development. It runs an evaluation with the local test adapter,
 downloads the exported card from a local OCI registry, and verifies it against
-the completed job. No model server is required.
+the completed job, including the OCI export status and artifact reference.
+No model server is required.
+
+Check `results.oci.status.state` for the OCI export status: `running`, `completed`,
+or `failed`. After a successful export, `results.oci.evaluation_card` provides the
+manifest digest and digest-qualified reference for retrieving the card. An OCI
+export failure leaves the evaluation's completed status and benchmark results intact.
+
+OCI export currently supports evaluation cards. Evaluation bundles, signing,
+and automatic export retries are not currently supported.
 
 Install these dependencies before starting:
 
@@ -266,6 +275,7 @@ Run the check:
 
 ```sh
 bash scripts/test-local-oci-export.sh
+OCI_TAG=custom OUTPUT_DIR=/tmp/local-oci-custom bash scripts/test-local-oci-export.sh
 ```
 
 A successful run prints a verification message and saves these files in

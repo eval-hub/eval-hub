@@ -3,12 +3,22 @@ package ociclient
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
 )
 
 const dockerConfigJSONKey = ".dockerconfigjson"
+
+// ErrDockerConfigMissing indicates that a Secret has no Docker configuration payload.
+var ErrDockerConfigMissing = errors.New("docker configuration is missing")
+
+// ErrRegistryCredentialsMissing indicates that the Docker configuration has no entry for the registry.
+var ErrRegistryCredentialsMissing = errors.New("registry credentials are missing")
+
+// ErrRegistryCredentialsInvalid indicates that the Docker configuration or its credentials are malformed.
+var ErrRegistryCredentialsInvalid = errors.New("registry credentials are invalid")
 
 // Credentials holds registry username and password.
 type Credentials struct {
@@ -33,10 +43,10 @@ type registryAuthConfig struct {
 func ParseDockerConfigJSON(data []byte, registryHost string) (Credentials, error) {
 	var cfg registryAuthConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return Credentials{}, fmt.Errorf("parse registry auth config: %w", err)
+		return Credentials{}, fmt.Errorf("parse registry auth config: %w: %w", ErrRegistryCredentialsInvalid, err)
 	}
 	if cfg.Auths == nil {
-		return Credentials{}, fmt.Errorf("registry auth config: no auths")
+		return Credentials{}, ErrRegistryCredentialsMissing
 	}
 	canonicalHost := canonicalRegistryHost(registryHost)
 	if canonicalHost == "" {
@@ -52,7 +62,7 @@ func ParseDockerConfigJSON(data []byte, registryHost string) (Credentials, error
 		}
 	}
 	if !found {
-		return Credentials{}, fmt.Errorf("registry auth config: no auth for registry %s", registryHost)
+		return Credentials{}, fmt.Errorf("registry auth config: no auth for registry %s: %w", registryHost, ErrRegistryCredentialsMissing)
 	}
 	username := auth.Username
 	password := auth.Password
@@ -60,7 +70,7 @@ func ParseDockerConfigJSON(data []byte, registryHost string) (Credentials, error
 		if auth.Auth != "" {
 			decoded, err := base64.StdEncoding.DecodeString(auth.Auth)
 			if err != nil {
-				return Credentials{}, fmt.Errorf("decode auth: %w", err)
+				return Credentials{}, fmt.Errorf("decode auth: %w: %w", ErrRegistryCredentialsInvalid, err)
 			}
 			parts := strings.SplitN(string(decoded), ":", 2)
 			if len(parts) == 2 {
@@ -70,7 +80,7 @@ func ParseDockerConfigJSON(data []byte, registryHost string) (Credentials, error
 		}
 	}
 	if username == "" || password == "" {
-		return Credentials{}, fmt.Errorf("registry auth config: missing username/password for registry")
+		return Credentials{}, ErrRegistryCredentialsInvalid
 	}
 	return Credentials{Username: username, Password: password}, nil
 }
@@ -80,11 +90,11 @@ func ParseDockerConfigJSON(data []byte, registryHost string) (Credentials, error
 // of type kubernetes.io/dockerconfigjson; this helper isolates that convention from callers.
 func DockerConfigJSONFromSecret(data map[string][]byte) ([]byte, error) {
 	if data == nil {
-		return nil, fmt.Errorf("secret data is nil")
+		return nil, ErrDockerConfigMissing
 	}
 	raw, ok := data[dockerConfigJSONKey]
 	if !ok || len(raw) == 0 {
-		return nil, fmt.Errorf("secret missing %q entry", dockerConfigJSONKey)
+		return nil, ErrDockerConfigMissing
 	}
 	return raw, nil
 }
