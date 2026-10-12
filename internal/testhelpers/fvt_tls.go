@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
+
+	"github.com/eval-hub/eval-hub/internal/safefile"
 )
 
 // NewFVTTransport adds the optional private CA bundle to system trust without
@@ -17,7 +20,9 @@ func NewFVTTransport() (*http.Transport, error) {
 	if caPath == "" {
 		return transport, nil
 	}
-	pemData, err := os.ReadFile(caPath)
+	// Treat the configured parent directory as the trusted root. The bundle
+	// name cannot traverse outside it, including through symlinks.
+	pemData, err := safefile.ReadFile(filepath.Dir(caPath), filepath.Base(caPath))
 	if err != nil {
 		return nil, fmt.Errorf("read FVT_CA_CERT_PATH: %w", err)
 	}

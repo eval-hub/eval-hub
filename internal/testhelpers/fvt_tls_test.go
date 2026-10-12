@@ -70,6 +70,16 @@ func TestFVTPrivateCA(t *testing.T) {
 			t.Fatal("certificate for a different hostname was accepted")
 		}
 	})
+	t.Run("CA symlink cannot escape its directory", func(t *testing.T) {
+		linkPath := filepath.Join(t.TempDir(), "ca.pem")
+		if err := os.Symlink(caPath, linkPath); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("FVT_CA_CERT_PATH", linkPath)
+		if _, err := NewFVTTransport(); err == nil {
+			t.Fatal("CA symlink outside its directory was accepted")
+		}
+	})
 	if http.DefaultTransport.(*http.Transport).TLSClientConfig != defaultTLS {
 		t.Fatal("default transport TLS configuration was modified")
 	}
