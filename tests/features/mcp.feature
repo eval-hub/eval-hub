@@ -6,7 +6,12 @@ Feature: MCP Tools
 
   Background:
     Given the service is running
+    And the MCP protocol version is "2026-07-28"
     And I set the wait deadline to "{{env:WAIT_DEADLINE|30m}}"
+
+  Scenario: Complete provider IDs over MCP HTTP
+    When I complete MCP resource "evalhub://providers/{id}" argument "id" with prefix "light"
+    Then the MCP completion should include "lighteval"
 
   Scenario: Discover all providers via MCP returns unfiltered list
     When I call MCP tool "discover_providers" with arguments "{}"

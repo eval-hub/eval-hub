@@ -26,6 +26,9 @@ func (tc *scenarioConfig) mcpCallContext() (context.Context, context.CancelFunc)
 
 // InitializeMCPSteps registers MCP tool/resource/prompt step definitions.
 func InitializeMCPSteps(ctx *godog.ScenarioContext, tc *scenarioConfig) {
+	ctx.Step(`^the MCP protocol version is "([^"]*)"$`, tc.theMCPProtocolVersionIs)
+	ctx.Step(`^I complete MCP resource "([^"]*)" argument "([^"]*)" with prefix "([^"]*)"$`, tc.iCompleteMCPResource)
+	ctx.Step(`^the MCP completion should include "([^"]*)"$`, tc.theMCPCompletionShouldInclude)
 	ctx.Step(`^I call MCP tool "([^"]*)" with arguments "([^"]*)"$`, tc.iCallMCPToolWithArguments)
 	ctx.Step(`^I call MCP tool "([^"]*)" with arguments:$`, tc.iCallMCPToolWithInlineArguments)
 	ctx.Step(`^the MCP tool call should succeed$`, tc.theMCPToolCallShouldSucceed)
@@ -60,6 +63,38 @@ func InitializeMCPSteps(ctx *godog.ScenarioContext, tc *scenarioConfig) {
 }
 
 // --- MCP Step Definitions ---
+
+func (tc *scenarioConfig) theMCPProtocolVersionIs(version string) error {
+	if tc.apiFeature.mcpClientSession == nil {
+		return tc.logError(fmt.Errorf("MCP client is not connected"))
+	}
+	if got := tc.apiFeature.mcpClientSession.InitializeResult().ProtocolVersion; got != version {
+		return tc.logError(fmt.Errorf("MCP protocol version = %q, want %q", got, version))
+	}
+	return nil
+}
+
+func (tc *scenarioConfig) iCompleteMCPResource(uri, argument, prefix string) error {
+	ctx, cancel := tc.mcpCallContext()
+	defer cancel()
+	result, err := tc.apiFeature.mcpClientSession.Complete(ctx, &mcp.CompleteParams{
+		Ref:      &mcp.CompleteReference{Type: "ref/resource", URI: uri},
+		Argument: mcp.CompleteParamsArgument{Name: argument, Value: prefix},
+	})
+	tc.mcpCompletion = result
+	return err
+}
+
+func (tc *scenarioConfig) theMCPCompletionShouldInclude(value string) error {
+	if tc.mcpCompletion != nil {
+		for _, got := range tc.mcpCompletion.Completion.Values {
+			if got == value {
+				return nil
+			}
+		}
+	}
+	return tc.logError(fmt.Errorf("MCP completion %v missing %q", tc.mcpCompletion, value))
+}
 
 // getMCPResultJSON converts MCP tool result to JSON bytes
 func (tc *scenarioConfig) getMCPResultJSON() ([]byte, error) {
