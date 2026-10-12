@@ -34,10 +34,11 @@ type ResultsExporter interface {
 }
 
 // ExportTarget exports an evaluation card to a single target.
+// Export returns a non-nil result on success and a nil result on failure.
 type ExportTarget interface {
 	Target() Target
 	Enabled(job *api.EvaluationJobResource) bool
-	Export(ctx context.Context, job *api.EvaluationJobResource, card *cards.EvaluationCard) (ExportResult, error)
+	Export(ctx context.Context, job *api.EvaluationJobResource, card *cards.EvaluationCard) (*ExportResult, error)
 }
 
 // ManagerConfig configures shared dependencies for export targets.
@@ -134,14 +135,14 @@ func (t *mlflowTarget) Enabled(job *api.EvaluationJobResource) bool {
 	return evalhubmlflow.HasExperimentName(&job.EvaluationJobConfig) && job.Resource.MLFlowExperimentID != ""
 }
 
-func (t *mlflowTarget) Export(ctx context.Context, job *api.EvaluationJobResource, card *cards.EvaluationCard) (ExportResult, error) {
+func (t *mlflowTarget) Export(ctx context.Context, job *api.EvaluationJobResource, card *cards.EvaluationCard) (*ExportResult, error) {
 	if t.client == nil {
-		return ExportResult{}, fmt.Errorf("mlflow client is not configured")
+		return nil, fmt.Errorf("mlflow client is not configured")
 	}
 
 	cardJSON, err := json.Marshal(card)
 	if err != nil {
-		return ExportResult{}, fmt.Errorf("marshal evaluation card: %w", err)
+		return nil, fmt.Errorf("marshal evaluation card: %w", err)
 	}
 
 	client := t.client.WithContext(ctx)
@@ -167,7 +168,7 @@ func (t *mlflowTarget) Export(ctx context.Context, job *api.EvaluationJobResourc
 		cardJSON,
 	)
 	if err != nil {
-		return ExportResult{}, err
+		return nil, err
 	}
 	if t.logger != nil {
 		t.logger.Info(
@@ -177,7 +178,7 @@ func (t *mlflowTarget) Export(ctx context.Context, job *api.EvaluationJobResourc
 			"artifact_url", artifactURL,
 		)
 	}
-	return ExportResult{CardURL: artifactURL}, nil
+	return &ExportResult{CardURL: artifactURL}, nil
 }
 
 type ociTarget struct {
@@ -199,28 +200,28 @@ func (t *ociTarget) Enabled(job *api.EvaluationJobResource) bool {
 	return job.Exports != nil && job.Exports.OCI != nil
 }
 
-func (t *ociTarget) Export(ctx context.Context, job *api.EvaluationJobResource, card *cards.EvaluationCard) (ExportResult, error) {
+func (t *ociTarget) Export(ctx context.Context, job *api.EvaluationJobResource, card *cards.EvaluationCard) (*ExportResult, error) {
 	if card == nil || card.Metadata.EvaluationJobID == "" {
-		return ExportResult{}, &OCIExportError{Operation: "generate evaluation card", Reason: "card is missing or has no evaluation job identity"}
+		return nil, &OCIExportError{Operation: "generate evaluation card", Reason: "card is missing or has no evaluation job identity"}
 	}
 	cardJSON, err := json.Marshal(card)
 	if err != nil {
-		return ExportResult{}, &OCIExportError{Operation: "serialize evaluation card", Err: err}
+		return nil, &OCIExportError{Operation: "serialize evaluation card", Err: err}
 	}
 	publisher, err := t.factory.NewPublisher(ctx, job)
 	if err != nil {
-		return ExportResult{}, &OCIExportError{Operation: "initialize OCI publisher and resolve registry credentials", Err: err}
+		return nil, &OCIExportError{Operation: "initialize OCI publisher and resolve registry credentials", Err: err}
 	}
 	if publisher == nil {
-		return ExportResult{}, &OCIExportError{Operation: "initialize OCI publisher", Reason: "publisher is unavailable"}
+		return nil, &OCIExportError{Operation: "initialize OCI publisher", Reason: "publisher is unavailable"}
 	}
 	defer func() { _ = publisher.Close() }()
 	artifact, err := publisher.PublishEvalCard(ctx, cardJSON)
 	if err != nil {
-		return ExportResult{}, &OCIExportError{Operation: "publish evaluation card to OCI", Err: err}
+		return nil, &OCIExportError{Operation: "publish evaluation card to OCI", Err: err}
 	}
 	if artifact == nil || artifact.OCIDigest == "" || artifact.OCIReference == "" {
-		return ExportResult{}, &OCIExportError{Operation: "publish evaluation card to OCI", Reason: "publisher returned no usable manifest reference"}
+		return nil, &OCIExportError{Operation: "publish evaluation card to OCI", Reason: "publisher returned no usable manifest reference"}
 	}
-	return ExportResult{OCIArtifact: artifact}, nil
+	return &ExportResult{OCIArtifact: artifact}, nil
 }

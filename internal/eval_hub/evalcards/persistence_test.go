@@ -27,9 +27,9 @@ func (r *recordingTarget) Target() Target { return r.name }
 func (r *recordingTarget) Enabled(_ *api.EvaluationJobResource) bool {
 	return r.enabled
 }
-func (r *recordingTarget) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (ExportResult, error) {
+func (r *recordingTarget) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (*ExportResult, error) {
 	r.called = true
-	return ExportResult{CardURL: r.cardURL}, nil
+	return &ExportResult{CardURL: r.cardURL}, nil
 }
 
 func TestManagerExportEnabledTargetsOnly(t *testing.T) {
@@ -185,8 +185,8 @@ func TestOCITargetEnabled(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Export() err = %v", err)
 	}
-	if cardURL.CardURL != "" {
-		t.Fatalf("cardURL = %v, want empty", cardURL)
+	if cardURL != nil {
+		t.Fatalf("result = %v, want nil", cardURL)
 	}
 }
 
@@ -218,8 +218,8 @@ func (f *failingTarget) Target() Target { return f.name }
 func (f *failingTarget) Enabled(_ *api.EvaluationJobResource) bool {
 	return true
 }
-func (f *failingTarget) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (ExportResult, error) {
-	return ExportResult{}, errors.New("export failed")
+func (f *failingTarget) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (*ExportResult, error) {
+	return nil, errors.New("export failed")
 }
 
 func TestManagerExportJoinsTargetErrors(t *testing.T) {
@@ -396,7 +396,7 @@ func TestMLflowTargetExportFailures(t *testing.T) {
 				job.Results = &api.EvaluationJobResults{Benchmarks: []api.BenchmarkResult{{Metrics: map[string]any{"invalid": make(chan int)}}}}
 			}
 			result, err := NewMLflowTarget(mlflowclient.NewClient(srv.URL), nil, nil).Export(context.Background(), job, cards.NewEvaluationCard(job))
-			if err == nil || result.CardURL != "" || result.OCIArtifact != nil || result.OCIError != nil {
+			if err == nil || result != nil {
 				t.Fatalf("result = %#v, error = %v", result, err)
 			}
 			if invalidCard {
@@ -420,9 +420,12 @@ type outcomeTarget struct {
 
 func (t *outcomeTarget) Target() Target                            { return t.name }
 func (t *outcomeTarget) Enabled(_ *api.EvaluationJobResource) bool { return true }
-func (t *outcomeTarget) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (ExportResult, error) {
+func (t *outcomeTarget) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (*ExportResult, error) {
 	t.calls++
-	return t.result, t.err
+	if t.err != nil {
+		return nil, t.err
+	}
+	return &t.result, nil
 }
 
 func TestManagerKeepsDestinationOutcomesIndependent(t *testing.T) {

@@ -77,7 +77,7 @@ func TestOCITargetPublicationFailurePreservesRegistryResponse(t *testing.T) {
 	target := NewOCITarget(NewOCIPublisherFactory(oci.NewLocalCredentialResolver(), srv.Client()), nil)
 	result, err := target.Export(context.Background(), job, cards.NewEvaluationCard(job))
 	var exportErr *OCIExportError
-	if !errors.As(err, &exportErr) || exportErr.Operation != "publish evaluation card to OCI" || !strings.Contains(err.Error(), message) || result.OCIArtifact != nil {
+	if !errors.As(err, &exportErr) || exportErr.Operation != "publish evaluation card to OCI" || !strings.Contains(err.Error(), message) || result != nil {
 		t.Fatalf("result=%#v, error=%v", result, err)
 	}
 	var httpErr *ociclient.RegistryHTTPError
