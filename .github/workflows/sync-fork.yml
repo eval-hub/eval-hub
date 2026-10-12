@@ -1,0 +1,68 @@
+name: Sync fork with upstream
+
+on:
+  workflow_call:
+    inputs:
+      target-repository:
+        description: Fork to update, in owner/repository format
+        required: true
+        type: string
+      target-branch:
+        description: Branch to sync from the same-named branch in the fork's upstream
+        required: false
+        default: main
+        type: string
+    secrets:
+      sync-token:
+        description: Token with Contents write access to the destination fork
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: sync-fork-${{ inputs.target-repository }}-${{ inputs.target-branch }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
+
+      - name: Sync destination fork
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.sync-token }}
+          GH_HOST: github.com
+          TARGET_REPOSITORY: ${{ inputs.target-repository }}
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$TARGET_REPOSITORY" =~ ^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$ ]]; then
+            echo "::error::target-repository must be in owner/repository format."
+            exit 1
+          fi
+          if [[ -z "$TARGET_BRANCH" || -z "$GH_TOKEN" ]]; then
+            echo "::error::target-branch and sync-token must not be empty."
+            exit 1
+          fi
+
+          if ! gh api --method POST \
+            "repos/$TARGET_REPOSITORY/merge-upstream" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -f "branch=$TARGET_BRANCH" > "$RUNNER_TEMP/fork-sync-result.json"; then
+            echo "::error::Fork sync failed. Check the API error above for conflicts, token permissions, or branch protection restrictions."
+            exit 1
+          fi
+
+          {
+            echo "### Fork synchronization"
+            jq -r '.message, ("Merge type: " + .merge_type), ("Upstream branch: " + .base_branch)' \
+              "$RUNNER_TEMP/fork-sync-result.json"
+          } >> "$GITHUB_STEP_SUMMARY"
