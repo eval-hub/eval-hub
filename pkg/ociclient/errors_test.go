@@ -63,11 +63,31 @@ func TestRegistryHTTPFailures(t *testing.T) {
 }
 
 func TestRegistryErrorResponseReadBound(t *testing.T) {
-	body := strings.NewReader(strings.Repeat("x", MaxErrorResponseBytes+100))
+	for _, size := range []int{0, 10, 1024, 1025, MaxErrorResponseBytes + 100} {
+		t.Run(fmt.Sprint(size), func(t *testing.T) {
+			body := strings.NewReader(strings.Repeat("x", size))
+			err := registryHTTPError("put manifest", &http.Response{StatusCode: http.StatusBadGateway, Body: io.NopCloser(body)})
+			var httpErr *RegistryHTTPError
+			if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusBadGateway {
+				t.Fatalf("missing structured HTTP status: %v", err)
+			}
+			wantMessage := strings.Repeat("x", min(size, 1024))
+			if httpErr.Message != wantMessage {
+				t.Fatalf("response message length = %d, want %d", len(httpErr.Message), len(wantMessage))
+			}
+			if wantRemaining := max(0, size-MaxErrorResponseBytes); body.Len() != wantRemaining {
+				t.Fatalf("remaining bytes = %d, want %d", body.Len(), wantRemaining)
+			}
+		})
+	}
+}
+
+func TestRegistryErrorResponseTruncationPreservesReadFailure(t *testing.T) {
+	body := io.MultiReader(strings.NewReader(strings.Repeat("x", 2048)), failedResponseReader{})
 	err := registryHTTPError("put manifest", &http.Response{StatusCode: http.StatusBadGateway, Body: io.NopCloser(body)})
 	var httpErr *RegistryHTTPError
-	if !errors.As(err, &httpErr) || len(httpErr.Message) != MaxErrorResponseBytes || body.Len() != 100 {
-		t.Fatalf("error response was not bounded: remaining bytes = %d", body.Len())
+	if !errors.As(err, &httpErr) || len(httpErr.Message) != 1024 || !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("message limit or read error lost: %v", err)
 	}
 }
 
