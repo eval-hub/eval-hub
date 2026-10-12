@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -39,7 +40,7 @@ func TestPushEvaluationCard(t *testing.T) {
 			}
 			_, _ = io.Copy(io.Discard, r.Body)
 			w.WriteHeader(http.StatusCreated)
-		case r.Method == http.MethodPut && r.URL.Path == "/v2/test-org/test-repo/manifests/eval-1-job-1":
+		case r.Method == http.MethodPut && r.URL.Path == "/v2/test-org/test-repo/manifests/evaluation-card-job-1":
 			mu.Lock()
 			uploadedManifest, _ = io.ReadAll(r.Body)
 			mu.Unlock()
@@ -53,7 +54,8 @@ func TestPushEvaluationCard(t *testing.T) {
 		t.Fatalf("NewClient() err = %v", err)
 	}
 	cardJSON := []byte(`{"card_version":"1.0"}`)
-	if err := client.PushEvaluationCard(context.Background(), "job-1", cardJSON, "eval-1", map[string]string{"job": "eval-1"}); err != nil {
+	artifact, err := client.PushEvaluationCard(context.Background(), "job-1", cardJSON, map[string]string{"job": "eval-1"})
+	if err != nil {
 		t.Fatalf("PushEvaluationCard() err = %v", err)
 	}
 
@@ -61,6 +63,13 @@ func TestPushEvaluationCard(t *testing.T) {
 	defer mu.Unlock()
 	if len(uploadedManifest) == 0 {
 		t.Fatal("expected manifest upload")
+	}
+	manifestDigest := blobDigest(uploadedManifest)
+	if artifact == nil || artifact.OCIDigest != manifestDigest || artifact.OCIReference != strings.TrimPrefix(srv.URL, "http://")+"/test-org/test-repo:evaluation-card-job-1@"+manifestDigest {
+		t.Fatalf("published artifact = %#v, manifest digest = %s", artifact, manifestDigest)
+	}
+	if artifact.OCIDigest == blobDigest(cardJSON) {
+		t.Fatal("reported layer digest instead of manifest digest")
 	}
 	var got manifest
 	if err := json.Unmarshal(uploadedManifest, &got); err != nil {
@@ -117,7 +126,7 @@ func TestPushEvaluationCardSkipsExistingBlob(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
-	if err := client.PushEvaluationCard(context.Background(), "job-1", []byte(`{"card_version":"1.0"}`), "", nil); err != nil {
+	if _, err := client.PushEvaluationCard(context.Background(), "job-1", []byte(`{"card_version":"1.0"}`), nil); err != nil {
 		t.Fatalf("PushEvaluationCard() err = %v", err)
 	}
 	if uploads != 0 {
@@ -349,8 +358,50 @@ func TestPushEvaluationCardValidationErrors(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if err := client.PushEvaluationCard(context.Background(), tc.jobID, tc.cardJSON, "", nil); err == nil {
+			if _, err := client.PushEvaluationCard(context.Background(), tc.jobID, tc.cardJSON, nil); err == nil {
 				t.Fatal("expected error")
+			}
+		})
+	}
+}
+
+func TestPushEvaluationCardUploadFailures(t *testing.T) {
+	for _, operation := range []string{"upload evaluation card layer", "push manifest"} {
+		t.Run(operation, func(t *testing.T) {
+			card := []byte(`{"card_version":"1.0"}`)
+			manifestRequests := 0
+			srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodHead:
+					if operation == "upload evaluation card layer" && strings.HasSuffix(r.URL.Path, "/blobs/"+blobDigest(card)) {
+						w.WriteHeader(http.StatusServiceUnavailable)
+						return
+					}
+					w.WriteHeader(http.StatusOK)
+				case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/manifests/"):
+					manifestRequests++
+					w.WriteHeader(http.StatusForbidden)
+					_, _ = io.WriteString(w, "repository policy denied publication")
+				default:
+					t.Errorf("unexpected registry request: %s %s", r.Method, r.URL.Path)
+					w.WriteHeader(http.StatusInternalServerError)
+				}
+			}))
+			client, err := NewClient(srv.URL, "org/repo", Credentials{}, httpClient)
+			if err != nil {
+				t.Fatal(err)
+			}
+			artifact, err := client.PushEvaluationCard(context.Background(), "job-1", card, nil)
+			var httpErr *RegistryHTTPError
+			if artifact != nil || !errors.As(err, &httpErr) || !strings.HasPrefix(err.Error(), operation+": ") {
+				t.Fatalf("artifact = %#v, error = %v", artifact, err)
+			}
+			if operation == "upload evaluation card layer" {
+				if manifestRequests != 0 || httpErr.Operation != "blob head" || httpErr.StatusCode != http.StatusServiceUnavailable {
+					t.Fatalf("layer failure did not stop publication: manifest requests = %d, error = %v", manifestRequests, err)
+				}
+			} else if manifestRequests != 1 || httpErr.Operation != "put manifest" || httpErr.StatusCode != http.StatusForbidden || httpErr.Message != "repository policy denied publication" {
+				t.Fatalf("manifest failure lost registry diagnostics: %v", err)
 			}
 		})
 	}
@@ -400,7 +451,7 @@ func TestPushEvaluationCardRetriesAuthOnUnauthorized(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
-	if err := client.PushEvaluationCard(context.Background(), "job-1", []byte(`{"card_version":"1.0"}`), "", nil); err != nil {
+	if _, err := client.PushEvaluationCard(context.Background(), "job-1", []byte(`{"card_version":"1.0"}`), nil); err != nil {
 		t.Fatalf("PushEvaluationCard() err = %v", err)
 	}
 	mu.Lock()
@@ -696,7 +747,7 @@ func TestUploadBlobMonolithicFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
-	if err := client.PushEvaluationCard(context.Background(), "job-1", []byte(`{"card_version":"1.0"}`), "", nil); err == nil {
+	if _, err := client.PushEvaluationCard(context.Background(), "job-1", []byte(`{"card_version":"1.0"}`), nil); err == nil {
 		t.Fatal("expected upload failure")
 	}
 }
