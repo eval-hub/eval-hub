@@ -1,0 +1,107 @@
+package ociclient
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"testing"
+)
+
+func TestRegistryHTTPFailures(t *testing.T) {
+	const message = "repository access denied; status 500 is unrelated diagnostic text"
+	for _, tc := range []struct {
+		name string
+		call func(*Client) error
+	}{
+		{"blob head", func(c *Client) error { _, err := c.blobExists(context.Background(), "sha256:abc"); return err }},
+		{"start blob upload", func(c *Client) error { _, err := c.startBlobUpload(context.Background()); return err }},
+		{"monolithic completion", func(c *Client) error {
+			return c.uploadBlobMonolithic(context.Background(), []byte("card"), "sha256:abc")
+		}},
+		{"patch blob chunk", func(c *Client) error {
+			_, err := c.patchBlobChunk(context.Background(), c.registry+"/upload", 0, 3, []byte("card"))
+			return err
+		}},
+		{"chunked completion", func(c *Client) error {
+			return c.completeBlobUpload(context.Background(), c.registry+"/upload", "sha256:abc")
+		}},
+		{"put manifest", func(c *Client) error { return c.putManifest(context.Background(), "card", []byte("{}")) }},
+		{"auth request", func(c *Client) error { return c.auth.createNewToken(context.Background(), c.registry+"/token") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tc.name == "monolithic completion" && r.Method == http.MethodPost {
+					w.Header().Set("Location", "/upload")
+					w.WriteHeader(http.StatusAccepted)
+					return
+				}
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = io.WriteString(w, message)
+			}))
+			client, err := NewClient(srv.URL, "team/results", Credentials{}, httpClient)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = fmt.Errorf("export: %w", tc.call(client))
+			var httpErr *RegistryHTTPError
+			if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusForbidden {
+				t.Fatalf("missing structured HTTP status: %v", err)
+			}
+			// HEAD responses have no body, even if the server writes one.
+			wantMessage := message
+			if tc.name == "blob head" {
+				wantMessage = ""
+			}
+			if httpErr.Message != wantMessage || !strings.Contains(err.Error(), wantMessage) {
+				t.Fatalf("response message = %q, want %q", httpErr.Message, wantMessage)
+			}
+		})
+	}
+}
+
+func TestRegistryErrorResponseReadBound(t *testing.T) {
+	for _, size := range []int{0, 10, 1024, 1025, MaxErrorResponseBytes + 100} {
+		t.Run(fmt.Sprint(size), func(t *testing.T) {
+			body := strings.NewReader(strings.Repeat("x", size))
+			err := registryHTTPError("put manifest", &http.Response{StatusCode: http.StatusBadGateway, Body: io.NopCloser(body)})
+			var httpErr *RegistryHTTPError
+			if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusBadGateway {
+				t.Fatalf("missing structured HTTP status: %v", err)
+			}
+			wantMessage := strings.Repeat("x", min(size, 1024))
+			if httpErr.Message != wantMessage {
+				t.Fatalf("response message length = %d, want %d", len(httpErr.Message), len(wantMessage))
+			}
+			if wantRemaining := max(0, size-MaxErrorResponseBytes); body.Len() != wantRemaining {
+				t.Fatalf("remaining bytes = %d, want %d", body.Len(), wantRemaining)
+			}
+		})
+	}
+}
+
+func TestRegistryErrorResponseTruncationPreservesReadFailure(t *testing.T) {
+	body := io.MultiReader(strings.NewReader(strings.Repeat("x", 2048)), failedResponseReader{})
+	err := registryHTTPError("put manifest", &http.Response{StatusCode: http.StatusBadGateway, Body: io.NopCloser(body)})
+	var httpErr *RegistryHTTPError
+	if !errors.As(err, &httpErr) || len(httpErr.Message) != 1024 || !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("message limit or read error lost: %v", err)
+	}
+}
+
+func TestRegistryErrorResponseReadFailure(t *testing.T) {
+	err := registryHTTPError("auth request", &http.Response{StatusCode: http.StatusForbidden, Body: io.NopCloser(failedResponseReader{})})
+	var httpErr *RegistryHTTPError
+	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusForbidden || !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("status or read error lost: %v", err)
+	}
+	if got, want := err.Error(), "auth request failed with HTTP status 403: read response: unexpected EOF"; got != want {
+		t.Fatalf("Error() = %q, want %q", got, want)
+	}
+}
+
+type failedResponseReader struct{}
+
+func (failedResponseReader) Read([]byte) (int, error) { return 0, io.ErrUnexpectedEOF }
