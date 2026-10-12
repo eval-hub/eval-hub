@@ -44,10 +44,10 @@ type EvaluationOCIResults struct {
 	Signing          *OCISigningResult     `json:"signing,omitempty"`
 }
 
-// MergeOCIResults updates workflow status and, when supplied, the card reference.
+// UpdateOCIResults updates workflow status and, when supplied, the card reference.
 // It initializes missing results and preserves all other fields. A nil card means
 // no change to the existing reference; this function does not reset OCI results.
-func MergeOCIResults(results *EvaluationJobResults, status *OCIProcessingStatus, card *OCIArtifactReference) *EvaluationJobResults {
+func UpdateOCIResults(results *EvaluationJobResults, status *OCIProcessingStatus, card *OCIArtifactReference) *EvaluationJobResults {
 	if results == nil {
 		results = &EvaluationJobResults{}
 	}

@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestMergeOCIResultsInitializesMissingResults(t *testing.T) {
+func TestUpdateOCIResultsInitializesMissingResults(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		results *EvaluationJobResults
@@ -15,7 +15,7 @@ func TestMergeOCIResultsInitializesMissingResults(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			status := &OCIProcessingStatus{State: OCIProcessingRunning}
-			got := MergeOCIResults(tc.results, status, nil)
+			got := UpdateOCIResults(tc.results, status, nil)
 			if got == nil || got.OCI == nil || got.OCI.Status != status {
 				t.Fatalf("OCI status was not initialized: %#v", got)
 			}
@@ -29,7 +29,7 @@ func TestMergeOCIResultsInitializesMissingResults(t *testing.T) {
 	}
 }
 
-func TestMergeOCIResultsPreservesOutputsAcrossWorkflowStates(t *testing.T) {
+func TestUpdateOCIResultsPreservesOutputsAcrossWorkflowStates(t *testing.T) {
 	oldCard := &OCIArtifactReference{OCIDigest: "sha256:old", OCIReference: "registry.example/card@sha256:old"}
 	newCard := &OCIArtifactReference{OCIDigest: "sha256:new", OCIReference: "registry.example/card@sha256:new"}
 	results := &EvaluationJobResults{
@@ -59,7 +59,7 @@ func TestMergeOCIResultsPreservesOutputsAcrossWorkflowStates(t *testing.T) {
 			if tc.card != nil {
 				wantOCI.EvaluationCard = tc.card
 			}
-			got := MergeOCIResults(results, status, tc.card)
+			got := UpdateOCIResults(results, status, tc.card)
 			if got != results || got.OCI != results.OCI || !reflect.DeepEqual(got, &want) {
 				t.Fatalf("merge changed unrelated results or lost outputs: got %#v, want %#v", got, &want)
 			}

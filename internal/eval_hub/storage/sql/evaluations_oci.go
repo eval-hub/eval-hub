@@ -36,7 +36,7 @@ func (s *sqlStorage) UpdateEvaluationJobOCI(id string, status *api.OCIProcessing
 				return nil
 			}
 		}
-		job.Results = api.MergeOCIResults(job.Results, status, card)
+		job.Results = api.UpdateOCIResults(job.Results, status, card)
 		return s.updateEvaluationJobTxn(txn, id, job.Status.State, &EvaluationJobEntity{
 			Config: &job.EvaluationJobConfig, Status: job.Status, Results: job.Results,
 		})

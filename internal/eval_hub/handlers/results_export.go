@@ -34,7 +34,7 @@ func (h *Handlers) exportEvaluationResults(ctx context.Context, storage abstract
 			logger.Error("Failed to persist OCI evaluation-card processing", "job_id", job.Resource.ID, "operation", code, "error", err)
 			return false
 		}
-		job.Results = api.MergeOCIResults(job.Results, status, card)
+		job.Results = api.UpdateOCIResults(job.Results, status, card)
 		return true
 	}
 	// Log the cause even if storage is unavailable and saving the failure also fails.

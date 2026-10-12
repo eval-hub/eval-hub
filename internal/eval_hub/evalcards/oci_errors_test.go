@@ -26,7 +26,7 @@ func TestOCITargetKubernetesCredentialFailures(t *testing.T) {
 	}{
 		{name: "missing Secret", err: k8serrors.NewNotFound(schema.GroupResource{Resource: "secrets"}, "connection"), reason: `secrets "connection" not found`},
 		{name: "forbidden Secret", err: k8serrors.NewForbidden(schema.GroupResource{Resource: "secrets"}, "connection", errors.New("access denied")), reason: "forbidden"},
-		{name: "missing Docker config", err: ociclient.ErrDockerConfigMissing, reason: "docker configuration is missing"},
+		{name: "missing Docker config", err: errors.New("docker configuration is missing"), reason: "docker configuration is missing"},
 		{name: "unusable credentials", data: []byte(`{"auths":{}}`), reason: "registry credentials are missing"},
 		{name: "malformed credentials", data: []byte(`{"auths":`), reason: "registry credentials are invalid"},
 	} {
@@ -47,9 +47,9 @@ func TestOCITargetKubernetesCredentialFailures(t *testing.T) {
 
 func TestOCIExportErrorPreservesCause(t *testing.T) {
 	for _, cause := range []error{
-		ociclient.ErrDockerConfigMissing,
-		ociclient.ErrRegistryCredentialsMissing,
-		ociclient.ErrRegistryCredentialsInvalid,
+		errors.New("docker configuration is missing"),
+		errors.New("registry credentials are missing"),
+		errors.New("registry credentials are invalid"),
 	} {
 		err := &OCIExportError{Operation: "resolve credentials", Err: fmt.Errorf("status 403: %w", cause)}
 		if !errors.Is(err, cause) {
