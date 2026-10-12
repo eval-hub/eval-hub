@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -359,6 +360,48 @@ func TestPushEvaluationCardValidationErrors(t *testing.T) {
 			t.Parallel()
 			if _, err := client.PushEvaluationCard(context.Background(), tc.jobID, tc.cardJSON, nil); err == nil {
 				t.Fatal("expected error")
+			}
+		})
+	}
+}
+
+func TestPushEvaluationCardUploadFailures(t *testing.T) {
+	for _, operation := range []string{"upload evaluation card layer", "push manifest"} {
+		t.Run(operation, func(t *testing.T) {
+			card := []byte(`{"card_version":"1.0"}`)
+			manifestRequests := 0
+			srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodHead:
+					if operation == "upload evaluation card layer" && strings.HasSuffix(r.URL.Path, "/blobs/"+blobDigest(card)) {
+						w.WriteHeader(http.StatusServiceUnavailable)
+						return
+					}
+					w.WriteHeader(http.StatusOK)
+				case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/manifests/"):
+					manifestRequests++
+					w.WriteHeader(http.StatusForbidden)
+					_, _ = io.WriteString(w, "repository policy denied publication")
+				default:
+					t.Errorf("unexpected registry request: %s %s", r.Method, r.URL.Path)
+					w.WriteHeader(http.StatusInternalServerError)
+				}
+			}))
+			client, err := NewClient(srv.URL, "org/repo", Credentials{}, httpClient)
+			if err != nil {
+				t.Fatal(err)
+			}
+			artifact, err := client.PushEvaluationCard(context.Background(), "job-1", card, nil)
+			var httpErr *RegistryHTTPError
+			if artifact != nil || !errors.As(err, &httpErr) || !strings.HasPrefix(err.Error(), operation+": ") {
+				t.Fatalf("artifact = %#v, error = %v", artifact, err)
+			}
+			if operation == "upload evaluation card layer" {
+				if manifestRequests != 0 || httpErr.Operation != "blob head" || httpErr.StatusCode != http.StatusServiceUnavailable {
+					t.Fatalf("layer failure did not stop publication: manifest requests = %d, error = %v", manifestRequests, err)
+				}
+			} else if manifestRequests != 1 || httpErr.Operation != "put manifest" || httpErr.StatusCode != http.StatusForbidden || httpErr.Message != "repository policy denied publication" {
+				t.Fatalf("manifest failure lost registry diagnostics: %v", err)
 			}
 		})
 	}

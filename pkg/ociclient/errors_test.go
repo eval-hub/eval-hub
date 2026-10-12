@@ -77,6 +77,9 @@ func TestRegistryErrorResponseReadFailure(t *testing.T) {
 	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusForbidden || !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Fatalf("status or read error lost: %v", err)
 	}
+	if got, want := err.Error(), "auth request failed with HTTP status 403: read response: unexpected EOF"; got != want {
+		t.Fatalf("Error() = %q, want %q", got, want)
+	}
 }
 
 type failedResponseReader struct{}

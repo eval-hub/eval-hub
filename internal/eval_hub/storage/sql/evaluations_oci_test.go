@@ -45,6 +45,10 @@ func TestUpdateEvaluationJobOCIPreservesResultsAndTenant(t *testing.T) {
 		if err = scoped.UpdateEvaluationJobOCI(job.Resource.ID, status(state), card); err != nil {
 			t.Fatal(err)
 		}
+		// Replaying an identical status and artifact must succeed without changing results.
+		if err = scoped.UpdateEvaluationJobOCI(job.Resource.ID, status(state), card); err != nil {
+			t.Fatalf("repeat %s update: %v", state, err)
+		}
 		got, err := scoped.GetEvaluationJob(job.Resource.ID)
 		if err != nil {
 			t.Fatal(err)
