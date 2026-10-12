@@ -79,9 +79,37 @@ a PR-based synchronization process instead.
 The same workflow can be called from the destination fork on a schedule or with
 `workflow_dispatch`. An upstream push does not trigger workflows in the fork.
 When using the destination's `GITHUB_TOKEN`, grant the caller `contents: write`
-and pass `${{ secrets.GITHUB_TOKEN }}` explicitly as `sync-token`. Events caused
-by that token generally do not trigger further workflows; use a GitHub App token
-or PAT if the synchronized push must trigger downstream CI.
+and pass `${{ secrets.GITHUB_TOKEN }}` explicitly as `sync-token`. The reusable
+workflow inherits the caller's `GITHUB_TOKEN` permissions without overriding
+them. The upstream example's `permissions: {}` is appropriate only because it
+uses a separate token; do not copy that setting into a caller using `GITHUB_TOKEN`.
+
+For example, add this caller to `opendatahub-io/eval-hub`:
+
+```yaml
+name: Sync from upstream
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.repository == 'opendatahub-io/eval-hub'
+    uses: eval-hub/eval-hub/.github/workflows/sync-fork.yml@main
+    with:
+      target-repository: opendatahub-io/eval-hub
+      target-branch: main
+    secrets:
+      sync-token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+Events caused by `GITHUB_TOKEN` generally do not trigger further workflows; use
+a GitHub App token or PAT if the synchronized push must trigger downstream CI.
 
 ### Results and failures
 

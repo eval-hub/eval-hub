@@ -17,7 +17,8 @@ on:
         description: Token with Contents write access to the destination fork
         required: true
 
-permissions: {}
+# Inherit GITHUB_TOKEN permissions from the caller. A downstream caller using
+# its own GITHUB_TOKEN needs contents: write; permissions: {} would remove it.
 
 concurrency:
   group: sync-fork-${{ inputs.target-repository }}-${{ inputs.target-branch }}
