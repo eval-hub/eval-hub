@@ -28,6 +28,13 @@ func TestOCISigningRequestContract(t *testing.T) {
 		{"empty secret", `,"signing":{"type":"key-pair","secret_ref":""}`, false},
 		{"spaces secret", `,"signing":{"type":"key-pair","secret_ref":"  "}`, false},
 		{"blank secret", `,"signing":{"type":"key-pair","secret_ref":" \t"}`, false},
+		{"uppercase secret", `,"signing":{"type":"key-pair","secret_ref":"Cosign-secret"}`, false},
+		{"underscore secret", `,"signing":{"type":"key-pair","secret_ref":"cosign_secret"}`, false},
+		{"leading hyphen secret", `,"signing":{"type":"key-pair","secret_ref":"-cosign"}`, false},
+		{"trailing hyphen secret", `,"signing":{"type":"key-pair","secret_ref":"cosign-"}`, false},
+		{"namespaced secret", `,"signing":{"type":"key-pair","secret_ref":"tenant/cosign"}`, false},
+		{"max length secret", `,"signing":{"type":"key-pair","secret_ref":"` + strings.Repeat("a", 63) + `"}`, true},
+		{"too long secret", `,"signing":{"type":"key-pair","secret_ref":"` + strings.Repeat("a", 64) + `"}`, false},
 		{"wrong type", `,"signing":{"type":"key-pair","secret_ref":42}`, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -73,7 +80,8 @@ func TestOCISigningRequestContract(t *testing.T) {
 
 func TestOCIResultsContract(t *testing.T) {
 	validate := newTestValidator(t)
-	artifact := `{"oci_digest":"sha256:abc","oci_reference":"quay.io/org/results@sha256:abc"}`
+	digest := "sha256:" + strings.Repeat("a", 64)
+	artifact := `{"oci_digest":"` + digest + `","oci_reference":"quay.io/org/results@` + digest + `"}`
 	for _, tt := range []struct {
 		name, raw string
 		valid     bool
@@ -89,9 +97,9 @@ func TestOCIResultsContract(t *testing.T) {
 		{"null status", `{"oci":{"status":null}}`, true},
 		{"signing without status", `{"oci":{"signing":{"type":"key-pair"}}}`, true},
 		{"empty card", `{"oci":{"evaluation_card":{}}}`, false},
-		{"incomplete bundle", `{"oci":{"evaluation_bundle":{"oci_digest":"sha256:abc"}}}`, false},
+		{"incomplete bundle", `{"oci":{"evaluation_bundle":{"oci_digest":"` + digest + `"}}}`, false},
 		{"null digest", `{"oci":{"evaluation_card":{"oci_digest":null,"oci_reference":"ref"}}}`, false},
-		{"blank reference", `{"oci":{"evaluation_card":{"oci_digest":"digest","oci_reference":" \t"}}}`, false},
+		{"blank reference", `{"oci":{"evaluation_card":{"oci_digest":"` + digest + `","oci_reference":" \t"}}}`, false},
 		{"empty signing", `{"oci":{"signing":{}}}`, false},
 		{"null signing type", `{"oci":{"signing":{"type":null}}}`, false},
 		{"empty status", `{"oci":{"status":{}}}`, false},
@@ -137,6 +145,44 @@ func TestOCIResultsContract(t *testing.T) {
 				if string(data) != `{}` {
 					t.Fatalf("unset results emitted: %s", data)
 				}
+			}
+		})
+	}
+}
+
+func TestOCIResultsDigestValidation(t *testing.T) {
+	validate := newTestValidator(t)
+	for _, field := range []string{"evaluation_card", "evaluation_bundle"} {
+		t.Run(field, func(t *testing.T) {
+			for _, tt := range []struct {
+				name, digest, tag string
+			}{
+				{"valid", "sha256:" + strings.Repeat("a", 64), ""},
+				{"empty", "", "required"},
+				{"blank", " \t", "sha256_digest"},
+				{"missing prefix", strings.Repeat("a", 64), "sha256_digest"},
+				{"wrong algorithm", "sha512:" + strings.Repeat("a", 64), "sha256_digest"},
+				{"short", "sha256:abc", "sha256_digest"},
+				{"long", "sha256:" + strings.Repeat("a", 65), "sha256_digest"},
+				{"nonhex", "sha256:" + strings.Repeat("g", 64), "sha256_digest"},
+			} {
+				t.Run(tt.name, func(t *testing.T) {
+					artifact := &api.OCIArtifactReference{OCIDigest: tt.digest, OCIReference: "quay.io/org/results"}
+					oci := &api.EvaluationOCIResults{}
+					if field == "evaluation_card" {
+						oci.EvaluationCard = artifact
+					} else {
+						oci.EvaluationBundle = artifact
+					}
+					err := validate.Struct(api.EvaluationJobResults{OCI: oci})
+					if tt.tag == "" {
+						if err != nil {
+							t.Fatalf("valid digest rejected: %v", err)
+						}
+					} else {
+						assertValidationTag(t, err, tt.tag)
+					}
+				})
 			}
 		})
 	}
