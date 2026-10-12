@@ -13,6 +13,18 @@ repository or source branch. For example, `opendatahub-io/eval-hub:main` is upda
 from `eval-hub/eval-hub:main`. The API reads the latest upstream state when called,
 so a run may include commits newer than the push that triggered it.
 
+### Commit history
+
+Synchronization preserves all commits reachable from the upstream branch and
+their original commit hashes. It does not squash, rebase, or cherry-pick commits.
+
+- If the destination can fast-forward, its branch advances to the upstream commit
+  without creating a merge commit.
+- If the branches have diverged and can be merged without conflicts, GitHub
+  creates a merge commit that preserves both upstream and fork-specific commits.
+- If there are merge conflicts, synchronization fails and the destination branch
+  remains unchanged.
+
 ### Call from the upstream repository
 
 Add this caller to the upstream repository to sync after each push to `main`,
