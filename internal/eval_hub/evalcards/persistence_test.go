@@ -27,9 +27,9 @@ func (r *recordingTarget) Target() Target { return r.name }
 func (r *recordingTarget) Enabled(_ *api.EvaluationJobResource) bool {
 	return r.enabled
 }
-func (r *recordingTarget) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (string, error) {
+func (r *recordingTarget) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (*ExportResult, error) {
 	r.called = true
-	return r.cardURL, nil
+	return &ExportResult{CardURL: r.cardURL}, nil
 }
 
 func TestManagerExportEnabledTargetsOnly(t *testing.T) {
@@ -43,8 +43,8 @@ func TestManagerExportEnabledTargetsOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Export() err = %v", err)
 	}
-	if cardURL != "https://example.com/card.json" {
-		t.Fatalf("cardURL = %q", cardURL)
+	if cardURL.CardURL != "https://example.com/card.json" {
+		t.Fatalf("cardURL = %v", cardURL)
 	}
 	if !mlflowTarget.called {
 		t.Fatal("expected mlflow target to be called")
@@ -159,7 +159,7 @@ func TestMLflowTargetExport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Export() err = %v", err)
 	}
-	if cardURL == "" {
+	if cardURL.CardURL == "" {
 		t.Fatal("expected non-empty card URL")
 	}
 	wantSuffix := "/mlflow-artifacts/artifacts/mlflow/artifacts/workspaces/sagar/8/8/run-1/artifacts/evaluation-card.json"
@@ -182,11 +182,11 @@ func TestOCITargetEnabled(t *testing.T) {
 		t.Fatalf("target = %q", target.Target())
 	}
 	cardURL, err := target.Export(context.Background(), job, &cards.EvaluationCard{})
-	if err != nil {
+	if err == nil {
 		t.Fatalf("Export() err = %v", err)
 	}
-	if cardURL != "" {
-		t.Fatalf("cardURL = %q, want empty", cardURL)
+	if cardURL != nil {
+		t.Fatalf("result = %v, want nil", cardURL)
 	}
 }
 
@@ -201,12 +201,12 @@ func TestNewManagerUsesDefaultTargets(t *testing.T) {
 
 func TestManagerExportNilJobOrCard(t *testing.T) {
 	manager := &Manager{}
-	if url, err := manager.Export(context.Background(), nil, &cards.EvaluationCard{}); err != nil || url != "" {
-		t.Fatalf("nil job: url=%q err=%v", url, err)
+	if url, err := manager.Export(context.Background(), nil, &cards.EvaluationCard{}); err != nil || url.CardURL != "" {
+		t.Fatalf("nil job: url=%v err=%v", url, err)
 	}
 	job := &api.EvaluationJobResource{Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}}}
-	if url, err := manager.Export(context.Background(), job, nil); err != nil || url != "" {
-		t.Fatalf("nil card: url=%q err=%v", url, err)
+	if url, err := manager.Export(context.Background(), job, nil); err != nil || url.CardURL != "" {
+		t.Fatalf("nil card: url=%v err=%v", url, err)
 	}
 }
 
@@ -218,8 +218,8 @@ func (f *failingTarget) Target() Target { return f.name }
 func (f *failingTarget) Enabled(_ *api.EvaluationJobResource) bool {
 	return true
 }
-func (f *failingTarget) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (string, error) {
-	return "", errors.New("export failed")
+func (f *failingTarget) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (*ExportResult, error) {
+	return nil, errors.New("export failed")
 }
 
 func TestManagerExportJoinsTargetErrors(t *testing.T) {
@@ -232,8 +232,8 @@ func TestManagerExportJoinsTargetErrors(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected joined export error")
 	}
-	if cardURL != "https://example.com/card.json" {
-		t.Fatalf("cardURL = %q", cardURL)
+	if cardURL.CardURL != "https://example.com/card.json" {
+		t.Fatalf("cardURL = %v", cardURL)
 	}
 }
 
@@ -287,8 +287,8 @@ func TestMLflowTargetExportWithLoggerAndTenant(t *testing.T) {
 		},
 	}
 	cardURL, err := target.Export(context.Background(), job, &cards.EvaluationCard{CardVersion: cards.CardVersion})
-	if err != nil || cardURL == "" {
-		t.Fatalf("Export() cardURL=%q err=%v", cardURL, err)
+	if err != nil || cardURL.CardURL == "" {
+		t.Fatalf("Export() cardURL=%v err=%v", cardURL, err)
 	}
 }
 
@@ -301,12 +301,180 @@ func (errOCIFactory) NewPublisher(_ context.Context, _ *api.EvaluationJobResourc
 func TestOCITargetExportFactoryError(t *testing.T) {
 	target := NewOCITarget(errOCIFactory{}, nil)
 	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Exports: &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{}},
 		},
 	}
-	_, err := target.Export(context.Background(), job, &cards.EvaluationCard{CardVersion: cards.CardVersion})
+	_, err := target.Export(context.Background(), job, cards.NewEvaluationCard(job))
 	if err == nil {
 		t.Fatal("expected error from oci publisher factory")
+	}
+	var exportErr *OCIExportError
+	if !errors.As(err, &exportErr) || exportErr.Operation != "initialize OCI publisher and resolve registry credentials" {
+		t.Fatalf("factory error was not preserved: %v", err)
+	}
+}
+
+type outcomeOCIFactory struct{ publisher OCIPublisher }
+
+func (f outcomeOCIFactory) NewPublisher(context.Context, *api.EvaluationJobResource) (OCIPublisher, error) {
+	return f.publisher, nil
+}
+
+type outcomeOCIPublisher struct {
+	artifact *api.OCIArtifactReference
+	closed   bool
+}
+
+func (p *outcomeOCIPublisher) PublishEvalCard(context.Context, []byte) (*api.OCIArtifactReference, error) {
+	return p.artifact, nil
+}
+
+func (p *outcomeOCIPublisher) Close() error {
+	p.closed = true
+	return nil
+}
+
+func TestOCITargetPublisherOutcomes(t *testing.T) {
+	artifact := &api.OCIArtifactReference{OCIDigest: "sha256:manifest", OCIReference: "registry/repo@sha256:manifest"}
+	for _, tc := range []struct {
+		name      string
+		publisher *outcomeOCIPublisher
+		reason    string
+	}{
+		{name: "unavailable publisher", reason: "publisher is unavailable"},
+		{name: "missing artifact", publisher: &outcomeOCIPublisher{}, reason: "publisher returned no usable manifest reference"},
+		{name: "missing digest", publisher: &outcomeOCIPublisher{artifact: &api.OCIArtifactReference{OCIReference: artifact.OCIReference}}, reason: "publisher returned no usable manifest reference"},
+		{name: "missing reference", publisher: &outcomeOCIPublisher{artifact: &api.OCIArtifactReference{OCIDigest: artifact.OCIDigest}}, reason: "publisher returned no usable manifest reference"},
+		{name: "published artifact", publisher: &outcomeOCIPublisher{artifact: artifact}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			factory := outcomeOCIFactory{}
+			if tc.publisher != nil {
+				factory.publisher = tc.publisher
+			}
+			job := &api.EvaluationJobResource{Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}}, EvaluationJobConfig: api.EvaluationJobConfig{Exports: &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{}}}}
+			manager := NewManager(nil, ManagerConfig{OCIPublisherFactory: factory})
+			result, err := manager.Export(context.Background(), job, cards.NewEvaluationCard(job))
+			if tc.publisher != nil && !tc.publisher.closed {
+				t.Fatal("publisher was not closed")
+			}
+			if tc.reason == "" {
+				if err != nil || result.OCIError != nil || result.OCIArtifact != artifact || result.CardURL != "" {
+					t.Fatalf("published outcome = %#v, error = %v", result, err)
+				}
+				return
+			}
+			var exportErr *OCIExportError
+			if !errors.As(err, &exportErr) || exportErr.Reason != tc.reason || !strings.Contains(err.Error(), tc.reason) || !errors.Is(err, result.OCIError) || result.OCIArtifact != nil {
+				t.Fatalf("failed outcome = %#v, error = %v", result, err)
+			}
+		})
+	}
+}
+
+func TestMLflowTargetExportFailures(t *testing.T) {
+	for _, invalidCard := range []bool{false, true} {
+		name := "upload failure"
+		if invalidCard {
+			name = "serialization failure"
+		}
+		t.Run(name, func(t *testing.T) {
+			requests := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests++
+				if strings.HasSuffix(r.URL.Path, "/runs/create") {
+					_ = json.NewEncoder(w).Encode(mlflowclient.CreateRunResponse{Run: mlflowclient.Run{Info: mlflowclient.RunInfo{RunID: "run-1"}}})
+					return
+				}
+				w.WriteHeader(http.StatusInternalServerError)
+			}))
+			t.Cleanup(srv.Close)
+			job := &api.EvaluationJobResource{Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}, MLFlowExperimentID: "8"}}
+			if invalidCard {
+				job.Results = &api.EvaluationJobResults{Benchmarks: []api.BenchmarkResult{{Metrics: map[string]any{"invalid": make(chan int)}}}}
+			}
+			result, err := NewMLflowTarget(mlflowclient.NewClient(srv.URL), nil, nil).Export(context.Background(), job, cards.NewEvaluationCard(job))
+			if err == nil || result != nil {
+				t.Fatalf("result = %#v, error = %v", result, err)
+			}
+			if invalidCard {
+				var marshalErr *json.UnsupportedTypeError
+				if !errors.As(err, &marshalErr) || requests != 0 {
+					t.Fatalf("serialization failure reached MLflow: requests = %d, error = %v", requests, err)
+				}
+			} else if requests < 2 || !strings.Contains(err.Error(), "500") {
+				t.Fatalf("upload failure was not propagated: requests = %d, error = %v", requests, err)
+			}
+		})
+	}
+}
+
+type outcomeTarget struct {
+	name   Target
+	result ExportResult
+	err    error
+	calls  int
+}
+
+func (t *outcomeTarget) Target() Target                            { return t.name }
+func (t *outcomeTarget) Enabled(_ *api.EvaluationJobResource) bool { return true }
+func (t *outcomeTarget) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (*ExportResult, error) {
+	t.calls++
+	if t.err != nil {
+		return nil, t.err
+	}
+	return &t.result, nil
+}
+
+func TestManagerKeepsDestinationOutcomesIndependent(t *testing.T) {
+	for _, ociFails := range []bool{true, false} {
+		mlflow := &outcomeTarget{name: TargetMLflow, result: ExportResult{CardURL: "https://mlflow/card"}}
+		oci := &outcomeTarget{name: TargetOCI, result: ExportResult{OCIArtifact: &api.OCIArtifactReference{OCIDigest: "sha256:manifest", OCIReference: "registry/repo@sha256:manifest"}}}
+		if ociFails {
+			oci.err = errors.New("registry failed")
+			oci.result = ExportResult{}
+		} else {
+			mlflow.err = errors.New("MLflow failed")
+		}
+		manager := &Manager{targets: []ExportTarget{oci, mlflow}}
+		result, err := manager.Export(context.Background(), &api.EvaluationJobResource{}, &cards.EvaluationCard{})
+		if err == nil || mlflow.calls != 1 || oci.calls != 1 {
+			t.Fatal("did not attempt both destinations")
+		}
+		if ociFails {
+			if result.OCIError == nil || result.OCIArtifact != nil || result.CardURL == "" {
+				t.Fatalf("result=%#v", result)
+			}
+		} else if result.OCIError != nil || result.OCIArtifact == nil {
+			t.Fatalf("MLflow failure hid OCI success: %#v", result)
+		}
+	}
+}
+
+func TestOCITargetGenerationAndSerializationFailures(t *testing.T) {
+	job := &api.EvaluationJobResource{Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}}}
+	for _, tc := range []struct {
+		card      *cards.EvaluationCard
+		operation string
+	}{
+		{card: nil, operation: "generate evaluation card"},
+		{card: &cards.EvaluationCard{}, operation: "generate evaluation card"},
+		{card: cards.NewEvaluationCard(&api.EvaluationJobResource{Resource: job.Resource, Results: &api.EvaluationJobResults{Benchmarks: []api.BenchmarkResult{{Metrics: map[string]any{"invalid": make(chan int)}}}}}), operation: "serialize evaluation card"},
+	} {
+		_, err := NewOCITarget(errOCIFactory{}, nil).Export(context.Background(), job, tc.card)
+		var exportErr *OCIExportError
+		if !errors.As(err, &exportErr) || exportErr.Operation != tc.operation {
+			t.Fatalf("error=%v, want operation %s", err, tc.operation)
+		}
+	}
+}
+
+func TestManagerRejectsDiscardPublication(t *testing.T) {
+	job := &api.EvaluationJobResource{Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}}, EvaluationJobConfig: api.EvaluationJobConfig{Exports: &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{}}}}
+	result, err := NewManager(nil, ManagerConfig{}).Export(context.Background(), job, cards.NewEvaluationCard(job))
+	if err == nil || result.OCIError == nil || result.OCIArtifact != nil {
+		t.Fatalf("discard publisher fabricated success: result=%#v, err=%v", result, err)
 	}
 }

@@ -23,7 +23,7 @@ func (s stubDockerConfigSecretGetter) GetDockerConfigJSON(_ context.Context, _, 
 	return s.data, s.err
 }
 
-// TestOCIPublisherFactoryNewPublisher verifies a tenant-authenticated publisher uploads a card with the configured tag.
+// TestOCIPublisherFactoryNewPublisher verifies a tenant-authenticated publisher uploads a card with its dedicated tag despite a configured OCI tag.
 func TestOCIPublisherFactoryNewPublisher(t *testing.T) {
 	t.Parallel()
 
@@ -39,7 +39,7 @@ func TestOCIPublisherFactoryNewPublisher(t *testing.T) {
 			w.WriteHeader(http.StatusAccepted)
 		case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/blobs/uploads/"):
 			w.WriteHeader(http.StatusCreated)
-		case r.Method == http.MethodPut && r.URL.Path == "/v2/my-org/my-repo/manifests/eval-123-job-1":
+		case r.Method == http.MethodPut && r.URL.Path == "/v2/my-org/my-repo/manifests/evaluation-card-job-1":
 			uploaded = true
 			w.WriteHeader(http.StatusCreated)
 		default:
@@ -78,7 +78,7 @@ func TestOCIPublisherFactoryNewPublisher(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal card: %v", err)
 	}
-	if err := publisher.PublishEvalCard(context.Background(), cardJSON); err != nil {
+	if _, err := publisher.PublishEvalCard(context.Background(), cardJSON); err != nil {
 		t.Fatalf("PublishEvalCard() err = %v", err)
 	}
 	if !uploaded {
@@ -154,7 +154,7 @@ func TestOCIPublisherFactoryDefaultsTagToJobID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPublisher() err = %v", err)
 	}
-	if err := publisher.PublishEvalCard(context.Background(), []byte(`{"card_version":"1.0"}`)); err != nil {
+	if _, err := publisher.PublishEvalCard(context.Background(), []byte(`{"card_version":"1.0"}`)); err != nil {
 		t.Fatalf("PublishEvalCard() err = %v", err)
 	}
 	if tag != "evaluation-card-job-42" {
@@ -246,7 +246,7 @@ func TestOCIPublisherPublishEvalCardNotConfigured(t *testing.T) {
 	t.Parallel()
 
 	publisher := &ociPublisher{}
-	if err := publisher.PublishEvalCard(context.Background(), []byte(`{"card_version":"1.0"}`)); err == nil {
+	if _, err := publisher.PublishEvalCard(context.Background(), []byte(`{"card_version":"1.0"}`)); err == nil {
 		t.Fatal("expected error for unconfigured publisher")
 	}
 }
@@ -259,7 +259,7 @@ func TestNoopOCIPublisherFactory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPublisher() err = %v", err)
 	}
-	if err := publisher.PublishEvalCard(context.Background(), []byte(`{"card_version":"1.0"}`)); err != nil {
+	if _, err := publisher.PublishEvalCard(context.Background(), []byte(`{"card_version":"1.0"}`)); err == nil {
 		t.Fatalf("PublishEvalCard() err = %v", err)
 	}
 	if err := publisher.Close(); err != nil {
@@ -342,7 +342,7 @@ func TestLocalOCIPublisherFactoryUpload(t *testing.T) {
 			w.WriteHeader(http.StatusAccepted)
 		case r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/blobs/uploads/"):
 			w.WriteHeader(http.StatusCreated)
-		case r.Method == http.MethodPut && r.URL.Path == "/v2/my-org/my-repo/manifests/eval-123-job-1":
+		case r.Method == http.MethodPut && r.URL.Path == "/v2/my-org/my-repo/manifests/evaluation-card-job-1":
 			uploaded = true
 			var manifest struct {
 				Annotations map[string]string `json:"annotations"`
@@ -389,7 +389,7 @@ func TestLocalOCIPublisherFactoryUpload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal card: %v", err)
 	}
-	if err := publisher.PublishEvalCard(context.Background(), cardJSON); err != nil {
+	if _, err := publisher.PublishEvalCard(context.Background(), cardJSON); err != nil {
 		t.Fatalf("PublishEvalCard() err = %v", err)
 	}
 	if !uploaded {
@@ -444,7 +444,7 @@ func TestLocalOCIPublisherTransportAndErrors(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = publisher.PublishEvalCard(context.Background(), []byte(`{}`))
+			_, err = publisher.PublishEvalCard(context.Background(), []byte(`{}`))
 			if (err != nil) != tc.wantError {
 				t.Fatalf("export error = %v, wantError %v", err, tc.wantError)
 			}
