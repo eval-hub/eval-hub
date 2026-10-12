@@ -1,6 +1,8 @@
 package ociclient
 
 import (
+	"crypto/rand"
+	"fmt"
 	"testing"
 )
 
@@ -22,19 +24,20 @@ func TestParseDockerConfigJSON(t *testing.T) {
 }
 
 func TestParseDockerConfigJSONDockerAlias(t *testing.T) {
-	data := []byte(`{
+	username, password := rand.Text(), rand.Text()
+	data := []byte(fmt.Sprintf(`{
 		"auths": {
 			"https://index.docker.io/v1/": {
-				"username": "docker-user",
-				"password": "docker-pass"
+				"username": %q,
+				"password": %q
 			}
 		}
-	}`)
+	}`, username, password))
 	creds, err := ParseDockerConfigJSON(data, "docker.io")
 	if err != nil {
 		t.Fatalf("ParseDockerConfigJSON() err = %v", err)
 	}
-	if creds.Username != "docker-user" || creds.Password != "docker-pass" {
+	if creds.Username != username || creds.Password != password {
 		t.Fatalf("creds = %#v", creds)
 	}
 }

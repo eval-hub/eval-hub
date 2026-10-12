@@ -21,8 +21,15 @@ Required env vars:
 If any required env var is missing, the tests are skipped.
 
 Optional:
-- `SKIP_TLS_VERIFY=true` for self-signed TLS
+- `FVT_CA_CERT_PATH` for a PEM bundle containing the private CA for the EvalHub API
 - `K8S_TEST_DEBUG=true` for verbose test logs
+
+For a private CA, set `FVT_CA_CERT_PATH=/absolute/path/to/cluster-ca.pem`.
+The bundle is added to system trust while certificate and hostname validation
+remain enabled. An unreadable or invalid bundle fails test setup. Without this
+setting, system trust is used. `SKIP_TLS_VERIFY` is no longer supported.
+The Kubernetes API client separately uses CA settings from kubeconfig or
+in-cluster configuration; this setting applies to EvalHub HTTP requests only.
 
 ### Execute
 
