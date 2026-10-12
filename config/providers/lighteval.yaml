@@ -410,7 +410,7 @@ benchmarks:
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - pass@1
+      - aime24.pass@1
     num_few_shot: 0
     dataset_size: 30
     tags:
@@ -419,7 +419,7 @@ benchmarks:
       - competition
       - lighteval
     primary_score:
-      metric: pass@1
+      metric: aime24.pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
@@ -432,7 +432,7 @@ benchmarks:
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - pass@1
+      - aime25.pass@1
     num_few_shot: 0
     dataset_size: 30
     tags:
@@ -441,7 +441,7 @@ benchmarks:
       - competition
       - lighteval
     primary_score:
-      metric: pass@1
+      metric: aime25.pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
@@ -558,7 +558,7 @@ benchmarks:
       500 hand-picked problems from the MATH dataset spanning 7 subject areas (algebra,
       counting, geometry, number theory, probability, pre-calculus, intermediate algebra).
       Tests competition-level mathematical reasoning with multi-step solutions.
-      Declared primary metric is pass@1; repeated seeded sampling must be verified
+      Declared primary metric is math_500.pass@1; repeated seeded sampling must be verified
       against the configured adapter before interpreting results as repeated runs.
     category: math
     domains: [knowledge_and_reasoning]
@@ -585,7 +585,7 @@ benchmarks:
       Expert-crafted PhD-level multiple-choice questions in biology, chemistry, and physics
       requiring deep domain synthesis across topics rarely co-occurring in training data.
       Diamond subset is the hardest tier — domain experts answer correctly ~65% of the time.
-      Declared primary metric is gpqa_pass@1; repeated seeded sampling must be
+      Declared primary metric is gpqa:diamond.gpqa_pass@1; repeated seeded sampling must be
       verified against the configured adapter.
     category: reasoning
     domains: [knowledge_and_reasoning]

@@ -75,7 +75,7 @@ benchmarks:
     provider_id: lighteval
     weight: 1   # Competition math — very hard, lower absolute scores expected
     primary_score:
-      metric: pass@1
+      metric: aime25.pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.15
