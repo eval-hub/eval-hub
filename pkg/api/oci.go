@@ -43,3 +43,20 @@ type EvaluationOCIResults struct {
 	EvaluationBundle *OCIArtifactReference `json:"evaluation_bundle,omitempty"`
 	Signing          *OCISigningResult     `json:"signing,omitempty"`
 }
+
+// UpdateOCIResults updates workflow status and, when supplied, the card reference.
+// It initializes missing results and preserves all other fields. A nil card means
+// no change to the existing reference; this function does not reset OCI results.
+func UpdateOCIResults(results *EvaluationJobResults, status *OCIProcessingStatus, card *OCIArtifactReference) *EvaluationJobResults {
+	if results == nil {
+		results = &EvaluationJobResults{}
+	}
+	if results.OCI == nil {
+		results.OCI = &EvaluationOCIResults{}
+	}
+	results.OCI.Status = status
+	if card != nil {
+		results.OCI.EvaluationCard = card
+	}
+	return results
+}
