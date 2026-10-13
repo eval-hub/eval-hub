@@ -65,7 +65,7 @@ benchmarks:
     pass_criteria:
       threshold: 0.60
     parameters:
-      num_fewshot: 0
+      num_few_shot: 0
 
 documentation:
   purpose: >-
@@ -123,7 +123,7 @@ documentation:
     - provider_id: lm_evaluation_harness
       benchmark_id: truthfulqa_mc1
       configured_parameters:
-        num_fewshot: 0
+        num_few_shot: 0
     choices:
     - >-
       Prompt injection uses num_examples=50 as an approved screening cap based on the existing Open-Telco
@@ -131,7 +131,7 @@ documentation:
     - >-
       The existing model_graded_qa/accuracy key is retained because it matches the current Inspect
       provider. The review statement about the former bare key is outdated for this configuration.
-    - TruthfulQA retains num_fewshot=0 for the existing zero-shot multiple-choice profile.
+    - TruthfulQA retains num_few_shot=0 for the existing zero-shot multiple-choice profile.
     - >-
       The prompt-injection judge remains unspecified. Inspect judge_model metadata describes Petri/Bloom
       and is not assumed to configure this task.
