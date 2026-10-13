@@ -368,7 +368,6 @@ type OCICoordinates struct {
 	OCIHost       string            `json:"oci_host" validate:"required"`
 	OCIRepository string            `json:"oci_repository" validate:"required"`
 	OCITag        string            `json:"oci_tag,omitempty"`
-	OCISubject    string            `json:"oci_subject,omitempty"`
 	Annotations   map[string]string `json:"annotations,omitempty"`
 }
 
