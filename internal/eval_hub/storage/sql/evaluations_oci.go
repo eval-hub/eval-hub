@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -19,8 +20,14 @@ func (s *sqlStorage) UpdateEvaluationJobOCI(id string, status *api.OCIProcessing
 	default:
 		return fmt.Errorf("invalid OCI processing state")
 	}
-	if card != nil && (card.OCIDigest == "" || card.OCIReference == "") {
-		return fmt.Errorf("complete OCI artifact reference is required")
+	if card != nil {
+		validate, err := validation.NewValidator()
+		if err != nil {
+			return fmt.Errorf("create OCI artifact validator: %w", err)
+		}
+		if err := validate.Struct(card); err != nil {
+			return fmt.Errorf("invalid OCI artifact reference: %w", err)
+		}
 	}
 	return s.withTransaction("update evaluation job OCI results", id, func(txn *sql.Tx) error {
 		job, err := s.getEvaluationJobTransactionalForUpdate(txn, id)
