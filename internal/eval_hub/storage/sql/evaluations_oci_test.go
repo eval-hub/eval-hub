@@ -2,12 +2,14 @@ package sql_test
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/common"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	"github.com/go-playground/validator/v10"
 )
 
 func TestUpdateEvaluationJobOCIPreservesResultsAndTenant(t *testing.T) {
@@ -79,6 +81,33 @@ func TestUpdateEvaluationJobOCIPreservesResultsAndTenant(t *testing.T) {
 	}
 	if err = scoped.UpdateEvaluationJobOCI(job.Resource.ID, status(api.OCIProcessingCompleted), &api.OCIArtifactReference{}); err == nil {
 		t.Fatal("empty artifact accepted")
+	}
+	for _, tc := range []struct {
+		name string
+		card api.OCIArtifactReference
+		tag  string
+	}{
+		{"malformed digest", api.OCIArtifactReference{OCIDigest: "sha256:abc", OCIReference: artifact.OCIReference}, "sha256_digest"},
+		{"blank reference", api.OCIArtifactReference{OCIDigest: artifact.OCIDigest, OCIReference: " \t\n"}, "notblank"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before, err := scoped.GetEvaluationJob(job.Resource.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = scoped.UpdateEvaluationJobOCI(job.Resource.ID, status(api.OCIProcessingCompleted), &tc.card)
+			var validationErrors validator.ValidationErrors
+			if !errors.As(err, &validationErrors) || len(validationErrors) != 1 || validationErrors[0].Tag() != tc.tag {
+				t.Fatalf("expected %s validation error, got %v", tc.tag, err)
+			}
+			after, err := scoped.GetEvaluationJob(job.Resource.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(before.Results, after.Results) {
+				t.Fatal("invalid artifact changed persisted results")
+			}
+		})
 	}
 }
 
