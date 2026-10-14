@@ -60,7 +60,7 @@ benchmarks:
       threshold: 0.60
     parameters:
       # Deliberate zero-shot profile; the provider metadata declares two shots.
-      num_fewshot: 0
+      num_few_shot: 0
       apply_chat_template: true
 
   - id: followbench
@@ -146,7 +146,7 @@ documentation:
     - provider_id: lm_evaluation_harness
       benchmark_id: jsonschema_bench_easy
       configured_parameters:
-        num_fewshot: 0
+        num_few_shot: 0
         apply_chat_template: true
     - provider_id: followbench
       benchmark_id: followbench
