@@ -94,6 +94,20 @@ type GPUConfig struct {
 	NodeSelector map[string]string `mapstructure:"node_selector" yaml:"node_selector" json:"node_selector,omitempty"`
 }
 
+// DRAConfig declares a Dynamic Resource Allocation (DRA) requirement for a
+// Kubernetes provider adapter. ResourceClaimTemplate names a ResourceClaimTemplate
+// in the job's namespace that defines the device requests (device class,
+// attributes, topology); ClaimName is the pod-local claim name consumed by the
+// adapter container, defaulting to "gpu" when empty. Mutually exclusive with GPU —
+// a provider runtime must not declare both. Omit both for CPU-only adapters.
+//
+// Unlike GPU, DRA does not carry a node selector: device placement is governed by
+// the referenced ResourceClaimTemplate's device class and topology constraints.
+type DRAConfig struct {
+	ResourceClaimTemplate string `mapstructure:"resource_claim_template" yaml:"resource_claim_template" json:"resource_claim_template"`
+	ClaimName             string `mapstructure:"claim_name" yaml:"claim_name" json:"claim_name,omitempty"`
+}
+
 // ProviderRuntime contains runtime configuration for Kubernetes jobs.
 //
 // Example YAML for provider configs:
@@ -125,6 +139,10 @@ type K8sRuntime struct {
 	// GPU declares the GPU resource requirement for this adapter. Omit entirely for CPU-only
 	// adapters — existing adapters are unaffected.
 	GPU *GPUConfig `mapstructure:"gpu" yaml:"gpu" json:"gpu,omitempty"`
+	// DRA declares a Dynamic Resource Allocation requirement for this adapter via a
+	// ResourceClaimTemplate reference. Mutually exclusive with GPU; omit both for
+	// CPU-only adapters.
+	DRA *DRAConfig `mapstructure:"dra" yaml:"dra" json:"dra,omitempty"`
 	Env []EnvVar   `mapstructure:"env" yaml:"env"`
 	// ImagePullPolicy controls when the adapter container image is pulled.
 	// API values: if_not_present (default when omitted) or always. Mapped to Kubernetes

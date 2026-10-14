@@ -4751,7 +4751,7 @@
       "HardwareGPUConfig": {
         "type": "object",
         "title": "HardwareGPUConfig",
-        "description": "Optional GPU resource override for a benchmark's direct `hardware_config`. Kubernetes sets GPU requests and limits to the same value (`count`).\n",
+        "description": "Optional GPU resource override for a benchmark's direct `hardware_config`. Kubernetes sets GPU requests and limits to the same value (`count`). Mutually exclusive with `dra` — a request that sets both is rejected.\n",
         "properties": {
           "name": {
             "type": "string",
@@ -4770,16 +4770,41 @@
           }
         }
       },
+      "HardwareDRAConfig": {
+        "type": "object",
+        "title": "HardwareDRAConfig",
+        "description": "Optional Dynamic Resource Allocation (DRA) override for a benchmark's direct `hardware_config`. Accelerators are requested by referencing a ResourceClaimTemplate that already exists in the job's namespace; the template, not this object, defines the device class, attribute selectors, and topology constraints. Mutually exclusive with `gpu` — a request that sets both is rejected. Template references (rather than pre-created ResourceClaims) keep evaluation Jobs admissible to Kueue, which only accepts workload objects that create their own claims.\n",
+        "properties": {
+          "resource_claim_template": {
+            "type": "string",
+            "maxLength": 63,
+            "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$",
+            "description": "Name of the ResourceClaimTemplate in the job's namespace. Must conform to RFC 1123 DNS label naming. The referenced template defines the device requests (device class, attributes, topology).\n",
+            "examples": [
+              "gpu-claim-template"
+            ]
+          },
+          "claim_name": {
+            "type": "string",
+            "maxLength": 63,
+            "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$",
+            "description": "Pod-local claim name the adapter container references via `resources.claims`. Defaults to `gpu` when omitted.\n",
+            "examples": [
+              "gpu"
+            ]
+          }
+        }
+      },
       "BenchmarkHardwareConfig": {
         "type": "object",
         "title": "BenchmarkHardwareConfig",
-        "description": "Optional per-benchmark hardware override for Kubernetes runtimes.\nTwo mutually exclusive modes:\n- **Profile mode:** set `hardware_profile_name` to fetch a named OpenDataHub\n  `HardwareProfile` custom resource and apply its CPU, memory, and GPU resource\n  values plus optional scheduling (`spec.scheduling`) to the evaluation Job.\n  Node scheduling applies `nodeSelector` and `tolerations`; Queue scheduling\n  applies the Kueue LocalQueue name and optional priority class. When\n  `hardware_profile_name` is set, `queue`, `cpu`, `memory`, and `gpu` must not\n  be present — the request is rejected. Disabled profiles\n  (`opendatahub.io/disabled: \"true\"`) are rejected on create.\n\n- **Direct mode:** omit `hardware_profile_name` and set `queue`, `cpu`,\n  `memory`, and/or `gpu` directly. Values missing from these fields fall back\n  to the provider `runtime.k8s` configuration (and built-in defaults when those\n  are unset).\n",
+        "description": "Optional per-benchmark hardware override for Kubernetes runtimes.\nTwo mutually exclusive modes:\n- **Profile mode:** set `hardware_profile_name` to fetch a named OpenDataHub\n  `HardwareProfile` custom resource and apply its CPU, memory, and GPU resource\n  values plus optional scheduling (`spec.scheduling`) to the evaluation Job.\n  Node scheduling applies `nodeSelector` and `tolerations`; Queue scheduling\n  applies the Kueue LocalQueue name and optional priority class. When\n  `hardware_profile_name` is set, `queue`, `cpu`, `memory`, `gpu`, and `dra`\n  must not be present — the request is rejected. Disabled profiles\n  (`opendatahub.io/disabled: \"true\"`) are rejected on create.\n\n- **Direct mode:** omit `hardware_profile_name` and set `queue`, `cpu`,\n  `memory`, `gpu`, and/or `dra` directly. Values missing from these fields\n  fall back to the provider `runtime.k8s` configuration (and built-in\n  defaults when those are unset). `gpu` (legacy extended resource) and\n  `dra` (ResourceClaimTemplate reference) are mutually exclusive with each\n  other; an explicit request-level choice of either overrides the provider\n  default for the other mechanism.\n",
         "properties": {
           "hardware_profile_name": {
             "type": "string",
             "maxLength": 63,
             "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$",
-            "description": "Name of the OpenDataHub `HardwareProfile` custom resource (`hardwareprofiles.infrastructure.opendatahub.io`) in the platform namespace (`EVALHUB_HARDWARE_PROFILES_NAMESPACE`, typically `opendatahub` or `redhat-ods-applications`). Must conform to RFC 1123 DNS label naming (lowercase letters, digits, and internal hyphens; max 63 characters). Mutually exclusive with `queue`, `cpu`, `memory`, and `gpu`.\n",
+            "description": "Name of the OpenDataHub `HardwareProfile` custom resource (`hardwareprofiles.infrastructure.opendatahub.io`) in the platform namespace (`EVALHUB_HARDWARE_PROFILES_NAMESPACE`, typically `opendatahub` or `redhat-ods-applications`). Must conform to RFC 1123 DNS label naming (lowercase letters, digits, and internal hyphens; max 63 characters). Mutually exclusive with `queue`, `cpu`, `memory`, `gpu`, and `dra`.\n",
             "examples": [
               "default-profile",
               "gpu-profile-v1"
@@ -4796,6 +4821,9 @@
           },
           "gpu": {
             "$ref": "#/components/schemas/HardwareGPUConfig"
+          },
+          "dra": {
+            "$ref": "#/components/schemas/HardwareDRAConfig"
           }
         }
       },
@@ -6332,6 +6360,27 @@
           }
         }
       },
+      "DRAConfig": {
+        "type": "object",
+        "title": "DRAConfig",
+        "description": "Dynamic Resource Allocation (DRA) requirement for a Kubernetes provider adapter. Mutually exclusive with `gpu` — a provider runtime must not declare both. Omit both for CPU-only adapters. Unlike `gpu`, `dra` does not carry a node selector: device placement is governed by the referenced ResourceClaimTemplate's device class and topology constraints.\n",
+        "properties": {
+          "resource_claim_template": {
+            "type": "string",
+            "description": "Name of the ResourceClaimTemplate in the job's namespace that defines the device requests (device class, attributes, topology).\n",
+            "examples": [
+              "gpu-claim-template"
+            ]
+          },
+          "claim_name": {
+            "type": "string",
+            "description": "Pod-local claim name consumed by the adapter container via `resources.claims`. Defaults to `gpu` when empty.\n",
+            "examples": [
+              "gpu"
+            ]
+          }
+        }
+      },
       "EnvVar": {
         "type": "object",
         "description": "Environment variable for job configuration",
@@ -6383,7 +6432,11 @@
           },
           "gpu": {
             "$ref": "#/components/schemas/GPUConfig",
-            "description": "GPU resource requirement for this adapter. Omit for CPU-only adapters; existing providers without this field are unchanged.\n"
+            "description": "GPU resource requirement for this adapter. Omit for CPU-only adapters; existing providers without this field are unchanged. Mutually exclusive with `dra`.\n"
+          },
+          "dra": {
+            "$ref": "#/components/schemas/DRAConfig",
+            "description": "Dynamic Resource Allocation requirement for this adapter via a ResourceClaimTemplate reference. Mutually exclusive with `gpu`; omit both for CPU-only adapters.\n"
           },
           "env": {
             "type": "array",

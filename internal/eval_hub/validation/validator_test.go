@@ -439,6 +439,13 @@ func TestBenchmarkHardwareConfig_ProfileWithDirectFieldsRejected(t *testing.T) {
 				Queue:               &api.QueueConfig{Kind: "kueue", Name: "my-queue"},
 			},
 		},
+		{
+			name: "with dra",
+			hw: &api.BenchmarkHardwareConfig{
+				HardwareProfileName: "my-hw-spec",
+				DRA:                 &api.HardwareDRAConfig{ResourceClaimTemplate: "gpu-claims"},
+			},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -476,6 +483,86 @@ func TestBenchmarkHardwareConfig_DirectFieldsAccepted(t *testing.T) {
 	}
 	if err := validate.Struct(cfg); err != nil {
 		t.Fatalf("expected no error for direct hardware_config, got: %v", err)
+	}
+}
+
+func TestBenchmarkHardwareConfig_DRAAccepted(t *testing.T) {
+	validate := newTestValidator(t)
+	cfg := api.EvaluationJobConfig{
+		Name:  "test-job",
+		Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
+		Benchmarks: []api.EvaluationBenchmarkConfig{
+			{
+				Ref:        api.Ref{ID: "b1"},
+				ProviderID: "provider-1",
+				HardwareConfig: &api.BenchmarkHardwareConfig{
+					DRA: &api.HardwareDRAConfig{ResourceClaimTemplate: "gpu-claims", ClaimName: "gpu"},
+				},
+			},
+		},
+	}
+	if err := validate.Struct(cfg); err != nil {
+		t.Fatalf("expected no error for dra hardware_config, got: %v", err)
+	}
+}
+
+func TestBenchmarkHardwareConfig_GPUAndDRARejected(t *testing.T) {
+	validate := newTestValidator(t)
+	cfg := api.EvaluationJobConfig{
+		Name:  "test-job",
+		Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
+		Benchmarks: []api.EvaluationBenchmarkConfig{
+			{
+				Ref:        api.Ref{ID: "b1"},
+				ProviderID: "provider-1",
+				HardwareConfig: &api.BenchmarkHardwareConfig{
+					GPU: &api.HardwareGPUConfig{Name: "nvidia.com/gpu", Count: 1},
+					DRA: &api.HardwareDRAConfig{ResourceClaimTemplate: "gpu-claims"},
+				},
+			},
+		},
+	}
+	if err := validate.Struct(cfg); err == nil {
+		t.Fatal("expected validation error for gpu and dra in the same hardware_config")
+	}
+}
+
+func TestBenchmarkHardwareConfig_InvalidDRANamesRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	cases := []struct {
+		name string
+		hw   *api.BenchmarkHardwareConfig
+	}{
+		{
+			name: "empty resource claim template",
+			hw:   &api.BenchmarkHardwareConfig{DRA: &api.HardwareDRAConfig{}},
+		},
+		{
+			name: "invalid resource claim template name",
+			hw:   &api.BenchmarkHardwareConfig{DRA: &api.HardwareDRAConfig{ResourceClaimTemplate: "Bad_Name"}},
+		},
+		{
+			name: "invalid claim name",
+			hw:   &api.BenchmarkHardwareConfig{DRA: &api.HardwareDRAConfig{ResourceClaimTemplate: "gpu-claims", ClaimName: "Bad Name"}},
+		},
+		{
+			name: "uppercase resource claim template",
+			hw:   &api.BenchmarkHardwareConfig{DRA: &api.HardwareDRAConfig{ResourceClaimTemplate: "GPU-Claims"}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := api.EvaluationJobConfig{
+				Name:  "test-job",
+				Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1", HardwareConfig: tc.hw},
+				},
+			}
+			if err := validate.Struct(cfg); err == nil {
+				t.Fatal("expected validation error")
+			}
+		})
 	}
 }
 

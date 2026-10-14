@@ -1,0 +1,31 @@
+type: object
+title: HardwareDRAConfig
+description: >
+  Optional Dynamic Resource Allocation (DRA) override for a benchmark's direct
+  `hardware_config`. Accelerators are requested by referencing a
+  ResourceClaimTemplate that already exists in the job's namespace; the
+  template, not this object, defines the device class, attribute selectors,
+  and topology constraints. Mutually exclusive with `gpu` — a request that
+  sets both is rejected. Template references (rather than pre-created
+  ResourceClaims) keep evaluation Jobs admissible to Kueue, which only
+  accepts workload objects that create their own claims.
+properties:
+  resource_claim_template:
+    type: string
+    maxLength: 63
+    pattern: '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+    description: >
+      Name of the ResourceClaimTemplate in the job's namespace. Must conform
+      to RFC 1123 DNS label naming. The referenced template defines the
+      device requests (device class, attributes, topology).
+    examples:
+      - gpu-claim-template
+  claim_name:
+    type: string
+    maxLength: 63
+    pattern: '^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$'
+    description: >
+      Pod-local claim name the adapter container references via
+      `resources.claims`. Defaults to `gpu` when omitted.
+    examples:
+      - gpu

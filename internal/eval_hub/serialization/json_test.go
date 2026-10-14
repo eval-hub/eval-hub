@@ -165,7 +165,7 @@ func TestUnmarshal_HardwareConfigExclusiveValidationError(t *testing.T) {
 		t.Fatalf("expected ServiceError, got %T: %v", err, err)
 	}
 	got := svcErr.Error()
-	if !strings.Contains(got, "hardware_config: hardware_profile_name cannot be combined with queue, cpu, memory, or gpu") {
+	if !strings.Contains(got, "hardware_config: hardware_profile_name cannot be combined with queue, cpu, memory, gpu, or dra") {
 		t.Fatalf("error = %q", got)
 	}
 }
