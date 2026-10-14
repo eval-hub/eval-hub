@@ -1,22 +1,29 @@
 id: coding-v1
+curation_order: 10
 name: Coding v1
 category: code
-domains: [software]
-tasks: [code_generation]
-modalities: [text]
-evaluation_targets: [model]
-curation_order: 0
+domains:
+  - software
+tasks:
+  - code_generation
+modalities:
+  - text
+evaluation_targets:
+  - model
+
 description: >
   Evaluates code generation capability of instruction-tuned chat LLMs on
-  execution-based programming problems. LiveCodeBench v6 contains problems from
-  Codeforces, LeetCode, and AtCoder. This fixed release does not establish whether
-  problems postdate the evaluated model's knowledge cutoff or exclude contamination.
-  Execution-based scoring runs generated code against hidden test cases. The primary
-  metric is codegen_pass@1; the request configures pass_at_k=1 and num_samples=3.
-  These settings do not establish averaging over three independently seeded runs;
-  actual sampling behavior must be verified against the configured adapter.
-  SWE-Bench (agentic software engineering) is planned for a future version.
-  Part of the Standard LLM Evaluation Suite (standard-llm-evals-v1).
+  execution-based programming problems.
+# LiveCodeBench v6 uses problems from
+# Codeforces, LeetCode, and AtCoder. This fixed release does not guarantee that
+# problems postdate the evaluated model's knowledge cutoff or exclude training
+# contamination. Generated code is scored against test cases without
+# feeding execution results back to the model. The primary metric is
+# lcb:codegeneration_v6.codegen_pass@1. The collection is a coding diagnostic,
+# not a comprehensive software-development readiness criterion. SWE-Bench and agentic
+# software-engineering workflows are outside the current scope.
+# Part of the Standard LLM Evaluation Suite (standard-llm-evals-v1).
+
 tags:
   - code
   - code-generation
@@ -24,21 +31,147 @@ tags:
   - execution
   - chat
   - lighteval
-  - vllm
   - standard
+
 pass_criteria:
   threshold: 0.30
+
+agent:
+  summary: Execution-based, zero-shot competitive-programming code generation with LiveCodeBench v6.
+  hints:
+    - >-
+      This fixed dataset release does not guarantee that problems postdate the
+      model's knowledge cutoff or exclude training contamination.
+    - >-
+      Only num_few_shot=0 is configured. Generation and sampling use the adapter's
+      task defaults; three independent seeded runs are not requested.
+    - >-
+      Verify task availability, emitted metric keys, and units in the deployed
+      LightEval image. Record adapter and dataset revisions and generation settings.
+  result_interpretation:
+    - >-
+      The expected metric is lcb:codegeneration_v6.codegen_pass@1 on a 0-1 scale.
+      With one benchmark of weight 1, the aggregate equals its score when present.
+      An absent score or test result is not a passing result.
+    - >-
+      The 0.30 threshold is a diagnostic target, not a deployment qualification.
+      Results do not establish application-development, code-repair, or agentic
+      repository-workflow proficiency.
+
 benchmarks:
   - id: lcb:codegeneration_v6
     provider_id: lighteval
     weight: 1
     primary_score:
-      metric: codegen_pass@1
+      metric: lcb:codegeneration_v6.codegen_pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.30
     parameters:
-      num_fewshot: 0
-      apply_chat_template: true
-      pass_at_k: 1
-      num_samples: 3
+      num_few_shot: 0
+
+# Source-only documentation; consumer-facing caveats are also in description and agent.
+documentation:
+  purpose: >-
+    Diagnose execution-based code generation on competitive-programming
+    problems. Generated code may be executed for scoring, without returning
+    execution feedback to the model.
+
+  selection:
+    - provider_id: lighteval
+      benchmark_id: lcb:codegeneration_v6
+      rationale: >-
+        LiveCodeBench v6 provides execution-based competitive-programming
+        problems for evaluating code generation.
+
+  scoring:
+    rows:
+      - provider_id: lighteval
+        benchmark_id: lcb:codegeneration_v6
+        metric: lcb:codegeneration_v6.codegen_pass@1
+        lower_is_better: false
+        weight: 1
+        threshold: 0.30
+
+    units: >-
+      The primary score is expected to be a fraction on a 0-1 scale.
+      Verify actual emitted units and metric names against the deployed
+      LightEval adapter.
+
+    aggregation: >-
+      The collection contains one benchmark, so its aggregate equals the
+      benchmark score when that score is present. A missing score must not
+      be interpreted as a passing result.
+
+    weight_rationale: >-
+      LiveCodeBench is the sole benchmark and receives 100% of the
+      collection weight.
+
+    threshold_provenance: >-
+      The collection retains its configured 0.30 diagnostic threshold.
+      This is a target, not a universal coding-quality or deployment
+      qualification criterion.
+
+    collection_threshold: 0.30
+    threshold_formula: "1.0 * 0.30 = 0.30"
+
+    interpretation: >-
+      The result measures performance on the selected benchmark and does
+      not establish broad software-development proficiency.
+
+  runtime:
+    rows:
+      - provider_id: lighteval
+        benchmark_id: lcb:codegeneration_v6
+        configured_parameters:
+          num_few_shot: 0
+
+    choices:
+      - >-
+        num_few_shot=0 selects the adapter's zero-shot profile. Generation
+        and sampling use the adapter's task defaults. This collection does
+        not request three independent seeded runs or override chat templating.
+
+    verification_status: >-
+      Configuration only. No model evaluations were run as part of this
+      configuration. Runtime behavior and emitted metric keys remain
+      subject to verification.
+
+  limitations:
+    - >-
+      A fixed LiveCodeBench v6 release does not guarantee that all problems
+      postdate a particular model's knowledge cutoff or eliminate
+      contamination risk.
+
+    - >-
+      Competitive-programming performance does not establish proficiency
+      in library/API-oriented application development, code repair, or
+      repository-level agent workflows.
+
+    - >-
+      Configured parameters and provider declarations are not proof of
+      successful execution against the deployed adapter.
+
+  unresolved_inputs:
+    - >-
+      Verify benchmark availability, exact metric keys, metric units, and
+      scoring behavior in the deployed LightEval image.
+
+    - >-
+      Record actual task-default sampling behavior. If repeated seeded
+      runs are required, establish and verify an adapter-supported protocol.
+
+    - >-
+      Record the adapter image, task/dataset revision, selection policy,
+      and relevant model/generation settings with actual run results.
+
+  provenance:
+    - path: config/providers/lighteval.yaml
+      supports: >-
+        Declared benchmark IDs, metrics, directions, provider defaults,
+        and runtime configuration; not proof of deployed behavior.
+
+    - path: config/collections/coding-v1.yaml
+      supports: >-
+        Executable benchmark selection, weights, thresholds, parameters,
+        and collection metadata.
