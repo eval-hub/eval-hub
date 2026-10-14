@@ -1,5 +1,5 @@
 id: document-understanding-v1
-curation_order: 2
+curation_order: 10
 name: Long-Context Document Comprehension v1
 description: >
   Evaluates bare-model understanding of supplied long-context documents and

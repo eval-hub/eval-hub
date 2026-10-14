@@ -1,5 +1,5 @@
 id: multimodal-v1
-curation_order: 2
+curation_order: 10
 name: Multimodal Document VQA v1
 description: >
   Evaluates vision-language understanding on scanned-document visual question

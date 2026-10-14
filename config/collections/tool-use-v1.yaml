@@ -1,5 +1,5 @@
 id: tool-use-v1
-curation_order: 2
+curation_order: 10
 name: Tool Use v1
 description: >
   Evaluates single-turn function-calling capability using supplied function
