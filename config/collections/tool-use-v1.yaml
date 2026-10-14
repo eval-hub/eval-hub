@@ -48,7 +48,7 @@ benchmarks:
     provider_id: inspect
     weight: 0.5
     primary_score:
-      metric: accuracy/accuracy
+      metric: bfcl_scorer/accuracy
       lower_is_better: false
     pass_criteria:
       threshold: 0.60
@@ -72,7 +72,7 @@ benchmarks:
     provider_id: inspect
     weight: 0.5
     primary_score:
-      metric: accuracy/accuracy
+      metric: bfcl_scorer/accuracy
       lower_is_better: false
     pass_criteria:
       threshold: 0.60
@@ -117,13 +117,13 @@ documentation:
     rows:
     - provider_id: inspect
       benchmark_id: inspect/bfcl
-      metric: accuracy/accuracy
+      metric: bfcl_scorer/accuracy
       lower_is_better: false
       weight: 0.5
       threshold: 0.6
     - provider_id: inspect
       benchmark_id: inspect/bfcl
-      metric: accuracy/accuracy
+      metric: bfcl_scorer/accuracy
       lower_is_better: false
       weight: 0.5
       threshold: 0.6
@@ -191,8 +191,8 @@ documentation:
     The two screening caps may leave categories untested and can hide always-call or never-call behavior
     in subpopulations.
   - >-
-    The review reports a potential BFCL scorer-name mismatch with accuracy/accuracy and a repeated-ID
-    threshold lookup issue. Identical row scoring settings avoid the reported threshold difference,
+    Both BFCL rows select bfcl_scorer/accuracy. The review reports a repeated-ID threshold lookup
+    issue. Identical row scoring settings avoid the reported threshold difference,
     but row/category identity still matters.
   - >-
     Native API tool calling versus prompted call generation is not established by these category settings

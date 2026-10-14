@@ -1,0 +1,41 @@
+type: object
+description: >-
+  Optional job-level OCI processing status, artifact references, and signing
+  information. Unavailable objects are omitted, including on completed jobs.
+  Status, artifacts, and signing are independently optional. Artifact references
+  identify published outputs and are not derived from job IDs or registry tags.
+  OCI workflows report running once at the start and save available outputs together
+  with the final completed or failed status, without intermediate phase writes.
+properties:
+  status:
+    $ref: ./OCIProcessingStatus.yaml
+    description: Optional common OCI workflow status; omit until actual workflow information is available.
+  evaluation_card:
+    $ref: ./OCIArtifactReference.yaml
+    description: Optional evaluation card artifact; omit until available.
+  evaluation_bundle:
+    $ref: ./OCIArtifactReference.yaml
+    description: Optional OCI index grouping the evaluation card and benchmark artifacts; omit until available.
+  signing:
+    $ref: ./OCISigningResult.yaml
+    description: Optional signing information; omitted when no outcome is available.
+additionalProperties: false
+examples:
+  - status:
+      state: running
+      message:
+        message: OCI processing is running.
+        message_code: oci_processing_running
+  - status:
+      state: completed
+      message:
+        message: OCI processing completed.
+        message_code: oci_processing_completed
+    evaluation_card:
+      oci_digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      oci_reference: quay.io/my-org/eval-results@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    evaluation_bundle:
+      oci_digest: sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
+      oci_reference: quay.io/my-org/eval-results@sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
+    signing:
+      type: key-pair

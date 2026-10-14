@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -15,6 +17,61 @@ func testResultsStorage() *sqlStorage {
 }
 
 func threshold32(v float32) *float32 { return &v }
+
+// Use the shipped collection definitions and the real row/aggregate scoring paths.
+// In particular, rounding the Safety/Fairness aggregate target upward must not
+// reject a result that meets every row target.
+func TestCollectionThresholds_AtAndAroundRowTargets(t *testing.T) {
+	s := testResultsStorage()
+	collections, err := config.LoadCollectionConfigs(s.logger, testhelpers.NewValidator(t), "../../../../config")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"model-validation", "safety-and-fairness-v1", "reasoning-v1", "instruction-following-v1"} {
+		t.Run(id, func(t *testing.T) {
+			collection, ok := collections[id]
+			if !ok {
+				t.Fatalf("collection %s not found", id)
+			}
+			for _, tc := range []struct {
+				name        string
+				improvement float32
+				wantPass    bool
+			}{
+				{name: "at_targets", wantPass: true},
+				{name: "better_than_targets", improvement: 0.01, wantPass: true},
+				{name: "worse_than_targets", improvement: -0.01, wantPass: false},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					job := &api.EvaluationJobResource{
+						EvaluationJobConfig: api.EvaluationJobConfig{
+							Collection: &api.CollectionRef{ID: id},
+						},
+						Results: &api.EvaluationJobResults{},
+					}
+					for i, row := range collection.Benchmarks {
+						score := *row.PassCriteria.Threshold + tc.improvement
+						if row.PrimaryScore.LowerIsBetter {
+							score = *row.PassCriteria.Threshold - tc.improvement
+						}
+						event := statusEvent(row.ID, row.ProviderID, map[string]any{row.PrimaryScore.Metric: score})
+						rowResult := s.computeBenchmarkTestResult(nil, job, event, &collection)
+						if rowResult == nil || rowResult.Pass != tc.wantPass {
+							t.Fatalf("unexpected row result for %s: %+v", row.ID, rowResult)
+						}
+						job.Results.Benchmarks = append(job.Results.Benchmarks, api.BenchmarkResult{
+							ID: row.ID, ProviderID: row.ProviderID, BenchmarkIndex: i, Test: rowResult,
+						})
+					}
+					s.computeJobTestResult(job, &collection)
+					if job.Results.Test == nil || job.Results.Test.Pass != tc.wantPass {
+						t.Fatalf("unexpected aggregate result: %+v; want pass=%v", job.Results.Test, tc.wantPass)
+					}
+				})
+			}
+		})
+	}
+}
 
 func jobWithBenchmark(id, providerID string, primaryScore *api.PrimaryScore, passCriteria *api.PassCriteria) *api.EvaluationJobResource {
 	return &api.EvaluationJobResource{

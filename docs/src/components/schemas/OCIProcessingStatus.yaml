@@ -1,0 +1,21 @@
+type: object
+description: >-
+  Common post-evaluation OCI workflow status for evaluation-card generation and
+  publication, evaluation-bundle generation and publication, and future signing.
+  Independent of the evaluation job status and completion message. Omit until
+  actual workflow information is available; no state or message is defaulted.
+required:
+  - state
+  - message
+properties:
+  state:
+    type: string
+    enum: [running, failed, completed]
+    description: >-
+      running means OCI processing has started and remains in progress throughout all
+      applicable phases. Workflow reporting uses running followed by completed or failed.
+      failed means a required stage failed, with the stage and cause described in the
+      message. completed means all applicable stages succeeded; card-only completion
+      does not require bundle or signing outputs. No state is defaulted when status is absent.
+  message:
+    $ref: ./MessageInfo.yaml

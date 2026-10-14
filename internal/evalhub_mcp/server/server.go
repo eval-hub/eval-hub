@@ -43,10 +43,16 @@ func New(info *ServerInfo, logger *slog.Logger, serverOption *ServerOption) *mcp
 	}
 	serverOpts := &mcp.ServerOptions{
 		Logger: logger,
+		// Catalogs are registered once at startup, so no change stream is needed.
 		Capabilities: &mcp.ServerCapabilities{
-			Tools:     &mcp.ToolCapabilities{ListChanged: true},
-			Resources: &mcp.ResourceCapabilities{ListChanged: true},
-			Prompts:   &mcp.PromptCapabilities{ListChanged: true},
+			Tools:     &mcp.ToolCapabilities{},
+			Resources: &mcp.ResourceCapabilities{},
+			Prompts:   &mcp.PromptCapabilities{},
+		},
+		SetCacheable: func(_ context.Context, _ mcp.Request, cache *mcp.Cacheable) {
+			// Resource results can contain tenant-specific, changing evaluation data.
+			cache.TTLMs = 0
+			cache.CacheScope = "private"
 		},
 	}
 	if serverOption != nil {
@@ -196,15 +202,21 @@ func wrapRequest(cfg *config.Config, logger *slog.Logger, next http.Handler) htt
 }
 
 func runHTTP(ctx context.Context, srv *mcp.Server, cfg *config.Config, logger *slog.Logger) error {
+	return serveHTTP(ctx, NewHTTPHandler(srv, cfg, logger), cfg, logger)
+}
+
+// NewHTTPHandler serves stateless Streamable HTTP requests with the configured
+// authentication and request tracking. It supports MCP 2026-07-28 and the SDK's
+// older protocol revisions without requiring an HTTP session ID.
+func NewHTTPHandler(srv *mcp.Server, cfg *config.Config, logger *slog.Logger) http.Handler {
 	mcpHandler := mcp.NewStreamableHTTPHandler(
 		func(r *http.Request) *mcp.Server { return srv },
 		// Server runs behind kube-rbac-proxy which handles authentication;
 		// the default localhost DNS-rebinding protection rejects the proxy's
 		// forwarded Host header and must be disabled.
-		&mcp.StreamableHTTPOptions{DisableLocalhostProtection: true},
+		&mcp.StreamableHTTPOptions{Stateless: true, DisableLocalhostProtection: true},
 	)
-	handler := wrapRequest(cfg, logger, mcpHandler)
-	return serveHTTP(ctx, handler, cfg, logger)
+	return wrapRequest(cfg, logger, mcpHandler)
 }
 
 // runLegacyHTTPSSE serves the deprecated HTTP+SSE transport (MCP 2024-11-05) for older clients.

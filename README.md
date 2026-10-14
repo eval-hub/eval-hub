@@ -6,7 +6,7 @@
 [![CI](https://github.com/eval-hub/eval-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/eval-hub/eval-hub/actions/workflows/ci.yml)
 [![golangci-lint](https://github.com/eval-hub/eval-hub/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/eval-hub/eval-hub/actions/workflows/golangci-lint.yml)
 [![codecov](https://codecov.io/github/eval-hub/eval-hub/graph/badge.svg?token=LHJACCNC9A)](https://codecov.io/github/eval-hub/eval-hub)
-[![TrustyAI Operator ConfigMap Sync](https://github.com/eval-hub/eval-hub/actions/workflows/check-trustyai-service-operator-configmap-sync.yml/badge.svg)](https://github.com/eval-hub/eval-hub/actions/workflows/check-trustyai-service-operator-configmap-sync.yml)
+[![TrustyAI Operator ConfigMap Sync](https://github.com/eval-hub/eval-hub/actions/workflows/check-trustyai-service-operator-configmap-sync.yml/badge.svg)](https://github.com/eval-hub/eval-hub/actions/workflows/check-trustyai-service-operator-configmap-sync.yml)[![see sync](https://img.shields.io/badge/syncing_docs-here)](#syncing-providers-and-collections-to-the-trustyai-operator)
 [![license](https://img.shields.io/badge/License-Apache2.0-blue.svg?plastic)](https://github.com/eval-hub/eval-hub/blob/main/LICENSE)
 [![Signed release](https://github.com/eval-hub/eval-hub/actions/workflows/signed-release.yml/badge.svg)](https://github.com/eval-hub/eval-hub/actions/workflows/signed-release.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/eval-hub/eval-hub/badge)](https://scorecard.dev/viewer/?uri=github.com/eval-hub/eval-hub)

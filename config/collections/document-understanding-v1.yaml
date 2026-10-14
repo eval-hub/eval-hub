@@ -36,12 +36,12 @@ pass_criteria:
   threshold: 0.2125
 
 benchmarks:
-  # Retain provider-declared keys pending verification of RULER's emitted metrics.
+  # RULER primary metric keys were verified in completed single-context smoke runs.
   - id: common-words-extraction
     provider_id: ruler
     weight: 0.125
     primary_score:
-      metric: string_match_all
+      metric: cwe.overall
       lower_is_better: false
     pass_criteria:
       threshold: 0.10
@@ -58,7 +58,7 @@ benchmarks:
     provider_id: ruler
     weight: 0.125
     primary_score:
-      metric: string_match_all
+      metric: fwe.overall
       lower_is_better: false
     pass_criteria:
       threshold: 0.10
@@ -75,7 +75,7 @@ benchmarks:
     provider_id: ruler
     weight: 0.125
     primary_score:
-      metric: string_match_part
+      metric: qa_1.overall
       lower_is_better: false
     pass_criteria:
       threshold: 0.15
@@ -92,7 +92,7 @@ benchmarks:
     provider_id: ruler
     weight: 0.125
     primary_score:
-      metric: string_match_part
+      metric: qa_2.overall
       lower_is_better: false
     pass_criteria:
       threshold: 0.15
@@ -109,7 +109,7 @@ benchmarks:
     provider_id: ruler
     weight: 0.125
     primary_score:
-      metric: string_match_all
+      metric: niah_single_2.overall
       lower_is_better: false
     pass_criteria:
       threshold: 0.50
@@ -126,7 +126,7 @@ benchmarks:
     provider_id: ruler
     weight: 0.125
     primary_score:
-      metric: string_match_all
+      metric: vt.overall
       lower_is_better: false
     pass_criteria:
       threshold: 0.10
@@ -183,37 +183,37 @@ documentation:
     rows:
     - provider_id: ruler
       benchmark_id: common-words-extraction
-      metric: string_match_all
+      metric: cwe.overall
       lower_is_better: false
       weight: 0.125
       threshold: 0.1
     - provider_id: ruler
       benchmark_id: frequency-words-extraction
-      metric: string_match_all
+      metric: fwe.overall
       lower_is_better: false
       weight: 0.125
       threshold: 0.1
     - provider_id: ruler
       benchmark_id: qa-squad
-      metric: string_match_part
+      metric: qa_1.overall
       lower_is_better: false
       weight: 0.125
       threshold: 0.15
     - provider_id: ruler
       benchmark_id: qa-hotpotqa
-      metric: string_match_part
+      metric: qa_2.overall
       lower_is_better: false
       weight: 0.125
       threshold: 0.15
     - provider_id: ruler
       benchmark_id: niah-single-essay
-      metric: string_match_all
+      metric: niah_single_2.overall
       lower_is_better: false
       weight: 0.125
       threshold: 0.5
     - provider_id: ruler
       benchmark_id: variable-tracking
-      metric: string_match_all
+      metric: vt.overall
       lower_is_better: false
       weight: 0.125
       threshold: 0.1
@@ -341,16 +341,18 @@ documentation:
     Answer matching and multiple-choice accuracy do not establish citation quality or faithfulness.
     Summarization, schema-based extraction, attribution, and explicit grounding remain gaps.
   - >-
-    The review reports that RULER emits task-qualified overall/per-length keys rather than the declared
-    string-match keys. Deployed-result verification remains outstanding.
+    RULER task-qualified overall and per-length result keys were verified in completed single-context
+    smoke runs. This does not verify evaluated counts or aggregation across the full configured
+    context-length range, or establish compatibility with every deployed adapter version.
   - >-
     Provider runtime definitions must be distinguished from real benchmark evidence: configured local
     simulator commands do not validate benchmark execution. Repository YAML documentation is not currently
     persisted or exposed as a documentation field by the service API.
   unresolved_inputs:
   - >-
-    Obtain deployed RULER fixtures proving exact result keys, units, evaluated counts, and per-length
-    behavior.
+    Verify RULER units, evaluated counts, and per-length aggregation for the configured 4,096-, 8,192-,
+    and 16,384-token contexts. Prior single-context smoke runs verify result keys, not the complete
+    collection configuration.
   - >-
     Select a tokenizer and prompt template appropriate for the evaluated model and verify actual input
     token lengths.
