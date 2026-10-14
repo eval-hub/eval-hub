@@ -1,4 +1,5 @@
 id: coding-v1
+curation_order: 2
 name: Coding v1
 category: code
 domains:
@@ -9,7 +10,6 @@ modalities:
   - text
 evaluation_targets:
   - model
-curation_order: 0
 
 description: >
   Evaluates code generation capability of instruction-tuned chat LLMs on
