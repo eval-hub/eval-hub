@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
@@ -135,10 +136,15 @@ func (s *sqlStorage) computeBenchmarkTestResult(txn *sql.Tx, job *api.Evaluation
 			}
 		}
 		if primaryScore != nil && primaryScore.Metric != "" {
-			primaryMetric := primaryScore.Metric
-			primaryMetric, primaryMetricValue, ok := findPrimaryMetric(benchmarkStatusEvent.Metrics, primaryMetric)
+			primaryMetric, primaryMetricValue, ok, candidates := findPrimaryMetric(benchmarkStatusEvent.Metrics, primaryScore.Metric)
 			if !ok {
-				if len(benchmarkStatusEvent.Metrics) > 0 {
+				if len(candidates) > 1 {
+					s.logger.Error("Multiple filtered variants for primary metric; test section omitted",
+						"benchmark_id", benchmarkStatusEvent.ID,
+						"provider_id", benchmarkStatusEvent.ProviderID,
+						"primary_metric", primaryMetric,
+						"candidate_metrics", candidates)
+				} else if len(benchmarkStatusEvent.Metrics) > 0 {
 					s.logger.Error("Primary score metric not present in benchmark metrics; test section omitted",
 						"benchmark_id", benchmarkStatusEvent.ID,
 						"provider_id", benchmarkStatusEvent.ProviderID,
@@ -178,26 +184,30 @@ func (s *sqlStorage) computeBenchmarkTestResult(txn *sql.Tx, job *api.Evaluation
 // and the filtered form emitted by LM Evaluation Harness (for example,
 // "exact_match,get-answer"). An exact key takes precedence. When more than one
 // filtered variant exists, there is no safe way to choose a primary score.
-func findPrimaryMetric(metrics map[string]any, configured string) (string, any, bool) {
+// Ambiguous matches return all candidate names in sorted order for diagnostics.
+func findPrimaryMetric(metrics map[string]any, configured string) (string, any, bool, []string) {
 	if value, ok := metrics[configured]; ok {
-		return configured, value, true
+		return configured, value, true, nil
 	}
 	var matched string
 	var value any
+	var candidates []string
 	for name, candidate := range metrics {
 		base, filter, filtered := strings.Cut(name, ",")
 		if !filtered || base != configured || filter == "" {
 			continue
 		}
-		if matched != "" {
-			return configured, nil, false
-		}
+		candidates = append(candidates, name)
 		matched, value = name, candidate
 	}
-	if matched == "" {
-		return configured, nil, false
+	if len(candidates) > 1 {
+		sort.Strings(candidates)
+		return configured, nil, false, candidates
 	}
-	return matched, value, true
+	if matched == "" {
+		return configured, nil, false, nil
+	}
+	return matched, value, true, nil
 }
 
 func castAnyToFloat32(primaryMetricValue any) (float32, error) {

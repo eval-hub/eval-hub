@@ -31,7 +31,8 @@
         "bbh_cot_zeroshot_dyck_languages"
       ],
       "lm_eval_metrics": {
-        "exact_match,flexible-extract": 0.75
+        "exact_match,flexible-extract": 0.75,
+        "exact_match,strict-match": 0.75
       },
       "callback_metrics": {
         "exact_match": 0.75

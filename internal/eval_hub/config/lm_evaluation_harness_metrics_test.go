@@ -47,6 +47,9 @@ func TestLMEvaluationHarnessPrimaryMetrics(t *testing.T) {
 	expected["bbh_cot_zeroshot"] = "exact_match"
 	expected["bbh_cot_zeroshot_causal_judgement"] = "exact_match"
 	expected["bbh_cot_zeroshot_dyck_languages"] = "exact_match"
+	expected["scrolls_qasper"] = "f1"
+	expected["metabench_truthfulqa_permute"] = "acc"
+	expected["tinyTruthfulQA"] = "acc"
 	for _, benchmark := range provider.Benchmarks {
 		metric, affected := expected[benchmark.ID]
 		if !affected {

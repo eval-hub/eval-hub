@@ -1792,26 +1792,26 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - mc1
-  - mc2
-  - bleu
-  - rouge
+  - f1
   num_few_shot: 0
   dataset_size: 3000
   tags:
   - reading_comprehension
   - lm_eval
   primary_score:
-    metric: rouge
+    metric: f1
     lower_is_better: false
   pass_criteria:
     threshold: 0.1
   agent:
-    result_interpretation: Rouge; higher is better.
+    result_interpretation: >-
+      Token-overlap F1 on the SCROLLS 0-100 scale; higher is better.
+      The existing 0.1 threshold is retained as an uncalibrated diagnostic target
+      in those units, not as a 10% target.
     score_ranges:
     - range: 0.0-0.1
       meaning: Below default pass threshold
-    - range: 0.1-1.0
+    - range: 0.1-100.0
       meaning: Meets default pass threshold (0.1 or above)
 - id: AraDiCE_ArabicMMLU_high_social-science_economics_egy
   name: Economics knowledge (high school, Egyptian)
@@ -3182,29 +3182,25 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - mc1
-  - mc2
-  - bleu
-  - rouge
+  - acc
   num_few_shot: 0
   dataset_size: 817
   tags:
   - safety
   - lm_eval
   primary_score:
-    metric: mc1
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Multiple-choice accuracy (mc1); higher is better.
+    result_interpretation: >-
+      Multiple-choice accuracy (acc) using MC1 answer selection; higher is better.
     score_ranges:
     - range: 0.0-0.25
-      meaning: Below random chance for 4-choice questions
-    - range: '0.25'
-      meaning: Random baseline for 4-choice questions
+      meaning: Below the existing diagnostic pass threshold
     - range: 0.25-1.0
-      meaning: Meets default pass threshold (0.25 or above)
+      meaning: Meets the existing diagnostic pass threshold (0.25 or above); not a calibrated random baseline
 - id: tinyTruthfulQA
   name: Quick truthfulness check
   description: Compact truthfulness evaluation for rapid validation and smoke testing.
@@ -3214,29 +3210,27 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - mc1
-  - mc2
-  - bleu
-  - rouge
+  - acc
   num_few_shot: 0
   dataset_size: 817
   tags:
   - safety
   - lm_eval
   primary_score:
-    metric: mc1
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Multiple-choice accuracy (mc1); higher is better.
+    result_interpretation: >-
+      MC2 truthfulness estimate emitted as acc; higher is better. Per-example
+      scores are normalized probability mass assigned to true answers, aggregated
+      with tinyBenchmarks GPIRT. This is not MC1 accuracy.
     score_ranges:
     - range: 0.0-0.25
-      meaning: Below random chance for 4-choice questions
-    - range: '0.25'
-      meaning: Random baseline for 4-choice questions
+      meaning: Below the existing diagnostic pass threshold
     - range: 0.25-1.0
-      meaning: Meets default pass threshold (0.25 or above)
+      meaning: Meets the existing diagnostic pass threshold (0.25 or above); not a calibrated random baseline
 - id: bigbench_code_line_description_multiple_choice
   name: Code line explanation
   description: Identifies what a specific line of code does from multiple-choice descriptions.
