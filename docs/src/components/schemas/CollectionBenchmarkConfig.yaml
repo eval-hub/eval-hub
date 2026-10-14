@@ -26,7 +26,13 @@ allOf:
       parameters:
         type: object
         additionalProperties: true
-        description: Benchmark specific parameters.
+        description: |
+          Benchmark-specific parameters. Collections may declare empty
+          `judge_model` and `judge_route` fields for judge-requiring benchmarks
+          so clients can render per-job inputs. `judge_route` is either `target`
+          (reuse the evaluated model connection) or `judge` (use the judge
+          connection in the job's model-auth Secret). Empty collection defaults
+          are not carried into a job; the caller must provide both fields.
       test_data_ref:
         $ref: ./TestDataRef.yaml
         description: |

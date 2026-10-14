@@ -60,6 +60,11 @@ benchmarks:
     parameters:
       # Screening cap; override num_examples in the request for other run sizes.
       num_examples: 50
+      # Select a deployed judge model for Inspect's grader role in each job.
+      # target reuses the evaluated model connection; judge uses the judge
+      # credentials and optional judge_url in model.auth.secret_ref.
+      judge_model: ""
+      judge_route: ""
       task_args:
         include_multi_modal: false
         only_hle_verified_gold: false

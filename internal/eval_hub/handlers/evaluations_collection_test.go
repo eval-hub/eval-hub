@@ -3,10 +3,12 @@ package handlers_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -175,6 +177,64 @@ func TestHandleCreateEvaluationUpdatesCustomCollectionRunCount(t *testing.T) {
 				}
 			} else if storage.updatedStatus != nil {
 				t.Errorf("system collection status was updated: %+v", storage.updatedStatus)
+			}
+		})
+	}
+}
+
+func TestHandleCreateEvaluationValidatesDeclaredJudgeParameters(t *testing.T) {
+	tests := []struct {
+		name       string
+		parameters string
+		modelAuth  string
+		wantCode   int
+		wantError  string
+	}{
+		{name: "missing judge model", parameters: `{"judge_route":"target"}`, wantCode: http.StatusBadRequest, wantError: "judge_model"},
+		{name: "invalid judge route", parameters: `{"judge_model":"deployed-model","judge_route":"other"}`, wantCode: http.StatusBadRequest, wantError: "judge_route"},
+		{name: "judge route requires secret", parameters: `{"judge_model":"deployed-model","judge_route":"judge"}`, wantCode: http.StatusBadRequest, wantError: "model.auth.secret_ref"},
+		{name: "target route", parameters: `{"judge_model":"deployed-model","judge_route":"target"}`, wantCode: http.StatusAccepted},
+		{name: "judge route with secret", parameters: `{"judge_model":"deployed-model","judge_route":"judge"}`, modelAuth: `,"auth":{"secret_ref":"model-credentials"}`, wantCode: http.StatusAccepted},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage := &collectionRunCountStorage{
+				fakeStorage: &fakeStorage{providerConfigs: map[string]api.ProviderResource{
+					"inspect": {
+						Resource:       api.Resource{ID: "inspect"},
+						ProviderConfig: api.ProviderConfig{Benchmarks: []api.BenchmarkResource{{ID: "inspect/hle"}}},
+					},
+				}},
+				collection: &api.CollectionResource{
+					Resource: api.Resource{ID: "knowledge-reasoning-v1", Owner: "system"},
+					CollectionConfig: api.CollectionConfig{Benchmarks: []api.CollectionBenchmarkConfig{{
+						Ref: api.Ref{ID: "inspect/hle"}, ProviderID: "inspect",
+						Parameters: map[string]any{"judge_model": "", "judge_route": ""},
+					}}},
+				},
+			}
+			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, nil)
+			body := fmt.Sprintf(`{"name":"evaluation","model":{"url":"http://test.com","name":"target"%s},"collection":{"id":"knowledge-reasoning-v1","benchmarks":[{"id":"inspect/hle","provider_id":"inspect","parameters":%s}]}}`, tt.modelAuth, tt.parameters)
+			req := &bodyRequest{MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"), body: []byte(body)}
+			recorder := httptest.NewRecorder()
+			ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
+
+			h.HandleCreateEvaluation(ctx, req, MockResponseWrapper{recorder: recorder})
+
+			if recorder.Code != tt.wantCode {
+				t.Fatalf("status = %d, want %d; body: %s", recorder.Code, tt.wantCode, recorder.Body.String())
+			}
+			if tt.wantError != "" {
+				if storage.atomicCalls != 0 || storage.createdJob != nil {
+					t.Fatal("invalid judge settings created a job")
+				}
+				if !strings.Contains(recorder.Body.String(), tt.wantError) {
+					t.Errorf("response %q does not mention %q", recorder.Body.String(), tt.wantError)
+				}
+			} else if storage.createdJob == nil {
+				t.Fatal("valid judge settings did not create a job")
 			}
 		})
 	}

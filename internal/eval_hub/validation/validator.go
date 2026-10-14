@@ -138,6 +138,45 @@ func ValidateCollectionOverrides(overrides []api.EvaluationBenchmarkConfig, coll
 	return nil
 }
 
+// ValidateCollectionJudgeParameters checks the effective parameters of benchmarks
+// whose collection definition opts in to the flat judge_route contract. Other
+// collections and standalone jobs retain their existing parameter behavior.
+func ValidateCollectionJudgeParameters(collection *api.CollectionResource, benchmarks []api.EvaluationBenchmarkConfig, model *api.ModelRef) error {
+	if collection == nil {
+		return nil
+	}
+
+	type benchmarkKey struct{ providerID, id string }
+	judgeBenchmarks := make(map[benchmarkKey]struct{})
+	for _, benchmark := range collection.Benchmarks {
+		if _, enabled := benchmark.Parameters["judge_route"]; enabled {
+			judgeBenchmarks[benchmarkKey{benchmark.ProviderID, benchmark.ID}] = struct{}{}
+		}
+	}
+
+	for _, benchmark := range benchmarks {
+		if _, enabled := judgeBenchmarks[benchmarkKey{benchmark.ProviderID, benchmark.ID}]; !enabled {
+			continue
+		}
+		invalid := func(reason string) error {
+			return serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error",
+				fmt.Sprintf("benchmark %q (%s): %s", benchmark.ID, benchmark.ProviderID, reason))
+		}
+		name, ok := benchmark.Parameters["judge_model"].(string)
+		if !ok || strings.TrimSpace(name) == "" {
+			return invalid("judge_model must be a non-empty model name")
+		}
+		route, ok := benchmark.Parameters["judge_route"].(string)
+		if !ok || (route != "target" && route != "judge") {
+			return invalid("judge_route must be target or judge")
+		}
+		if route == "judge" && (model == nil || model.Auth == nil || strings.TrimSpace(model.Auth.SecretRef) == "") {
+			return invalid("judge_route=judge requires model.auth.secret_ref with judge credentials")
+		}
+	}
+	return nil
+}
+
 // validateBenchmarkHardwareConfigExclusive rejects combining a hardware profile name
 // with inline queue/cpu/memory/gpu overrides.
 func validateBenchmarkHardwareConfigExclusive(sl validator.StructLevel) {
