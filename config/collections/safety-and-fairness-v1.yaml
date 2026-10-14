@@ -15,8 +15,9 @@ tags:
   - ethics
   - truthfulness
 pass_criteria:
-  # Rounded collection-level pass threshold.
-  threshold: 0.75
+  # Weighted row targets, with lower-is-better inverted: 8.9 / 12.
+  # Round down at this precision so scores at all row targets still pass.
+  threshold: 0.7416666
 benchmarks:
   - id: truthfulqa_mc1
     provider_id: lm_evaluation_harness
