@@ -1,7 +1,10 @@
 package sql
 
 import (
+	"bytes"
+	"encoding/json"
 	"log/slog"
+	"slices"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
@@ -299,5 +302,108 @@ func TestComputeBenchmarkTestResult_MissingPrimaryMetricReturnsNil(t *testing.T)
 	result := s.computeBenchmarkTestResult(nil, job, event, nil)
 	if result != nil {
 		t.Fatalf("expected nil when primary metric is missing from metrics, got %+v", result)
+	}
+}
+
+func TestComputeBenchmarkTestResult_FilteredPrimaryMetric(t *testing.T) {
+	t.Parallel()
+	s := testResultsStorage()
+	job := jobWithBenchmark("bbh_cot_fewshot_navigate", "lm_evaluation_harness",
+		&api.PrimaryScore{Metric: "exact_match"},
+		&api.PassCriteria{Threshold: threshold32(0.25)},
+	)
+	event := statusEvent("bbh_cot_fewshot_navigate", "lm_evaluation_harness", map[string]any{
+		"exact_match,get-answer":        float64(0.75),
+		"exact_match_stderr,get-answer": float64(0.1),
+	})
+	result := s.computeBenchmarkTestResult(nil, job, event, nil)
+	if result == nil {
+		t.Fatal("expected test result for filtered primary metric")
+	}
+	if result.PrimaryScoreMetric != "exact_match,get-answer" || result.PrimaryScore != 0.75 || result.Threshold != 0.25 || !result.Pass {
+		t.Errorf("unexpected filtered metric test result: %+v", result)
+	}
+}
+
+func TestComputeBenchmarkTestResult_AmbiguousFilteredPrimaryMetricReturnsNil(t *testing.T) {
+	t.Parallel()
+	s := testResultsStorage()
+	job := jobWithBenchmark("bbh_cot_zeroshot", "lm_evaluation_harness",
+		&api.PrimaryScore{Metric: "exact_match"},
+		&api.PassCriteria{Threshold: threshold32(0.25)},
+	)
+	event := statusEvent("bbh_cot_zeroshot", "lm_evaluation_harness", map[string]any{
+		"exact_match,strict-match":     float64(0.3),
+		"exact_match,flexible-extract": float64(0.8),
+	})
+	if result := s.computeBenchmarkTestResult(nil, job, event, nil); result != nil {
+		t.Fatalf("expected nil for ambiguous filtered metrics, got %+v", result)
+	}
+
+	event.Metrics["exact_match"] = float64(0.5)
+	result := s.computeBenchmarkTestResult(nil, job, event, nil)
+	if result == nil || result.PrimaryScoreMetric != "exact_match" || result.PrimaryScore != 0.5 {
+		t.Fatalf("expected exact metric to take precedence, got %+v", result)
+	}
+}
+
+func TestComputeBenchmarkTestResult_MetricSelectionDiagnostics(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name       string
+		metrics    map[string]any
+		message    string
+		candidates []string
+	}{
+		{
+			name:    "missing",
+			metrics: map[string]any{"acc": 0.75},
+			message: "Primary score metric not present in benchmark metrics; test section omitted",
+		},
+		{
+			name: "ambiguous",
+			metrics: map[string]any{
+				"exact_match,strict-match":     0.3,
+				"exact_match,flexible-extract": 0.8,
+				"exact_match,get-answer":       0.6,
+				"exact_match_stderr,ignore":    0.1,
+				"acc,none":                     0.5,
+			},
+			message: "Multiple filtered variants for primary metric; test section omitted",
+			candidates: []string{
+				"exact_match,flexible-extract",
+				"exact_match,get-answer",
+				"exact_match,strict-match",
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var logs bytes.Buffer
+			s := &sqlStorage{logger: slog.New(slog.NewJSONHandler(&logs, nil))}
+			job := jobWithBenchmark("bbh_cot_zeroshot", "lm_evaluation_harness",
+				&api.PrimaryScore{Metric: "exact_match"},
+				&api.PassCriteria{Threshold: threshold32(0.25)},
+			)
+			event := statusEvent("bbh_cot_zeroshot", "lm_evaluation_harness", tc.metrics)
+			if result := s.computeBenchmarkTestResult(nil, job, event, nil); result != nil {
+				t.Fatalf("expected no test result, got %+v", result)
+			}
+			var diagnostic struct {
+				Message     string   `json:"msg"`
+				BenchmarkID string   `json:"benchmark_id"`
+				ProviderID  string   `json:"provider_id"`
+				Metric      string   `json:"primary_metric"`
+				Candidates  []string `json:"candidate_metrics"`
+			}
+			if err := json.Unmarshal(logs.Bytes(), &diagnostic); err != nil {
+				t.Fatalf("decode diagnostic: %v; log: %s", err, logs.String())
+			}
+			if diagnostic.Message != tc.message || diagnostic.BenchmarkID != event.ID || diagnostic.ProviderID != event.ProviderID || diagnostic.Metric != "exact_match" {
+				t.Errorf("unexpected diagnostic: %+v", diagnostic)
+			}
+			if !slices.Equal(diagnostic.Candidates, tc.candidates) {
+				t.Errorf("candidate metrics = %v, want %v", diagnostic.Candidates, tc.candidates)
+			}
+		})
 	}
 }
