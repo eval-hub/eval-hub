@@ -8,10 +8,13 @@ evaluation_targets: [model]
 curation_order: 0
 description: >
   Evaluates code generation capability of instruction-tuned chat LLMs on
-  execution-based programming problems. LiveCodeBench v6 samples problems from
-  Codeforces, LeetCode, and AtCoder after the model knowledge cutoff to reduce data
-  contamination risk. Execution-based scoring runs generated code against hidden test
-  cases. The primary metric is codegen_pass@1 averaged over 3 random seeds (k=1, n=3).
+  execution-based programming problems. LiveCodeBench v6 contains problems from
+  Codeforces, LeetCode, and AtCoder. This fixed release does not establish whether
+  problems postdate the evaluated model's knowledge cutoff or exclude contamination.
+  Execution-based scoring runs generated code against hidden test cases. The primary
+  metric is codegen_pass@1; the request configures pass_at_k=1 and num_samples=3.
+  These settings do not establish averaging over three independently seeded runs;
+  actual sampling behavior must be verified against the configured adapter.
   SWE-Bench (agentic software engineering) is planned for a future version.
   Part of the Standard LLM Evaluation Suite (standard-llm-evals-v1).
 tags:
@@ -19,7 +22,6 @@ tags:
   - code-generation
   - competitive-programming
   - execution
-  - contamination-resistant
   - chat
   - lighteval
   - vllm
