@@ -19,7 +19,7 @@ description: >
 # problems postdate the evaluated model's knowledge cutoff or exclude training
 # contamination. Generated code is scored against test cases without
 # feeding execution results back to the model. The primary metric is
-# codegen_pass@1. The collection is a coding diagnostic,
+# lcb:codegeneration_v6.codegen_pass@1. The collection is a coding diagnostic,
 # not a comprehensive software-development readiness criterion. SWE-Bench and agentic
 # software-engineering workflows are outside the current scope.
 # Part of the Standard LLM Evaluation Suite (standard-llm-evals-v1).
@@ -50,7 +50,7 @@ agent:
       LightEval image. Record adapter and dataset revisions and generation settings.
   result_interpretation:
     - >-
-      The expected metric is codegen_pass@1 on a 0-1 scale.
+      The expected metric is lcb:codegeneration_v6.codegen_pass@1 on a 0-1 scale.
       With one benchmark of weight 1, the aggregate equals its score when present.
       An absent score or test result is not a passing result.
     - >-
@@ -63,7 +63,7 @@ benchmarks:
     provider_id: lighteval
     weight: 1
     primary_score:
-      metric: codegen_pass@1
+      metric: lcb:codegeneration_v6.codegen_pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.30
@@ -88,7 +88,7 @@ documentation:
     rows:
       - provider_id: lighteval
         benchmark_id: lcb:codegeneration_v6
-        metric: codegen_pass@1
+        metric: lcb:codegeneration_v6.codegen_pass@1
         lower_is_better: false
         weight: 1
         threshold: 0.30
