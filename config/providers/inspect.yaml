@@ -1134,9 +1134,9 @@ benchmarks:
     tasks: [call_generation, parameter_type_correctness, relevance_no_call_detection]
     modalities: [text]
     evaluation_targets: [model]
-    metrics: [accuracy/accuracy]
+    metrics: [bfcl_scorer/accuracy]
     primary_score:
-      metric: accuracy/accuracy
+      metric: bfcl_scorer/accuracy
       lower_is_better: false
     pass_criteria:
       threshold: 0.60

@@ -1,5 +1,33 @@
 # Development tips for MCP
 
+## Protocol versions and transports
+
+EvalHub supports MCP **2026-07-28** over stdio and stateless Streamable HTTP
+(`--transport http`). The Go MCP SDK also supports older revisions
+`2025-11-25`, `2025-06-18`, `2025-03-26`, and `2024-11-05`. Older clients can
+continue to use the initialization handshake over these transports.
+
+For 2026-07-28, each request carries its protocol version and client capabilities
+in `params._meta`. Clients can call `server/discover` to obtain supported versions,
+capabilities, and server identity, or send a request directly. There is no
+`initialize` / `notifications/initialized` exchange and no `Mcp-Session-Id`.
+The SDK adds server identity to each result's `_meta`.
+
+HTTP requests use `MCP-Protocol-Version` and `Mcp-Method` headers. Named operations
+also use `Mcp-Name`: the tool or prompt name, or the resource URI. Header values
+must match the request body. The SDK supplies these fields for SDK clients.
+
+Catalogs are fixed at startup and do not advertise list-change notifications or
+resource subscriptions. Cache hints use `ttlMs: 0` and `cacheScope: private`, so
+clients should re-fetch results and intermediaries should not share evaluation
+data between users. The separate 30-second completion cache is unchanged.
+
+The deprecated `--transport http-sse` remains available for legacy clients,
+including MCP 2024-11-05. Use stdio or Streamable HTTP for 2026-07-28.
+
+See the [specification changelog](https://modelcontextprotocol.io/specification/2026-07-28/changelog)
+and [Go SDK protocol guidance](https://github.com/modelcontextprotocol/go-sdk/blob/v1.8.0/docs/protocol.md).
+
 ## Creating a MCP service using the evalhub CR
 
 This example shows the minimal config required to enable MCP in the evalhub CR:
@@ -277,7 +305,41 @@ EVALHUB_BASE_URL=http://localhost:8080 EVALHUB_TOKEN=token EVALHUB_TENANT=tenant
 
 Default `auth_type` is `none`; no bearer token is required to reach the MCP endpoint.
 
+For example, discover capabilities without initialization:
+
+```shell
+curl http://localhost:3001/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'MCP-Protocol-Version: 2026-07-28' \
+  -H 'Mcp-Method: server/discover' \
+  --data '{"jsonrpc":"2.0","id":1,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{},"io.modelcontextprotocol/clientInfo":{"name":"curl","version":"1"}}}}'
+```
+
+Or read the version resource directly, without a discovery call:
+
+```shell
+curl http://localhost:3001/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'MCP-Protocol-Version: 2026-07-28' \
+  -H 'Mcp-Method: resources/read' \
+  -H 'Mcp-Name: evalhub://server/version' \
+  --data '{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"evalhub://server/version","_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{},"io.modelcontextprotocol/clientInfo":{"name":"curl","version":"1"}}}}'
+```
+
+Through kube-rbac-proxy, send a bearer token to the proxy for every request,
+including discovery. The proxy must forward the MCP headers along with `X-User`
+and `X-Tenant`. The MCP server validates those identity headers on each request.
+
 ### Local testing
+
+MCP FVT scenarios exercise the production Streamable HTTP handler and assert
+protocol version 2026-07-28, covering tools, resources, prompts, and completions:
+
+```shell
+make test-fvt FVT_TAGS='--godog.tags=@mcp && ~@ignore && ~@cluster && ~@local_runtime && ~@mlflow && ~@benchmark_providers'
+```
 
 ```shell
 make start-service

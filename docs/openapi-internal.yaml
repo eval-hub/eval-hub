@@ -3792,10 +3792,6 @@ components:
           type: string
           title: OCI Tag
           description: OCI tag (e.g. 'eval-123')
-        oci_subject:
-          type: string
-          title: OCI Subject
-          description: Optional OCI subject identifier (in same registry and repo)
         annotations:
           type: object
           additionalProperties:

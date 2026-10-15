@@ -19,8 +19,8 @@ tags:
   - vllm
   - standard
 pass_criteria:
-  # Desired capability level for instruction following.
-  threshold: 0.65
+  # Match the only benchmark's row target.
+  threshold: 0.70
 benchmarks:
   - id: ifeval
     provider_id: lm_evaluation_harness

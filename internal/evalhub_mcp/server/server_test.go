@@ -74,9 +74,12 @@ func TestNewEvalHubClientCreated(t *testing.T) {
 
 // --- MCP server via in-memory transport ---
 
-func TestInitializeHandshake(t *testing.T) {
+func TestProtocolDiscovery(t *testing.T) {
 	t.Parallel()
-	connectServer(t, &ServerInfo{Build: "test123"})
+	_, cs := connectServer(t, &ServerInfo{Build: "test123"})
+	if got := cs.InitializeResult().ProtocolVersion; got != "2026-07-28" {
+		t.Fatalf("discovered protocol version = %q, want 2026-07-28", got)
+	}
 }
 
 func TestServerMetadata(t *testing.T) {
