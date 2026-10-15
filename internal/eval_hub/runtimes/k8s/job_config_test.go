@@ -1,13 +1,94 @@
 package k8s
 
 import (
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	corev1 "k8s.io/api/core/v1"
 )
+
+func TestPostProcessorPVCConfigsEdgeCases(t *testing.T) {
+	validColumns := api.CalibrationDataConfig{
+		Format:  "jsonl",
+		Columns: api.CalibrationDataColumns{Label: "label", Prediction: "prediction"},
+	}
+	tests := []struct {
+		name    string
+		job     *api.EvaluationJobResource
+		want    []postProcessorPVCConfig
+		wantErr string
+	}{
+		{name: "nil job"},
+		{name: "ordinary evaluation", job: &api.EvaluationJobResource{EvaluationJobConfig: api.EvaluationJobConfig{Name: "evaluation"}}},
+		{
+			name: "malformed post-processing operations",
+			job: &api.EvaluationJobResource{EvaluationJobConfig: api.EvaluationJobConfig{Benchmarks: []api.EvaluationBenchmarkConfig{{
+				ProviderID: postprocessing.ProviderID,
+				Ref:        api.Ref{ID: postprocessing.BenchmarkID},
+			}}}},
+			wantErr: "read post-processing calibration data refs",
+		},
+		{
+			name: "non PVC calibration references are ignored",
+			job: postProcessorPVCJobForEdgeCases([]api.CalibrationDataRef{{
+				S3: &api.S3TestDataRef{Bucket: "calibration", Key: "labels", SecretRef: "s3-secret"}, DataConfig: validColumns,
+			}}),
+		},
+		{
+			name: "PVC claims are trimmed and deduplicated",
+			job: postProcessorPVCJobForEdgeCases([]api.CalibrationDataRef{
+				{PVC: &api.PVCTestDataRef{ClaimName: " calibration-a "}, DataConfig: validColumns},
+				{PVC: &api.PVCTestDataRef{ClaimName: "calibration-a"}, DataConfig: validColumns},
+				{PVC: &api.PVCTestDataRef{ClaimName: "calibration-b"}, DataConfig: validColumns},
+			}),
+			want: []postProcessorPVCConfig{
+				{claimName: "calibration-a", volumeName: postProcessorCalibrationPVCVolumeNamePrefix + "0", mountPath: postProcessorCalibrationPVCMountPathPrefix + "/calibration-a"},
+				{claimName: "calibration-b", volumeName: postProcessorCalibrationPVCVolumeNamePrefix + "1", mountPath: postProcessorCalibrationPVCMountPathPrefix + "/calibration-b"},
+			},
+		},
+		{
+			name:    "empty PVC claim is rejected",
+			job:     postProcessorPVCJobForEdgeCases([]api.CalibrationDataRef{{PVC: &api.PVCTestDataRef{ClaimName: "  "}, DataConfig: validColumns}}),
+			wantErr: "claim_name is required",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := postProcessorPVCConfigs(test.job)
+			if test.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+					t.Fatalf("postProcessorPVCConfigs() error = %v, want it to contain %q", err, test.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("postProcessorPVCConfigs() error = %v", err)
+			}
+			if !reflect.DeepEqual(got, test.want) {
+				t.Fatalf("postProcessorPVCConfigs() = %#v, want %#v", got, test.want)
+			}
+		})
+	}
+}
+
+func postProcessorPVCJobForEdgeCases(refs []api.CalibrationDataRef) *api.EvaluationJobResource {
+	request := &api.StandalonePostProcessingRequest{
+		Operations: api.StandalonePostProcessingOperations{ConfidenceInterval: &api.StandaloneConfidenceIntervalConfig{
+			ConfidenceIntervalConfigCommon: api.ConfidenceIntervalConfigCommon{
+				CalibrationDataRef: refs,
+				SignificanceLevel:  0.05,
+			},
+			ResultsDataRef: &api.PostProcessingResultsDataRef{PVC: &api.PVCTestDataRef{ClaimName: "results"}},
+			PrimaryScore:   &api.PrimaryScore{Metric: "accuracy"},
+		}},
+	}
+	return &api.EvaluationJobResource{EvaluationJobConfig: *postprocessing.ToEvaluationJob(request)}
+}
 
 func TestBuildJobConfigDefaults(t *testing.T) {
 	callbackURL := "http://localhost:8080"
@@ -1516,5 +1597,55 @@ func TestBuildJobConfigTestDataHF(t *testing.T) {
 	}
 	if cfg.testDataHF.secretRef != "hf-token" {
 		t.Fatalf("expected testDataHF.secretRef %q, got %q", "hf-token", cfg.testDataHF.secretRef)
+	}
+}
+
+func TestPostProcessorPVCConfigs(t *testing.T) {
+	evaluation := &api.EvaluationJobResource{
+		EvaluationJobConfig: api.EvaluationJobConfig{
+			Benchmarks: []api.EvaluationBenchmarkConfig{{
+				Ref:        api.Ref{ID: "evaluation-post-processor"},
+				ProviderID: "evalhub-internal",
+				Parameters: map[string]any{
+					"operations": api.StandalonePostProcessingOperations{
+						ConfidenceInterval: &api.StandaloneConfidenceIntervalConfig{
+							ConfidenceIntervalConfigCommon: api.ConfidenceIntervalConfigCommon{
+								CalibrationDataRef: []api.CalibrationDataRef{
+									{PVC: &api.PVCTestDataRef{ClaimName: "calibration-a"}},
+									{S3: &api.S3TestDataRef{Bucket: "bucket", Key: "calibration.csv", SecretRef: "s3-secret"}},
+									{PVC: &api.PVCTestDataRef{ClaimName: "calibration-b"}},
+									{PVC: &api.PVCTestDataRef{ClaimName: "calibration-a"}},
+								},
+							},
+						},
+					},
+				},
+			}},
+		},
+	}
+
+	configs, err := postProcessorPVCConfigs(evaluation)
+	if err != nil {
+		t.Fatalf("postProcessorPVCConfigs: %v", err)
+	}
+	if len(configs) != 2 {
+		t.Fatalf("got %d PVC configs, want 2", len(configs))
+	}
+	want := []postProcessorPVCConfig{
+		{
+			claimName:  "calibration-a",
+			volumeName: postProcessorCalibrationPVCVolumeNamePrefix + "0",
+			mountPath:  postProcessorCalibrationPVCMountPathPrefix + "/calibration-a",
+		},
+		{
+			claimName:  "calibration-b",
+			volumeName: postProcessorCalibrationPVCVolumeNamePrefix + "1",
+			mountPath:  postProcessorCalibrationPVCMountPathPrefix + "/calibration-b",
+		},
+	}
+	for i := range want {
+		if configs[i] != want[i] {
+			t.Errorf("config[%d] = %#v, want %#v", i, configs[i], want[i])
+		}
 	}
 }

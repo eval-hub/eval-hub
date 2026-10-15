@@ -1,0 +1,19 @@
+title: ResultsDataConfig
+description: |
+  Optional result format and field mappings. In standalone requests, place this
+  beside the source inside results_data_ref; in job-scoped requests, use
+  results_data_config. Omit this to use automatic format detection and
+  canonical sample_id/prediction fields. An object applies to every result artifact.
+  For heterogeneous evaluation jobs, an array selects a configuration using
+  benchmark_id, provider_id, and/or metric; exactly one entry must match each
+  source benchmark. An array configures individual source benchmarks.
+oneOf:
+  - $ref: ./ResultsDataConfigEntry.yaml
+  - type: array
+    minItems: 1
+    items:
+      allOf:
+        - $ref: ./ResultsDataConfigEntry.yaml
+        - type: object
+          required:
+            - selection

@@ -14,7 +14,7 @@ import (
 const (
 	ProviderID          = "evalhub-internal"
 	BenchmarkID         = "evaluation-post-processor"
-	workloadType        = workloads.Type("post-processing")
+	workloadType        = workloads.PostProcessing
 	defaultAdapterImage = "quay.io/evalhub/evalhub-post-processor:latest"
 	adapterImageEnv     = "EVALHUB_POST_PROCESSING_IMAGE"
 	localAdapterDir     = "../eval-hub-contrib/adapters/evalhub-post-processor"
@@ -159,6 +159,10 @@ func ResourceFromJob(job *api.EvaluationJobResource) (*api.PostProcessingResourc
 	if err != nil {
 		return nil, err
 	}
+	results, err := resultsFromJob(job, operations.ConfidenceInterval)
+	if err != nil {
+		return nil, err
+	}
 	resource := &api.PostProcessingResource{
 		Resource: job.Resource.Resource,
 		PostProcessingCommon: api.PostProcessingCommon{
@@ -168,17 +172,105 @@ func ResourceFromJob(job *api.EvaluationJobResource) (*api.PostProcessingResourc
 		},
 		Operations: operations,
 		Status:     api.PostProcessingStatus{State: api.StatePending},
+		Results:    results,
 	}
-	if job.Status != nil {
-		resource.Status.State = api.State(job.Status.State)
-		if len(job.Status.Benchmarks) == 1 {
-			benchmark := job.Status.Benchmarks[0]
-			resource.Status.ErrorMessage = benchmark.ErrorMessage
-			resource.Status.WarningMessage = benchmark.WarningMessage
-			resource.Status.StartedAt = benchmark.StartedAt
-			resource.Status.CompletedAt = benchmark.CompletedAt
-			resource.Status.Benchmarks = job.Status.Benchmarks
+	resource.Status = postProcessingStatusFromJob(job)
+	return resource, nil
+}
+
+// JobResourceFromJob builds the job-scoped response, omitting the source
+// reference because it is represented by the request path.
+func JobResourceFromJob(job *api.EvaluationJobResource) (*api.JobPostProcessingResource, error) {
+	operations, err := OperationsFromJob(&job.EvaluationJobConfig)
+	if err != nil {
+		return nil, err
+	}
+	operation := operations.ConfidenceInterval
+	if operation == nil || operation.ResultsDataRef == nil || operation.ResultsDataRef.EvalJob == nil {
+		return nil, fmt.Errorf("post-processing job does not reference an evaluation job")
+	}
+	operationOrder, err := OperationOrderFromJob(&job.EvaluationJobConfig)
+	if err != nil {
+		return nil, err
+	}
+	results, err := resultsFromJob(job, operation)
+	if err != nil {
+		return nil, err
+	}
+	return &api.JobPostProcessingResource{
+		Resource: job.Resource.Resource,
+		PostProcessingCommon: api.PostProcessingCommon{
+			Name:           job.Name,
+			HardwareConfig: job.HardwareConfig,
+			OperationOrder: operationOrder,
+		},
+		Operations: api.JobPostProcessingOperations{
+			ConfidenceInterval: &api.ConfidenceIntervalConfig{
+				ConfidenceIntervalConfigCommon: operation.ConfidenceIntervalConfigCommon,
+				ResultsDataConfig:              operation.ResultsDataRef.DataConfig,
+				NumParallelThreads:             operation.ResultsDataRef.EvalJob.NumParallelThreads,
+			},
+		},
+		Status:  postProcessingStatusFromJob(job),
+		Results: results,
+	}, nil
+}
+
+func postProcessingStatusFromJob(job *api.EvaluationJobResource) api.PostProcessingStatus {
+	status := api.PostProcessingStatus{State: api.StatePending}
+	if job.Status == nil {
+		return status
+	}
+	status.State = api.State(job.Status.State)
+	if len(job.Status.Benchmarks) == 1 {
+		benchmark := job.Status.Benchmarks[0]
+		status.ErrorMessage = benchmark.ErrorMessage
+		status.WarningMessage = benchmark.WarningMessage
+		status.StartedAt = benchmark.StartedAt
+		status.CompletedAt = benchmark.CompletedAt
+	}
+	return status
+}
+
+// resultsFromJob maps the post-processor's operation output from the backing
+// evaluation job into the result shape selected by the standalone request.
+func resultsFromJob(job *api.EvaluationJobResource, operation *api.StandaloneConfidenceIntervalConfig) (*api.PostProcessingResults, error) {
+	if job.Results == nil || operation == nil || operation.ResultsDataRef == nil {
+		return nil, nil
+	}
+
+	usesEvaluationJobResults := operation.ResultsDataRef.EvalJob != nil
+	results := &api.PostProcessingResults{}
+	for _, benchmark := range job.Results.Benchmarks {
+		raw, ok := benchmark.AdditionalInfo["confidence_interval"]
+		if !ok {
+			continue
+		}
+
+		data, err := json.Marshal(raw)
+		if err != nil {
+			return nil, fmt.Errorf("marshal post-processing confidence interval results: %w", err)
+		}
+		var output struct {
+			Benchmarks         []api.PostProcessingBenchmarkResult `json:"benchmarks"`
+			ConfidenceInterval *api.ConfidenceInterval             `json:"confidence_interval"`
+		}
+		if err := json.Unmarshal(data, &output); err != nil {
+			return nil, fmt.Errorf("decode post-processing confidence interval results: %w", err)
+		}
+
+		if usesEvaluationJobResults {
+			results.Benchmarks = append(results.Benchmarks, output.Benchmarks...)
+		} else if output.ConfidenceInterval != nil {
+			results.ConfidenceInterval = output.ConfidenceInterval
 		}
 	}
-	return resource, nil
+
+	if usesEvaluationJobResults && len(results.Benchmarks) > 0 {
+		return results, nil
+	}
+	if !usesEvaluationJobResults && results.ConfidenceInterval != nil {
+		return results, nil
+	}
+	return nil, nil
 }

@@ -44,6 +44,11 @@ func formatValidationError(errs validator.ValidationErrors) string {
 		if e.Field() == "results_data_ref" {
 			return "results_data_ref is required"
 		}
+		if e.Field() == "primary_score" {
+			return "primary_score is required"
+		}
+	case "standalone_results_data_ref":
+		return "results_data_ref.eval_job is only available on job-scoped post-processing"
 	case "operation_order_matches_operations":
 		return "operation_order must list each configured operation exactly once"
 	case "oneof":
@@ -58,9 +63,6 @@ func formatValidationError(errs validator.ValidationErrors) string {
 		if isTestDataRefSourceField(e.Field()) && strings.Contains(e.StructNamespace(), "TestDataRef.") {
 			return "test_data_ref: exactly one of s3, pvc, git, or hf must be set"
 		}
-		if e.Field() == "primary_score" {
-			return "primary_score is not allowed when results_data_ref.eval_job is set"
-		}
 	case "required_without_all":
 		if refName := postProcessingDataRefName(e); refName != "" {
 			if refName == "calibration_data_ref" {
@@ -70,10 +72,6 @@ func formatValidationError(errs validator.ValidationErrors) string {
 		}
 		if isTestDataRefSourceField(e.Field()) && strings.Contains(e.StructNamespace(), "TestDataRef.") {
 			return "test_data_ref: one of s3, pvc, git, or hf must be set"
-		}
-	case "required_without":
-		if e.Field() == "primary_score" {
-			return "primary_score is required when results_data_ref.eval_job is not set"
 		}
 	case "category_or_domains":
 		return "either category or a non-empty domains array must be provided"

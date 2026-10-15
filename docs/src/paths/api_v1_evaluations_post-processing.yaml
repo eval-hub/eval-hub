@@ -13,42 +13,25 @@ post:
       application/json:
         schema:
           $ref: ../components/schemas/StandalonePostProcessingRequest.yaml
-        examples:
-          eval_job:
-            summary: Compute confidence intervals from an evaluation job
-            value:
-              name: inspect-accuracy-confidence-interval
-              hardware_config:
-                cpu:
-                  request: 500m
-                  limit: "2"
-                memory:
-                  request: 1Gi
-                  limit: "4Gi"
-              operation_order:
-                - confidence_interval
-              operations:
-                confidence_interval:
-                  results_data_ref:
-                    eval_job:
-                      id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
-                      num_parallel_threads: 2
-                  calibration_data_ref:
-                    - s3:
-                        bucket: evaluation-data
-                        key: calibration/accuracy
-                        secret_ref: s3-secret
-                      data_config:
-                        format: jsonl
-                        columns:
-                          sample_id: example_id
-                          label: human_score
-                          prediction: judge_score
-                          benchmark_id: benchmark_id
-                          provider_id: provider_id
-                        selection:
-                          metric: accuracy
-                  significance_level: 0.7
+        example:
+          operations:
+            confidence_interval:
+              results_data_ref:
+                pvc:
+                  claim_name: evaluation-results
+              primary_score:
+                metric: accuracy
+              calibration_data_ref:
+                - s3:
+                    bucket: evaluation-data
+                    key: calibration/accuracy
+                    secret_ref: s3-secret
+                  data_config:
+                    format: jsonl
+                    columns:
+                      label: human_score
+                      prediction: judge_score
+              significance_level: 0.05
   responses:
     '202':
       description: Post-processing computation accepted.

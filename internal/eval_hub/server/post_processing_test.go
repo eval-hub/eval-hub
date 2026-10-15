@@ -84,20 +84,36 @@ func newPostProcessingServer(t *testing.T) (http.Handler, abstractions.Storage, 
 }
 
 func postProcessingBody(source string) string {
-	primaryScore := `,"primary_score":{"metric":"accuracy"}`
-	if strings.Contains(source, `"eval_job"`) {
-		primaryScore = ""
-	}
 	return fmt.Sprintf(`{"name":"confidence intervals",
 		"hardware_config":{"cpu":{"request":"500m"},"queue":{"name":"batch"}},
 		"operations":{"confidence_interval":{
-			"results_data_ref":%s%s,
+			"results_data_ref":%s,"primary_score":{"metric":"accuracy"},
 			"calibration_data_ref":[
 				{"s3":{"bucket":"calibration","key":"labels","secret_ref":"s3-secret"},"data_config":{"format":"jsonl","columns":{"label":"human","prediction":"judge"}}},
 				{"pvc":{"claim_name":"calibration-data"},"data_config":{"format":"jsonl","columns":{"label":"truth","prediction":"score"}}}
 			],
 			"significance_level":0.05
-		}}}`, source, primaryScore)
+		}}}`, source)
+}
+
+func jobPostProcessingBody(confidenceIntervalFields string) string {
+	return fmt.Sprintf(`{"name":"confidence intervals",
+		"hardware_config":{"cpu":{"request":"500m"},"queue":{"name":"batch"}},
+		"operations":{"confidence_interval":{
+			"calibration_data_ref":[
+				{"s3":{"bucket":"calibration","key":"labels","secret_ref":"s3-secret"},"data_config":{"format":"jsonl","columns":{"label":"human","prediction":"judge"}}},
+				{"pvc":{"claim_name":"calibration-data"},"data_config":{"format":"jsonl","columns":{"label":"truth","prediction":"score"}}}
+			],
+			"significance_level":0.05%s
+		}}}`, confidenceIntervalFields)
+}
+
+func jobPostProcessingPath(jobID string) string {
+	return "/api/v1/evaluations/jobs/" + jobID + "/post-processing"
+}
+
+func jobPostProcessingItemPath(jobID, postProcessingID string) string {
+	return jobPostProcessingPath(jobID) + "/" + postProcessingID
 }
 
 func postProcessingRequest(handler http.Handler, method, path, body string) *httptest.ResponseRecorder {
@@ -197,17 +213,174 @@ func TestPostProcessingCreate(t *testing.T) {
 	}
 }
 
-func TestPostProcessingCompletionDoesNotUpdateSource(t *testing.T) {
+func TestPostProcessingGetMapsEvaluationJobResults(t *testing.T) {
 	handler, store, runtime := newPostProcessingServer(t)
 	source := createPostProcessingSource(t, store, api.OverallStateCompleted)
-	body := postProcessingBody(fmt.Sprintf(`{"eval_job":{"id":%q}}`, source.Resource.ID))
+	body := jobPostProcessingBody("")
+	submitted := postProcessingRequest(handler, http.MethodPost, jobPostProcessingPath(source.Resource.ID), body)
+	if submitted.Code != http.StatusAccepted {
+		t.Fatalf("submit status %d: %s", submitted.Code, submitted.Body.String())
+	}
+	var created api.JobPostProcessingResource
+	if err := json.Unmarshal(submitted.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	secondResponse := postProcessingRequest(handler, http.MethodPost, jobPostProcessingPath(source.Resource.ID), body)
+	if secondResponse.Code != http.StatusAccepted {
+		t.Fatalf("second POST while pending returned %d, want 202: %s", secondResponse.Code, secondResponse.Body.String())
+	}
+	var second api.JobPostProcessingResource
+	if err := json.Unmarshal(secondResponse.Body.Bytes(), &second); err != nil {
+		t.Fatal(err)
+	}
+	if second.Resource.ID == created.Resource.ID {
+		t.Fatalf("separate POST returned duplicate job ID %q", second.Resource.ID)
+	}
+	assertSourceUnchanged := func() {
+		t.Helper()
+		stored, err := store.GetEvaluationJob(source.Resource.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(stored.Results, source.Results) {
+			t.Fatalf("post-processing changed source results: got=%+v want=%+v", stored.Results, source.Results)
+		}
+	}
+	assertSourceUnchanged()
+	event := &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+		ProviderID: postprocessing.ProviderID,
+		ID:         postprocessing.BenchmarkID,
+		Status:     api.StateCompleted,
+		AdditionalInfo: map[string]any{"confidence_interval": map[string]any{
+			"benchmarks": []any{map[string]any{
+				"id": "accuracy", "provider_id": "source-provider", "benchmark_index": 0,
+				"confidence_interval": map[string]any{"lower": 0.82, "upper": 0.94},
+			}},
+		}},
+	}}
+	if err := runtime.storage.UpdateEvaluationJob(created.Resource.ID, event); err != nil {
+		t.Fatal(err)
+	}
+	assertSourceUnchanged()
+
+	fetched := postProcessingRequest(handler, http.MethodGet, jobPostProcessingItemPath(source.Resource.ID, created.Resource.ID), "")
+	if fetched.Code != http.StatusOK {
+		t.Fatalf("get status %d: %s", fetched.Code, fetched.Body.String())
+	}
+	var resource api.JobPostProcessingResource
+	if err := json.Unmarshal(fetched.Body.Bytes(), &resource); err != nil {
+		t.Fatal(err)
+	}
+	if resource.Status.State != api.StateCompleted || resource.Results == nil || len(resource.Results.Benchmarks) != 1 {
+		t.Fatalf("GET response is missing mapped results: %+v", resource)
+	}
+	var responseJSON map[string]json.RawMessage
+	if err := json.Unmarshal(fetched.Body.Bytes(), &responseJSON); err != nil {
+		t.Fatal(err)
+	}
+	var statusJSON map[string]json.RawMessage
+	if err := json.Unmarshal(responseJSON["status"], &statusJSON); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := statusJSON["benchmarks"]; exists {
+		t.Fatal("post-processing status must not expose per-benchmark status")
+	}
+	var operationsJSON map[string]json.RawMessage
+	if err := json.Unmarshal(responseJSON["operations"], &operationsJSON); err != nil {
+		t.Fatal(err)
+	}
+	var confidenceIntervalJSON map[string]json.RawMessage
+	if err := json.Unmarshal(operationsJSON["confidence_interval"], &confidenceIntervalJSON); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := confidenceIntervalJSON["results_data_ref"]; exists {
+		t.Fatal("job-scoped response must represent the source through the path")
+	}
+
+	wrongEvaluationGet := postProcessingRequest(handler, http.MethodGet, "/api/v1/evaluations/jobs/"+created.Resource.ID, "")
+	if wrongEvaluationGet.Code != http.StatusNotFound {
+		t.Fatalf("evaluation-job GET for post-processing ID returned %d, want 404: %s", wrongEvaluationGet.Code, wrongEvaluationGet.Body.String())
+	}
+	wrongEvaluationDelete := postProcessingRequest(handler, http.MethodDelete, "/api/v1/evaluations/jobs/"+created.Resource.ID+"?hard_delete=true", "")
+	if wrongEvaluationDelete.Code != http.StatusNotFound {
+		t.Fatalf("evaluation-job DELETE for post-processing ID returned %d, want 404: %s", wrongEvaluationDelete.Code, wrongEvaluationDelete.Body.String())
+	}
+	wrongPostProcessingGet := postProcessingRequest(handler, http.MethodGet, postProcessingPath+"/"+source.Resource.ID, "")
+	if wrongPostProcessingGet.Code != http.StatusNotFound {
+		t.Fatalf("post-processing GET for evaluation-job ID returned %d, want 404: %s", wrongPostProcessingGet.Code, wrongPostProcessingGet.Body.String())
+	}
+	wrongPostProcessingDelete := postProcessingRequest(handler, http.MethodDelete, postProcessingPath+"/"+source.Resource.ID, "")
+	if wrongPostProcessingDelete.Code != http.StatusNotFound {
+		t.Fatalf("post-processing DELETE for evaluation-job ID returned %d, want 404: %s", wrongPostProcessingDelete.Code, wrongPostProcessingDelete.Body.String())
+	}
+	wrongStandalonePostProcessingGet := postProcessingRequest(handler, http.MethodGet, postProcessingPath+"/"+created.Resource.ID, "")
+	if wrongStandalonePostProcessingGet.Code != http.StatusNotFound {
+		t.Fatalf("standalone post-processing GET for job-scoped ID returned %d, want 404: %s", wrongStandalonePostProcessingGet.Code, wrongStandalonePostProcessingGet.Body.String())
+	}
+	wrongStandalonePostProcessingDelete := postProcessingRequest(handler, http.MethodDelete, postProcessingPath+"/"+created.Resource.ID, "")
+	if wrongStandalonePostProcessingDelete.Code != http.StatusNotFound {
+		t.Fatalf("standalone post-processing DELETE for job-scoped ID returned %d, want 404: %s", wrongStandalonePostProcessingDelete.Code, wrongStandalonePostProcessingDelete.Body.String())
+	}
+	listedEvaluationJobs := postProcessingRequest(handler, http.MethodGet, "/api/v1/evaluations/jobs", "")
+	if listedEvaluationJobs.Code != http.StatusOK {
+		t.Fatalf("evaluation-job list returned %d: %s", listedEvaluationJobs.Code, listedEvaluationJobs.Body.String())
+	}
+	var evaluationJobs api.EvaluationJobResourceList
+	if err := json.Unmarshal(listedEvaluationJobs.Body.Bytes(), &evaluationJobs); err != nil {
+		t.Fatal(err)
+	}
+	if len(evaluationJobs.Items) != 1 || evaluationJobs.Items[0].Resource.ID != source.Resource.ID {
+		t.Fatalf("evaluation-job list exposed the wrong resources: %+v", evaluationJobs.Items)
+	}
+	unrelatedSource := createPostProcessingSource(t, store, api.OverallStateCompleted)
+	wrongParentGet := postProcessingRequest(handler, http.MethodGet, jobPostProcessingItemPath(unrelatedSource.Resource.ID, created.Resource.ID), "")
+	if wrongParentGet.Code != http.StatusNotFound {
+		t.Fatalf("GET under unrelated evaluation job returned %d, want 404", wrongParentGet.Code)
+	}
+	wrongParentDelete := postProcessingRequest(handler, http.MethodDelete, jobPostProcessingItemPath(unrelatedSource.Resource.ID, created.Resource.ID), "")
+	if wrongParentDelete.Code != http.StatusNotFound {
+		t.Fatalf("DELETE under unrelated evaluation job returned %d, want 404", wrongParentDelete.Code)
+	}
+	if _, err := store.GetEvaluationJob(created.Resource.ID); err != nil {
+		t.Fatalf("wrong-parent DELETE removed the post-processing job: %v", err)
+	}
+	if _, err := store.GetEvaluationJob(created.Resource.ID); err != nil {
+		t.Fatalf("cross-API DELETE removed the post-processing job: %v", err)
+	}
+	if _, err := store.GetEvaluationJob(source.Resource.ID); err != nil {
+		t.Fatalf("cross-API DELETE removed the evaluation job: %v", err)
+	}
+	result := resource.Results.Benchmarks[0]
+	if result.ID != "accuracy" || result.ProviderID != "source-provider" || result.BenchmarkIndex != 0 || result.ConfidenceInterval.Lower != 0.82 || result.ConfidenceInterval.Upper != 0.94 {
+		t.Fatalf("GET response has incorrect mapped result: %+v", result)
+	}
+	deleted := postProcessingRequest(handler, http.MethodDelete, jobPostProcessingItemPath(source.Resource.ID, created.Resource.ID), "")
+	if deleted.Code != http.StatusOK {
+		t.Fatalf("job-scoped DELETE returned %d, want 200: %s", deleted.Code, deleted.Body.String())
+	}
+	afterDelete := postProcessingRequest(handler, http.MethodGet, jobPostProcessingItemPath(source.Resource.ID, created.Resource.ID), "")
+	if afterDelete.Code != http.StatusNotFound {
+		t.Fatalf("job-scoped GET after DELETE returned %d, want 404", afterDelete.Code)
+	}
+	assertSourceUnchanged()
+	secondDelete := postProcessingRequest(handler, http.MethodDelete, jobPostProcessingItemPath(source.Resource.ID, second.Resource.ID), "")
+	if secondDelete.Code != http.StatusOK {
+		t.Fatalf("second job-scoped DELETE returned %d, want 200: %s", secondDelete.Code, secondDelete.Body.String())
+	}
+	assertSourceUnchanged()
+}
+
+func TestPostProcessingParallelJobsDoNotUpdateSource(t *testing.T) {
+	handler, store, runtime := newPostProcessingServer(t)
+	source := createPostProcessingSource(t, store, api.OverallStateCompleted)
+	body := jobPostProcessingBody("")
 	submit := func() string {
 		t.Helper()
-		response := postProcessingRequest(handler, http.MethodPost, postProcessingPath, body)
+		response := postProcessingRequest(handler, http.MethodPost, jobPostProcessingPath(source.Resource.ID), body)
 		if response.Code != http.StatusAccepted {
-			t.Fatalf("status %d: %s", response.Code, response.Body.String())
+			t.Fatalf("status %d, want %d: %s", response.Code, http.StatusAccepted, response.Body.String())
 		}
-		var result api.PostProcessingResource
+		var result api.JobPostProcessingResource
 		if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 			t.Fatal(err)
 		}
@@ -220,47 +393,55 @@ func TestPostProcessingCompletionDoesNotUpdateSource(t *testing.T) {
 			t.Fatal(err)
 		}
 		if stored.Status.State != api.OverallStateCompleted || !reflect.DeepEqual(stored.Results, source.Results) {
-			t.Fatalf("source evaluation changed during post-processing: %+v", stored)
+			t.Fatalf("source evaluation changed during post-processing: got=%+v want=%+v", stored, source)
 		}
 	}
 	first := submit()
 	assertSourceUnchanged()
-	event := &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{ProviderID: postprocessing.ProviderID, ID: postprocessing.BenchmarkID, Status: api.StateRunning}}
+	second := submit()
+	if first == second {
+		t.Fatalf("separate POST requests returned the same post-processing job ID %q", first)
+	}
+	assertSourceUnchanged()
+	startedAt := api.DateTime("2026-10-09T12:00:00Z")
+	event := &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+		ProviderID: postprocessing.ProviderID,
+		ID:         postprocessing.BenchmarkID,
+		Status:     api.StateRunning,
+		StartedAt:  startedAt,
+	}}
 	if err := runtime.storage.UpdateEvaluationJob(first, event); err != nil {
 		t.Fatal(err)
 	}
 	assertSourceUnchanged()
 	event.BenchmarkStatusEvent.Status = api.StateCompleted
+	event.BenchmarkStatusEvent.CompletedAt = api.DateTime("2026-10-09T12:05:00Z")
 	if err := runtime.storage.UpdateEvaluationJob(first, event); err != nil {
 		t.Fatal(err)
 	}
 	assertSourceUnchanged()
-
-	second := submit()
-	assertSourceUnchanged()
-	eventBody, err := json.Marshal(event)
-	if err != nil {
-		t.Fatal(err)
-	}
-	response := postProcessingRequest(handler, http.MethodPost, "/api/v1/evaluations/jobs/"+second+"/events", string(eventBody))
-	if response.Code != http.StatusNoContent {
-		t.Fatalf("completion status %d: %s", response.Code, response.Body.String())
+	response := postProcessingRequest(handler, http.MethodDelete, jobPostProcessingItemPath(source.Resource.ID, first), "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("delete status %d: %s", response.Code, response.Body.String())
 	}
 	assertSourceUnchanged()
-	// A replay from an older completed computation must not change its source.
-	_ = runtime.storage.UpdateEvaluationJob(first, event)
-	assertSourceUnchanged()
-
-	failed := submit()
-	event.BenchmarkStatusEvent.Status = api.StateFailed
-	if err := runtime.storage.UpdateEvaluationJob(failed, event); err != nil {
+	secondStartedAt := api.DateTime("2026-10-09T12:06:00Z")
+	event.BenchmarkStatusEvent.Status = api.StateRunning
+	event.BenchmarkStatusEvent.StartedAt = secondStartedAt
+	event.BenchmarkStatusEvent.CompletedAt = ""
+	if err := runtime.storage.UpdateEvaluationJob(second, event); err != nil {
 		t.Fatal(err)
 	}
 	assertSourceUnchanged()
-	cancelled := submit()
-	response = postProcessingRequest(handler, http.MethodDelete, "/api/v1/evaluations/jobs/"+cancelled, "")
-	if response.Code != http.StatusNoContent {
-		t.Fatalf("cancel status %d: %s", response.Code, response.Body.String())
+	event.BenchmarkStatusEvent.Status = api.StateCompleted
+	event.BenchmarkStatusEvent.CompletedAt = api.DateTime("2026-10-09T12:06:00Z")
+	if err := runtime.storage.UpdateEvaluationJob(second, event); err != nil {
+		t.Fatal(err)
+	}
+	assertSourceUnchanged()
+	response = postProcessingRequest(handler, http.MethodDelete, jobPostProcessingItemPath(source.Resource.ID, second), "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("delete status %d: %s", response.Code, response.Body.String())
 	}
 	assertSourceUnchanged()
 }
@@ -270,8 +451,8 @@ func TestPostProcessingSourceValidation(t *testing.T) {
 		t.Run(string(state), func(t *testing.T) {
 			handler, store, runtime := newPostProcessingServer(t)
 			source := createPostProcessingSource(t, store, state)
-			body := postProcessingBody(fmt.Sprintf(`{"eval_job":{"id":%q,"num_parallel_threads":2}}`, source.Resource.ID))
-			response := postProcessingRequest(handler, http.MethodPost, postProcessingPath, body)
+			body := jobPostProcessingBody(`,"num_parallel_threads":2`)
+			response := postProcessingRequest(handler, http.MethodPost, jobPostProcessingPath(source.Resource.ID), body)
 			want := http.StatusConflict
 			if state == api.OverallStateCompleted {
 				want = http.StatusAccepted
@@ -293,8 +474,8 @@ func TestPostProcessingSourceValidation(t *testing.T) {
 	handler, store, _ := newPostProcessingServer(t)
 	source := createPostProcessingSource(t, store, api.OverallStateCompleted)
 	for _, sourceID := range []string{common.GUID(), source.Resource.ID} {
-		body := postProcessingBody(fmt.Sprintf(`{"eval_job":{"id":%q}}`, sourceID))
-		req := httptest.NewRequest(http.MethodPost, postProcessingPath, strings.NewReader(body))
+		body := jobPostProcessingBody("")
+		req := httptest.NewRequest(http.MethodPost, jobPostProcessingPath(sourceID), strings.NewReader(body))
 		req.Header.Set("X-Tenant", "tenant-b")
 		req.Header.Set("X-User", "user-b")
 		response := httptest.NewRecorder()
@@ -306,26 +487,25 @@ func TestPostProcessingSourceValidation(t *testing.T) {
 }
 
 func TestPostProcessingValidation(t *testing.T) {
-	valid := postProcessingBody(`{"eval_job":{"id":"source"}}`)
+	valid := postProcessingBody(`{"pvc":{"claim_name":"results-data"}}`)
+	evalJobStandalone := postProcessingBody(`{"eval_job":{"id":"source"}}`)
 	invalid := map[string]string{
 		"blank name":                     strings.Replace(valid, `"confidence intervals"`, `" "`, 1),
 		"missing operations":             `{"name":"test"}`,
 		"empty operations":               `{"name":"test","operations":{}}`,
 		"null operation config":          `{"operations":{"confidence_interval":null}}`,
 		"null body":                      `null`,
-		"missing source":                 strings.Replace(valid, `{"eval_job":{"id":"source"}}`, `{}`, 1),
-		"null source":                    strings.Replace(valid, `{"eval_job":{"id":"source"}}`, `null`, 1),
-		"multiple sources":               strings.Replace(valid, `{"eval_job":{"id":"source"}}`, `{"eval_job":{"id":"source"},"pvc":{"claim_name":"data"}}`, 1),
-		"invalid source id":              strings.Replace(valid, `"id":"source"`, `"id":" "`, 1),
-		"zero threads":                   strings.Replace(valid, `"id":"source"`, `"id":"source","num_parallel_threads":0`, 1),
-		"fractional threads":             strings.Replace(valid, `"id":"source"`, `"id":"source","num_parallel_threads":1.5`, 1),
+		"missing result source":          strings.Replace(valid, `"pvc":{"claim_name":"results-data"}`, `{}`, 1),
+		"null result source":             strings.Replace(valid, `{"pvc":{"claim_name":"results-data"}}`, `null`, 1),
+		"multiple result sources":        postProcessingBody(`{"pvc":{"claim_name":"data"},"s3":{"bucket":"bucket","key":"key"}}`),
+		"eval job source unsupported":    evalJobStandalone,
 		"alpha zero":                     strings.Replace(valid, `"significance_level":0.05`, `"significance_level":0`, 1),
 		"alpha one":                      strings.Replace(valid, `"significance_level":0.05`, `"significance_level":1`, 1),
 		"missing alpha":                  strings.Replace(valid, `"significance_level":0.05`, "", 1),
-		"empty calibration":              `{"operations":{"confidence_interval":{"results_data_ref":{"eval_job":{"id":"source"}},"calibration_data_ref":[],"significance_level":0.05}}}`,
+		"empty calibration":              strings.Replace(valid, `"calibration_data_ref":[`, `"calibration_data_ref":[],"ignored_calibration_data_ref":[`, 1),
 		"eval job calibration":           strings.Replace(valid, `"pvc":{"claim_name":"calibration-data"}`, `"eval_job":{"id":"source"}`, 1),
 		"mlflow calibration":             strings.Replace(valid, `"pvc":{"claim_name":"calibration-data"}`, `"mlflow":{"run_id":"run","artifact_path":"results"}`, 1),
-		"missing data config":            strings.Replace(valid, `,"data_config":{"format":"jsonl","columns":{"label":"human","prediction":"judge"}}`, "", 1),
+		"missing calibration config":     strings.Replace(valid, `,"data_config":{"format":"jsonl","columns":{"label":"human","prediction":"judge"}}`, "", 1),
 		"invalid hardware":               strings.Replace(valid, `"cpu":{"request":"500m"}`, `"hardware_profile_name":"cpu-profile","cpu":{"request":"500m"}`, 1),
 		"external missing primary score": strings.Replace(postProcessingBody(`{"oci":{"coordinates":{"oci_host":"quay.io","oci_repository":"repo"},"artifact_path":"results"}}`), `,"primary_score":{"metric":"accuracy"}`, "", 1),
 		"invalid digest":                 postProcessingBody(`{"oci":{"coordinates":{"oci_host":"quay.io","oci_repository":"repo"},"artifact_path":"results","digest":"abc"}}`),
@@ -351,23 +531,56 @@ func TestPostProcessingValidation(t *testing.T) {
 	}
 }
 
+func TestJobPostProcessingValidation(t *testing.T) {
+	valid := jobPostProcessingBody("")
+	invalid := map[string]string{
+		"blank name":              strings.Replace(valid, `"confidence intervals"`, `" "`, 1),
+		"missing operations":      `{"name":"test"}`,
+		"empty operations":        `{"name":"test","operations":{}}`,
+		"null operation config":   `{"operations":{"confidence_interval":null}}`,
+		"null body":               `null`,
+		"zero threads":            strings.Replace(valid, `"significance_level":0.05`, `"significance_level":0.05,"num_parallel_threads":0`, 1),
+		"fractional threads":      strings.Replace(valid, `"significance_level":0.05`, `"significance_level":0.05,"num_parallel_threads":1.5`, 1),
+		"alpha zero":              strings.Replace(valid, `"significance_level":0.05`, `"significance_level":0`, 1),
+		"alpha one":               strings.Replace(valid, `"significance_level":0.05`, `"significance_level":1`, 1),
+		"missing alpha":           strings.Replace(valid, `"significance_level":0.05`, "", 1),
+		"invalid hardware":        strings.Replace(valid, `"cpu":{"request":"500m"}`, `"hardware_profile_name":"cpu-profile","cpu":{"request":"500m"}`, 1),
+		"invalid results mapping": strings.Replace(valid, `"significance_level":0.05`, `"significance_level":0.05,"results_data_config":{"format":"xml"}`, 1),
+		"extra json":              valid + `{}`,
+	}
+	handler, _, runtime := newPostProcessingServer(t)
+	for name, body := range invalid {
+		t.Run(name, func(t *testing.T) {
+			response := postProcessingRequest(handler, http.MethodPost, jobPostProcessingPath("source"), body)
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("status %d: %s", response.Code, response.Body.String())
+			}
+			if runtime.job != nil {
+				t.Fatal("invalid request launched a computation")
+			}
+		})
+	}
+}
+
 func TestPostProcessingIgnoresUnknownFields(t *testing.T) {
 	handler, store, _ := newPostProcessingServer(t)
 	source := createPostProcessingSource(t, store, api.OverallStateCompleted)
-	body := postProcessingBody(fmt.Sprintf(`{"eval_job":{"id":%q,"future_source_option":true}}`, source.Resource.ID))
+	body := jobPostProcessingBody(`,"num_parallel_threads":2,"future_config_option":true,"results_data_config":{"format":"json","columns":{"prediction":"score"},"future_mapping_option":true}`)
 	body = strings.Replace(body, `"pvc":{"claim_name":"calibration-data"}`, `"pvc":{"claim_name":"calibration-data"},"resolved_sha":"abc"`, 1)
 	body = strings.Replace(body, `"name":`, `"future_request_option":true,"name":`, 1)
-	body = strings.Replace(body, `"results_data_ref":`, `"future_config_option":true,"num_parallel_threads":99,"results_data_ref":`, 1)
-	response := postProcessingRequest(handler, http.MethodPost, postProcessingPath, body)
+	response := postProcessingRequest(handler, http.MethodPost, jobPostProcessingPath(source.Resource.ID), body)
 	if response.Code != http.StatusAccepted {
 		t.Fatalf("unknown fields rejected: %d: %s", response.Code, response.Body.String())
 	}
-	var result api.PostProcessingResource
+	var result api.JobPostProcessingResource
 	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Operations.ConfidenceInterval.ResultsDataRef.EvalJob.NumParallelThreads != nil {
-		t.Fatal("misplaced num_parallel_threads must be ignored")
+	if result.Operations.ConfidenceInterval.NumParallelThreads == nil || *result.Operations.ConfidenceInterval.NumParallelThreads != 2 {
+		t.Fatal("job-scoped num_parallel_threads was not preserved")
+	}
+	if result.Operations.ConfidenceInterval.ResultsDataConfig == nil {
+		t.Fatal("job-scoped results_data_config was not preserved")
 	}
 	if strings.Contains(response.Body.String(), "future_") {
 		t.Fatal("unknown fields should not be persisted or echoed")
@@ -444,6 +657,17 @@ func TestPostProcessingMethodsAndIdentity(t *testing.T) {
 			t.Fatalf("%s returned %d", method, response.Code)
 		}
 	}
+	itemMethod := postProcessingRequest(handler, http.MethodPut, postProcessingPath+"/post-processing-id", "")
+	if itemMethod.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("PUT to a post-processing item returned %d, want 405", itemMethod.Code)
+	}
+	missingItemIdentity := httptest.NewRequest(http.MethodGet, postProcessingPath+"/post-processing-id", nil)
+	missingItemIdentity.Header.Set("X-Tenant", "tenant-a")
+	missingItemResponse := httptest.NewRecorder()
+	handler.ServeHTTP(missingItemResponse, missingItemIdentity)
+	if missingItemResponse.Code < 400 {
+		t.Fatalf("GET post-processing item without X-User returned %d", missingItemResponse.Code)
+	}
 	for _, missing := range []string{"X-Tenant", "X-User"} {
 		req := httptest.NewRequest(http.MethodPost, postProcessingPath, strings.NewReader(postProcessingBody(`{"pvc":{"claim_name":"results"}}`)))
 		req.Header.Set("X-Tenant", "tenant-a")
@@ -454,5 +678,93 @@ func TestPostProcessingMethodsAndIdentity(t *testing.T) {
 		if response.Code < 400 {
 			t.Fatalf("missing %s accepted", missing)
 		}
+	}
+}
+
+func TestPostProcessingResultDataConfigRoundTrip(t *testing.T) {
+	configs := map[string]string{
+		"object":                `{"format":"json","columns":{"sample_id":"id","prediction":"scores.judge.value"},"value_mappings":{"prediction":{"C":1,"I":0}}}`,
+		"selected array":        `[{"selection":{"provider_id":"provider-a"},"columns":{"prediction":"score"}},{"selection":{"provider_id":"provider-b"},"columns":{"prediction":"metrics.value"}}]`,
+		"single selected entry": `[{"selection":{"provider_id":"provider-a"},"columns":{"sample_id":"id"}}]`,
+		"automatic":             `{}`,
+	}
+	for name, config := range configs {
+		t.Run(name, func(t *testing.T) {
+			handler, store, runtime := newPostProcessingServer(t)
+			source := createPostProcessingSource(t, store, api.OverallStateCompleted)
+			body := jobPostProcessingBody(fmt.Sprintf(`,"results_data_config":%s`, config))
+			response := postProcessingRequest(handler, http.MethodPost, jobPostProcessingPath(source.Resource.ID), body)
+			if response.Code != http.StatusAccepted {
+				t.Fatalf("submit status %d: %s", response.Code, response.Body.String())
+			}
+			var submitted api.JobPostProcessingResource
+			if err := json.Unmarshal(response.Body.Bytes(), &submitted); err != nil {
+				t.Fatal(err)
+			}
+			checkConfig := func(got *api.ResultsDataConfig) {
+				t.Helper()
+				encoded, err := json.Marshal(got)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var actual, expected any
+				if err := json.Unmarshal(encoded, &actual); err != nil {
+					t.Fatal(err)
+				}
+				if err := json.Unmarshal([]byte(config), &expected); err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(actual, expected) {
+					t.Fatalf("data_config = %s, want %s", encoded, config)
+				}
+			}
+			checkConfig(submitted.Operations.ConfidenceInterval.ResultsDataConfig)
+			operations, err := postprocessing.OperationsFromJob(&runtime.job.EvaluationJobConfig)
+			if err != nil {
+				t.Fatal(err)
+			}
+			checkConfig(operations.ConfidenceInterval.ResultsDataRef.DataConfig)
+			fetched := postProcessingRequest(handler, http.MethodGet, jobPostProcessingItemPath(source.Resource.ID, submitted.Resource.ID), "")
+			if fetched.Code != http.StatusOK {
+				t.Fatalf("get status %d: %s", fetched.Code, fetched.Body.String())
+			}
+			var resource api.JobPostProcessingResource
+			if err := json.Unmarshal(fetched.Body.Bytes(), &resource); err != nil {
+				t.Fatal(err)
+			}
+			checkConfig(resource.Operations.ConfidenceInterval.ResultsDataConfig)
+		})
+	}
+}
+
+func TestPostProcessingRejectsInvalidResultDataConfig(t *testing.T) {
+	configs := map[string]string{
+		"scalar":                  `"json"`,
+		"empty array":             `[]`,
+		"array without selection": `[{"format":"json"}]`,
+		"invalid format":          `{"format":"xml"}`,
+		"unknown column role":     `{"columns":{"unknown":"x"}}`,
+		"blank column":            `{"columns":{"prediction":" "}}`,
+		"unknown selection":       `{"selection":{"unknown":"x"}}`,
+		"empty selection":         `{"selection":{}}`,
+		"unknown mapped role":     `{"value_mappings":{"sample_id":{"x":1}}}`,
+		"empty value map":         `{"value_mappings":{"prediction":{}}}`,
+		"boolean target":          `{"value_mappings":{"prediction":{"yes":true}}}`,
+		"string target":           `{"value_mappings":{"prediction":{"yes":"1"}}}`,
+		"nonfinite target":        `{"value_mappings":{"prediction":{"yes":1e999}}}`,
+		"invalid selected entry":  `[{"selection":{"provider_id":"p"},"columns":{"prediction":""}}]`,
+	}
+	for name, config := range configs {
+		t.Run(name, func(t *testing.T) {
+			handler, _, runtime := newPostProcessingServer(t)
+			body := postProcessingBody(fmt.Sprintf(`{"pvc":{"claim_name":"results"},"data_config":%s}`, config))
+			response := postProcessingRequest(handler, http.MethodPost, postProcessingPath, body)
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("status %d: %s", response.Code, response.Body.String())
+			}
+			if runtime.job != nil {
+				t.Fatal("invalid mapping launched a job")
+			}
+		})
 	}
 }

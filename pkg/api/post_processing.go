@@ -69,30 +69,35 @@ type ConfidenceIntervalConfigCommon struct {
 
 // ConfidenceIntervalConfig is the job-scoped operation configuration. The
 // evaluation job reference is supplied by the URL and is added to the adapter
-// job spec when the operation is mapped to a runtime job.
+// job spec when the operation is mapped to a runtime job. ResultsDataConfig
+// optionally maps the source job's result artifacts.
 type ConfidenceIntervalConfig struct {
 	ConfidenceIntervalConfigCommon
-	NumParallelThreads *int `json:"num_parallel_threads,omitempty" validate:"omitempty,min=1"`
+	ResultsDataConfig  *ResultsDataConfig `json:"results_data_config,omitempty"`
+	NumParallelThreads *int               `json:"num_parallel_threads,omitempty" validate:"omitempty,min=1"`
 }
 
 // StandaloneConfidenceIntervalConfig describes result and calibration data for
 // a standalone confidence interval computation.
 type StandaloneConfidenceIntervalConfig struct {
 	ConfidenceIntervalConfigCommon
-	ResultsDataRef *PostProcessingResultsDataRef `json:"results_data_ref" validate:"required"`
-	PrimaryScore   *PrimaryScore                 `json:"primary_score,omitempty" validate:"required_without=ResultsDataRef.EvalJob,excluded_with=ResultsDataRef.EvalJob"`
+	ResultsDataRef *PostProcessingResultsDataRef `json:"results_data_ref" validate:"required,standalone_results_data_ref"`
+	PrimaryScore   *PrimaryScore                 `json:"primary_score,omitempty" validate:"required"`
 }
 
-// PostProcessingResultsDataRef accepts exactly one source. Calibration data
-// uses CalibrationDataRef instead, excluding evaluation jobs, MLflow, and OCI.
+// PostProcessingResultsDataRef is the adapter's persisted result source. The
+// standalone API accepts only its external source fields; the job-scoped API
+// supplies EvalJob internally from its path parameter. Calibration data uses
+// CalibrationDataRef instead, excluding evaluation jobs, MLflow, and OCI.
 type PostProcessingResultsDataRef struct {
-	EvalJob *EvaluationJobDataRef `json:"eval_job,omitempty" validate:"required_without_all=S3 PVC Git HF MLFlow OCI,excluded_with=S3 PVC Git HF MLFlow OCI"`
-	S3      *S3TestDataRef        `json:"s3,omitempty" validate:"required_without_all=EvalJob PVC Git HF MLFlow OCI,excluded_with=EvalJob PVC Git HF MLFlow OCI"`
-	PVC     *PVCTestDataRef       `json:"pvc,omitempty" validate:"required_without_all=EvalJob S3 Git HF MLFlow OCI,excluded_with=EvalJob S3 Git HF MLFlow OCI"`
-	Git     *GitTestDataRef       `json:"git,omitempty" validate:"required_without_all=EvalJob S3 PVC HF MLFlow OCI,excluded_with=EvalJob S3 PVC HF MLFlow OCI"`
-	HF      *HFTestDataRef        `json:"hf,omitempty" validate:"required_without_all=EvalJob S3 PVC Git MLFlow OCI,excluded_with=EvalJob S3 PVC Git MLFlow OCI"`
-	MLFlow  *MLflowDataRef        `json:"mlflow,omitempty" validate:"required_without_all=EvalJob S3 PVC Git HF OCI,excluded_with=EvalJob S3 PVC Git HF OCI"`
-	OCI     *OCIDataRef           `json:"oci,omitempty" validate:"required_without_all=EvalJob S3 PVC Git HF MLFlow,excluded_with=EvalJob S3 PVC Git HF MLFlow"`
+	DataConfig *ResultsDataConfig    `json:"data_config,omitempty"`
+	EvalJob    *EvaluationJobDataRef `json:"eval_job,omitempty" validate:"required_without_all=S3 PVC Git HF MLFlow OCI,excluded_with=S3 PVC Git HF MLFlow OCI"`
+	S3         *S3TestDataRef        `json:"s3,omitempty" validate:"required_without_all=EvalJob PVC Git HF MLFlow OCI,excluded_with=EvalJob PVC Git HF MLFlow OCI"`
+	PVC        *PVCTestDataRef       `json:"pvc,omitempty" validate:"required_without_all=EvalJob S3 Git HF MLFlow OCI,excluded_with=EvalJob S3 Git HF MLFlow OCI"`
+	Git        *GitTestDataRef       `json:"git,omitempty" validate:"required_without_all=EvalJob S3 PVC HF MLFlow OCI,excluded_with=EvalJob S3 PVC HF MLFlow OCI"`
+	HF         *HFTestDataRef        `json:"hf,omitempty" validate:"required_without_all=EvalJob S3 PVC Git MLFlow OCI,excluded_with=EvalJob S3 PVC Git MLFlow OCI"`
+	MLFlow     *MLflowDataRef        `json:"mlflow,omitempty" validate:"required_without_all=EvalJob S3 PVC Git HF OCI,excluded_with=EvalJob S3 PVC Git HF OCI"`
+	OCI        *OCIDataRef           `json:"oci,omitempty" validate:"required_without_all=EvalJob S3 PVC Git HF MLFlow,excluded_with=EvalJob S3 PVC Git HF MLFlow"`
 }
 
 // CalibrationDataRef describes one labeled calibration dataset and its
@@ -160,12 +165,11 @@ type JobPostProcessingResource struct {
 }
 
 type PostProcessingStatus struct {
-	State          State             `json:"state"`
-	ErrorMessage   *MessageInfo      `json:"error_message,omitempty"`
-	WarningMessage *MessageInfo      `json:"warning_message,omitempty"`
-	StartedAt      DateTime          `json:"started_at,omitempty"`
-	CompletedAt    DateTime          `json:"completed_at,omitempty"`
-	Benchmarks     []BenchmarkStatus `json:"benchmarks,omitempty"`
+	State          State        `json:"state"`
+	ErrorMessage   *MessageInfo `json:"error_message,omitempty"`
+	WarningMessage *MessageInfo `json:"warning_message,omitempty"`
+	StartedAt      DateTime     `json:"started_at,omitempty"`
+	CompletedAt    DateTime     `json:"completed_at,omitempty"`
 }
 
 // PostProcessingResults contains per-benchmark results for evaluation-job

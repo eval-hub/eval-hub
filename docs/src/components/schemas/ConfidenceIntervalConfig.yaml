@@ -1,10 +1,12 @@
 type: object
 title: ConfidenceIntervalConfig
-description: Configuration for confidence interval post-processing on an evaluation job.
+description: Configuration for confidence interval post-processing on an evaluation job, including optional result artifact parsing.
 allOf:
   - $ref: ./ConfidenceIntervalConfigCommon.yaml
   - type: object
     properties:
       num_parallel_threads:
         $ref: ./NumParallelThreads.yaml
+      results_data_config:
+        $ref: ./ResultsDataConfig.yaml
 unevaluatedProperties: false

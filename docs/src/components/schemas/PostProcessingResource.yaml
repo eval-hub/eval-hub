@@ -11,10 +11,7 @@ allOf:
       status:
         $ref: ./PostProcessingStatus.yaml
       results:
-        oneOf:
-          - $ref: ./PostProcessingResultsEvalJob.yaml
-          - $ref: ./PostProcessingResultsExternal.yaml
-        description: Use benchmark results for eval_job data and aggregate results otherwise.
+        $ref: ./PostProcessingResultsExternal.yaml
     required:
       - resource
       - operations

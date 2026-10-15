@@ -845,42 +845,25 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/StandalonePostProcessingRequest'
-            examples:
-              eval_job:
-                summary: Compute confidence intervals from an evaluation job
-                value:
-                  name: inspect-accuracy-confidence-interval
-                  hardware_config:
-                    cpu:
-                      request: 500m
-                      limit: '2'
-                    memory:
-                      request: 1Gi
-                      limit: 4Gi
-                  operation_order:
-                    - confidence_interval
-                  operations:
-                    confidence_interval:
-                      results_data_ref:
-                        eval_job:
-                          id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
-                          num_parallel_threads: 2
-                      calibration_data_ref:
-                        - s3:
-                            bucket: evaluation-data
-                            key: calibration/accuracy
-                            secret_ref: s3-secret
-                          data_config:
-                            format: jsonl
-                            columns:
-                              sample_id: example_id
-                              label: human_score
-                              prediction: judge_score
-                              benchmark_id: benchmark_id
-                              provider_id: provider_id
-                            selection:
-                              metric: accuracy
-                      significance_level: 0.7
+            example:
+              operations:
+                confidence_interval:
+                  results_data_ref:
+                    pvc:
+                      claim_name: evaluation-results
+                  primary_score:
+                    metric: accuracy
+                  calibration_data_ref:
+                    - s3:
+                        bucket: evaluation-data
+                        key: calibration/accuracy
+                        secret_ref: s3-secret
+                      data_config:
+                        format: jsonl
+                        columns:
+                          label: human_score
+                          prediction: judge_score
+                  significance_level: 0.05
       responses:
         '202':
           description: Post-processing computation accepted.
@@ -896,7 +879,7 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
-  /api/v1/evaluations/post-processing/{id}:
+  /api/v1/evaluations/post-processing/{post_processing_job_id}:
     get:
       tags:
         - Evaluations
@@ -904,7 +887,7 @@ paths:
       description: Get a standalone confidence interval post-processing resource.
       operationId: get_evaluations_post_processing_id
       parameters:
-        - name: id
+        - name: post_processing_job_id
           in: path
           required: true
           schema:
@@ -917,62 +900,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/PostProcessingResource'
               examples:
-                eval_job:
-                  summary: Evaluation-job result shape
-                  value:
-                    resource:
-                      id: 4b6510bd-cee3-4a80-8028-4a6cb60ae1cc
-                      tenant: sagar
-                      created_at: '2026-09-21T05:57:34.477263Z'
-                      updated_at: '2026-09-21T05:58:29.768663Z'
-                      owner: nbs
-                    name: inspect-accuracy-confidence-interval
-                    hardware_config:
-                      cpu:
-                        request: 500m
-                        limit: '2'
-                      memory:
-                        request: 1Gi
-                        limit: 4Gi
-                    operation_order:
-                      - confidence_interval
-                    operations:
-                      confidence_interval:
-                        results_data_ref:
-                          eval_job:
-                            id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
-                            num_parallel_threads: 2
-                        calibration_data_ref:
-                          - s3:
-                              bucket: evaluation-data
-                              key: calibration/accuracy
-                              secret_ref: s3-secret
-                            data_config:
-                              format: jsonl
-                              columns:
-                                sample_id: example_id
-                                label: human_score
-                                prediction: judge_score
-                                benchmark_id: benchmark_id
-                                provider_id: provider_id
-                              selection:
-                                metric: accuracy
-                        significance_level: 0.7
-                    status:
-                      state: completed
-                      benchmarks:
-                        - id: accuracy-benchmark
-                          provider_id: inspect
-                          benchmark_index: 0
-                          status: completed
-                    results:
-                      benchmarks:
-                        - id: accuracy-benchmark
-                          provider_id: inspect
-                          benchmark_index: 0
-                          confidence_interval:
-                            lower: 0.75
-                            upper: 0.85
                 external:
                   summary: External-result shape
                   value:
@@ -1036,7 +963,7 @@ paths:
       description: Delete a standalone confidence interval post-processing resource.
       operationId: delete_evaluations_post_processing_id
       parameters:
-        - name: id
+        - name: post_processing_job_id
           in: path
           required: true
           schema:
@@ -1056,10 +983,9 @@ paths:
         - Evaluations
       summary: Create Confidence Interval Post-Processing
       description: |
-        Create confidence interval computation for the benchmarks in an existing
-        evaluation job. The operation is idempotent: if the same job already has a
-        confidence interval computation, the existing post-processing resource is
-        returned.
+        Create a confidence interval computation for the benchmarks in an existing
+        evaluation job. Multiple post-processing jobs can be created and run
+        concurrently for the same evaluation job.
 
         The computation runs independently for each benchmark. The `operations`
         object is keyed by operation kind, so each kind can appear at most once.
@@ -1097,6 +1023,15 @@ paths:
                   operations:
                     confidence_interval:
                       num_parallel_threads: 2
+                      results_data_config:
+                        format: json
+                        columns:
+                          sample_id: id
+                          prediction: scores.telemath_scorer.value
+                        value_mappings:
+                          prediction:
+                            C: 1
+                            I: 0
                       calibration_data_ref:
                         - s3:
                             bucket: evaluation-data
@@ -1114,63 +1049,6 @@ paths:
                               metric: accuracy
                       significance_level: 0.7
       responses:
-        '200':
-          description: The existing post-processing resource is returned.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/JobPostProcessingResource'
-              example:
-                resource:
-                  id: 4b6510bd-cee3-4a80-8028-4a6cb60ae1cc
-                  tenant: sagar
-                  created_at: '2026-09-21T05:57:34.477263Z'
-                  updated_at: '2026-09-21T05:58:29.768663Z'
-                  owner: nbs
-                name: inspect-accuracy-confidence-interval
-                hardware_config:
-                  cpu:
-                    request: 500m
-                    limit: '2'
-                  memory:
-                    request: 1Gi
-                    limit: 4Gi
-                operation_order:
-                  - confidence_interval
-                operations:
-                  confidence_interval:
-                    num_parallel_threads: 2
-                    calibration_data_ref:
-                      - s3:
-                          bucket: evaluation-data
-                          key: calibration/accuracy
-                          secret_ref: s3-secret
-                        data_config:
-                          format: jsonl
-                          columns:
-                            sample_id: example_id
-                            label: human_score
-                            prediction: judge_score
-                            benchmark_id: benchmark_id
-                            provider_id: provider_id
-                          selection:
-                            metric: accuracy
-                    significance_level: 0.7
-                status:
-                  state: completed
-                  benchmarks:
-                    - id: accuracy-benchmark
-                      provider_id: inspect
-                      benchmark_index: 0
-                      status: completed
-                results:
-                  benchmarks:
-                    - id: accuracy-benchmark
-                      provider_id: inspect
-                      benchmark_index: 0
-                      confidence_interval:
-                        lower: 0.75
-                        upper: 0.85
         '202':
           description: The post-processing resource is returned after the computation is accepted.
           content:
@@ -1197,6 +1075,11 @@ paths:
                 operations:
                   confidence_interval:
                     num_parallel_threads: 2
+                    results_data_config:
+                      format: json
+                      columns:
+                        sample_id: id
+                        prediction: scores.telemath_scorer.value
                     calibration_data_ref:
                       - s3:
                           bucket: evaluation-data
@@ -1272,6 +1155,11 @@ paths:
                 operations:
                   confidence_interval:
                     num_parallel_threads: 2
+                    results_data_config:
+                      format: json
+                      columns:
+                        sample_id: id
+                        prediction: scores.telemath_scorer.value
                     calibration_data_ref:
                       - s3:
                           bucket: evaluation-data
@@ -1290,11 +1178,6 @@ paths:
                     significance_level: 0.7
                 status:
                   state: completed
-                  benchmarks:
-                    - id: accuracy-benchmark
-                      provider_id: inspect
-                      benchmark_index: 0
-                      status: completed
                 results:
                   benchmarks:
                     - id: accuracy-benchmark
@@ -1329,7 +1212,7 @@ paths:
             type: string
             title: Post Processing Id
       responses:
-        '204':
+        '200':
           description: Job-scoped post-processing computation deleted.
         '401':
           $ref: '#/components/responses/Unauthorized'
@@ -4214,37 +4097,109 @@ components:
       required:
         - calibration_data_ref
         - significance_level
-    NumParallelThreads:
-      type: integer
-      title: NumParallelThreads
-      minimum: 1
-      default: 1
-      description: Number of benchmark confidence interval computations to run in parallel; 1 runs them sequentially.
-    EvaluationJobDataRef:
+    ResultsDataConfigEntry:
       type: object
-      title: EvaluationJobDataRef
-      description: Reference to a completed evaluation job whose stored results are consumed.
+      title: ResultsDataConfigEntry
+      description: Mapping from a result artifact to per-example scores for post-processing.
       properties:
-        eval_job:
+        format:
+          type: string
+          enum:
+            - auto
+            - json
+            - jsonl
+            - csv
+            - parquet
+          default: auto
+          description: File serialization format. JSON may contain a samples or records array.
+        path:
+          type: string
+          minLength: 1
+          description: Relative file or directory inside the downloaded artifact.
+        columns:
           type: object
-          description: Evaluation job identifier and benchmark processing options.
+          description: Logical fields mapped to literal column names or dotted paths into nested JSON.
           properties:
-            id:
+            sample_id:
               type: string
-              description: Evaluation job identifier.
-            num_parallel_threads:
-              $ref: '#/components/schemas/NumParallelThreads'
-          required:
-            - id
+              minLength: 1
+            prediction:
+              type: string
+              minLength: 1
+            label:
+              type: string
+              minLength: 1
+            metric:
+              type: string
+              minLength: 1
+            benchmark_id:
+              type: string
+              minLength: 1
+            provider_id:
+              type: string
+              minLength: 1
           additionalProperties: false
-      required:
-        - eval_job
+        selection:
+          type: object
+          minProperties: 1
+          description: Source benchmark identity used for selection and row filtering.
+          properties:
+            benchmark_id:
+              type: string
+              minLength: 1
+            provider_id:
+              type: string
+              minLength: 1
+            metric:
+              type: string
+              minLength: 1
+          additionalProperties: false
+        value_mappings:
+          type: object
+          description: |
+            Explicit conversion of string categories to finite numeric scores, after
+            column lookup. When configured for a role, every present value must be
+            a declared string category; unknown values fail the computation.
+          properties:
+            prediction:
+              type: object
+              minProperties: 1
+              additionalProperties:
+                type: number
+            label:
+              type: object
+              minProperties: 1
+              additionalProperties:
+                type: number
+          additionalProperties: false
       additionalProperties: false
+    ResultsDataConfig:
+      title: ResultsDataConfig
+      description: |
+        Optional result format and field mappings. In standalone requests, place this
+        beside the source inside results_data_ref; in job-scoped requests, use
+        results_data_config. Omit this to use automatic format detection and
+        canonical sample_id/prediction fields. An object applies to every result artifact.
+        For heterogeneous evaluation jobs, an array selects a configuration using
+        benchmark_id, provider_id, and/or metric; exactly one entry must match each
+        source benchmark. An array configures individual source benchmarks.
+      oneOf:
+        - $ref: '#/components/schemas/ResultsDataConfigEntry'
+        - type: array
+          minItems: 1
+          items:
+            allOf:
+              - $ref: '#/components/schemas/ResultsDataConfigEntry'
+              - type: object
+                required:
+                  - selection
     MLflowDataRef:
       type: object
       title: MLflowDataRef
       description: Reference to a result artifact stored in MLflow.
       properties:
+        data_config:
+          $ref: '#/components/schemas/ResultsDataConfig'
         mlflow:
           type: object
           properties:
@@ -4266,6 +4221,8 @@ components:
       title: OCIDataRef
       description: Reference to a result artifact stored in an OCI registry.
       properties:
+        data_config:
+          $ref: '#/components/schemas/ResultsDataConfig'
         oci:
           type: object
           properties:
@@ -4295,6 +4252,8 @@ components:
       oneOf:
         - type: object
           properties:
+            data_config:
+              $ref: '#/components/schemas/ResultsDataConfig'
             s3:
               $ref: '#/components/schemas/TestDataRefS3'
           required:
@@ -4303,6 +4262,8 @@ components:
           title: S3
         - type: object
           properties:
+            data_config:
+              $ref: '#/components/schemas/ResultsDataConfig'
             pvc:
               $ref: '#/components/schemas/TestDataRefPVC'
           required:
@@ -4311,6 +4272,8 @@ components:
           title: PVC
         - type: object
           properties:
+            data_config:
+              $ref: '#/components/schemas/ResultsDataConfig'
             git:
               $ref: '#/components/schemas/TestDataRefGit'
           required:
@@ -4319,6 +4282,8 @@ components:
           title: Git
         - type: object
           properties:
+            data_config:
+              $ref: '#/components/schemas/ResultsDataConfig'
             hf:
               $ref: '#/components/schemas/TestDataRefHF'
           required:
@@ -4334,28 +4299,19 @@ components:
       allOf:
         - $ref: '#/components/schemas/ConfidenceIntervalConfigCommon'
         - type: object
-          oneOf:
-            - type: object
-              properties:
-                results_data_ref:
-                  $ref: '#/components/schemas/EvaluationJobDataRef'
-              required:
-                - results_data_ref
-            - type: object
-              properties:
-                results_data_ref:
-                  $ref: '#/components/schemas/ExternalResultsDataRef'
-                primary_score:
-                  allOf:
-                    - $ref: '#/components/schemas/PrimaryScore'
-                    - type: object
-                      required:
-                        - metric
-              required:
-                - results_data_ref
-                - primary_score
-              description: Direct external result references must identify the primary score metric.
-          description: Result data reference. An evaluation job is supported only for result data.
+          properties:
+            results_data_ref:
+              $ref: '#/components/schemas/ExternalResultsDataRef'
+            primary_score:
+              allOf:
+                - $ref: '#/components/schemas/PrimaryScore'
+                - type: object
+                  required:
+                    - metric
+          required:
+            - results_data_ref
+            - primary_score
+          description: Standalone computations use external result references and must identify the primary score metric.
       unevaluatedProperties: false
     StandalonePostProcessingOperations:
       type: object
@@ -4400,11 +4356,6 @@ components:
           type: string
           format: date-time
           description: RFC3339 completion time.
-        benchmarks:
-          type: array
-          items:
-            $ref: '#/components/schemas/BenchmarkStatus'
-          description: Per-benchmark status when benchmark metadata is available.
       required:
         - state
       additionalProperties: false
@@ -4425,6 +4376,79 @@ components:
         - lower
         - upper
       additionalProperties: false
+    PostProcessingResultsExternal:
+      type: object
+      title: PostProcessingResultsExternal
+      description: Aggregate confidence interval result for external result data.
+      properties:
+        confidence_interval:
+          $ref: '#/components/schemas/ConfidenceInterval'
+      required:
+        - confidence_interval
+      additionalProperties: false
+    PostProcessingResource:
+      title: PostProcessingResource
+      description: Standalone post-processing resource.
+      allOf:
+        - $ref: '#/components/schemas/PostProcessingCommon'
+        - type: object
+          properties:
+            resource:
+              $ref: '#/components/schemas/Resource'
+            operations:
+              $ref: '#/components/schemas/StandalonePostProcessingOperations'
+            status:
+              $ref: '#/components/schemas/PostProcessingStatus'
+            results:
+              $ref: '#/components/schemas/PostProcessingResultsExternal'
+          required:
+            - resource
+            - operations
+            - status
+      unevaluatedProperties: false
+    NumParallelThreads:
+      type: integer
+      title: NumParallelThreads
+      minimum: 1
+      default: 1
+      description: Number of benchmark confidence interval computations to run in parallel; 1 runs them sequentially.
+    ConfidenceIntervalConfig:
+      type: object
+      title: ConfidenceIntervalConfig
+      description: Configuration for confidence interval post-processing on an evaluation job, including optional result artifact parsing.
+      allOf:
+        - $ref: '#/components/schemas/ConfidenceIntervalConfigCommon'
+        - type: object
+          properties:
+            num_parallel_threads:
+              $ref: '#/components/schemas/NumParallelThreads'
+            results_data_config:
+              $ref: '#/components/schemas/ResultsDataConfig'
+      unevaluatedProperties: false
+    JobPostProcessingOperations:
+      type: object
+      title: JobPostProcessingOperations
+      description: |
+        Post-processing operations associated with an evaluation job. Each property
+        names an operation kind, so a kind can appear at most once. At least one
+        operation must be configured.
+      minProperties: 1
+      properties:
+        confidence_interval:
+          $ref: '#/components/schemas/ConfidenceIntervalConfig'
+      additionalProperties: false
+    ConfidenceIntervalPostProcessingRequest:
+      title: ConfidenceIntervalPostProcessingRequest
+      description: Request to configure post-processing operations for an evaluation job.
+      allOf:
+        - $ref: '#/components/schemas/PostProcessingCommon'
+        - type: object
+          properties:
+            operations:
+              $ref: '#/components/schemas/JobPostProcessingOperations'
+          required:
+            - operations
+      unevaluatedProperties: false
     PostProcessingBenchmarkResult:
       type: object
       title: PostProcessingBenchmarkResult
@@ -4459,74 +4483,6 @@ components:
       required:
         - benchmarks
       additionalProperties: false
-    PostProcessingResultsExternal:
-      type: object
-      title: PostProcessingResultsExternal
-      description: Aggregate confidence interval result for external result data.
-      properties:
-        confidence_interval:
-          $ref: '#/components/schemas/ConfidenceInterval'
-      required:
-        - confidence_interval
-      additionalProperties: false
-    PostProcessingResource:
-      title: PostProcessingResource
-      description: Standalone post-processing resource.
-      allOf:
-        - $ref: '#/components/schemas/PostProcessingCommon'
-        - type: object
-          properties:
-            resource:
-              $ref: '#/components/schemas/Resource'
-            operations:
-              $ref: '#/components/schemas/StandalonePostProcessingOperations'
-            status:
-              $ref: '#/components/schemas/PostProcessingStatus'
-            results:
-              oneOf:
-                - $ref: '#/components/schemas/PostProcessingResultsEvalJob'
-                - $ref: '#/components/schemas/PostProcessingResultsExternal'
-              description: Use benchmark results for eval_job data and aggregate results otherwise.
-          required:
-            - resource
-            - operations
-            - status
-      unevaluatedProperties: false
-    ConfidenceIntervalConfig:
-      type: object
-      title: ConfidenceIntervalConfig
-      description: Configuration for confidence interval post-processing on an evaluation job.
-      allOf:
-        - $ref: '#/components/schemas/ConfidenceIntervalConfigCommon'
-        - type: object
-          properties:
-            num_parallel_threads:
-              $ref: '#/components/schemas/NumParallelThreads'
-      unevaluatedProperties: false
-    JobPostProcessingOperations:
-      type: object
-      title: JobPostProcessingOperations
-      description: |
-        Post-processing operations associated with an evaluation job. Each property
-        names an operation kind, so a kind can appear at most once. At least one
-        operation must be configured.
-      minProperties: 1
-      properties:
-        confidence_interval:
-          $ref: '#/components/schemas/ConfidenceIntervalConfig'
-      additionalProperties: false
-    ConfidenceIntervalPostProcessingRequest:
-      title: ConfidenceIntervalPostProcessingRequest
-      description: Request to configure post-processing operations for an evaluation job.
-      allOf:
-        - $ref: '#/components/schemas/PostProcessingCommon'
-        - type: object
-          properties:
-            operations:
-              $ref: '#/components/schemas/JobPostProcessingOperations'
-          required:
-            - operations
-      unevaluatedProperties: false
     JobPostProcessingResource:
       title: JobPostProcessingResource
       description: Post-processing resource associated with an evaluation job.
