@@ -132,9 +132,13 @@ documentation:
       config/providers/inspect.yaml and config/providers/lighteval.yaml.
     hle: >-
       Uses the static text-only dataset without restricting it to verified-gold questions,
-      with a screening cap and one regex_judge grader. Bind model_roles.grader and its
-      credentials in the request. See examples/inspect-hle/README.md for the supported
-      runtime and a standalone request generated from this collection's settings.
+      with a screening cap and one regex_judge grader. For collection jobs, set
+      judge_model and judge_route in the HLE benchmark request overrides. Use `target`
+      to reuse the evaluated model connection, or `judge` to use judge_api-key and the
+      optional judge_url from model.auth.secret_ref. For standalone requests, bind
+      model_roles.grader and its credentials. See examples/inspect-hle/README.md for
+      the supported runtime and a standalone request generated from this collection's
+      settings.
   limitations:
   - >-
     Structured-table and structured-data analysis are outside this collection's scope.
