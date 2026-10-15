@@ -205,6 +205,76 @@ func TestBuildJobRequiresAdapterImage(t *testing.T) {
 	}
 }
 
+func TestBuildJobDRAResourceClaims(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:                    "job-dra",
+		resourceGUID:             "guid-dra",
+		benchmarkIndex:           0,
+		namespace:                "default",
+		providerID:               "provider-1",
+		benchmarkID:              "bench-1",
+		adapterImage:             "adapter:latest",
+		draResourceClaimTemplate: "gpu-claims",
+		draClaimName:             "gpu",
+	}
+
+	job, err := buildJob(cfg, nil)
+	if err != nil {
+		t.Fatalf("buildJob: %v", err)
+	}
+
+	claims := job.Spec.Template.Spec.ResourceClaims
+	if len(claims) != 1 {
+		t.Fatalf("expected 1 pod resource claim, got %d", len(claims))
+	}
+	if claims[0].Name != "gpu" {
+		t.Fatalf("pod claim name = %q, want gpu", claims[0].Name)
+	}
+	if claims[0].ResourceClaimTemplateName == nil || *claims[0].ResourceClaimTemplateName != "gpu-claims" {
+		t.Fatalf("expected ResourceClaimTemplate reference gpu-claims, got %+v", claims[0])
+	}
+	// A pre-created ResourceClaim reference would make the Job inadmissible to Kueue.
+	if claims[0].ResourceClaimName != nil {
+		t.Fatalf("expected template-based claim (no pre-created ResourceClaim), got %q", *claims[0].ResourceClaimName)
+	}
+
+	adapter := mustFindContainer(t, job.Spec.Template.Spec.Containers, adapterContainerName)
+	if len(adapter.Resources.Claims) != 1 || adapter.Resources.Claims[0].Name != "gpu" {
+		t.Fatalf("expected adapter container claim gpu, got %+v", adapter.Resources.Claims)
+	}
+
+	// Sidecar and init containers stay CPU-only.
+	for i := range job.Spec.Template.Spec.InitContainers {
+		if c := &job.Spec.Template.Spec.InitContainers[i]; len(c.Resources.Claims) != 0 {
+			t.Fatalf("init container %s must not consume DRA claims, got %+v", c.Name, c.Resources.Claims)
+		}
+	}
+}
+
+func TestBuildJobWithoutDRANoResourceClaims(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:          "job-cpu",
+		resourceGUID:   "guid-cpu",
+		benchmarkIndex: 0,
+		namespace:      "default",
+		providerID:     "provider-1",
+		benchmarkID:    "bench-1",
+		adapterImage:   "adapter:latest",
+	}
+
+	job, err := buildJob(cfg, nil)
+	if err != nil {
+		t.Fatalf("buildJob: %v", err)
+	}
+	if job.Spec.Template.Spec.ResourceClaims != nil {
+		t.Fatalf("expected no pod resource claims without DRA, got %+v", job.Spec.Template.Spec.ResourceClaims)
+	}
+	adapter := mustFindContainer(t, job.Spec.Template.Spec.Containers, adapterContainerName)
+	if len(adapter.Resources.Claims) != 0 {
+		t.Fatalf("expected no adapter claims without DRA, got %+v", adapter.Resources.Claims)
+	}
+}
+
 func TestBuildJobAnnotations(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:          "job-123",
