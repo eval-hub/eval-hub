@@ -1,5 +1,5 @@
 id: document-understanding-v1
-curation_order: 2
+curation_order: 10
 name: Long-Context Document Comprehension v1
 description: >
   Evaluates bare-model understanding of supplied long-context documents and
@@ -36,7 +36,7 @@ pass_criteria:
   threshold: 0.2125
 
 benchmarks:
-  # Primary metrics match keys returned by completed EvalHub RULER runs.
+  # RULER primary metric keys were verified in completed single-context smoke runs.
   - id: common-words-extraction
     provider_id: ruler
     weight: 0.125
@@ -341,16 +341,18 @@ documentation:
     Answer matching and multiple-choice accuracy do not establish citation quality or faithfulness.
     Summarization, schema-based extraction, attribution, and explicit grounding remain gaps.
   - >-
-    The review reports that RULER emits task-qualified overall/per-length keys rather than the declared
-    string-match keys. Deployed-result verification remains outstanding.
+    RULER task-qualified overall and per-length result keys were verified in completed single-context
+    smoke runs. This does not verify evaluated counts or aggregation across the full configured
+    context-length range, or establish compatibility with every deployed adapter version.
   - >-
     Provider runtime definitions must be distinguished from real benchmark evidence: configured local
     simulator commands do not validate benchmark execution. Repository YAML documentation is not currently
     persisted or exposed as a documentation field by the service API.
   unresolved_inputs:
   - >-
-    Obtain deployed RULER fixtures proving exact result keys, units, evaluated counts, and per-length
-    behavior.
+    Verify RULER units, evaluated counts, and per-length aggregation for the configured 4,096-, 8,192-,
+    and 16,384-token contexts. Prior single-context smoke runs verify result keys, not the complete
+    collection configuration.
   - >-
     Select a tokenizer and prompt template appropriate for the evaluated model and verify actual input
     token lengths.
@@ -379,5 +381,4 @@ documentation:
       not established.
   - source: Implementation plan in the pull request description
     supports: >-
-      Approved membership, runtime-input choices, diagnostic interpretation, and the final curation policy
-      (seven existing target collections at 2, two new at 1, other collections unchanged at 0).
+      Approved membership, runtime-input choices, diagnostic interpretation.

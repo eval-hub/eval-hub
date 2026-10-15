@@ -105,7 +105,7 @@ benchmarks:
     provider_id: lighteval
     weight: 2
     primary_score:
-      metric: codegen_pass@1
+      metric: lcb:codegeneration_v6.codegen_pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.25

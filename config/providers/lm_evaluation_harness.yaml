@@ -3342,14 +3342,14 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - acc
+  - pass@1
   num_few_shot: 0
-  dataset_size: 1000
+  dataset_size: 164
   tags:
   - code
   - lm_eval
   primary_score:
-    metric: acc
+    metric: pass@1
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
