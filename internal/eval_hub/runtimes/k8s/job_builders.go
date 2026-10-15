@@ -251,6 +251,7 @@ func buildJob(cfg *jobConfig, serviceConfig *config.Config) (*batchv1.Job, error
 					NodeSelector:                 cfg.nodeSelector,
 					Tolerations:                  cfg.tolerations,
 					PriorityClassName:            cfg.priorityClassName,
+					ResourceClaims:               buildResourceClaims(cfg),
 					InitContainers:               initContainers,
 					Containers:                   containers,
 					Volumes:                      jobVolumes,

@@ -3,6 +3,7 @@ title: HardwareGPUConfig
 description: >
   Optional GPU resource override for a benchmark's direct `hardware_config`.
   Kubernetes sets GPU requests and limits to the same value (`count`).
+  Mutually exclusive with `dra` — a request that sets both is rejected.
 properties:
   name:
     type: string
