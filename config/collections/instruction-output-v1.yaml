@@ -76,9 +76,9 @@ benchmarks:
       max_tokens: 2048
       temperature: 0.0
       request_timeout: 120
-      # target reuses the evaluated model connection; judge uses the judge
-      # credentials and optional judge_url in model.auth.secret_ref.
       judge_model: ""
+      # Value `target` reuses the evaluated model connection; value `judge` uses the judge
+      # credentials and optional judge_url in model.auth.secret_ref.
       judge_route: ""
 
 documentation:
@@ -185,7 +185,7 @@ documentation:
     values; Easy-only coverage does not establish handling of harder schemas.
   - >-
     The review reports that an unspecified FollowBench judge falls back to the evaluated model in
-    the inspected adapter. The job must select a judge model and route; choosing target does not
+    the inspected adapter. The job must select a judge model and route; choosing 'target' does not
     establish an independent measuring instrument.
   - >-
     The schema prompt protocol differs from the provider few-shot metadata, so scores must not be
@@ -197,7 +197,7 @@ documentation:
   unresolved_inputs:
   - >-
     Select FollowBench judge_model and judge_route per job, then verify the actual judge and route
-    used in execution logs. Use judge when an independent connection is required.
+    used in execution logs. Use 'judge' when an independent connection is required.
   - >-
     Choose a FollowBench complete-example-group budget and verify evaluated group and constraint counts.
   - >-

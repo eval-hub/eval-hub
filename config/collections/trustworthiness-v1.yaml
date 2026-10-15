@@ -56,9 +56,9 @@ benchmarks:
     parameters:
       # Screening cap; verify the actual evaluated count.
       num_examples: 50
-      # target reuses the evaluated model connection; judge uses the judge
-      # credentials and optional judge_url in model.auth.secret_ref.
       judge_model: ""
+      # Value `target` reuses the evaluated model connection; value `judge` uses the judge
+      # credentials and optional judge_url in model.auth.secret_ref.
       judge_route: ""
 
   - id: truthfulqa_mc1

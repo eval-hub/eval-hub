@@ -72,8 +72,8 @@ parameters:
   - name: judge_route
     type: string
     description: >
-      For the bundled collection, target reuses model.url and its credential;
-      judge uses judge_api-key and optional judge_url in model.auth.secret_ref.
+      For the bundled collection, value `target` reuses model.url and its credential;
+      value `judge` uses judge_api-key and optional judge_url in model.auth.secret_ref.
 
   - name: judge_url
     type: string
