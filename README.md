@@ -386,7 +386,7 @@ Configuration is loaded from `config/config.yaml`, overridden by environment var
 
 Provider configurations live in `config/providers/` as YAML files. The default set includes lm-evaluation-harness (167 benchmarks), RAGAS, Garak, GuideLLM, LightEval, and MTEB.
 
-For Kubernetes evaluations, see [job pod resource requirements](docs/job-resources.md),
+For Kubernetes evaluations, see [job pod resource requirements](https://eval-hub.github.io/kubernetes/job-resources/),
 including the high-memory requirements of the shared LightEval provider.
 
 ### Syncing providers and collections to the TrustyAI operator
