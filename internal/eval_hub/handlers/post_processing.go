@@ -74,6 +74,21 @@ func (h *Handlers) HandleDeletePostProcessing(ctx *executioncontext.ExecutionCon
 			w.Error(err, ctx.RequestID)
 			return err
 		}
+		if job.Status == nil || !job.Status.State.IsTerminalState() {
+			previousState := api.OverallStatePending
+			if job.Status != nil {
+				previousState = job.Status.State
+			}
+			recordEvaluationJobTerminalTransition(
+				ctx.Ctx,
+				previousState,
+				api.OverallStateCancelled,
+				jobProviderIDs(nil, &job.EvaluationJobConfig),
+				jobCollectionID(&job.EvaluationJobConfig),
+				job.Resource.CreatedAt,
+				ctx.Tenant.String(),
+			)
+		}
 		w.WriteJSON(nil, http.StatusNoContent)
 		return nil
 	}, "storage", "delete-post-processing", "post_processing.id", id)
