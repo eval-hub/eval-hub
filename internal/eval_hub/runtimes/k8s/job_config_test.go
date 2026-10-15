@@ -1377,6 +1377,183 @@ func TestBuildJobConfigGPU(t *testing.T) {
 	})
 }
 
+func TestBuildJobConfigDRA(t *testing.T) {
+	newEvaluation := func(hw *api.BenchmarkHardwareConfig) *api.EvaluationJobResource {
+		return &api.EvaluationJobResource{
+			Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-dra"}},
+			EvaluationJobConfig: api.EvaluationJobConfig{
+				Model: &api.ModelRef{URL: "http://model", Name: "model"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{Ref: api.Ref{ID: "bench-1"}, HardwareConfig: hw},
+				},
+			},
+		}
+	}
+	gpuProvider := &api.ProviderResource{
+		Resource: api.Resource{ID: "gpu-provider"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+					GPU: &api.GPUConfig{
+						Resource:     "nvidia.com/gpu",
+						Count:        1,
+						NodeSelector: map[string]string{"nvidia.com/gpu.product": "NVIDIA-H100-SXM5-80GB"},
+					},
+				},
+			},
+		},
+	}
+	draProvider := &api.ProviderResource{
+		Resource: api.Resource{ID: "dra-provider"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+					DRA:   &api.DRAConfig{ResourceClaimTemplate: "provider-template", ClaimName: "provider-claim"},
+				},
+			},
+		},
+	}
+	bothProvider := &api.ProviderResource{
+		Resource: api.Resource{ID: "both-provider"},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image: "adapter:latest",
+					GPU:   &api.GPUConfig{Resource: "nvidia.com/gpu", Count: 1},
+					DRA:   &api.DRAConfig{ResourceClaimTemplate: "provider-template"},
+				},
+			},
+		},
+	}
+
+	t.Run("request dra overrides provider gpu default and clears node selector", func(t *testing.T) {
+		evaluation := newEvaluation(&api.BenchmarkHardwareConfig{
+			DRA: &api.HardwareDRAConfig{ResourceClaimTemplate: "gpu-claims"},
+		})
+		cfg, err := buildJobConfig(evaluation, gpuProvider, &evaluation.Benchmarks[0], 0, nil, nil)
+		if err != nil {
+			t.Fatalf("buildJobConfig: %v", err)
+		}
+		if cfg.draResourceClaimTemplate != "gpu-claims" {
+			t.Errorf("draResourceClaimTemplate = %q, want gpu-claims", cfg.draResourceClaimTemplate)
+		}
+		// claim_name omitted → defaulted
+		if cfg.draClaimName != "gpu" {
+			t.Errorf("draClaimName = %q, want default gpu", cfg.draClaimName)
+		}
+		// The explicit DRA choice replaces the provider's legacy GPU scheduling;
+		// the device still reaches the adapter via the claim.
+		if cfg.gpuResource != "" || cfg.gpuCount != 0 {
+			t.Errorf("expected provider GPU default suppressed by dra override, got resource=%q count=%d", cfg.gpuResource, cfg.gpuCount)
+		}
+		// Placement is governed by the ResourceClaimTemplate, not a GPU node selector.
+		if len(cfg.nodeSelector) != 0 {
+			t.Errorf("expected no nodeSelector for DRA job, got %v", cfg.nodeSelector)
+		}
+	})
+
+	t.Run("provider dra default with request-level overrides", func(t *testing.T) {
+		evaluation := newEvaluation(&api.BenchmarkHardwareConfig{
+			DRA: &api.HardwareDRAConfig{ResourceClaimTemplate: "request-template", ClaimName: "request-claim"},
+		})
+		cfg, err := buildJobConfig(evaluation, draProvider, &evaluation.Benchmarks[0], 0, nil, nil)
+		if err != nil {
+			t.Fatalf("buildJobConfig: %v", err)
+		}
+		if cfg.draResourceClaimTemplate != "request-template" {
+			t.Errorf("draResourceClaimTemplate = %q, want request-template", cfg.draResourceClaimTemplate)
+		}
+		if cfg.draClaimName != "request-claim" {
+			t.Errorf("draClaimName = %q, want request-claim", cfg.draClaimName)
+		}
+	})
+
+	t.Run("provider dra default retained when request sets nothing", func(t *testing.T) {
+		evaluation := newEvaluation(nil)
+		cfg, err := buildJobConfig(evaluation, draProvider, &evaluation.Benchmarks[0], 0, nil, nil)
+		if err != nil {
+			t.Fatalf("buildJobConfig: %v", err)
+		}
+		if cfg.draResourceClaimTemplate != "provider-template" {
+			t.Errorf("draResourceClaimTemplate = %q, want provider-template", cfg.draResourceClaimTemplate)
+		}
+		if cfg.draClaimName != "provider-claim" {
+			t.Errorf("draClaimName = %q, want provider-claim", cfg.draClaimName)
+		}
+	})
+
+	t.Run("request claim_name omitted keeps provider claim name", func(t *testing.T) {
+		evaluation := newEvaluation(&api.BenchmarkHardwareConfig{
+			DRA: &api.HardwareDRAConfig{ResourceClaimTemplate: "request-template"},
+		})
+		cfg, err := buildJobConfig(evaluation, draProvider, &evaluation.Benchmarks[0], 0, nil, nil)
+		if err != nil {
+			t.Fatalf("buildJobConfig: %v", err)
+		}
+		if cfg.draClaimName != "provider-claim" {
+			t.Errorf("draClaimName = %q, want provider-claim retained", cfg.draClaimName)
+		}
+	})
+
+	t.Run("request gpu overrides provider dra default", func(t *testing.T) {
+		evaluation := newEvaluation(&api.BenchmarkHardwareConfig{
+			GPU: &api.HardwareGPUConfig{Name: "nvidia.com/gpu", Count: 2},
+		})
+		cfg, err := buildJobConfig(evaluation, draProvider, &evaluation.Benchmarks[0], 0, nil, nil)
+		if err != nil {
+			t.Fatalf("buildJobConfig: %v", err)
+		}
+		if cfg.gpuResource != "nvidia.com/gpu" || cfg.gpuCount != 2 {
+			t.Errorf("expected GPU request set, got resource=%q count=%d", cfg.gpuResource, cfg.gpuCount)
+		}
+		if cfg.draResourceClaimTemplate != "" || cfg.draClaimName != "" {
+			t.Errorf("expected provider DRA default suppressed by gpu override, got template=%q claim=%q", cfg.draResourceClaimTemplate, cfg.draClaimName)
+		}
+	})
+
+	t.Run("provider declaring both gpu and dra rejected", func(t *testing.T) {
+		evaluation := newEvaluation(nil)
+		_, err := buildJobConfig(evaluation, bothProvider, &evaluation.Benchmarks[0], 0, nil, nil)
+		if err == nil {
+			t.Fatal("expected error for provider declaring both gpu and dra")
+		}
+	})
+
+	t.Run("queue and dra coexist for Kueue quota accounting", func(t *testing.T) {
+		evaluation := newEvaluation(&api.BenchmarkHardwareConfig{
+			Queue: &api.QueueConfig{Kind: "kueue", Name: "gpu-queue"},
+			DRA:   &api.HardwareDRAConfig{ResourceClaimTemplate: "gpu-claims"},
+		})
+		cfg, err := buildJobConfig(evaluation, gpuProvider, &evaluation.Benchmarks[0], 0, nil, nil)
+		if err != nil {
+			t.Fatalf("buildJobConfig: %v", err)
+		}
+		if cfg.queueName != "gpu-queue" {
+			t.Errorf("queueName = %q, want gpu-queue", cfg.queueName)
+		}
+		if cfg.draResourceClaimTemplate != "gpu-claims" {
+			t.Errorf("draResourceClaimTemplate = %q, want gpu-claims", cfg.draResourceClaimTemplate)
+		}
+	})
+
+	t.Run("hardware profile gpu with provider dra default rejected", func(t *testing.T) {
+		// Validation rejects profile mode + request-level dra, but a profile GPU can
+		// still meet a provider DRA default; finalizeAcceleratorConfig must catch it.
+		profile := &hardwareProfileResources{
+			schedulingType: hardwareProfileSchedulingNode,
+			gpuResource:    "nvidia.com/gpu",
+			gpuCount:       1,
+		}
+		evaluation := newEvaluation(nil)
+		_, err := buildJobConfig(evaluation, draProvider, &evaluation.Benchmarks[0], 0, nil, profile)
+		if err == nil {
+			t.Fatal("expected error for hardware profile GPU combined with provider DRA default")
+		}
+	})
+}
+
 func TestResolveNodeSelector(t *testing.T) {
 	tests := []struct {
 		name string
