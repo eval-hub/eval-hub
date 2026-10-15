@@ -44,7 +44,6 @@ Feature: Collections Endpoint
     And the response should contain the value "longbenchv2" at path "$.results.benchmarks[*].id"
     And the response should contain "results"
 
-  # currently not present on any cluster
   Scenario: Verify curated collection run and results - fairness-bias-v1
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_fairness-bias-v1.json"
@@ -119,7 +118,6 @@ Feature: Collections Endpoint
     And the response should contain the value "inspect/docvqa" at path "$.results.benchmarks[*].id"
     And the response should contain "results"
 
-  # currently not present on any cluster
   Scenario: Verify curated collection run and results - safety-ethical-principles-v1
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_safety-ethical-principles-v1.json"
