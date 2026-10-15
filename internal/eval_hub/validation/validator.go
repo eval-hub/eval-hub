@@ -139,10 +139,21 @@ func ValidateCollectionOverrides(overrides []api.EvaluationBenchmarkConfig, coll
 }
 
 // validateBenchmarkHardwareConfigExclusive rejects combining a hardware profile name
-// with inline queue/cpu/memory/gpu overrides.
+// with inline queue/cpu/memory/gpu/dra overrides, and combining the legacy GPU
+// extended-resource override with a DRA claim reference.
 func validateBenchmarkHardwareConfigExclusive(sl validator.StructLevel) {
 	hw, ok := sl.Current().Interface().(api.BenchmarkHardwareConfig)
 	if !ok {
+		return
+	}
+	if hw.GPU != nil && hw.DRA != nil {
+		sl.ReportError(
+			hw.DRA,
+			"dra",
+			"DRA",
+			"hardware_config_gpu_dra_exclusive",
+			"gpu and dra are mutually exclusive within hardware_config",
+		)
 		return
 	}
 	if strings.TrimSpace(hw.HardwareProfileName) == "" {
@@ -154,7 +165,7 @@ func validateBenchmarkHardwareConfigExclusive(sl validator.StructLevel) {
 			"hardware_profile_name",
 			"HardwareProfileName",
 			"hardware_config_exclusive",
-			"hardware_profile_name cannot be combined with queue, cpu, memory, or gpu",
+			"hardware_profile_name cannot be combined with queue, cpu, memory, gpu, or dra",
 		)
 	}
 }
