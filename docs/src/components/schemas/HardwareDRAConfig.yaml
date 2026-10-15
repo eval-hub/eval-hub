@@ -9,6 +9,8 @@ description: >
   sets both is rejected. Template references (rather than pre-created
   ResourceClaims) keep evaluation Jobs admissible to Kueue, which only
   accepts workload objects that create their own claims.
+required:
+  - resource_claim_template
 properties:
   resource_claim_template:
     type: string
