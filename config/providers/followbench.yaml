@@ -77,7 +77,11 @@ parameters:
 
   - name: judge_url
     type: string
-    description: OpenAI-compatible external judge endpoint.
+    description: >
+      Legacy endpoint override for jobs that do not set judge_route. When omitted,
+      FollowBench uses model.url. With judge_route=target, model.url is used; with
+      judge_route=judge, use the optional judge_url in model.auth.secret_ref instead.
+      Do not set this parameter when judge_route is present.
 
   - name: num_examples
     type: integer
