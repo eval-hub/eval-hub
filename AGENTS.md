@@ -202,7 +202,8 @@ go test -v ./cmd/evalhub_mcp/ ./internal/evalhub_mcp/...
 - `server.New()` creates the MCP server with advertised capabilities (tools, resources, prompts)
 - `server.NewEvalHubClient()` creates an eval-hub API client from config
 - `server.RegisterHandlers()` wires tool/resource/prompt handlers; handlers access the API client via closures
-- Server metadata (name, version+build hash) is returned in the MCP `initialize` handshake
+- MCP 2026-07-28 uses `server/discover` and per-request metadata; older revisions use the `initialize` handshake
+- Streamable HTTP is stateless and does not require an `Mcp-Session-Id`; catalogs are fixed at startup
 - Both transports share the same `*mcp.Server` instance, so capability listings are identical
 - Uses `github.com/modelcontextprotocol/go-sdk` (Go MCP SDK)
 
