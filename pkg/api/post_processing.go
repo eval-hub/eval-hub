@@ -69,22 +69,26 @@ type ConfidenceIntervalConfigCommon struct {
 
 // ConfidenceIntervalConfig is the job-scoped operation configuration. The
 // evaluation job reference is supplied by the URL and is added to the adapter
-// job spec when the operation is mapped to a runtime job.
+// job spec when the operation is mapped to a runtime job. ResultsDataConfig
+// optionally maps the source job's result artifacts.
 type ConfidenceIntervalConfig struct {
 	ConfidenceIntervalConfigCommon
-	NumParallelThreads *int `json:"num_parallel_threads,omitempty" validate:"omitempty,min=1"`
+	ResultsDataConfig  *ResultsDataConfig `json:"results_data_config,omitempty"`
+	NumParallelThreads *int               `json:"num_parallel_threads,omitempty" validate:"omitempty,min=1"`
 }
 
 // StandaloneConfidenceIntervalConfig describes result and calibration data for
 // a standalone confidence interval computation.
 type StandaloneConfidenceIntervalConfig struct {
 	ConfidenceIntervalConfigCommon
-	ResultsDataRef *PostProcessingResultsDataRef `json:"results_data_ref" validate:"required"`
-	PrimaryScore   *PrimaryScore                 `json:"primary_score,omitempty" validate:"required_without=ResultsDataRef.EvalJob,excluded_with=ResultsDataRef.EvalJob"`
+	ResultsDataRef *PostProcessingResultsDataRef `json:"results_data_ref" validate:"required,standalone_results_data_ref"`
+	PrimaryScore   *PrimaryScore                 `json:"primary_score,omitempty" validate:"required"`
 }
 
-// PostProcessingResultsDataRef accepts exactly one source. Calibration data
-// uses CalibrationDataRef instead, excluding evaluation jobs, MLflow, and OCI.
+// PostProcessingResultsDataRef is the adapter's persisted result source. The
+// standalone API accepts only its external source fields; the job-scoped API
+// supplies EvalJob internally from its path parameter. Calibration data uses
+// CalibrationDataRef instead, excluding evaluation jobs, MLflow, and OCI.
 type PostProcessingResultsDataRef struct {
 	DataConfig *ResultsDataConfig    `json:"data_config,omitempty"`
 	EvalJob    *EvaluationJobDataRef `json:"eval_job,omitempty" validate:"required_without_all=S3 PVC Git HF MLFlow OCI,excluded_with=S3 PVC Git HF MLFlow OCI"`

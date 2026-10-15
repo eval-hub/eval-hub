@@ -1,17 +1,18 @@
 id: tool-use-v1
-curation_order: 2
+curation_order: 10
 name: Tool Use v1
 description: >
   Evaluates single-turn function-calling capability using supplied function
   schemas, including function selection, argument generation and structural
-  correctness, together with relevance and no-call detection. BFCL categories
-  are explicitly restricted to non-agentic call-generation and relevance
-  tasks; executable, multi-turn, memory, and web-search workflows are excluded.
-  The collection evaluates tool-call generation only and does not execute tools
-  or measure multi-step agent behavior.
-  Each BFCL row is capped at 50 examples for screening; coverage of every
-  selected category is not guaranteed by this cap.
-  Scores are diagnostic summaries, not evidence of successful tool execution.
+  correctness, together with relevance and no-call detection.
+# BFCL categories
+# are explicitly restricted to non-agentic call-generation and relevance
+# tasks; executable, multi-turn, memory, and web-search workflows are excluded.
+# The collection evaluates tool-call generation only and does not execute tools
+# or measure multi-step agent behavior.
+# Each BFCL row is capped at 50 examples for screening; coverage of every
+# selected category is not guaranteed by this cap.
+# Scores are diagnostic summaries, not evidence of successful tool execution.
 
 domains:
   - tool_use_and_function_calling
@@ -47,7 +48,7 @@ benchmarks:
     provider_id: inspect
     weight: 0.5
     primary_score:
-      metric: accuracy/accuracy
+      metric: bfcl_scorer/accuracy
       lower_is_better: false
     pass_criteria:
       threshold: 0.60
@@ -71,7 +72,7 @@ benchmarks:
     provider_id: inspect
     weight: 0.5
     primary_score:
-      metric: accuracy/accuracy
+      metric: bfcl_scorer/accuracy
       lower_is_better: false
     pass_criteria:
       threshold: 0.60
@@ -116,13 +117,13 @@ documentation:
     rows:
     - provider_id: inspect
       benchmark_id: inspect/bfcl
-      metric: accuracy/accuracy
+      metric: bfcl_scorer/accuracy
       lower_is_better: false
       weight: 0.5
       threshold: 0.6
     - provider_id: inspect
       benchmark_id: inspect/bfcl
-      metric: accuracy/accuracy
+      metric: bfcl_scorer/accuracy
       lower_is_better: false
       weight: 0.5
       threshold: 0.6
@@ -190,8 +191,8 @@ documentation:
     The two screening caps may leave categories untested and can hide always-call or never-call behavior
     in subpopulations.
   - >-
-    The review reports a potential BFCL scorer-name mismatch with accuracy/accuracy and a repeated-ID
-    threshold lookup issue. Identical row scoring settings avoid the reported threshold difference,
+    Both BFCL rows select bfcl_scorer/accuracy. The review reports a repeated-ID threshold lookup
+    issue. Identical row scoring settings avoid the reported threshold difference,
     but row/category identity still matters.
   - >-
     Native API tool calling versus prompted call generation is not established by these category settings
@@ -231,5 +232,4 @@ documentation:
       not established.
   - source: Implementation plan in the pull request description
     supports: >-
-      Approved membership, runtime-input choices, diagnostic interpretation, and the final curation policy
-      (seven existing target collections at 2, two new at 1, other collections unchanged at 0).
+      Approved membership, runtime-input choices, diagnostic interpretation.

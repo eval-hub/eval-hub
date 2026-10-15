@@ -79,7 +79,88 @@ func (h *Handlers) HandleDeletePostProcessing(ctx *executioncontext.ExecutionCon
 	}, "storage", "delete-post-processing", "post_processing.id", id)
 }
 
+// HandleGetJobPostProcessing handles GET /api/v1/evaluations/jobs/{job_id}/post-processing/{post_processing_id}.
+func (h *Handlers) HandleGetJobPostProcessing(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
+	logging.LogRequestStarted(ctx)
+	jobID := req.PathValue(constants.PathParameterJobID)
+	if jobID == "" {
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PathParameterJobID), ctx.RequestID)
+		return
+	}
+	id := req.PathValue(constants.PathParameterJobPostProcessingID)
+	if id == "" {
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PathParameterJobPostProcessingID), ctx.RequestID)
+		return
+	}
+	storage := h.getStorage(ctx)
+	_ = h.withSpan(ctx, func(runtimeCtx context.Context) error {
+		job, err := h.getJobPostProcessingJob(storage.WithContext(runtimeCtx), jobID, id)
+		if err != nil {
+			w.Error(err, ctx.RequestID)
+			return err
+		}
+		response, err := postprocessing.JobResourceFromJob(job)
+		if err != nil {
+			err = serviceerrors.NewServiceError(messages.InternalServerError, "Error", err.Error())
+			w.Error(err, ctx.RequestID)
+			return err
+		}
+		w.WriteJSON(response, http.StatusOK)
+		return nil
+	}, "storage", "get-job-post-processing", "job.id", jobID, "post_processing.id", id)
+}
+
+// HandleDeleteJobPostProcessing handles DELETE /api/v1/evaluations/jobs/{job_id}/post-processing/{post_processing_id}.
+func (h *Handlers) HandleDeleteJobPostProcessing(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
+	logging.LogRequestStarted(ctx)
+	jobID := req.PathValue(constants.PathParameterJobID)
+	if jobID == "" {
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PathParameterJobID), ctx.RequestID)
+		return
+	}
+	id := req.PathValue(constants.PathParameterJobPostProcessingID)
+	if id == "" {
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PathParameterJobPostProcessingID), ctx.RequestID)
+		return
+	}
+	storage := h.getStorage(ctx)
+	_ = h.withSpan(ctx, func(runtimeCtx context.Context) error {
+		contextualStorage := storage.WithContext(runtimeCtx)
+		job, err := h.getJobPostProcessingJob(contextualStorage, jobID, id)
+		if err != nil {
+			w.Error(err, ctx.RequestID)
+			return err
+		}
+		if h.runtime != nil && (job.Status == nil || job.Status.State != api.OverallStateCancelled) {
+			if err := h.runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).DeleteEvaluationJobResources(job); err != nil {
+				ctx.Logger.Error("Failed to delete post-processing runtime resources", "error", err, "id", id)
+			}
+		}
+		if err := contextualStorage.WithWorkloadType(workloads.PostProcessing).DeleteEvaluationJob(id); err != nil {
+			w.Error(err, ctx.RequestID)
+			return err
+		}
+		w.WriteJSON(nil, http.StatusOK)
+		return nil
+	}, "storage", "delete-job-post-processing", "job.id", jobID, "post_processing.id", id)
+}
+
 func (h *Handlers) getStandalonePostProcessingJob(storage abstractions.Storage, id string) (*api.EvaluationJobResource, error) {
+	job, err := h.getPostProcessingJob(storage, id)
+	if err != nil {
+		return nil, err
+	}
+	operations, err := postprocessing.OperationsFromJob(&job.EvaluationJobConfig)
+	if err != nil {
+		return nil, err
+	}
+	if operations.ConfidenceInterval == nil || operations.ConfidenceInterval.ResultsDataRef == nil || operations.ConfidenceInterval.ResultsDataRef.EvalJob != nil {
+		return nil, postProcessingNotFound(id)
+	}
+	return job, nil
+}
+
+func (h *Handlers) getPostProcessingJob(storage abstractions.Storage, id string) (*api.EvaluationJobResource, error) {
 	job, err := storage.GetEvaluationJob(id)
 	if err != nil {
 		var serviceErr *serviceerrors.ServiceError
@@ -90,6 +171,27 @@ func (h *Handlers) getStandalonePostProcessingJob(storage abstractions.Storage, 
 	}
 	if job == nil || !postprocessing.IsPostProcessingJob(&job.EvaluationJobConfig) {
 		return nil, postProcessingNotFound(id)
+	}
+	return job, nil
+}
+
+func (h *Handlers) getJobPostProcessingJob(storage abstractions.Storage, jobID, postProcessingID string) (*api.EvaluationJobResource, error) {
+	sourceStorage := storage.WithWorkloadType(workloads.Evaluation)
+	if _, err := sourceStorage.GetEvaluationJob(jobID); err != nil {
+		return nil, err
+	}
+	postProcessingStorage := storage.WithWorkloadType(workloads.PostProcessing)
+	job, err := h.getPostProcessingJob(postProcessingStorage, postProcessingID)
+	if err != nil {
+		return nil, err
+	}
+	operations, err := postprocessing.OperationsFromJob(&job.EvaluationJobConfig)
+	if err != nil {
+		return nil, err
+	}
+	operation := operations.ConfidenceInterval
+	if operation == nil || operation.ResultsDataRef == nil || operation.ResultsDataRef.EvalJob == nil || operation.ResultsDataRef.EvalJob.ID != jobID {
+		return nil, postProcessingNotFound(postProcessingID)
 	}
 	return job, nil
 }
@@ -120,11 +222,7 @@ func (h *Handlers) HandleCreatePostProcessing(ctx *executioncontext.ExecutionCon
 			return
 		}
 	}
-	evaluation := postprocessing.ToEvaluationJob(&request)
-	if sourceJob != nil {
-		evaluation.Exports = copySourceOCIExports(sourceJob)
-	}
-	job, err := h.createPostProcessingEvaluationJob(ctx, evaluation)
+	job, err := h.createPostProcessingEvaluationJobFromRequest(ctx, &request, sourceJob)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
@@ -135,6 +233,72 @@ func (h *Handlers) HandleCreatePostProcessing(ctx *executioncontext.ExecutionCon
 		return
 	}
 	w.WriteJSON(response, 202)
+}
+
+// HandleCreateJobPostProcessing handles POST /api/v1/evaluations/jobs/{job_id}/post-processing.
+func (h *Handlers) HandleCreateJobPostProcessing(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
+	logging.LogRequestStarted(ctx)
+	jobID := req.PathValue(constants.PathParameterJobID)
+	if jobID == "" {
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PathParameterJobID), ctx.RequestID)
+		return
+	}
+	body, err := req.BodyAsBytes()
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+	var request api.ConfidenceIntervalPostProcessingRequest
+	if err := serialization.Unmarshal(h.validate, ctx, body, &request); err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+	operation := request.Operations.ConfidenceInterval
+	sourceRef := &api.PostProcessingResultsDataRef{EvalJob: &api.EvaluationJobDataRef{
+		ID:                 jobID,
+		NumParallelThreads: operation.NumParallelThreads,
+	}}
+	sourceJob, err := h.validatePostProcessingResultsSource(ctx, sourceRef)
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+
+	standaloneRequest := &api.StandalonePostProcessingRequest{
+		PostProcessingCommon: request.PostProcessingCommon,
+		Operations: api.StandalonePostProcessingOperations{
+			ConfidenceInterval: &api.StandaloneConfidenceIntervalConfig{
+				ConfidenceIntervalConfigCommon: operation.ConfidenceIntervalConfigCommon,
+				ResultsDataRef: &api.PostProcessingResultsDataRef{
+					EvalJob:    sourceRef.EvalJob,
+					DataConfig: operation.ResultsDataConfig,
+				},
+			},
+		},
+	}
+	job, err := h.createPostProcessingEvaluationJobFromRequest(ctx, standaloneRequest, sourceJob)
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+	response, err := postprocessing.JobResourceFromJob(job)
+	if err != nil {
+		w.Error(serviceerrors.NewServiceError(messages.InternalServerError, "Error", err.Error()), ctx.RequestID)
+		return
+	}
+	w.WriteJSON(response, http.StatusAccepted)
+}
+
+func (h *Handlers) createPostProcessingEvaluationJobFromRequest(
+	ctx *executioncontext.ExecutionContext,
+	request *api.StandalonePostProcessingRequest,
+	sourceJob *api.EvaluationJobResource,
+) (*api.EvaluationJobResource, error) {
+	evaluation := postprocessing.ToEvaluationJob(request)
+	if sourceJob != nil {
+		evaluation.Exports = copySourceOCIExports(sourceJob)
+	}
+	return h.createPostProcessingEvaluationJob(ctx, evaluation)
 }
 
 // validatePostProcessingResultsSource checks the stored state of an eval_job

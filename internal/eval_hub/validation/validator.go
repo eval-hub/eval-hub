@@ -63,6 +63,9 @@ func registerCustomValidators(instance *validator.Validate) error {
 	if err := instance.RegisterValidation("sha256_digest", validateOCIDigest); err != nil {
 		return fmt.Errorf("register validator failed for sha256_digest: %w", err)
 	}
+	if err := instance.RegisterValidation("standalone_results_data_ref", validateStandaloneResultsDataRef); err != nil {
+		return fmt.Errorf("register validator failed for standalone_results_data_ref: %w", err)
+	}
 	instance.RegisterStructValidation(evaluationJobConfig, api.EvaluationJobConfig{})
 	instance.RegisterStructValidation(validateStandalonePostProcessingRequest, api.StandalonePostProcessingRequest{})
 	instance.RegisterStructValidation(validateJobPostProcessingRequest, api.ConfidenceIntervalPostProcessingRequest{})
@@ -72,6 +75,24 @@ func registerCustomValidators(instance *validator.Validate) error {
 	// hardware_profile_name is mutually exclusive with inline queue/cpu/memory/gpu.
 	instance.RegisterStructValidation(validateBenchmarkHardwareConfigExclusive, api.BenchmarkHardwareConfig{})
 	return nil
+}
+
+func validateStandaloneResultsDataRef(fl validator.FieldLevel) bool {
+	field := fl.Field()
+	if !field.IsValid() {
+		return true
+	}
+	if field.Kind() == reflect.Pointer {
+		if field.IsNil() {
+			return true
+		}
+		field = field.Elem()
+	}
+	if field.Kind() != reflect.Struct {
+		return true
+	}
+	ref, ok := field.Interface().(api.PostProcessingResultsDataRef)
+	return !ok || ref.EvalJob == nil
 }
 
 func validateRFC1123DNSLabel(fl validator.FieldLevel) bool {

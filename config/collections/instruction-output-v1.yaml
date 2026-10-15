@@ -1,15 +1,16 @@
 id: instruction-output-v1
-curation_order: 2
+curation_order: 10
 name: Instruction and Output Reliability v1
 description: >
   Evaluates bare-model instruction and output reliability across explicit
   instruction following, unconstrained JSON/schema compliance, and compound
-  constraint satisfaction. Balanced IFBench, JSONSchemaBench Easy, and FollowBench
-  coverage measures whether models can satisfy verifiable requirements without
-  constrained decoding, tool execution, or multi-step agent scaffolding.
-  IFBench uses loose prompt-level scoring; schema compliance covers the Easy
-  split with zero-shot prompting. Scores are diagnostic summaries, not
-  production reliability criteria.
+  constraint satisfaction.
+# Balanced IFBench, JSONSchemaBench Easy, and FollowBench
+# coverage measures whether models can satisfy verifiable requirements without
+# constrained decoding, tool execution, or multi-step agent scaffolding.
+# IFBench uses loose prompt-level scoring; schema compliance covers the Easy
+# split with zero-shot prompting. Scores are diagnostic summaries, not
+# production reliability criteria.
 domains:
   - instruction_and_output_reliability
 tasks:
@@ -59,7 +60,7 @@ benchmarks:
       threshold: 0.60
     parameters:
       # Deliberate zero-shot profile; the provider metadata declares two shots.
-      num_fewshot: 0
+      num_few_shot: 0
       apply_chat_template: true
 
   - id: followbench
@@ -145,7 +146,7 @@ documentation:
     - provider_id: lm_evaluation_harness
       benchmark_id: jsonschema_bench_easy
       configured_parameters:
-        num_fewshot: 0
+        num_few_shot: 0
         apply_chat_template: true
     - provider_id: followbench
       benchmark_id: followbench
@@ -224,5 +225,4 @@ documentation:
       not established.
   - source: Implementation plan in the pull request description
     supports: >-
-      Approved membership, runtime-input choices, diagnostic interpretation, and the final curation policy
-      (seven existing target collections at 2, two new at 1, other collections unchanged at 0).
+      Approved membership, runtime-input choices, diagnostic interpretation.

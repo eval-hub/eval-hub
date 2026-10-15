@@ -44,6 +44,11 @@ get:
             operations:
               confidence_interval:
                 num_parallel_threads: 2
+                results_data_config:
+                  format: json
+                  columns:
+                    sample_id: id
+                    prediction: scores.telemath_scorer.value
                 calibration_data_ref:
                   - s3:
                       bucket: evaluation-data
@@ -96,7 +101,7 @@ delete:
         type: string
         title: Post Processing Id
   responses:
-    '204':
+    '200':
       description: Job-scoped post-processing computation deleted.
     '401':
       $ref: ../components/responses/Unauthorized.yaml

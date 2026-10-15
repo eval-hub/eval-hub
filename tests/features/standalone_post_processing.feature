@@ -10,7 +10,7 @@ Feature: Post-Processing Endpoint
     And I set the header "X-User" to "{{env:X_USER|test-user}}"
 
   @local
-  Scenario: Create post-processing computation from a completed evaluation job
+  Scenario: Create post-processing computation for a completed evaluation job
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
@@ -34,17 +34,12 @@ Feature: Post-Processing Endpoint
     Then the response code should be 200
     And the response should contain the value "completed" at path "$.status.state"
     And the response should contain the value "0.7" at path "$.results.benchmarks[0].metrics.accuracy"
-    When I send a POST request to "/api/v1/evaluations/post-processing" with body:
+    When I send a POST request to "/api/v1/evaluations/jobs/{{value:source_job_id}}/post-processing" with body:
     """
     {
       "name": "confidence-interval-fvt",
       "operations": {
         "confidence_interval": {
-          "results_data_ref": {
-            "eval_job": {
-              "id": "{{value:source_job_id}}"
-            }
-          },
           "calibration_data_ref": [
             {
               "pvc": {"claim_name": "calibration-data"},
@@ -65,28 +60,17 @@ Feature: Post-Processing Endpoint
     Then the response code should be 202
     And the response should contain the value "confidence-interval-fvt" at path "$.name"
     And the response should contain the value "pending" at path "$.status.state"
-    And the response should contain the value "{{value:source_job_id}}" at path "$.operations.confidence_interval.results_data_ref.eval_job.id"
     And the "resource.id" field in the response should be saved as "value:post_processing_id"
-    When I send a GET request to "/api/v1/evaluations/post-processing/{{value:post_processing_id}}"
+    When I send a GET request to "/api/v1/evaluations/jobs/{{value:source_job_id}}/post-processing/{{value:post_processing_id}}"
     Then the response code should be 200
     And the response should contain the value "confidence-interval-fvt" at path "$.name"
     When I send a GET request to "/api/v1/evaluations/post-processing/{{value:source_job_id}}"
     Then the response code should be 404
-    When I send a GET request to "/api/v1/evaluations/jobs/{{value:post_processing_id}}"
-    Then the response code should be 404
     When I send a GET request to "/api/v1/evaluations/jobs/{{value:source_job_id}}"
     Then the response code should be 200
-    When I send a DELETE request to "/api/v1/evaluations/post-processing/{{value:source_job_id}}"
-    Then the response code should be 404
-    When I send a GET request to "/api/v1/evaluations/jobs/{{value:source_job_id}}"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{{value:source_job_id}}/post-processing/{{value:post_processing_id}}"
     Then the response code should be 200
-    When I send a DELETE request to "/api/v1/evaluations/jobs/{{value:post_processing_id}}"
-    Then the response code should be 404
-    When I send a GET request to "/api/v1/evaluations/post-processing/{{value:post_processing_id}}"
-    Then the response code should be 200
-    When I send a DELETE request to "/api/v1/evaluations/post-processing/{{value:post_processing_id}}?hard_delete=true"
-    Then the response code should be 204
-    When I send a GET request to "/api/v1/evaluations/post-processing/{{value:post_processing_id}}"
+    When I send a GET request to "/api/v1/evaluations/jobs/{{value:source_job_id}}/post-processing/{{value:post_processing_id}}"
     Then the response code should be 404
     When I send a DELETE request to "/api/v1/evaluations/jobs/{{value:source_job_id}}?hard_delete=true"
     Then the response code should be 204
@@ -94,7 +78,7 @@ Feature: Post-Processing Endpoint
     Then the response code should be 404
 
   @local
-  Scenario: Evaluation jobs list excludes standalone post-processing jobs
+  Scenario: Evaluation jobs list excludes job-scoped post-processing jobs
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job.json"
     Then the response code should be 202
@@ -114,17 +98,12 @@ Feature: Post-Processing Endpoint
     }
     """
     Then the response code should be 204
-    When I send a POST request to "/api/v1/evaluations/post-processing" with body:
+    When I send a POST request to "/api/v1/evaluations/jobs/{{value:list_source_job_id}}/post-processing" with body:
     """
     {
       "name": "confidence-interval-list-fvt",
       "operations": {
         "confidence_interval": {
-          "results_data_ref": {
-            "eval_job": {
-              "id": "{{value:list_source_job_id}}"
-            }
-          },
           "calibration_data_ref": [
             {
               "pvc": {"claim_name": "calibration-data"},
@@ -148,7 +127,38 @@ Feature: Post-Processing Endpoint
     Then the response code should be 200
     And the response should contain the value "{{value:list_source_job_id}}" at path "$.items[*].resource.id"
     And the response should not contain the value "{{value:list_post_processing_id}}" at path "$.items[*].resource.id"
-    When I send a DELETE request to "/api/v1/evaluations/post-processing/{{value:list_post_processing_id}}?hard_delete=true"
-    Then the response code should be 204
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{{value:list_source_job_id}}/post-processing/{{value:list_post_processing_id}}"
+    Then the response code should be 200
     When I send a DELETE request to "/api/v1/evaluations/jobs/{{value:list_source_job_id}}?hard_delete=true"
     Then the response code should be 204
+
+  @local
+  Scenario: Standalone post-processing rejects eval_job results data references
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/post-processing" with body:
+    """
+    {
+      "name": "standalone-eval-job-ref-rejected",
+      "operations": {
+        "confidence_interval": {
+          "results_data_ref": {
+            "eval_job": {
+              "id": "00000000-0000-4000-8000-000000000001"
+            }
+          },
+          "calibration_data_ref": [
+            {
+              "pvc": {"claim_name": "calibration-data"},
+              "data_config": {
+                "format": "jsonl",
+                "columns": {"label": "label", "prediction": "prediction"}
+              }
+            }
+          ],
+          "significance_level": 0.05
+        }
+      }
+    }
+    """
+    Then the response code should be 400
+    And the response should contain the value "eval_job is only available on job-scoped post-processing" at path "$.message"

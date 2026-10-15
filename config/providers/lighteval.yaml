@@ -4,7 +4,7 @@ title: Lighteval
 description: Lightweight LLM evaluation framework from Hugging Face
 runtime:
   k8s:
-    image: quay.io/evalhub/community-lighteval:latest
+    image: quay.io/evalhub/community-lighteval:v0.6.3@sha256:9cd5a3a48b8d7a6f7f69eaca774c5bf659a32c6163c86b2d8e83f9cbc3f6beb1
     entrypoint:
       - python
       - main.py
@@ -410,7 +410,7 @@ benchmarks:
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - pass@1
+      - aime24.pass@1
     num_few_shot: 0
     dataset_size: 30
     tags:
@@ -419,7 +419,7 @@ benchmarks:
       - competition
       - lighteval
     primary_score:
-      metric: pass@1
+      metric: aime24.pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
@@ -432,7 +432,7 @@ benchmarks:
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - pass@1
+      - aime25.pass@1
     num_few_shot: 0
     dataset_size: 30
     tags:
@@ -441,7 +441,7 @@ benchmarks:
       - competition
       - lighteval
     primary_score:
-      metric: pass@1
+      metric: aime25.pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
@@ -558,7 +558,7 @@ benchmarks:
       500 hand-picked problems from the MATH dataset spanning 7 subject areas (algebra,
       counting, geometry, number theory, probability, pre-calculus, intermediate algebra).
       Tests competition-level mathematical reasoning with multi-step solutions.
-      Declared primary metric is pass@1; repeated seeded sampling must be verified
+      Declared primary metric is math_500.pass@1; repeated seeded sampling must be verified
       against the configured adapter before interpreting results as repeated runs.
     category: math
     domains: [knowledge_and_reasoning]
@@ -566,7 +566,7 @@ benchmarks:
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - pass@1
+      - math_500.pass@1
     num_few_shot: 0
     dataset_size: 500
     tags:
@@ -575,7 +575,7 @@ benchmarks:
       - competition
       - lighteval
     primary_score:
-      metric: pass@1
+      metric: math_500.pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.30
@@ -585,7 +585,7 @@ benchmarks:
       Expert-crafted PhD-level multiple-choice questions in biology, chemistry, and physics
       requiring deep domain synthesis across topics rarely co-occurring in training data.
       Diamond subset is the hardest tier — domain experts answer correctly ~65% of the time.
-      Declared primary metric is gpqa_pass@1; repeated seeded sampling must be
+      Declared primary metric is gpqa:diamond.gpqa_pass@1; repeated seeded sampling must be
       verified against the configured adapter.
     category: reasoning
     domains: [knowledge_and_reasoning]
@@ -593,7 +593,7 @@ benchmarks:
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - gpqa_pass@1
+      - gpqa:diamond.gpqa_pass@1
     num_few_shot: 0
     dataset_size: 198
     tags:
@@ -603,7 +603,7 @@ benchmarks:
       - competition
       - lighteval
     primary_score:
-      metric: gpqa_pass@1
+      metric: gpqa:diamond.gpqa_pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.35
@@ -614,15 +614,15 @@ benchmarks:
       AtCoder. The fixed v6 release does not establish whether problems postdate
       the evaluated model's knowledge cutoff or exclude training contamination.
       Execution-based evaluation: generated code is run against hidden test cases.
-      Declared primary metric is codegen_pass@1; repeated seeded sampling must be
-      verified against the configured adapter.
+      Declared primary metric is lcb:codegeneration_v6.codegen_pass@1; repeated
+      seeded sampling must be verified against the configured adapter.
     category: code
     domains: [software]
     tasks: [code_generation]
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - codegen_pass@1
+      - lcb:codegeneration_v6.codegen_pass@1
     num_few_shot: 0
     tags:
       - code
@@ -630,7 +630,7 @@ benchmarks:
       - execution
       - lighteval
     primary_score:
-      metric: codegen_pass@1
+      metric: lcb:codegeneration_v6.codegen_pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.25

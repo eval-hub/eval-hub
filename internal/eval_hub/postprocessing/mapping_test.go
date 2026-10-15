@@ -302,6 +302,43 @@ func TestResourceFromJobConfidenceIntervalResultEdgeCases(t *testing.T) {
 	}
 }
 
+func TestJobResourceFromJobMapsJobScopedConfiguration(t *testing.T) {
+	operations := validOperations()
+	confidenceInterval := operations["confidence_interval"].(map[string]any)
+	resultsDataRef := confidenceInterval["results_data_ref"].(map[string]any)
+	evalJob := resultsDataRef["eval_job"].(map[string]any)
+	evalJob["num_parallel_threads"] = float64(4)
+	resultsDataRef["data_config"] = map[string]any{
+		"format":  "json",
+		"columns": map[string]any{"sample_id": "id", "prediction": "score"},
+	}
+	config := *postProcessingJob(map[string]any{
+		"operations":      operations,
+		"operation_order": []any{"confidence_interval"},
+	})
+	config.Name = "mapped job-scoped computation"
+	job := &api.EvaluationJobResource{
+		Resource:            api.EvaluationResource{Resource: api.Resource{ID: "post-processing-id"}},
+		EvaluationJobConfig: config,
+		Status: &api.EvaluationJobStatus{EvaluationJobState: api.EvaluationJobState{
+			State: api.OverallStateCompleted,
+		}},
+	}
+	resource, err := JobResourceFromJob(job)
+	if err != nil {
+		t.Fatalf("JobResourceFromJob() error = %v", err)
+	}
+	if resource.Name != job.Name || resource.Status.State != api.StateCompleted || resource.Operations.ConfidenceInterval.NumParallelThreads == nil || *resource.Operations.ConfidenceInterval.NumParallelThreads != 4 {
+		t.Fatalf("job-scoped metadata was not mapped: %+v", resource)
+	}
+	if resource.Operations.ConfidenceInterval.ResultsDataConfig == nil || resource.Operations.ConfidenceInterval.ResultsDataConfig.Single == nil || resource.Operations.ConfidenceInterval.ResultsDataConfig.Single.Format != "json" {
+		t.Fatalf("results_data_config was not mapped: %+v", resource.Operations.ConfidenceInterval.ResultsDataConfig)
+	}
+	if resource.Results != nil {
+		t.Fatalf("unexpected results without backing output: %+v", resource.Results)
+	}
+}
+
 func postProcessingJob(parameters any) *api.EvaluationJobConfig {
 	var params map[string]any
 	if parameters != nil {

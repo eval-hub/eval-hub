@@ -80,6 +80,18 @@ func (r *postProcessingPathRequest) PathValue(name string) string {
 	return ""
 }
 
+type jobPostProcessingBodyRequest struct {
+	*bodyRequest
+	jobID string
+}
+
+func (r *jobPostProcessingBodyRequest) PathValue(name string) string {
+	if name == constants.PathParameterJobID {
+		return r.jobID
+	}
+	return ""
+}
+
 func TestHandleGetPostProcessing(t *testing.T) {
 	validJob := standalonePostProcessingJob("post-processing-id", &api.EvaluationJobStatus{
 		EvaluationJobState: api.EvaluationJobState{State: api.OverallStateCompleted},
@@ -223,6 +235,8 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 		name            string
 		body            []byte
 		bodyErr         error
+		jobScoped       bool
+		jobID           string
 		storage         *postProcessingHandlerStorage
 		serviceConfig   *config.Config
 		wantStatus      int
@@ -244,20 +258,20 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 		},
 		{
 			name:       "invalid operation order",
-			body:       marshalPostProcessingRequest(t, nil, []string{"unknown"}),
+			body:       marshalPostProcessingRequest(t, []string{"unknown"}),
 			storage:    newPostProcessingHandlerStorage(),
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:        "external data succeeds and preserves operation order",
-			body:        marshalPostProcessingRequest(t, nil, []string{"confidence_interval"}),
+			body:        marshalPostProcessingRequest(t, []string{"confidence_interval"}),
 			storage:     newPostProcessingHandlerStorage(),
 			wantStatus:  http.StatusAccepted,
 			wantCreated: true,
 		},
 		{
 			name: "storage create failure",
-			body: marshalPostProcessingRequest(t, nil, nil),
+			body: marshalPostProcessingRequest(t, nil),
 			storage: &postProcessingHandlerStorage{
 				fakeStorage: newPostProcessingBaseStorage(),
 				createErr:   errors.New("storage unavailable"),
@@ -266,8 +280,10 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 			wantCreated: true,
 		},
 		{
-			name: "completed eval job succeeds",
-			body: marshalPostProcessingRequest(t, &api.EvaluationJobDataRef{ID: "source-job"}, nil),
+			name:      "completed eval job succeeds",
+			body:      marshalJobPostProcessingRequest(t, nil, nil),
+			jobScoped: true,
+			jobID:     "source-job",
 			storage: &postProcessingHandlerStorage{
 				fakeStorage: newPostProcessingBaseStorage(),
 				source:      completedSource,
@@ -276,8 +292,10 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 			wantCreated: true,
 		},
 		{
-			name: "post-processing job cannot be used as an eval-job source",
-			body: marshalPostProcessingRequest(t, &api.EvaluationJobDataRef{ID: "source-job"}, nil),
+			name:      "post-processing job cannot be used as an eval-job source",
+			body:      marshalJobPostProcessingRequest(t, nil, nil),
+			jobScoped: true,
+			jobID:     "source-job",
 			storage: &postProcessingHandlerStorage{
 				fakeStorage: newPostProcessingBaseStorage(),
 				source: &api.EvaluationJobResource{
@@ -291,8 +309,10 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 			wantStatus: http.StatusNotFound,
 		},
 		{
-			name: "completed eval job propagates OCI export settings",
-			body: marshalPostProcessingRequest(t, &api.EvaluationJobDataRef{ID: "source-job"}, nil),
+			name:      "completed eval job propagates OCI export settings",
+			body:      marshalJobPostProcessingRequest(t, nil, nil),
+			jobScoped: true,
+			jobID:     "source-job",
 			storage: &postProcessingHandlerStorage{
 				fakeStorage: newPostProcessingBaseStorage(),
 				source: &api.EvaluationJobResource{
@@ -324,8 +344,10 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 			}},
 		},
 		{
-			name: "completed eval job preserves explicit thread count",
-			body: marshalPostProcessingRequest(t, &api.EvaluationJobDataRef{ID: "source-job", NumParallelThreads: intPointer(8)}, nil),
+			name:      "completed eval job preserves explicit thread count",
+			body:      marshalJobPostProcessingRequest(t, intPointer(8), nil),
+			jobScoped: true,
+			jobID:     "source-job",
 			storage: &postProcessingHandlerStorage{
 				fakeStorage: newPostProcessingBaseStorage(),
 				source:      completedSource,
@@ -336,13 +358,17 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 		},
 		{
 			name:       "source job not found",
-			body:       marshalPostProcessingRequest(t, &api.EvaluationJobDataRef{ID: "missing"}, nil),
+			body:       marshalJobPostProcessingRequest(t, nil, nil),
+			jobScoped:  true,
+			jobID:      "missing",
 			storage:    newPostProcessingHandlerStorage(),
 			wantStatus: http.StatusNotFound,
 		},
 		{
-			name: "source job is incomplete",
-			body: marshalPostProcessingRequest(t, &api.EvaluationJobDataRef{ID: "source-job"}, nil),
+			name:      "source job is incomplete",
+			body:      marshalJobPostProcessingRequest(t, nil, nil),
+			jobScoped: true,
+			jobID:     "source-job",
 			storage: &postProcessingHandlerStorage{
 				fakeStorage: newPostProcessingBaseStorage(),
 				source: &api.EvaluationJobResource{
@@ -353,8 +379,10 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 			wantStatus: http.StatusConflict,
 		},
 		{
-			name: "source job has no status",
-			body: marshalPostProcessingRequest(t, &api.EvaluationJobDataRef{ID: "source-job"}, nil),
+			name:      "source job has no status",
+			body:      marshalJobPostProcessingRequest(t, nil, nil),
+			jobScoped: true,
+			jobID:     "source-job",
 			storage: &postProcessingHandlerStorage{
 				fakeStorage: newPostProcessingBaseStorage(),
 				source:      &api.EvaluationJobResource{Resource: api.EvaluationResource{Resource: api.Resource{ID: "source-job"}}},
@@ -362,8 +390,10 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 			wantStatus: http.StatusConflict,
 		},
 		{
-			name: "source lookup error",
-			body: marshalPostProcessingRequest(t, &api.EvaluationJobDataRef{ID: "source-job"}, nil),
+			name:      "source lookup error",
+			body:      marshalJobPostProcessingRequest(t, nil, nil),
+			jobScoped: true,
+			jobID:     "source-job",
 			storage: &postProcessingHandlerStorage{
 				fakeStorage: newPostProcessingBaseStorage(),
 				getErr:      errors.New("storage unavailable"),
@@ -372,7 +402,7 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 		},
 		{
 			name:          "configured post-processing runtime does not require a catalog provider",
-			body:          marshalPostProcessingRequest(t, nil, nil),
+			body:          marshalPostProcessingRequest(t, nil),
 			storage:       newPostProcessingHandlerStorageWithoutProvider(),
 			serviceConfig: localPostProcessingConfig(),
 			wantStatus:    http.StatusAccepted,
@@ -380,14 +410,14 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 		},
 		{
 			name:        "dedicated endpoint bypasses catalog validation without service runtime config",
-			body:        marshalPostProcessingRequest(t, nil, nil),
+			body:        marshalPostProcessingRequest(t, nil),
 			storage:     newPostProcessingHandlerStorageWithoutProvider(),
 			wantStatus:  http.StatusAccepted,
 			wantCreated: true,
 		},
 		{
 			name: "created job cannot be represented as post-processing resource",
-			body: marshalPostProcessingRequest(t, nil, nil),
+			body: marshalPostProcessingRequest(t, nil),
 			storage: &postProcessingHandlerStorage{
 				fakeStorage: newPostProcessingBaseStorage(),
 				mutateJob: func(job *api.EvaluationJobResource) {
@@ -409,7 +439,11 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 			}
 			ctx := executioncontext.NewExecutionContext(context.Background(), "req-post-processing", slog.New(slog.NewTextHandler(io.Discard, nil)), "test-user", "test-tenant")
 
-			handler.HandleCreatePostProcessing(ctx, request, MockResponseWrapper{recorder: recorder})
+			if test.jobScoped {
+				handler.HandleCreateJobPostProcessing(ctx, &jobPostProcessingBodyRequest{bodyRequest: request, jobID: test.jobID}, MockResponseWrapper{recorder: recorder})
+			} else {
+				handler.HandleCreatePostProcessing(ctx, request, MockResponseWrapper{recorder: recorder})
+			}
 
 			if recorder.Code != test.wantStatus {
 				t.Fatalf("status = %d, want %d; response=%s", recorder.Code, test.wantStatus, recorder.Body.String())
@@ -427,12 +461,22 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 				}
 			}
 			if test.wantCreated && test.wantStatus == http.StatusAccepted {
-				var response api.PostProcessingResource
-				if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
-					t.Fatalf("decode response: %v", err)
-				}
-				if !response.Operations.HasOperation() {
-					t.Fatal("response does not include the submitted operation")
+				if test.jobScoped {
+					var response api.JobPostProcessingResource
+					if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+						t.Fatalf("decode job response: %v", err)
+					}
+					if !response.Operations.HasOperation() {
+						t.Fatal("job response does not include the submitted operation")
+					}
+				} else {
+					var response api.PostProcessingResource
+					if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+						t.Fatalf("decode response: %v", err)
+					}
+					if !response.Operations.HasOperation() {
+						t.Fatal("response does not include the submitted operation")
+					}
 				}
 			}
 		})
@@ -484,14 +528,8 @@ func newPostProcessingHandlerStorageWithoutProvider() *postProcessingHandlerStor
 	return &postProcessingHandlerStorage{fakeStorage: &fakeStorage{providerConfigs: map[string]api.ProviderResource{}}}
 }
 
-func marshalPostProcessingRequest(t *testing.T, evalJob *api.EvaluationJobDataRef, order []string) []byte {
+func marshalPostProcessingRequest(t *testing.T, order []string) []byte {
 	t.Helper()
-	results := &api.PostProcessingResultsDataRef{PVC: &api.PVCTestDataRef{ClaimName: "results-data"}}
-	primaryScore := &api.PrimaryScore{Metric: "accuracy"}
-	if evalJob != nil {
-		results = &api.PostProcessingResultsDataRef{EvalJob: evalJob}
-		primaryScore = nil
-	}
 	request := api.StandalonePostProcessingRequest{
 		PostProcessingCommon: api.PostProcessingCommon{OperationOrder: order},
 		Operations: api.StandalonePostProcessingOperations{ConfidenceInterval: &api.StandaloneConfidenceIntervalConfig{
@@ -502,8 +540,30 @@ func marshalPostProcessingRequest(t *testing.T, evalJob *api.EvaluationJobDataRe
 				}},
 				SignificanceLevel: 0.05,
 			},
-			ResultsDataRef: results,
-			PrimaryScore:   primaryScore,
+			ResultsDataRef: &api.PostProcessingResultsDataRef{PVC: &api.PVCTestDataRef{ClaimName: "results-data"}},
+			PrimaryScore:   &api.PrimaryScore{Metric: "accuracy"},
+		}},
+	}
+	body, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
+}
+
+func marshalJobPostProcessingRequest(t *testing.T, numParallelThreads *int, order []string) []byte {
+	t.Helper()
+	request := api.ConfidenceIntervalPostProcessingRequest{
+		PostProcessingCommon: api.PostProcessingCommon{OperationOrder: order},
+		Operations: api.JobPostProcessingOperations{ConfidenceInterval: &api.ConfidenceIntervalConfig{
+			ConfidenceIntervalConfigCommon: api.ConfidenceIntervalConfigCommon{
+				CalibrationDataRef: []api.CalibrationDataRef{{
+					PVC:        &api.PVCTestDataRef{ClaimName: "calibration-data"},
+					DataConfig: api.CalibrationDataConfig{Format: "jsonl", Columns: api.CalibrationDataColumns{Label: "label", Prediction: "prediction"}},
+				}},
+				SignificanceLevel: 0.05,
+			},
+			NumParallelThreads: numParallelThreads,
 		}},
 	}
 	body, err := json.Marshal(request)

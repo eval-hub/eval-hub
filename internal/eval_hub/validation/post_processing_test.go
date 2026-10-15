@@ -146,23 +146,29 @@ func TestCalibrationDataRefValidation(t *testing.T) {
 
 func TestStandaloneConfidenceIntervalValidation(t *testing.T) {
 	validate := newTestValidator(t)
-	external := validStandaloneConfidenceInterval()
-	external.ResultsDataRef = &api.PostProcessingResultsDataRef{PVC: validPVCRef()}
 	tests := []struct {
 		name string
 		cfg  api.StandaloneConfidenceIntervalConfig
 		want string
 	}{
-		{name: "eval job source", cfg: *validStandaloneConfidenceInterval()},
-		{name: "external source requires primary score", cfg: *external, want: "required_without"},
+		{name: "external source", cfg: *validStandaloneConfidenceInterval()},
 		{
-			name: "primary score not allowed with eval job",
+			name: "external source requires primary score",
 			cfg: func() api.StandaloneConfidenceIntervalConfig {
 				cfg := *validStandaloneConfidenceInterval()
-				cfg.PrimaryScore = &api.PrimaryScore{Metric: "accuracy"}
+				cfg.PrimaryScore = nil
 				return cfg
 			}(),
-			want: "excluded_with",
+			want: "required",
+		},
+		{
+			name: "eval job source rejected",
+			cfg: func() api.StandaloneConfidenceIntervalConfig {
+				cfg := *validStandaloneConfidenceInterval()
+				cfg.ResultsDataRef = &api.PostProcessingResultsDataRef{EvalJob: &api.EvaluationJobDataRef{ID: "job-id"}}
+				return cfg
+			}(),
+			want: "standalone_results_data_ref",
 		},
 	}
 	for _, test := range tests {
@@ -199,7 +205,8 @@ func validStandaloneConfidenceInterval() *api.StandaloneConfidenceIntervalConfig
 			CalibrationDataRef: []api.CalibrationDataRef{calibrationRefWithSource(func(ref *api.CalibrationDataRef) { ref.PVC = validPVCRef() })},
 			SignificanceLevel:  0.05,
 		},
-		ResultsDataRef: &api.PostProcessingResultsDataRef{EvalJob: &api.EvaluationJobDataRef{ID: "job-id"}},
+		ResultsDataRef: &api.PostProcessingResultsDataRef{PVC: validPVCRef()},
+		PrimaryScore:   &api.PrimaryScore{Metric: "accuracy"},
 	}
 }
 

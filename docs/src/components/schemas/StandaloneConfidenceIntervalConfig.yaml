@@ -4,26 +4,17 @@ description: Configuration for a standalone confidence interval computation.
 allOf:
   - $ref: ./ConfidenceIntervalConfigCommon.yaml
   - type: object
-    oneOf:
-      - type: object
-        properties:
-          results_data_ref:
-            $ref: ./EvaluationJobDataRef.yaml
-        required:
-          - results_data_ref
-      - type: object
-        properties:
-          results_data_ref:
-            $ref: ./ExternalResultsDataRef.yaml
-          primary_score:
-            allOf:
-              - $ref: ./PrimaryScore.yaml
-              - type: object
-                required:
-                  - metric
-        required:
-          - results_data_ref
-          - primary_score
-        description: Direct external result references must identify the primary score metric.
-    description: Result data reference. An evaluation job is supported only for result data.
+    properties:
+      results_data_ref:
+        $ref: ./ExternalResultsDataRef.yaml
+      primary_score:
+        allOf:
+          - $ref: ./PrimaryScore.yaml
+          - type: object
+            required:
+              - metric
+    required:
+      - results_data_ref
+      - primary_score
+    description: Standalone computations use external result references and must identify the primary score metric.
 unevaluatedProperties: false
