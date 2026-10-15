@@ -104,8 +104,8 @@ type GPUConfig struct {
 // Unlike GPU, DRA does not carry a node selector: device placement is governed by
 // the referenced ResourceClaimTemplate's device class and topology constraints.
 type DRAConfig struct {
-	ResourceClaimTemplate string `mapstructure:"resource_claim_template" yaml:"resource_claim_template" json:"resource_claim_template"`
-	ClaimName             string `mapstructure:"claim_name" yaml:"claim_name" json:"claim_name,omitempty"`
+	ResourceClaimTemplate string `mapstructure:"resource_claim_template" yaml:"resource_claim_template" json:"resource_claim_template" validate:"omitempty,rfc1123_dns_label"`
+	ClaimName             string `mapstructure:"claim_name" yaml:"claim_name" json:"claim_name,omitempty" validate:"omitempty,rfc1123_dns_label"`
 }
 
 // ProviderRuntime contains runtime configuration for Kubernetes jobs.

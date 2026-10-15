@@ -628,6 +628,70 @@ func TestK8sRuntimeImagePullPolicy_ValidValuesAccepted(t *testing.T) {
 	}
 }
 
+func TestK8sRuntimeDRA_InvalidNamesRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	cases := []struct {
+		name string
+		dra  *api.DRAConfig
+	}{
+		{
+			name: "invalid resource claim template name",
+			dra:  &api.DRAConfig{ResourceClaimTemplate: "Bad_Name"},
+		},
+		{
+			name: "invalid claim name",
+			dra:  &api.DRAConfig{ResourceClaimTemplate: "gpu-claims", ClaimName: "Bad Name"},
+		},
+		{
+			name: "uppercase resource claim template",
+			dra:  &api.DRAConfig{ResourceClaimTemplate: "GPU-Claims"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := api.ProviderConfig{
+				Name: "test-provider",
+				Runtime: &api.Runtime{
+					K8s: &api.K8sRuntime{
+						Image:      "quay.io/example/adapter:latest",
+						Entrypoint: []string{"/bin/true"},
+						DRA:        tc.dra,
+					},
+				},
+				Benchmarks: []api.BenchmarkResource{{ID: "bench-1", Name: "Bench 1"}},
+			}
+			if err := validate.Struct(cfg); err == nil {
+				t.Fatal("expected validation error for invalid dra names")
+			}
+		})
+	}
+}
+
+func TestK8sRuntimeDRA_ValidAndOptionalNamesAccepted(t *testing.T) {
+	validate := newTestValidator(t)
+	for _, dra := range []*api.DRAConfig{
+		nil,
+		{},
+		{ResourceClaimTemplate: "gpu-claims"},
+		{ResourceClaimTemplate: "gpu-claims", ClaimName: "gpu"},
+	} {
+		cfg := api.ProviderConfig{
+			Name: "test-provider",
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image:      "quay.io/example/adapter:latest",
+					Entrypoint: []string{"/bin/true"},
+					DRA:        dra,
+				},
+			},
+			Benchmarks: []api.BenchmarkResource{{ID: "bench-1", Name: "Bench 1"}},
+		}
+		if err := validate.Struct(cfg); err != nil {
+			t.Errorf("dra %+v: expected no error, got: %v", dra, err)
+		}
+	}
+}
+
 func TestValidateCollectionOverrides_InvalidProviderID(t *testing.T) {
 	t.Parallel()
 	overrides := []api.EvaluationBenchmarkConfig{
