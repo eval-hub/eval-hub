@@ -59,7 +59,7 @@ post:
               pass_criteria:
                 threshold: 0.5
           CreateEvaluationWithCollectionJudge:
-            summary: Select a judge model from the model-auth Secret's judge route
+            summary: Select a judge model using optional Secret-backed connection fields
             value:
               name: "trustworthiness-with-judge"
               model:
@@ -74,7 +74,6 @@ post:
                     provider_id: "inspect"
                     parameters:
                       judge_model: "deployed-judge-model"
-                      judge_route: "judge"
           CreateEvaluationWithAuthAndHardwareProfile:
             summary: Evaluate an authenticated model with HardwareProfile Kueue scheduling
             value:

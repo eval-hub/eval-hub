@@ -35,12 +35,10 @@ func TestBundledJudgeCollectionsDeclareFlatInputs(t *testing.T) {
 				if benchmark.ProviderID != tt.providerID || benchmark.ID != tt.benchmarkID {
 					continue
 				}
-				for _, key := range []string{"judge_model", "judge_route"} {
-					if value, ok := benchmark.Parameters[key]; !ok || value != "" {
-						t.Errorf("%s = %v (present %t), want an empty string form field", key, value, ok)
-					}
+				if value, ok := benchmark.Parameters["judge_model"]; !ok || value != "" {
+					t.Errorf("judge_model = %v (present %t), want an empty string form field", value, ok)
 				}
-				for _, key := range []string{"judge_url", "judge_api_key"} {
+				for _, key := range []string{"judge_route", "judge_url", "judge_api_key"} {
 					if _, ok := benchmark.Parameters[key]; ok {
 						t.Errorf("%s must not be a collection parameter", key)
 					}

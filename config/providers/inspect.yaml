@@ -759,7 +759,8 @@ benchmarks:
     description: >
       Prompt injection subset of Meta's CyberSecEval 2 suite. Measures the percentage
       of successful injection attacks against the model. In the bundled collection,
-      set judge_model and judge_route (target or judge) per job.
+      set judge_model per job. Optional judge credentials and endpoint are selected
+      by judge_api-key and judge_url in model.auth.secret_ref.
     category: cybersecurity
     domains: [trustworthiness]
     tasks: [adversarial_prompt_injection_resistance]
@@ -1071,14 +1072,15 @@ benchmarks:
     tags: [knowledge, factuality, inspect-evals]
 
   # knowledge-reasoning-v1 supplies the text-only, single-grader scorer settings
-  # and declares judge_model/judge_route for per-job selection. Standalone jobs
+  # and declares judge_model for per-job selection. Standalone jobs
   # can bind model_roles.grader and pass the full task_args; see examples/inspect-hle/.
   - id: inspect/hle
     name: "Humanity's Last Exam"
     description: >
       Frontier-difficulty questions across dozens of academic subjects, including image questions.
       The knowledge-reasoning-v1 collection and standalone example select the text-only subset.
-      Set judge_model and judge_route (target or judge) when using the bundled collection.
+      Set judge_model when using the bundled collection; judge_api-key and optional
+      judge_url in model.auth.secret_ref select a separate connection.
     category: knowledge
     domains: [knowledge_and_reasoning]
     tasks: [reasoning]

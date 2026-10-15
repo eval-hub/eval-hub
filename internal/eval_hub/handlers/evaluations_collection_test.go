@@ -190,11 +190,10 @@ func TestHandleCreateEvaluationValidatesDeclaredJudgeParameters(t *testing.T) {
 		wantCode   int
 		wantError  string
 	}{
-		{name: "missing judge model", parameters: `{"judge_route":"target"}`, wantCode: http.StatusBadRequest, wantError: "judge_model"},
-		{name: "invalid judge route", parameters: `{"judge_model":"deployed-model","judge_route":"other"}`, wantCode: http.StatusBadRequest, wantError: "judge_route"},
-		{name: "judge route requires secret", parameters: `{"judge_model":"deployed-model","judge_route":"judge"}`, wantCode: http.StatusBadRequest, wantError: "model.auth.secret_ref"},
-		{name: "target route", parameters: `{"judge_model":"deployed-model","judge_route":"target"}`, wantCode: http.StatusAccepted},
-		{name: "judge route with secret", parameters: `{"judge_model":"deployed-model","judge_route":"judge"}`, modelAuth: `,"auth":{"secret_ref":"model-credentials"}`, wantCode: http.StatusAccepted},
+		{name: "missing judge model", parameters: `{}`, wantCode: http.StatusBadRequest, wantError: "judge_model"},
+		{name: "blank judge model", parameters: `{"judge_model":" "}`, wantCode: http.StatusBadRequest, wantError: "judge_model"},
+		{name: "judge model without secret", parameters: `{"judge_model":"deployed-model"}`, wantCode: http.StatusAccepted},
+		{name: "judge model with secret", parameters: `{"judge_model":"deployed-model"}`, modelAuth: `,"auth":{"secret_ref":"model-credentials"}`, wantCode: http.StatusAccepted},
 	}
 
 	for _, tt := range tests {
@@ -210,7 +209,7 @@ func TestHandleCreateEvaluationValidatesDeclaredJudgeParameters(t *testing.T) {
 					Resource: api.Resource{ID: "knowledge-reasoning-v1", Owner: "system"},
 					CollectionConfig: api.CollectionConfig{Benchmarks: []api.CollectionBenchmarkConfig{{
 						Ref: api.Ref{ID: "inspect/hle"}, ProviderID: "inspect",
-						Parameters: map[string]any{"judge_model": "", "judge_route": ""},
+						Parameters: map[string]any{"judge_model": ""},
 					}}},
 				},
 			}

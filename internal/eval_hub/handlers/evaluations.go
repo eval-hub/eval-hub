@@ -220,7 +220,7 @@ func (h *Handlers) createEvaluationJob(ctx *executioncontext.ExecutionContext, e
 	if err != nil {
 		return nil, err
 	}
-	if err := validation.ValidateCollectionJudgeParameters(collection, benchmarks, evaluation.Model); err != nil {
+	if err := validation.ValidateCollectionJudgeParameters(collection, benchmarks); err != nil {
 		return nil, err
 	}
 	if err := h.withSpan(

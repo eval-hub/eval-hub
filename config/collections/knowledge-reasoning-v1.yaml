@@ -62,9 +62,6 @@ benchmarks:
       num_examples: 50
       # Select a deployed judge model for Inspect's grader role in each job.
       judge_model: ""
-      # Value `target` reuses the evaluated model connection; value `judge` uses the judge
-      # credentials and optional judge_url in model.auth.secret_ref.
-      judge_route: ""
       task_args:
         include_multi_modal: false
         only_hle_verified_gold: false
@@ -133,9 +130,10 @@ documentation:
     hle: >-
       Uses the static text-only dataset without restricting it to verified-gold questions,
       with a screening cap and one regex_judge grader. For collection jobs, set
-      judge_model and judge_route in the HLE benchmark request overrides. Use `target`
-      to reuse the evaluated model connection, or `judge` to use judge_api-key and the
-      optional judge_url from model.auth.secret_ref. For standalone requests, bind
+      judge_model in the HLE benchmark request overrides. With no judge fields in
+      model.auth.secret_ref, the judge reuses the target connection. A judge_api-key
+      uses that credential; an optional judge_url selects a different endpoint.
+      judge_url alone is invalid. For standalone requests, bind
       model_roles.grader and its credentials. See examples/inspect-hle/README.md for
       the supported runtime and a standalone request generated from this collection's
       settings.
