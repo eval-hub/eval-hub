@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"os/exec"
@@ -32,6 +33,7 @@ import (
 	"github.com/cucumber/godog"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	mcpconfig "github.com/eval-hub/eval-hub/internal/evalhub_mcp/config"
 	mcpserver "github.com/eval-hub/eval-hub/internal/evalhub_mcp/server"
 )
 
@@ -322,28 +324,28 @@ func (a *apiFeature) setupMCPServer(logger *slog.Logger) error {
 		GitHash:   gitHash,
 	}
 
-	a.mcpServer = mcpserver.New(serverInfo, logger, nil)
+	a.mcpServer = mcpserver.New(serverInfo, logger, mcpserver.CompletionHandlerOption(evalhubClient, logger, evalhubclient.DefaultListPageLimit))
 	if err := mcpserver.RegisterHandlers(a.mcpServer, evalhubClient, serverInfo, logger, evalhubclient.DefaultListPageLimit); err != nil {
 		return fmt.Errorf("failed to register MCP handlers: %w", err)
 	}
 
-	// Create in-memory transports for testing (like unit tests)
-	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-
-	ctx := context.Background()
-
-	// Connect server
-	serverSession, err := a.mcpServer.Connect(ctx, serverTransport, nil)
-	if err != nil {
-		return fmt.Errorf("failed to connect MCP server: %w", err)
-	}
-	a.mcpServerSession = serverSession
+	// Exercise the production HTTP handler rather than an in-memory transport.
+	a.mcpHTTPServer = httptest.NewServer(mcpserver.NewHTTPHandler(a.mcpServer, &mcpconfig.Config{AuthType: mcpconfig.AuthTypeNone}, logger))
+	clientTransport := &mcp.StreamableClientTransport{Endpoint: a.mcpHTTPServer.URL}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	// Connect client
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "fvt-test-client", Version: "1.0.X"}, nil) // this is just a test so it can be anything
 	clientSession, err := mcpClient.Connect(ctx, clientTransport, nil)
 	if err != nil {
+		a.mcpHTTPServer.Close()
 		return fmt.Errorf("failed to connect MCP client: %w", err)
+	}
+	if got := clientSession.InitializeResult().ProtocolVersion; got != "2026-07-28" {
+		_ = clientSession.Close()
+		a.mcpHTTPServer.Close()
+		return fmt.Errorf("MCP FVT negotiated protocol %q, want 2026-07-28", got)
 	}
 	a.mcpClientSession = clientSession
 
@@ -358,11 +360,8 @@ func (a *apiFeature) cleanup(ctx context.Context, _ *godog.Scenario, _ error) (c
 			logDebug("MCP client session close error (non-fatal): %v\n", err)
 		}
 	}
-	if a.mcpServerSession != nil {
-		if err := a.mcpServerSession.Close(); err != nil {
-			// Log but don't fail - consistent with existing cleanup pattern
-			logDebug("MCP server session close error (non-fatal): %v\n", err)
-		}
+	if a.mcpHTTPServer != nil {
+		a.mcpHTTPServer.Close()
 	}
 	if a.metricsServer != nil {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

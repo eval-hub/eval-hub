@@ -60,7 +60,7 @@ benchmarks:
     provider_id: lighteval
     weight: 2
     primary_score:
-      metric: pass@1
+      metric: math_500.pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.30
@@ -75,7 +75,7 @@ benchmarks:
     provider_id: lighteval
     weight: 1   # Competition math — very hard, lower absolute scores expected
     primary_score:
-      metric: pass@1
+      metric: aime25.pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.15
@@ -90,7 +90,7 @@ benchmarks:
     provider_id: lighteval
     weight: 2
     primary_score:
-      metric: gpqa_pass@1
+      metric: gpqa:diamond.gpqa_pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.35
@@ -105,7 +105,7 @@ benchmarks:
     provider_id: lighteval
     weight: 2
     primary_score:
-      metric: codegen_pass@1
+      metric: lcb:codegeneration_v6.codegen_pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
