@@ -8,6 +8,7 @@ import (
 )
 
 func TestResultsDataConfigUnmarshalJSON(t *testing.T) {
+	zero, half, negative := 0.0, 0.5, -1.0
 	tests := []struct {
 		name       string
 		input      string
@@ -34,9 +35,9 @@ func TestResultsDataConfigUnmarshalJSON(t *testing.T) {
 		{
 			name:  "object preserves numeric mapping targets including zero",
 			input: `{"value_mappings":{"prediction":{"incorrect":0,"partial":0.5},"label":{"negative":-1}}}`,
-			wantSingle: &ResultsDataConfigEntry{ValueMappings: map[string]map[string]float64{
-				"prediction": {"incorrect": 0, "partial": 0.5},
-				"label":      {"negative": -1},
+			wantSingle: &ResultsDataConfigEntry{ValueMappings: map[string]map[string]*float64{
+				"prediction": {"incorrect": &zero, "partial": &half},
+				"label":      {"negative": &negative},
 			}},
 		},
 		{
@@ -44,18 +45,40 @@ func TestResultsDataConfigUnmarshalJSON(t *testing.T) {
 			input: `[{"selection":{"provider_id":"provider-a"},"value_mappings":{"prediction":{"incorrect":0}}}]`,
 			wantList: []ResultsDataConfigEntry{{
 				Selection:     map[string]string{"provider_id": "provider-a"},
-				ValueMappings: map[string]map[string]float64{"prediction": {"incorrect": 0}},
+				ValueMappings: map[string]map[string]*float64{"prediction": {"incorrect": &zero}},
 			}},
 		},
 		{
 			name:       "null role map is retained for schema validation",
 			input:      `{"value_mappings":{"prediction":null}}`,
-			wantSingle: &ResultsDataConfigEntry{ValueMappings: map[string]map[string]float64{"prediction": nil}},
+			wantSingle: &ResultsDataConfigEntry{ValueMappings: map[string]map[string]*float64{"prediction": nil}},
 		},
-		{name: "null prediction target", input: `{"value_mappings":{"prediction":{"correct":null,"incorrect":0}}}`, wantErr: `value_mappings["prediction"]["correct"] must be a number`},
-		{name: "null label target", input: `{"value_mappings":{"label":{"correct":null}}}`, wantErr: `value_mappings["label"]["correct"] must be a number`},
-		{name: "null selected prediction target", input: `[{"selection":{"provider_id":"provider-a"},"value_mappings":{"prediction":{"correct":null,"incorrect":0}}}]`, wantErr: `value_mappings["prediction"]["correct"] must be a number`},
-		{name: "null selected label target", input: `[{"selection":{"provider_id":"provider-a"},"value_mappings":{"label":{"correct":null}}}]`, wantErr: `value_mappings["label"]["correct"] must be a number`},
+		{
+			name:       "null prediction target is retained for validation",
+			input:      `{"value_mappings":{"prediction":{"correct":null,"incorrect":0}}}`,
+			wantSingle: &ResultsDataConfigEntry{ValueMappings: map[string]map[string]*float64{"prediction": {"correct": nil, "incorrect": &zero}}},
+		},
+		{
+			name:       "null label target is retained for validation",
+			input:      `{"value_mappings":{"label":{"correct":null}}}`,
+			wantSingle: &ResultsDataConfigEntry{ValueMappings: map[string]map[string]*float64{"label": {"correct": nil}}},
+		},
+		{
+			name:  "null selected prediction target is retained for validation",
+			input: `[{"selection":{"provider_id":"provider-a"},"value_mappings":{"prediction":{"correct":null,"incorrect":0}}}]`,
+			wantList: []ResultsDataConfigEntry{{
+				Selection:     map[string]string{"provider_id": "provider-a"},
+				ValueMappings: map[string]map[string]*float64{"prediction": {"correct": nil, "incorrect": &zero}},
+			}},
+		},
+		{
+			name:  "null selected label target is retained for validation",
+			input: `[{"selection":{"provider_id":"provider-a"},"value_mappings":{"label":{"correct":null}}}]`,
+			wantList: []ResultsDataConfigEntry{{
+				Selection:     map[string]string{"provider_id": "provider-a"},
+				ValueMappings: map[string]map[string]*float64{"label": {"correct": nil}},
+			}},
+		},
 		{name: "boolean target", input: `{"value_mappings":{"prediction":{"correct":true}}}`, wantErr: "cannot unmarshal bool"},
 		{name: "string target", input: `{"value_mappings":{"prediction":{"correct":"1"}}}`, wantErr: "cannot unmarshal string"},
 		{name: "nonfinite target", input: `{"value_mappings":{"prediction":{"correct":1e999}}}`, wantErr: "cannot unmarshal number 1e999"},
