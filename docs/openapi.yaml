@@ -3376,7 +3376,14 @@ components:
       properties:
         coordinates:
           $ref: '#/components/schemas/OCICoordinates'
-          description: Coordinates where the OCI artifact should be stored
+          description: 'OCI export destination. The optional oci_tag reserves the evaluation-bundle prefix: the final index tag is <oci_tag>-<job-id>, or <job-id> when omitted or empty. Evaluation cards use evaluation-card-<job-id> independently. Invalid prefix characters are rejected before job creation. Long prefixes are truncated during publication to preserve the full job ID within 128 characters.'
+          properties:
+            oci_tag:
+              type: string
+              pattern: ^$|^[a-zA-Z0-9_][a-zA-Z0-9._-]*$
+              description: Optional evaluation-bundle tag prefix. Nonempty values start with an ASCII letter, digit, or underscore and contain only ASCII letters, digits, underscores, dots, and hyphens. Prefixes have no maximum input length. The published prefix is truncated to 128 minus one separator minus the job ID length (currently 91 characters for UUIDs). The original prefix remains in the job configuration.
+              examples:
+                - final
         k8s:
           $ref: '#/components/schemas/OCIConnectionConfig'
           description: Optional Kubernetes connection for OCI registry authentication

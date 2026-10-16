@@ -403,7 +403,11 @@ type OCIConnectionConfig struct {
 	Connection string `json:"connection" validate:"required"`
 }
 
-// EvaluationExportsOCI represents OCI export configuration
+// EvaluationExportsOCI represents OCI export configuration. Coordinates.OCITag is
+// the optional evaluation-bundle tag prefix; the final tag is <prefix>-<job-id>,
+// or <job-id> when empty. Nonempty prefixes must match
+// ^[a-zA-Z0-9_][a-zA-Z0-9._-]*$. Long prefixes are truncated when publishing
+// to fit the 128-character final tag limit while preserving the full job ID.
 type EvaluationExportsOCI struct {
 	Coordinates OCICoordinates       `json:"coordinates" validate:"required"`
 	K8s         *OCIConnectionConfig `json:"k8s,omitempty"`

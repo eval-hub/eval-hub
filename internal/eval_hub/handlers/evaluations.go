@@ -313,6 +313,9 @@ func (h *Handlers) validatePreparedEvaluation(
 	return h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
+			if err := validation.ValidateEvaluationOCITag(evaluation); err != nil {
+				return err
+			}
 			if h.runtime != nil {
 				if err := h.runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).ValidateHardwareProfiles(
 					benchmarksWithHardwareConfigFallback(benchmarks, evaluation.HardwareConfig),
