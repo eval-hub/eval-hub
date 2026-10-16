@@ -66,6 +66,10 @@ Viper loads **`config/config.yaml`** with overrides from environment variables a
 
 Every runnable workload is an **`EvaluationJobResource`** under the hood: its API maps a request to an `EvaluationJobConfig`, then uses the shared evaluation storage, status updates, and runtime. The [post-processing mapping](internal/eval_hub/postprocessing/mapping.go) shows both request-to-job and job-to-response conversion. The `evaluations.workload_type` column stores its type (`evaluation` by default; `post-processing` for standalone post-processing) when [SQL creates the job](internal/eval_hub/storage/sql/evaluations_crud.go). [`workloads.TypeForJob`](internal/eval_hub/workloads/workloads.go) identifies registered workloads from the stored job; an unmatched job is a conventional evaluation.
 
+The registry accepts implementations of the [`workloads.Workload`](internal/eval_hub/workloads/workloads.go) interface. [Evaluation](internal/eval_hub/evaluations/mapping.go) and post-processing implement it in their `mapping.go` files. The interface supplies identity, request and response conversion, runtime provider resolution, and separate `ValidateCreate`, `ValidateGet`, and `ValidateDelete` methods. Conventional evaluations are the registry fallback; registered workloads are matched first regardless of registration order.
+
+Both GET routes delegate to `HandleGetJob`. The route selects the workload type, and the shared handler resolves its implementation, applies the tenant and workload storage scopes, calls `ValidateGet`, and converts the job with `ResourceFromJob`. Each implementation supplies its existing path parameter, resource name, and tracing names. CREATE and DELETE continue through their existing handlers and validation; their interface methods provide workload invariant checks for a later migration.
+
 The APIs keep different contracts over that shared representation. `/api/v1/evaluations/jobs` accepts model and benchmark configuration and resolves providers from the catalog. `/api/v1/evaluations/post-processing` accepts operations and data references, stores them as parameters of one internal benchmark, then returns a post-processing resource. The server assigns internal provider and benchmark IDs; public evaluation requests cannot select them. Each API must restrict reads and deletes to its own workload, and evaluation lists must exclude other workloads.
 
 ### API and status flow for post processing workload
@@ -79,8 +83,11 @@ flowchart TB
     evalHandlers -- create --> create["Shared evaluation job creation"]
     ppHandlers --> ppMapping["ToEvaluationJob / ResourceFromJob (new)"]
     ppMapping -- create --> create
-    evalHandlers -. GET/DELETE .-> db[("evaluations table<br/>job JSON + workload_type")]
-    ppHandlers -. GET/DELETE .-> db
+    evalHandlers -. GET .-> get["HandleGetJob<br/>registry / ValidateGet / ResourceFromJob"]
+    ppHandlers -. GET .-> get
+    get --> db[("evaluations table<br/>job JSON + workload_type")]
+    evalHandlers -. DELETE .-> db
+    ppHandlers -. DELETE .-> db
     create --> db
     create --> runtime["Local / Kubernetes runtime"]
     runtime --> resolver["ProviderForBenchmark"]
@@ -105,11 +112,11 @@ Blue nodes mark post-processing additions. Both workloads use the existing [stat
 
 ### Post-processing code call relationships
 
-The handler calls the mapping and registry directly. Both runtimes reach them through `shared.ProviderForBenchmark`, which looks up the registered workload and invokes its callbacks.
+The shared GET handler resolves an implementation from the registry. CREATE and DELETE retain their existing paths. Both runtimes use `shared.ProviderForBenchmark`, which looks up the workload and invokes its runtime methods.
 
 ```mermaid
 sequenceDiagram
-    participant H as handlers/post_processing.go
+    participant H as handlers/evaluations.go
     participant M as postprocessing/mapping.go
     participant W as workloads/workloads.go
     participant S as runtimes/shared/provider.go
@@ -117,10 +124,13 @@ sequenceDiagram
     participant L as local_runtime.go
 
     Note over M,W: Startup registration
-    M->>W: Register(MatchesJob, RuntimeProvider)
-    Note over H,W: Post-processing API calls
-    H->>M: ToEvaluationJob / ResourceFromJob / IsPostProcessingJob
-    H->>W: TypeForJob (validate eval_job source)
+    M->>W: Register(Workload implementation)
+    Note over H,W: GET API calls
+    H->>W: ByType(route workload)
+    W-->>H: Workload implementation
+    Note over H: Fetch job with tenant and workload scope
+    H->>M: ValidateGet
+    H->>M: ResourceFromJob
     Note over W,L: Runtime provider resolution
     alt Kubernetes
         K->>S: ProviderForBenchmark
@@ -128,17 +138,17 @@ sequenceDiagram
         L->>S: ProviderForBenchmark
     end
     S->>W: ForJob / ByType / IsInternalProviderID
-    W->>M: MatchesJob callback
-    S->>M: RuntimeProvider callback
+    W->>M: MatchesJob
+    S->>M: RuntimeProvider
 ```
 
 ### Steps to add a new workload
 
 For a server-managed workload outside the provider catalog, follow these steps:
 
-1. Define a stable workload type and internal provider/benchmark IDs. Implement `MatchesJob`, register a `workloads.Workload` with `Internal: true` in `init()`, and import the package from runtime wiring. See the [post-processing registration and matcher](internal/eval_hub/postprocessing/mapping.go) and its [startup import](internal/eval_hub/runtimes/shared/provider.go). Types are persisted, and the IDs identify stored jobs. Unregistered jobs default to `evaluation`.
+1. Define a stable workload type and internal provider/benchmark IDs. Implement the `workloads.Workload` interface in the workload's `mapping.go`, return `true` from `Internal()` for a server-managed provider, register the implementation in `init()`, and import the package from runtime wiring. See the [post-processing implementation](internal/eval_hub/postprocessing/mapping.go) and its [startup import](internal/eval_hub/runtimes/shared/provider.go). Types are persisted, and the IDs identify stored jobs. Unregistered jobs default to `evaluation`.
 2. Implement `RuntimeProvider` to return an in-memory `ProviderResource` with settings for the supported runtime modes. See the [post-processing runtime provider](internal/eval_hub/postprocessing/mapping.go); [`ProviderForBenchmark`](internal/eval_hub/runtimes/shared/provider.go) uses it for registered workloads and the catalog for conventional evaluations.
-3. Add workload-specific [API types](pkg/api/post_processing.go), [handlers](internal/eval_hub/handlers/post_processing.go), and [route registration](internal/eval_hub/server/server.go) that map requests to backing evaluation jobs and stored jobs back to the public response. Scope each exposed GET/DELETE/list route to its workload, and cover cross-API resource isolation in tests.
+3. Add workload-specific [API types](pkg/api/post_processing.go) and [route registration](internal/eval_hub/server/server.go). GET routes call [`HandleGetJob`](internal/eval_hub/handlers/evaluations.go) with the registered type; implement `GetOptions`, `ValidateGet`, and `ResourceFromJob` for that API's contract. CREATE and DELETE currently require [workload handlers](internal/eval_hub/handlers/post_processing.go). Scope every exposed route to its workload, and cover cross-API resource isolation in tests.
 
 ---
 

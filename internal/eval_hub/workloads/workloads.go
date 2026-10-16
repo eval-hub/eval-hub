@@ -1,4 +1,4 @@
-// Package workloads registers server-managed workloads for runtime provider resolution.
+// Package workloads registers workload implementations for API and runtime use.
 package workloads
 
 import (
@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -34,14 +36,35 @@ func TypeFromContext(ctx context.Context) Type {
 	return workloadType
 }
 
-// Workload describes a workload that supplies its own runtime provider.
-type Workload struct {
-	Type            Type
-	ProviderID      string
-	BenchmarkID     string
-	Internal        bool
-	MatchesJob      func(*api.EvaluationJobConfig) bool
-	RuntimeProvider func() *api.ProviderResource
+// GetOptions preserves each workload's public identifier and observability names.
+type GetOptions struct {
+	PathParameter    string
+	ResourceName     string
+	SpanName         string
+	TraceIDAttribute string
+}
+
+// Workload supplies job identification, API conversion, operation validation,
+// and runtime provider resolution. Implementations must be safe for concurrent
+// use after registration. Routes select a workload independently of request data.
+type Workload interface {
+	Type() Type
+	ProviderID() string
+	BenchmarkID() string
+	Internal() bool
+	MatchesJob(*api.EvaluationJobConfig) bool
+	RuntimeProvider() *api.ProviderResource
+	GetOptions() GetOptions
+	NewRequest() any
+	ToEvaluationJob(request any) (*api.EvaluationJobConfig, error)
+	ResourceFromJob(*api.EvaluationJobResource) (any, error)
+
+	// ValidateCreate checks workload invariants after request decoding. Schema,
+	// catalog, source, and runtime validation in the existing create handlers
+	// still applies until those handlers are migrated to this interface.
+	ValidateCreate(*api.EvaluationJobConfig) error
+	ValidateGet(id string, job *api.EvaluationJobResource) error
+	ValidateDelete(id string, job *api.EvaluationJobResource) error
 }
 
 var (
@@ -49,32 +72,32 @@ var (
 	registry   []Workload
 )
 
-// Register adds a workload. Invalid or duplicate registrations are logged and ignored.
+// Register accepts any Workload implementation. Invalid or duplicate
+// registrations are logged and ignored. Conventional evaluations use catalog
+// providers and do not require a fixed internal provider or benchmark.
 func Register(workload Workload) {
-	// Conventional evaluations use catalog providers and benchmarks, so they
-	// cannot be represented by one fixed provider/benchmark registration.
-	if workload.Type == Evaluation {
-		slog.Error("Conventional evaluation cannot be registered as a workload", "type", workload.Type)
+	if workload == nil {
+		slog.Error("Cannot register a nil workload")
 		return
 	}
-	if workload.Type == "" || workload.ProviderID == "" || workload.BenchmarkID == "" ||
-		workload.MatchesJob == nil || workload.RuntimeProvider == nil {
-		slog.Error("Incomplete workload registration", "type", workload.Type, "provider_id", workload.ProviderID, "benchmark_id", workload.BenchmarkID)
+	if workload.Type() == "" ||
+		(workload.Type() != Evaluation && (workload.ProviderID() == "" || workload.BenchmarkID() == "")) {
+		slog.Error("Incomplete workload registration", "type", workload.Type(), "provider_id", workload.ProviderID(), "benchmark_id", workload.BenchmarkID())
 		return
 	}
 	registryMu.Lock()
 	defer registryMu.Unlock()
 	for _, registered := range registry {
-		if registered.Type == workload.Type ||
-			(registered.ProviderID == workload.ProviderID && registered.BenchmarkID == workload.BenchmarkID) {
-			slog.Error("Duplicate workload registration", "type", workload.Type, "provider_id", workload.ProviderID, "benchmark_id", workload.BenchmarkID)
+		if registered.Type() == workload.Type() ||
+			(workload.ProviderID() != "" && registered.ProviderID() == workload.ProviderID() && registered.BenchmarkID() == workload.BenchmarkID()) {
+			slog.Error("Duplicate workload registration", "type", workload.Type(), "provider_id", workload.ProviderID(), "benchmark_id", workload.BenchmarkID())
 			return
 		}
 	}
 	registry = append(registry, workload)
 }
 
-// registeredWorkloads takes a snapshot so MatchesJob can run without holding
+// registeredWorkloads takes a snapshot so implementations run without holding
 // the registry lock while concurrent registrations remain safe.
 func registeredWorkloads() []Workload {
 	registryMu.RLock()
@@ -82,31 +105,35 @@ func registeredWorkloads() []Workload {
 	return append([]Workload(nil), registry...)
 }
 
-// ForJob returns the registered workload that owns a stored job.
-func ForJob(job *api.EvaluationJobConfig) *Workload {
-	workloads := registeredWorkloads()
-	for i := range workloads {
-		if workloads[i].MatchesJob(job) {
-			return &workloads[i]
+// ForJob returns the workload that owns a stored job. The conventional
+// evaluation implementation is the fallback, regardless of registration order.
+func ForJob(job *api.EvaluationJobConfig) Workload {
+	var evaluation Workload
+	for _, workload := range registeredWorkloads() {
+		if workload.Type() == Evaluation {
+			evaluation = workload
+			continue
+		}
+		if workload.MatchesJob(job) {
+			return workload
 		}
 	}
-	return nil
+	return evaluation
 }
 
 // TypeForJob returns the registered workload type, or the default evaluation type.
 func TypeForJob(job *api.EvaluationJobConfig) Type {
 	if workload := ForJob(job); workload != nil {
-		return workload.Type
+		return workload.Type()
 	}
 	return Evaluation
 }
 
 // ByType returns a registered workload by type.
-func ByType(workloadType Type) *Workload {
-	workloads := registeredWorkloads()
-	for i := range workloads {
-		if workloads[i].Type == workloadType {
-			return &workloads[i]
+func ByType(workloadType Type) Workload {
+	for _, workload := range registeredWorkloads() {
+		if workload.Type() == workloadType {
+			return workload
 		}
 	}
 	return nil
@@ -115,9 +142,22 @@ func ByType(workloadType Type) *Workload {
 // IsInternalProviderID reports whether an internal workload registered an ID.
 func IsInternalProviderID(id string) bool {
 	for _, workload := range registeredWorkloads() {
-		if workload.Internal && workload.ProviderID == id {
+		if workload.Internal() && workload.ProviderID() == id {
 			return true
 		}
 	}
 	return false
+}
+
+// NotFound uses the public resource name even when storage uses a shared job model.
+func NotFound(workload Workload, id string) error {
+	return serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", workload.GetOptions().ResourceName, "ResourceId", id)
+}
+
+// ValidateResource rejects absent jobs and jobs belonging to another workload.
+func ValidateResource(workload Workload, id string, job *api.EvaluationJobResource) error {
+	if job == nil || !workload.MatchesJob(&job.EvaluationJobConfig) {
+		return NotFound(workload, id)
+	}
+	return nil
 }

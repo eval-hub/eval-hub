@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -14,7 +15,7 @@ import (
 const (
 	ProviderID          = "evalhub-internal"
 	BenchmarkID         = "evaluation-post-processor"
-	workloadType        = workloads.Type("post-processing")
+	workloadType        = workloads.PostProcessing
 	defaultAdapterImage = "quay.io/evalhub/evalhub-post-processor:latest"
 	adapterImageEnv     = "EVALHUB_POST_PROCESSING_IMAGE"
 	localAdapterDir     = "../eval-hub-contrib/adapters/evalhub-post-processor"
@@ -23,14 +24,57 @@ const (
 )
 
 func init() {
-	workloads.Register(workloads.Workload{
-		Type:            workloadType,
-		ProviderID:      ProviderID,
-		BenchmarkID:     BenchmarkID,
-		Internal:        true,
-		MatchesJob:      IsPostProcessingJob,
-		RuntimeProvider: RuntimeProvider,
-	})
+	workloads.Register(Workload{})
+}
+
+// Workload implements standalone post-processing identification and API conversion.
+type Workload struct{}
+
+var _ workloads.Workload = Workload{}
+
+func (Workload) Type() workloads.Type                         { return workloadType }
+func (Workload) ProviderID() string                           { return ProviderID }
+func (Workload) BenchmarkID() string                          { return BenchmarkID }
+func (Workload) Internal() bool                               { return true }
+func (Workload) MatchesJob(job *api.EvaluationJobConfig) bool { return IsPostProcessingJob(job) }
+func (Workload) RuntimeProvider() *api.ProviderResource       { return RuntimeProvider() }
+func (Workload) NewRequest() any                              { return &api.StandalonePostProcessingRequest{} }
+
+func (Workload) GetOptions() workloads.GetOptions {
+	return workloads.GetOptions{
+		PathParameter:    constants.PathParameterPostProcessingID,
+		ResourceName:     "post-processing computation",
+		SpanName:         "get-post-processing",
+		TraceIDAttribute: "post_processing.id",
+	}
+}
+
+func (Workload) ToEvaluationJob(request any) (*api.EvaluationJobConfig, error) {
+	value, ok := request.(*api.StandalonePostProcessingRequest)
+	if !ok || value == nil {
+		return nil, fmt.Errorf("invalid post-processing request type %T", request)
+	}
+	return ToEvaluationJob(value), nil
+}
+
+func (Workload) ResourceFromJob(job *api.EvaluationJobResource) (any, error) {
+	return ResourceFromJob(job)
+}
+
+func (Workload) ValidateCreate(job *api.EvaluationJobConfig) error {
+	if !IsPostProcessingJob(job) {
+		return fmt.Errorf("invalid internal post-processing job configuration")
+	}
+	_, err := OperationsFromJob(job)
+	return err
+}
+
+func (w Workload) ValidateGet(id string, job *api.EvaluationJobResource) error {
+	return workloads.ValidateResource(w, id, job)
+}
+
+func (w Workload) ValidateDelete(id string, job *api.EvaluationJobResource) error {
+	return workloads.ValidateResource(w, id, job)
 }
 
 // RuntimeProvider builds the in-memory execution descriptor used by runtimes
@@ -159,6 +203,10 @@ func ResourceFromJob(job *api.EvaluationJobResource) (*api.PostProcessingResourc
 	if err != nil {
 		return nil, err
 	}
+	results, err := resultsFromJob(job, operations.ConfidenceInterval)
+	if err != nil {
+		return nil, err
+	}
 	resource := &api.PostProcessingResource{
 		Resource: job.Resource.Resource,
 		PostProcessingCommon: api.PostProcessingCommon{
@@ -168,6 +216,7 @@ func ResourceFromJob(job *api.EvaluationJobResource) (*api.PostProcessingResourc
 		},
 		Operations: operations,
 		Status:     api.PostProcessingStatus{State: api.StatePending},
+		Results:    results,
 	}
 	if job.Status != nil {
 		resource.Status.State = api.State(job.Status.State)
@@ -177,8 +226,50 @@ func ResourceFromJob(job *api.EvaluationJobResource) (*api.PostProcessingResourc
 			resource.Status.WarningMessage = benchmark.WarningMessage
 			resource.Status.StartedAt = benchmark.StartedAt
 			resource.Status.CompletedAt = benchmark.CompletedAt
-			resource.Status.Benchmarks = job.Status.Benchmarks
 		}
 	}
 	return resource, nil
+}
+
+// resultsFromJob maps the post-processor's operation output from the backing
+// evaluation job into the result shape selected by the standalone request.
+func resultsFromJob(job *api.EvaluationJobResource, operation *api.StandaloneConfidenceIntervalConfig) (*api.PostProcessingResults, error) {
+	if job.Results == nil || operation == nil || operation.ResultsDataRef == nil {
+		return nil, nil
+	}
+
+	usesEvaluationJobResults := operation.ResultsDataRef.EvalJob != nil
+	results := &api.PostProcessingResults{}
+	for _, benchmark := range job.Results.Benchmarks {
+		raw, ok := benchmark.AdditionalInfo["confidence_interval"]
+		if !ok {
+			continue
+		}
+
+		data, err := json.Marshal(raw)
+		if err != nil {
+			return nil, fmt.Errorf("marshal post-processing confidence interval results: %w", err)
+		}
+		var output struct {
+			Benchmarks         []api.PostProcessingBenchmarkResult `json:"benchmarks"`
+			ConfidenceInterval *api.ConfidenceInterval             `json:"confidence_interval"`
+		}
+		if err := json.Unmarshal(data, &output); err != nil {
+			return nil, fmt.Errorf("decode post-processing confidence interval results: %w", err)
+		}
+
+		if usesEvaluationJobResults {
+			results.Benchmarks = append(results.Benchmarks, output.Benchmarks...)
+		} else if output.ConfidenceInterval != nil {
+			results.ConfidenceInterval = output.ConfidenceInterval
+		}
+	}
+
+	if usesEvaluationJobResults && len(results.Benchmarks) > 0 {
+		return results, nil
+	}
+	if !usesEvaluationJobResults && results.ConfidenceInterval != nil {
+		return results, nil
+	}
+	return nil, nil
 }

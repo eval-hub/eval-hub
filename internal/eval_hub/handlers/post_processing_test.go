@@ -12,20 +12,27 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 type postProcessingHandlerStorage struct {
 	*fakeStorage
-	source     *api.EvaluationJobResource
-	getErr     error
-	createErr  error
-	createdJob *api.EvaluationJobResource
-	mutateJob  func(*api.EvaluationJobResource)
+	source      *api.EvaluationJobResource
+	getErr      error
+	createErr   error
+	deleteErr   error
+	createdJob  *api.EvaluationJobResource
+	getID       string
+	deleteID    string
+	deleteCall  int
+	gotWorkload workloads.Type
+	mutateJob   func(*api.EvaluationJobResource)
 }
 
 func (s *postProcessingHandlerStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return s }
@@ -34,8 +41,13 @@ func (s *postProcessingHandlerStorage) WithContext(_ context.Context) abstractio
 }
 func (s *postProcessingHandlerStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
 func (s *postProcessingHandlerStorage) WithOwner(_ api.User) abstractions.Storage    { return s }
+func (s *postProcessingHandlerStorage) WithWorkloadType(workloadType workloads.Type) abstractions.Storage {
+	s.gotWorkload = workloadType
+	return s
+}
 
-func (s *postProcessingHandlerStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
+func (s *postProcessingHandlerStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, error) {
+	s.getID = id
 	return s.source, s.getErr
 }
 
@@ -45,6 +57,24 @@ func (s *postProcessingHandlerStorage) CreateEvaluationJob(job *api.EvaluationJo
 		s.mutateJob(job)
 	}
 	return s.createErr
+}
+
+func (s *postProcessingHandlerStorage) DeleteEvaluationJob(id string) error {
+	s.deleteCall++
+	s.deleteID = id
+	return s.deleteErr
+}
+
+type postProcessingPathRequest struct {
+	*MockRequest
+	id string
+}
+
+func (r *postProcessingPathRequest) PathValue(name string) string {
+	if name == constants.PathParameterPostProcessingID {
+		return r.id
+	}
+	return ""
 }
 
 func TestHandleCreatePostProcessing(t *testing.T) {
@@ -286,4 +316,22 @@ func marshalPostProcessingRequest(t *testing.T, evalJob *api.EvaluationJobDataRe
 
 func intPointer(value int) *int {
 	return &value
+}
+
+func standalonePostProcessingJob(id string, status *api.EvaluationJobStatus) *api.EvaluationJobResource {
+	request := &api.StandalonePostProcessingRequest{
+		Operations: api.StandalonePostProcessingOperations{ConfidenceInterval: &api.StandaloneConfidenceIntervalConfig{
+			ConfidenceIntervalConfigCommon: api.ConfidenceIntervalConfigCommon{
+				CalibrationDataRef: []api.CalibrationDataRef{{PVC: &api.PVCTestDataRef{ClaimName: "calibration"}}},
+				SignificanceLevel:  0.05,
+			},
+			ResultsDataRef: &api.PostProcessingResultsDataRef{PVC: &api.PVCTestDataRef{ClaimName: "results"}},
+			PrimaryScore:   &api.PrimaryScore{Metric: "accuracy"},
+		}},
+	}
+	return &api.EvaluationJobResource{
+		Resource:            api.EvaluationResource{Resource: api.Resource{ID: id}},
+		EvaluationJobConfig: *postprocessing.ToEvaluationJob(request),
+		Status:              status,
+	}
 }

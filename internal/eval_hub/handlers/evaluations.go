@@ -2,8 +2,11 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	_ "github.com/eval-hub/eval-hub/internal/eval_hub/evaluations"
 	"log/slog"
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -633,31 +636,52 @@ func (h *Handlers) HandleListEvaluations(ctx *executioncontext.ExecutionContext,
 
 // HandleGetEvaluation handles GET /api/v1/evaluations/jobs/{id}
 func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper) {
-	storage := h.getStorage(ctx)
+	h.HandleGetJob(ctx, r, w, workloads.Evaluation)
+}
 
+func (h *Handlers) HandleGetJob(ctx *executioncontext.ExecutionContext, r httpwrappers.RequestWrapper, w httpwrappers.ResponseWrapper, workloadType workloads.Type) {
 	logging.LogRequestStarted(ctx)
-
-	// Extract ID from path
-	evaluationJobID := r.PathValue(constants.PathParameterJobID)
-	if evaluationJobID == "" {
-		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", constants.PathParameterJobID), ctx.RequestID)
+	workload := workloads.ByType(workloadType)
+	if workload == nil {
+		w.Error(serviceerrors.NewServiceError(messages.InternalServerError, "Error", fmt.Sprintf("workload %q is not registered", workloadType)), ctx.RequestID)
 		return
 	}
-
+	options := workload.GetOptions()
+	id := r.PathValue(options.PathParameter)
+	if id == "" {
+		w.Error(serviceerrors.NewServiceError(messages.MissingPathParameter, "ParameterName", options.PathParameter), ctx.RequestID)
+		return
+	}
+	storage := h.getStorage(ctx)
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			response, err := storage.WithContext(runtimeCtx).GetEvaluationJob(evaluationJobID)
+			scopedContext := storage.WithContext(runtimeCtx).WithWorkloadType(workload.Type())
+			job, err := scopedContext.GetEvaluationJob(id)
 			if err != nil {
+				var serviceErr *serviceerrors.ServiceError
+				if errors.As(err, &serviceErr) && serviceErr.MessageCode() == messages.ResourceNotFound {
+					err = workloads.NotFound(workload, id)
+				}
 				w.Error(err, ctx.RequestID)
 				return err
 			}
-			w.WriteJSON(response, 200)
+			if err := workload.ValidateGet(id, job); err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			response, err := workload.ResourceFromJob(job)
+			if err != nil {
+				err = serviceerrors.NewServiceError(messages.InternalServerError, "Error", err.Error())
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			w.WriteJSON(response, http.StatusOK)
 			return nil
 		},
 		"storage",
-		"get-evaluation-job",
-		"job.id", evaluationJobID,
+		options.SpanName,
+		options.TraceIDAttribute, id,
 	)
 }
 
