@@ -211,6 +211,22 @@ paths:
                     id: standard-safety-collection
                   pass_criteria:
                     threshold: 0.5
+              CreateEvaluationWithCollectionJudge:
+                summary: Select a judge model using optional Secret-backed connection fields
+                value:
+                  name: trustworthiness-with-judge
+                  model:
+                    url: http://target-model.models.svc.cluster.local:8000/v1
+                    name: target-model
+                    auth:
+                      secret_ref: model-and-judge-credentials
+                  collection:
+                    id: trustworthiness-v1
+                    benchmarks:
+                      - id: inspect/cyberseceval-2-pi
+                        provider_id: inspect
+                        parameters:
+                          judge_model: deployed-judge-model
               CreateEvaluationWithAuthAndHardwareProfile:
                 summary: Evaluate an authenticated model with HardwareProfile Kueue scheduling
                 value:
@@ -3755,7 +3771,14 @@ components:
             parameters:
               type: object
               additionalProperties: true
-              description: Benchmark specific parameters.
+              description: |
+                Benchmark-specific parameters. For a collection benchmark that declares
+                `judge_model`, supply a non-empty judge model identifier. With no
+                judge-specific entries in the Secret named by `model.auth.secret_ref`,
+                the judge reuses the target endpoint and credential. `judge_api-key`
+                selects a separate credential at the target endpoint; add `judge_url`
+                for a separate endpoint. `judge_url` without `judge_api-key` is invalid.
+                This applies only to benchmarks whose collection declares `judge_model`.
             test_data_ref:
               $ref: '#/components/schemas/TestDataRef'
               description: |
@@ -4953,7 +4976,13 @@ components:
             parameters:
               type: object
               additionalProperties: true
-              description: Benchmark specific parameters.
+              description: |
+                Benchmark-specific parameters. Collections may declare empty
+                `judge_model` for judge-requiring benchmarks so clients can render a
+                per-job input. The judge connection is selected by optional
+                `judge_api-key` and `judge_url` entries in the job's model-auth Secret.
+                Empty collection defaults are not carried into a job; the caller must
+                provide a non-empty `judge_model`.
             test_data_ref:
               $ref: '#/components/schemas/TestDataRef'
               description: |
