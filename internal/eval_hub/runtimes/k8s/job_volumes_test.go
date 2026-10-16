@@ -2,9 +2,11 @@ package k8s
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -23,31 +25,46 @@ func assertTestDataEmptyDirSizeLimit(t *testing.T, volumes []corev1.Volume) {
 }
 
 func TestBuildJobMountsPostProcessorCalibrationPVCs(t *testing.T) {
-	pvcs := []postProcessorPVCConfig{
-		{
-			claimName:  "calibration-a",
-			volumeName: postProcessorCalibrationPVCVolumeNamePrefix + "0",
-			mountPath:  postProcessorCalibrationPVCMountPathPrefix + "/calibration-a",
-		},
-		{
-			claimName:  "calibration-b",
-			volumeName: postProcessorCalibrationPVCVolumeNamePrefix + "1",
-			mountPath:  postProcessorCalibrationPVCMountPathPrefix + "/calibration-b",
-		},
+	refs := []api.CalibrationDataRef{
+		{PVC: &api.PVCTestDataRef{ClaimName: "calibration-a", SubPath: "datasets/first"}},
+		{PVC: &api.PVCTestDataRef{ClaimName: "calibration-a", SubPath: "datasets/second"}},
+		{PVC: &api.PVCTestDataRef{ClaimName: "calibration-b"}},
 	}
-	cfg := &jobConfig{
-		jobID:          "job-ppi-pvc",
-		resourceGUID:   "guid-ppi-pvc",
-		benchmarkIndex: 0,
-		namespace:      "default",
-		providerID:     "evalhub-internal",
-		benchmarkID:    "evaluation-post-processor",
-		adapterImage:   "adapter:latest",
-		defaultEnv: []api.EnvVar{{
-			Name:  envPostProcessorPVCMountsName,
-			Value: "provider-value-must-not-override-runtime-paths",
-		}},
-		postProcessorPVCs: pvcs,
+	for i := range refs {
+		refs[i].DataConfig = api.CalibrationDataConfig{
+			Format:  "jsonl",
+			Columns: api.CalibrationDataColumns{Label: "label", Prediction: "prediction"},
+		}
+	}
+	evaluation := postProcessorPVCJobForEdgeCases(refs)
+	evaluation.Resource.ID = "job-ppi-pvc"
+	cfg, err := buildJobConfig(evaluation, postprocessing.RuntimeProvider(), &evaluation.Benchmarks[0], 0, nil, nil)
+	if err != nil {
+		t.Fatalf("buildJobConfig: %v", err)
+	}
+	cfg.defaultEnv = append(cfg.defaultEnv, api.EnvVar{
+		Name:  envPostProcessorPVCMountsName,
+		Value: "provider-value-must-not-override-runtime-paths",
+	})
+	pvcs := cfg.postProcessorPVCs
+	if len(pvcs) != 2 {
+		t.Fatalf("got %d PVC mounts, want 2 for 3 references sharing 2 claims", len(pvcs))
+	}
+
+	encodedSpec, err := json.Marshal(cfg.jobSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec struct {
+		Parameters struct {
+			Operations api.StandalonePostProcessingOperations `json:"operations"`
+		} `json:"parameters"`
+	}
+	if err := json.Unmarshal(encodedSpec, &spec); err != nil {
+		t.Fatal(err)
+	}
+	if spec.Parameters.Operations.ConfidenceInterval == nil || !reflect.DeepEqual(spec.Parameters.Operations.ConfidenceInterval.CalibrationDataRef, refs) {
+		t.Fatalf("adapter job spec did not preserve calibration subpaths: %s", encodedSpec)
 	}
 
 	job, err := buildJob(cfg, nil)
@@ -63,9 +80,14 @@ func TestBuildJobMountsPostProcessorCalibrationPVCs(t *testing.T) {
 		t.Fatal("expected sidecar init container")
 	}
 
-	wantMountPaths := make(map[string]string, len(pvcs))
+	wantMountPaths := map[string]string{
+		"calibration-a": postProcessorCalibrationPVCMountPathPrefix + "/calibration-a",
+		"calibration-b": postProcessorCalibrationPVCMountPathPrefix + "/calibration-b",
+	}
 	for _, pvc := range pvcs {
-		wantMountPaths[pvc.claimName] = pvc.mountPath
+		if pvc.mountPath != wantMountPaths[pvc.claimName] {
+			t.Errorf("mount path for %q = %q, want claim root %q", pvc.claimName, pvc.mountPath, wantMountPaths[pvc.claimName])
+		}
 		volume := findVolume(job.Spec.Template.Spec.Volumes, pvc.volumeName)
 		if volume == nil || volume.PersistentVolumeClaim == nil {
 			t.Fatalf("expected PVC volume %q", pvc.volumeName)
@@ -76,6 +98,9 @@ func TestBuildJobMountsPostProcessorCalibrationPVCs(t *testing.T) {
 		mount := findVolumeMount(adapter.VolumeMounts, pvc.volumeName)
 		if mount == nil || mount.MountPath != pvc.mountPath || !mount.ReadOnly {
 			t.Errorf("adapter mount %q = %#v, want read-only mount at %q", pvc.volumeName, mount, pvc.mountPath)
+		}
+		if mount != nil && mount.SubPath != "" {
+			t.Errorf("adapter mount %q has SubPath %q; the adapter applies each reference's sub_path", pvc.volumeName, mount.SubPath)
 		}
 		if findVolumeMount(sidecar.VolumeMounts, pvc.volumeName) != nil {
 			t.Errorf("sidecar must not mount calibration PVC %q", pvc.claimName)

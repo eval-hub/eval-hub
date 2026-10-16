@@ -134,10 +134,6 @@ func postProcessorPVCConfigs(evaluation *api.EvaluationJobResource) ([]postProce
 	if err != nil {
 		return nil, fmt.Errorf("read post-processing calibration data refs: %w", err)
 	}
-	if operations.ConfidenceInterval == nil {
-		return nil, nil
-	}
-
 	seenClaims := make(map[string]struct{})
 	var configs []postProcessorPVCConfig
 	for _, ref := range operations.ConfidenceInterval.CalibrationDataRef {

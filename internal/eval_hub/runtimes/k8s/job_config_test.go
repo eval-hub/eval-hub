@@ -90,6 +90,37 @@ func postProcessorPVCJobForEdgeCases(refs []api.CalibrationDataRef) *api.Evaluat
 	return &api.EvaluationJobResource{EvaluationJobConfig: *postprocessing.ToEvaluationJob(request)}
 }
 
+func TestBuildJobConfigRejectsInvalidPostProcessorPVCs(t *testing.T) {
+	malformed := postProcessorPVCJobForEdgeCases(nil)
+	malformed.Benchmarks[0].Parameters["operations"] = "invalid"
+	missingOperation := postProcessorPVCJobForEdgeCases(nil)
+	missingOperation.Benchmarks[0].Parameters["operations"] = api.StandalonePostProcessingOperations{}
+	tests := []struct {
+		name    string
+		job     *api.EvaluationJobResource
+		wantErr string
+	}{
+		{name: "malformed operations", job: malformed, wantErr: "read post-processing calibration data refs: decode post-processing operations"},
+		{name: "missing confidence interval", job: missingOperation, wantErr: "read post-processing calibration data refs: post-processing job has no supported operations"},
+		{
+			name:    "blank calibration claim",
+			job:     postProcessorPVCJobForEdgeCases([]api.CalibrationDataRef{{PVC: &api.PVCTestDataRef{ClaimName: " "}}}),
+			wantErr: "claim_name is required",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg, err := buildJobConfig(test.job, postprocessing.RuntimeProvider(), &test.job.Benchmarks[0], 0, nil, nil)
+			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("buildJobConfig() error = %v, want it to contain %q", err, test.wantErr)
+			}
+			if cfg != nil {
+				t.Fatalf("buildJobConfig() returned a config for invalid calibration data: %#v", cfg)
+			}
+		})
+	}
+}
+
 func TestBuildJobConfigDefaults(t *testing.T) {
 	callbackURL := "http://localhost:8080"
 	benchmark := api.EvaluationBenchmarkConfig{

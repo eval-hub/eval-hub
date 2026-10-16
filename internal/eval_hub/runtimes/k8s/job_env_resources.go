@@ -88,6 +88,7 @@ func buildEnvVars(jc *jobConfig, serviceConfig *config.Config) []corev1.EnvVar {
 	}
 
 	if len(jc.postProcessorPVCs) > 0 {
+		// Map claim roots; the adapter resolves each reference's sub_path.
 		mountPaths := make(map[string]string, len(jc.postProcessorPVCs))
 		for _, pvc := range jc.postProcessorPVCs {
 			mountPaths[pvc.claimName] = pvc.mountPath
