@@ -222,24 +222,47 @@ type HardwareResourceQuantity struct {
 // HardwareGPUConfig holds optional GPU resource overrides for a benchmark.
 // Name is the Kubernetes extended resource (e.g. "nvidia.com/gpu").
 // Count is the number of GPUs requested on the Job (requests == limits).
+// Mutually exclusive with DRA: a request must not set both.
 type HardwareGPUConfig struct {
 	Name  string `mapstructure:"name" json:"name,omitempty"`
 	Count int    `mapstructure:"count" json:"count,omitempty"`
+}
+
+// HardwareDRAConfig holds an optional Dynamic Resource Allocation (DRA) override
+// for a benchmark's hardware_config. Devices are requested by referencing a
+// ResourceClaimTemplate that already exists in the job's namespace; the template
+// (not this config) defines the device class, attribute selectors, and topology
+// constraints. Mutually exclusive with GPU. Template references (rather than
+// pre-created ResourceClaims) keep evaluation Jobs admissible to Kueue, which
+// only accepts workload objects that create their own claims.
+type HardwareDRAConfig struct {
+	// ResourceClaimTemplate is the name of a ResourceClaimTemplate in the job's
+	// namespace. Must conform to RFC 1123 DNS label naming.
+	ResourceClaimTemplate string `mapstructure:"resource_claim_template" json:"resource_claim_template" validate:"required,rfc1123_dns_label"`
+	// ClaimName is the pod-local claim name the adapter container references via
+	// resources.claims. Defaults to "gpu" when omitted.
+	ClaimName string `mapstructure:"claim_name" json:"claim_name,omitempty" validate:"omitempty,rfc1123_dns_label"`
 }
 
 // BenchmarkHardwareConfig is an optional per-benchmark hardware override for Kubernetes runtimes.
 //
 // Two mutually exclusive modes:
 //   - Profile mode: set HardwareProfileName to fetch an OpenDataHub HardwareProfile CR.
-//     Queue, CPU, Memory, and GPU must not be set.
-//   - Direct mode: omit HardwareProfileName and set Queue, CPU, Memory, and/or GPU directly.
-//     Values missing from direct fields fall back to the provider runtime.k8s configuration.
+//     Queue, CPU, Memory, GPU, and DRA must not be set.
+//   - Direct mode: omit HardwareProfileName and set Queue, CPU, Memory, GPU, and/or DRA
+//     directly. Values missing from direct fields fall back to the provider runtime.k8s
+//     configuration. GPU (legacy extended resource) and DRA (ResourceClaimTemplate
+//     reference) are mutually exclusive with each other; an explicit request-level
+//     choice of either overrides the provider default for the other mechanism.
 type BenchmarkHardwareConfig struct {
 	HardwareProfileName string                    `mapstructure:"hardware_profile_name" json:"hardware_profile_name,omitempty" validate:"omitempty,rfc1123_dns_label"`
 	Queue               *QueueConfig              `mapstructure:"queue" json:"queue,omitempty"`
 	CPU                 *HardwareResourceQuantity `mapstructure:"cpu" json:"cpu,omitempty"`
 	Memory              *HardwareResourceQuantity `mapstructure:"memory" json:"memory,omitempty"`
 	GPU                 *HardwareGPUConfig        `mapstructure:"gpu" json:"gpu,omitempty"`
+	// DRA requests accelerators via a namespace-local ResourceClaimTemplate reference
+	// instead of the legacy GPU extended resource. Mutually exclusive with GPU.
+	DRA *HardwareDRAConfig `mapstructure:"dra" json:"dra,omitempty"`
 }
 
 // HasDirectFields reports whether any inline (non-profile) hardware fields are set.
@@ -247,7 +270,7 @@ func (h *BenchmarkHardwareConfig) HasDirectFields() bool {
 	if h == nil {
 		return false
 	}
-	return h.Queue != nil || h.CPU != nil || h.Memory != nil || h.GPU != nil
+	return h.Queue != nil || h.CPU != nil || h.Memory != nil || h.GPU != nil || h.DRA != nil
 }
 
 // EvaluationBenchmarkConfig represents a benchmark reference in an evaluation job request or persisted job config.

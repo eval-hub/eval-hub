@@ -220,6 +220,9 @@ func (h *Handlers) createEvaluationJob(ctx *executioncontext.ExecutionContext, e
 	if err != nil {
 		return nil, err
 	}
+	if err := validation.ValidateCollectionJudgeParameters(collection, benchmarks); err != nil {
+		return nil, err
+	}
 	if err := h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
@@ -319,7 +322,7 @@ func (h *Handlers) validatePreparedEvaluation(
 			}
 			if (evaluation.Model != nil) &&
 				(strings.TrimSpace(evaluation.Model.URL) == "") &&
-				!postprocessing.IsPostProcessingJob(evaluation) &&
+				workloads.TypeForJob(evaluation) == workloads.Evaluation &&
 				!allBenchmarksHavePreRecordedData(benchmarks) {
 				return serviceerrors.NewServiceError(messages.ModelURLRequired)
 			}
@@ -647,7 +650,8 @@ func (h *Handlers) HandleGetEvaluation(ctx *executioncontext.ExecutionContext, r
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			response, err := storage.WithContext(runtimeCtx).GetEvaluationJob(evaluationJobID)
+			scopedContext := storage.WithContext(runtimeCtx).WithWorkloadType(workloads.Evaluation)
+			response, err := scopedContext.GetEvaluationJob(evaluationJobID)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -771,11 +775,12 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 	err := h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
+			scopedContext := storage.WithContext(runtimeCtx).WithWorkloadType(workloads.Evaluation)
+			job, err := scopedContext.GetEvaluationJob(evaluationJobID)
+			if err != nil {
+				return err
+			}
 			if h.runtime != nil {
-				job, err := storage.WithContext(runtimeCtx).GetEvaluationJob(evaluationJobID)
-				if err != nil {
-					return err
-				}
 				if (job != nil) && (job.Status != nil) && (job.Status.State != api.OverallStateCancelled) {
 					if err := h.runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).DeleteEvaluationJobResources(job); err != nil {
 						// Cleanup failures shouldn't block deleting the storage record.
@@ -813,8 +818,9 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
+			scopedContext := storage.WithContext(runtimeCtx).WithWorkloadType(workloads.Evaluation)
 			if hardDelete {
-				err = storage.WithContext(runtimeCtx).DeleteEvaluationJob(evaluationJobID)
+				err = scopedContext.DeleteEvaluationJob(evaluationJobID)
 				if err != nil {
 					ctx.Logger.Info("Failed to delete evaluation job", "error", err.Error(), "id", evaluationJobID)
 					w.Error(err, ctx.RequestID)
@@ -822,11 +828,11 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 				}
 			} else {
 				var previousState api.OverallState
-				job, jobErr := storage.WithContext(runtimeCtx).GetEvaluationJob(evaluationJobID)
+				job, jobErr := scopedContext.GetEvaluationJob(evaluationJobID)
 				if jobErr == nil && job != nil && job.Status != nil {
 					previousState = job.Status.State
 				}
-				err = storage.WithContext(runtimeCtx).UpdateEvaluationJobStatus(evaluationJobID, api.OverallStateCancelled, api.WithMessageOrigin(&api.MessageInfo{
+				err = scopedContext.UpdateEvaluationJobStatus(evaluationJobID, api.OverallStateCancelled, api.WithMessageOrigin(&api.MessageInfo{
 					Message:     "Evaluation job cancelled",
 					MessageCode: constants.MessageCodeEvaluationJobCancelled,
 				}, api.MessageOriginServer))
