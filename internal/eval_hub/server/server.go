@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
@@ -204,6 +205,7 @@ func (s *Server) handleFunc(router *http.ServeMux, pattern string, handler func(
 }
 
 func spanNameFormatter(operation string, r *http.Request) string {
+	operation = strings.TrimPrefix(operation, r.Method+" ")
 	return fmt.Sprintf("%s %s", r.Method, operation)
 }
 
@@ -269,6 +271,20 @@ func (s *Server) setupEvaluationJobsRoutes(h *handlers.Handlers, router *http.Se
 }
 
 func (s *Server) setupPostProcessingRoutes(h *handlers.Handlers, router *http.ServeMux) {
+	s.handleFunc(router, fmt.Sprintf("DELETE /api/v1/evaluations/post-processing/{%s}", constants.PathParameterPostProcessingID), func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := s.newRequestWrapper(w, r)
+		if !s.canContinueRequest(ctx, resp) {
+			return
+		}
+		switch r.Method {
+		case http.MethodDelete:
+			h.HandleDeletePostProcessing(ctx, req, resp)
+		default:
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
+		}
+	})
 	s.handleFunc(router, "/api/v1/evaluations/post-processing", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
