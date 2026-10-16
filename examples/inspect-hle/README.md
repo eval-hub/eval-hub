@@ -8,16 +8,17 @@ defaults for standalone jobs.
 
 ## Runtime compatibility
 
-[inspect.yaml](../../config/providers/inspect.yaml) pins the Inspect image by tag
-and digest. Its HLE configuration uses `inspect-ai` 0.3.276, `inspect-evals` 0.23.0,
-and HLE task revision `7-E`. The versioned
+[inspect.yaml](../../config/providers/inspect.yaml) uses the mutable `latest` tag.
+The previously validated HLE runtime used `inspect-ai` 0.3.276,
+`inspect-evals` 0.23.0, and HLE task revision `7-E`. The versioned
 [task metadata](https://github.com/UKGovernmentBEIS/inspect_evals/blob/v0.23.0/src/inspect_evals/hle/eval.yaml)
 and [changelog](https://github.com/UKGovernmentBEIS/inspect_evals/blob/v0.23.0/src/inspect_evals/hle/README.md#changelog)
 describe that revision. Older task signatures and metric keys require separately
 validated adapter compatibility handling.
 
-Operator-managed deployments must propagate the image pin into their provider
-configuration. The pin applies to the entire Inspect provider.
+For reproducible evaluations, select and validate a versioned image and digest in
+the provider configuration. Operator-managed deployments configure that image
+separately. The image selection applies to the entire Inspect provider.
 
 ## Standalone request
 
