@@ -177,7 +177,6 @@ func ResourceFromJob(job *api.EvaluationJobResource) (*api.PostProcessingResourc
 			resource.Status.WarningMessage = benchmark.WarningMessage
 			resource.Status.StartedAt = benchmark.StartedAt
 			resource.Status.CompletedAt = benchmark.CompletedAt
-			resource.Status.Benchmarks = job.Status.Benchmarks
 		}
 	}
 	return resource, nil

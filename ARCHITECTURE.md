@@ -95,13 +95,13 @@ flowchart TB
     ppAdapter --> events
     events --> update["HandleUpdateEvaluation + storage.UpdateEvaluationJob"]
     update --> db
-    update -- "completed post-processing with eval_job source" --> link["Link result to source evaluation (new)"]
-    link --> db
+    update -- "completed post-processing with eval_job source" --> sourceCheck["Validate source completion"]
+    sourceCheck --> db
     classDef ppNew fill:#dbeafe,stroke:#2563eb,color:#111827;
-    class ppAPI,ppHandlers,ppMapping,registry,ppProvider,ppAdapter,link ppNew;
+    class ppAPI,ppHandlers,ppMapping,registry,ppProvider,ppAdapter ppNew;
 ```
 
-Blue nodes mark post-processing additions. Both workloads use the existing [status-event route](internal/eval_hub/server/server.go), [update handler](internal/eval_hub/handlers/evaluations.go), and [SQL status update](internal/eval_hub/storage/sql/evaluations_status.go); completed post-processing jobs with an `eval_job` source also use [SQL completion linking](internal/eval_hub/storage/sql/post_processing.go). The evaluation-job GET/DELETE routes still hide post-processing jobs.
+Blue nodes mark post-processing additions. Both workloads use the existing [status-event route](internal/eval_hub/server/server.go), [update handler](internal/eval_hub/handlers/evaluations.go), and [SQL status update](internal/eval_hub/storage/sql/evaluations_status.go); completed post-processing jobs with an `eval_job` source also use [SQL source validation](internal/eval_hub/storage/sql/post_processing.go). Completion and deletion do not link or unlink post-processing jobs on source evaluations. The evaluation-job GET/DELETE routes hide post-processing jobs.
 
 ### Post-processing code call relationships
 

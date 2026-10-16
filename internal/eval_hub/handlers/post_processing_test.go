@@ -8,24 +8,32 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
 type postProcessingHandlerStorage struct {
 	*fakeStorage
-	source     *api.EvaluationJobResource
-	getErr     error
-	createErr  error
-	createdJob *api.EvaluationJobResource
-	mutateJob  func(*api.EvaluationJobResource)
+	source      *api.EvaluationJobResource
+	getErr      error
+	createErr   error
+	deleteErr   error
+	createdJob  *api.EvaluationJobResource
+	getID       string
+	deleteID    string
+	deleteCall  int
+	gotWorkload workloads.Type
+	mutateJob   func(*api.EvaluationJobResource)
 }
 
 func (s *postProcessingHandlerStorage) WithLogger(_ *slog.Logger) abstractions.Storage { return s }
@@ -34,8 +42,13 @@ func (s *postProcessingHandlerStorage) WithContext(_ context.Context) abstractio
 }
 func (s *postProcessingHandlerStorage) WithTenant(_ api.Tenant) abstractions.Storage { return s }
 func (s *postProcessingHandlerStorage) WithOwner(_ api.User) abstractions.Storage    { return s }
+func (s *postProcessingHandlerStorage) WithWorkloadType(workloadType workloads.Type) abstractions.Storage {
+	s.gotWorkload = workloadType
+	return s
+}
 
-func (s *postProcessingHandlerStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
+func (s *postProcessingHandlerStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, error) {
+	s.getID = id
 	return s.source, s.getErr
 }
 
@@ -45,6 +58,24 @@ func (s *postProcessingHandlerStorage) CreateEvaluationJob(job *api.EvaluationJo
 		s.mutateJob(job)
 	}
 	return s.createErr
+}
+
+func (s *postProcessingHandlerStorage) DeleteEvaluationJob(id string) error {
+	s.deleteCall++
+	s.deleteID = id
+	return s.deleteErr
+}
+
+type postProcessingPathRequest struct {
+	*MockRequest
+	id string
+}
+
+func (r *postProcessingPathRequest) PathValue(name string) string {
+	if name == constants.PathParameterPostProcessingID {
+		return r.id
+	}
+	return ""
 }
 
 func TestHandleCreatePostProcessing(t *testing.T) {
@@ -61,6 +92,7 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 		wantStatus      int
 		wantCreated     bool
 		wantThreadCount int
+		wantExports     *api.EvaluationExports
 	}{
 		{
 			name:       "body read error",
@@ -88,6 +120,16 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 			wantCreated: true,
 		},
 		{
+			name: "storage create failure",
+			body: marshalPostProcessingRequest(t, nil, nil),
+			storage: &postProcessingHandlerStorage{
+				fakeStorage: newPostProcessingBaseStorage(),
+				createErr:   errors.New("storage unavailable"),
+			},
+			wantStatus:  http.StatusInternalServerError,
+			wantCreated: true,
+		},
+		{
 			name: "completed eval job succeeds",
 			body: marshalPostProcessingRequest(t, &api.EvaluationJobDataRef{ID: "source-job"}, nil),
 			storage: &postProcessingHandlerStorage{
@@ -96,6 +138,54 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 			},
 			wantStatus:  http.StatusAccepted,
 			wantCreated: true,
+		},
+		{
+			name: "post-processing job cannot be used as an eval-job source",
+			body: marshalPostProcessingRequest(t, &api.EvaluationJobDataRef{ID: "source-job"}, nil),
+			storage: &postProcessingHandlerStorage{
+				fakeStorage: newPostProcessingBaseStorage(),
+				source: &api.EvaluationJobResource{
+					Resource: api.EvaluationResource{Resource: api.Resource{ID: "source-job"}},
+					EvaluationJobConfig: api.EvaluationJobConfig{Benchmarks: []api.EvaluationBenchmarkConfig{{
+						Ref: api.Ref{ID: postprocessing.BenchmarkID}, ProviderID: postprocessing.ProviderID,
+					}}},
+					Status: &api.EvaluationJobStatus{EvaluationJobState: api.EvaluationJobState{State: api.OverallStateCompleted}},
+				},
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name: "completed eval job propagates OCI export settings",
+			body: marshalPostProcessingRequest(t, &api.EvaluationJobDataRef{ID: "source-job"}, nil),
+			storage: &postProcessingHandlerStorage{
+				fakeStorage: newPostProcessingBaseStorage(),
+				source: &api.EvaluationJobResource{
+					Resource: api.EvaluationResource{Resource: api.Resource{ID: "source-job"}},
+					Status:   &api.EvaluationJobStatus{EvaluationJobState: api.EvaluationJobState{State: api.OverallStateCompleted}},
+					EvaluationJobConfig: api.EvaluationJobConfig{
+						Exports: &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{
+							Coordinates: api.OCICoordinates{
+								OCIHost:       "quay.io",
+								OCIRepository: "rh-ee-nbs/nbs-dev",
+								OCITag:        "source-results",
+								Annotations:   map[string]string{"purpose": "evaluation-results"},
+							},
+							K8s: &api.OCIConnectionConfig{Connection: "oci-credentials"},
+						}},
+					},
+				},
+			},
+			wantStatus:  http.StatusAccepted,
+			wantCreated: true,
+			wantExports: &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{
+				Coordinates: api.OCICoordinates{
+					OCIHost:       "quay.io",
+					OCIRepository: "rh-ee-nbs/nbs-dev",
+					OCITag:        "source-results",
+					Annotations:   map[string]string{"purpose": "evaluation-results"},
+				},
+				K8s: &api.OCIConnectionConfig{Connection: "oci-credentials"},
+			}},
 		},
 		{
 			name: "completed eval job preserves explicit thread count",
@@ -190,6 +280,9 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 			}
 			if (test.storage.createdJob != nil) != test.wantCreated {
 				t.Fatalf("created job = %v, want created %t", test.storage.createdJob, test.wantCreated)
+			}
+			if test.wantCreated && !reflect.DeepEqual(test.storage.createdJob.Exports, test.wantExports) {
+				t.Errorf("created job exports = %#v, want %#v", test.storage.createdJob.Exports, test.wantExports)
 			}
 			if test.wantThreadCount > 0 {
 				mapped, ok := test.storage.createdJob.Benchmarks[0].Parameters["operations"].(api.StandalonePostProcessingOperations)
@@ -286,4 +379,22 @@ func marshalPostProcessingRequest(t *testing.T, evalJob *api.EvaluationJobDataRe
 
 func intPointer(value int) *int {
 	return &value
+}
+
+func standalonePostProcessingJob(id string, status *api.EvaluationJobStatus) *api.EvaluationJobResource {
+	request := &api.StandalonePostProcessingRequest{
+		Operations: api.StandalonePostProcessingOperations{ConfidenceInterval: &api.StandaloneConfidenceIntervalConfig{
+			ConfidenceIntervalConfigCommon: api.ConfidenceIntervalConfigCommon{
+				CalibrationDataRef: []api.CalibrationDataRef{{PVC: &api.PVCTestDataRef{ClaimName: "calibration"}}},
+				SignificanceLevel:  0.05,
+			},
+			ResultsDataRef: &api.PostProcessingResultsDataRef{PVC: &api.PVCTestDataRef{ClaimName: "results"}},
+			PrimaryScore:   &api.PrimaryScore{Metric: "accuracy"},
+		}},
+	}
+	return &api.EvaluationJobResource{
+		Resource:            api.EvaluationResource{Resource: api.Resource{ID: id}},
+		EvaluationJobConfig: *postprocessing.ToEvaluationJob(request),
+		Status:              status,
+	}
 }

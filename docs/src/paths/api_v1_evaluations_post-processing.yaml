@@ -33,6 +33,15 @@ post:
                     eval_job:
                       id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
                       num_parallel_threads: 2
+                    data_config:
+                      format: json
+                      columns:
+                        sample_id: id
+                        prediction: scores.telemath_scorer.value
+                      value_mappings:
+                        prediction:
+                          C: 1
+                          I: 0
                   calibration_data_ref:
                     - s3:
                         bucket: evaluation-data
