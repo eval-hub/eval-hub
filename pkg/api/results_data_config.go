@@ -24,6 +24,37 @@ type ResultsDataConfigEntry struct {
 	ValueMappings map[string]map[string]float64 `json:"value_mappings,omitempty" validate:"omitempty,dive,keys,oneof=prediction label,endkeys,required,min=1,dive"`
 }
 
+// UnmarshalJSON distinguishes null mapping targets from numeric zero before
+// converting them to the public numeric mapping type.
+func (entry *ResultsDataConfigEntry) UnmarshalJSON(data []byte) error {
+	type entryAlias ResultsDataConfigEntry
+	var decoded struct {
+		entryAlias
+		ValueMappings map[string]map[string]*float64 `json:"value_mappings"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	if decoded.ValueMappings != nil {
+		decoded.entryAlias.ValueMappings = make(map[string]map[string]float64, len(decoded.ValueMappings))
+		for role, targets := range decoded.ValueMappings {
+			var values map[string]float64
+			if targets != nil {
+				values = make(map[string]float64, len(targets))
+			}
+			for category, target := range targets {
+				if target == nil {
+					return fmt.Errorf("results_data_ref.data_config.value_mappings[%q][%q] must be a number", role, category)
+				}
+				values[category] = *target
+			}
+			decoded.entryAlias.ValueMappings[role] = values
+		}
+	}
+	*entry = ResultsDataConfigEntry(decoded.entryAlias)
+	return nil
+}
+
 func (config *ResultsDataConfig) UnmarshalJSON(data []byte) error {
 	data = bytes.TrimSpace(data)
 	if len(data) == 0 {

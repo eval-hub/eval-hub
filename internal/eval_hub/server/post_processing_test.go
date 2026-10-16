@@ -559,10 +559,11 @@ func TestPostProcessingMethodsAndIdentity(t *testing.T) {
 
 func TestPostProcessingResultDataConfigRoundTrip(t *testing.T) {
 	configs := map[string]string{
-		"object":                `{"format":"json","columns":{"sample_id":"id","prediction":"scores.judge.value"},"value_mappings":{"prediction":{"C":1,"I":0}}}`,
-		"selected array":        `[{"selection":{"provider_id":"provider-a"},"columns":{"prediction":"score"}},{"selection":{"provider_id":"provider-b"},"columns":{"prediction":"metrics.value"}}]`,
-		"single selected entry": `[{"selection":{"provider_id":"provider-a"},"columns":{"sample_id":"id"}}]`,
-		"automatic":             `{}`,
+		"object":                    `{"format":"json","columns":{"sample_id":"id","prediction":"scores.judge.value"},"value_mappings":{"prediction":{"C":1,"I":0}}}`,
+		"selected array":            `[{"selection":{"provider_id":"provider-a"},"columns":{"prediction":"score"}},{"selection":{"provider_id":"provider-b"},"columns":{"prediction":"metrics.value"}}]`,
+		"single selected entry":     `[{"selection":{"provider_id":"provider-a"},"columns":{"sample_id":"id"}}]`,
+		"selected numeric mappings": `[{"selection":{"provider_id":"provider-a"},"value_mappings":{"prediction":{"correct":1,"incorrect":0},"label":{"correct":1,"incorrect":0}}}]`,
+		"automatic":                 `{}`,
 	}
 	for name, config := range configs {
 		t.Run(name, func(t *testing.T) {
@@ -615,20 +616,24 @@ func TestPostProcessingResultDataConfigRoundTrip(t *testing.T) {
 
 func TestPostProcessingRejectsInvalidResultDataConfig(t *testing.T) {
 	configs := map[string]string{
-		"scalar":                  `"json"`,
-		"empty array":             `[]`,
-		"array without selection": `[{"format":"json"}]`,
-		"invalid format":          `{"format":"xml"}`,
-		"unknown column role":     `{"columns":{"unknown":"x"}}`,
-		"blank column":            `{"columns":{"prediction":" "}}`,
-		"unknown selection":       `{"selection":{"unknown":"x"}}`,
-		"empty selection":         `{"selection":{}}`,
-		"unknown mapped role":     `{"value_mappings":{"sample_id":{"x":1}}}`,
-		"empty value map":         `{"value_mappings":{"prediction":{}}}`,
-		"boolean target":          `{"value_mappings":{"prediction":{"yes":true}}}`,
-		"string target":           `{"value_mappings":{"prediction":{"yes":"1"}}}`,
-		"nonfinite target":        `{"value_mappings":{"prediction":{"yes":1e999}}}`,
-		"invalid selected entry":  `[{"selection":{"provider_id":"p"},"columns":{"prediction":""}}]`,
+		"scalar":                          `"json"`,
+		"empty array":                     `[]`,
+		"array without selection":         `[{"format":"json"}]`,
+		"invalid format":                  `{"format":"xml"}`,
+		"unknown column role":             `{"columns":{"unknown":"x"}}`,
+		"blank column":                    `{"columns":{"prediction":" "}}`,
+		"unknown selection":               `{"selection":{"unknown":"x"}}`,
+		"empty selection":                 `{"selection":{}}`,
+		"unknown mapped role":             `{"value_mappings":{"sample_id":{"x":1}}}`,
+		"empty value map":                 `{"value_mappings":{"prediction":{}}}`,
+		"boolean target":                  `{"value_mappings":{"prediction":{"yes":true}}}`,
+		"string target":                   `{"value_mappings":{"prediction":{"yes":"1"}}}`,
+		"nonfinite target":                `{"value_mappings":{"prediction":{"yes":1e999}}}`,
+		"null prediction target":          `{"value_mappings":{"prediction":{"correct":null,"incorrect":0}}}`,
+		"null label target":               `{"value_mappings":{"label":{"correct":null}}}`,
+		"selected null prediction target": `[{"selection":{"provider_id":"provider-a"},"value_mappings":{"prediction":{"correct":null,"incorrect":0}}}]`,
+		"selected null label target":      `[{"selection":{"provider_id":"provider-a"},"value_mappings":{"label":{"correct":null}}}]`,
+		"invalid selected entry":          `[{"selection":{"provider_id":"p"},"columns":{"prediction":""}}]`,
 	}
 	for name, config := range configs {
 		t.Run(name, func(t *testing.T) {
