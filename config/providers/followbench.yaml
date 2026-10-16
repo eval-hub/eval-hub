@@ -34,7 +34,9 @@ benchmarks:
     name: FollowBench
     description: >
       Multi-level instruction-following evaluation with HSR and SSR normalized
-      to 0.0–1.0 and CSL reported on a 0–5 scale.
+      to 0.0–1.0 and CSL reported on a 0–5 scale. When using the bundled
+      collection, set judge_model per job. Optional judge credentials and endpoint
+      are selected by judge_api-key and judge_url in model.auth.secret_ref.
     category: instruction_following
     domains:
       - instruction_and_output_reliability
@@ -66,11 +68,13 @@ benchmarks:
 parameters:
   - name: judge_model
     type: string
-    description: External judge model identifier.
+    description: Judge model identifier. Required for the bundled collection.
 
   - name: judge_url
     type: string
-    description: OpenAI-compatible external judge endpoint.
+    description: >
+      Legacy endpoint override for standalone jobs. For bundled collection jobs,
+      use judge_url in model.auth.secret_ref together with judge_api-key instead.
 
   - name: num_examples
     type: integer

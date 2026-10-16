@@ -71,12 +71,12 @@ benchmarks:
       lower_is_better: false
     pass_criteria:
       threshold: 0.20
-    # Select an independent judge_model and judge_url before finalizing the protocol.
     # The sample budget counts complete example groups and remains unspecified.
     parameters:
       max_tokens: 2048
       temperature: 0.0
       request_timeout: 120
+      judge_model: ""
 
 documentation:
   purpose: >-
@@ -170,8 +170,8 @@ documentation:
       FollowBench explicitly adopts provider defaults max_tokens=2048, temperature=0.0, and request_timeout=120
       seconds for model and judge requests.
     - >-
-      FollowBench judge_model and judge_url remain unspecified. Its num_examples counts complete example
-      groups, so the IFBench prompt count is not reused as its budget.
+      FollowBench judge_model is selected per job; the collection does not pin a judge.
+      Its num_examples counts complete example groups, so the IFBench prompt count is not reused as its budget.
     verification_status: >-
       Configured values document intent, not measured execution. No model evaluations were run as
       part of this configuration change. Unspecified settings remain deployment or provider/task defaults,
@@ -182,7 +182,8 @@ documentation:
     values; Easy-only coverage does not establish handling of harder schemas.
   - >-
     The review reports that an unspecified FollowBench judge falls back to the evaluated model in
-    the inspected adapter. These defaults do not establish an independent measuring instrument.
+    the inspected adapter. The job must select a judge model; without judge-specific Secret
+    fields, this does not establish an independent measuring instrument.
   - >-
     The schema prompt protocol differs from the provider few-shot metadata, so scores must not be
     compared as if the protocols were identical.
@@ -192,8 +193,9 @@ documentation:
     persisted or exposed as a documentation field by the service API.
   unresolved_inputs:
   - >-
-    Supply a fixed independent FollowBench judge_model and judge_url, then verify the actual judge
-    used in execution logs.
+    Select FollowBench judge_model per job, then verify the actual judge and connection
+    used in execution logs. For an independent connection, supply judge_api-key and
+    optionally judge_url in model.auth.secret_ref; judge_url alone is invalid.
   - >-
     Choose a FollowBench complete-example-group budget and verify evaluated group and constraint counts.
   - >-
