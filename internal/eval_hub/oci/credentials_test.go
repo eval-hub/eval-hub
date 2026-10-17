@@ -2,8 +2,10 @@ package oci
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -19,13 +21,15 @@ func (f secretGetterFunc) GetDockerConfigJSON(ctx context.Context, namespace, se
 
 // TestKubernetesCredentialResolverSelectsRegistryAndScopesLookup verifies tenant-scoped lookup and registry-specific credential selection.
 func TestKubernetesCredentialResolverSelectsRegistryAndScopesLookup(t *testing.T) {
+	want := ociclient.Credentials{Username: rand.Text(), Password: rand.Text()}
+	other := ociclient.Credentials{Username: rand.Text(), Password: rand.Text()}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	resolver := NewKubernetesCredentialResolver(secretGetterFunc(func(gotCtx context.Context, namespace, secretName string) ([]byte, error) {
 		if gotCtx != ctx || namespace != "tenant-a" || secretName != "registry-secret" {
 			t.Fatalf("unexpected secret lookup: context=%v namespace=%q secret=%q", gotCtx, namespace, secretName)
 		}
-		return []byte(`{"auths":{"quay.io":{"username":"quay-user","password":"quay-pass"},"registry.example":{"username":"other-user","password":"other-pass"}}}`), nil
+		return fmt.Appendf(nil, `{"auths":{"quay.io":{"username":%q,"password":%q},"registry.example":{"username":%q,"password":%q}}}`, want.Username, want.Password, other.Username, other.Password), nil
 	}))
 	creds, err := resolver.Resolve(ctx, OCICredentialRequest{
 		RegistryHost: "https://quay.io",
@@ -35,7 +39,7 @@ func TestKubernetesCredentialResolverSelectsRegistryAndScopesLookup(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if creds != (ociclient.Credentials{Username: "quay-user", Password: "quay-pass"}) {
+	if creds != want {
 		t.Fatal("credentials did not match the requested registry")
 	}
 }
