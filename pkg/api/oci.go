@@ -81,8 +81,8 @@ type EvaluationOCIResults struct {
 // It initializes missing results and preserves all other
 // fields. A nil status or card means no change to the existing value; if both are
 // nil, results are returned unchanged.
-func UpdateOCIResults(results *EvaluationJobResults, status *OCIProcessingStatus, card *OCIArtifactReference) *EvaluationJobResults {
-	if status == nil && card == nil {
+func UpdateOCIResults(results *EvaluationJobResults, status *OCIProcessingStatus, card, bundle *OCIArtifactReference) *EvaluationJobResults {
+	if status == nil && card == nil && bundle == nil {
 		return results
 	}
 	if results == nil {
@@ -96,6 +96,9 @@ func UpdateOCIResults(results *EvaluationJobResults, status *OCIProcessingStatus
 	}
 	if card != nil {
 		results.OCI.EvaluationCard = card
+	}
+	if bundle != nil {
+		results.OCI.EvaluationBundle = bundle
 	}
 	return results
 }

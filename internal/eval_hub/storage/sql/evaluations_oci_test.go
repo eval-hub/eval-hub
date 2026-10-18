@@ -38,14 +38,14 @@ func TestUpdateEvaluationJobOCIPreservesResultsAndTenant(t *testing.T) {
 		return &api.OCIProcessingStatus{State: state, Message: &api.MessageInfo{Message: "Card processing", MessageCode: "oci_card_test", MessageOrigin: api.MessageOriginServer}}
 	}
 	artifact := &api.OCIArtifactReference{OCIDigest: "sha256:" + strings.Repeat("a", 64), OCIReference: "quay.io/team/results:evaluation-card-test@sha256:" + strings.Repeat("a", 64)}
-	err = store.WithTenant("other-tenant").UpdateEvaluationJobOCI(job.Resource.ID, status(api.OCIProcessingRunning), nil)
+	err = store.WithTenant("other-tenant").UpdateEvaluationJobOCI(job.Resource.ID, status(api.OCIProcessingRunning), nil, nil)
 	_ = assertOCIServiceError(t, err, messages.ResourceNotFound, http.StatusNotFound)
 	for _, state := range []api.OCIProcessingState{api.OCIProcessingRunning, api.OCIProcessingCompleted} {
 		var card *api.OCIArtifactReference
 		if state == api.OCIProcessingCompleted {
 			card = artifact
 		}
-		if err = scoped.UpdateEvaluationJobOCI(job.Resource.ID, status(state), card); err != nil {
+		if err = scoped.UpdateEvaluationJobOCI(job.Resource.ID, status(state), card, nil); err != nil {
 			t.Fatal(err)
 		}
 		beforeReplay, err := scoped.GetEvaluationJob(job.Resource.ID)
@@ -53,7 +53,7 @@ func TestUpdateEvaluationJobOCIPreservesResultsAndTenant(t *testing.T) {
 			t.Fatal(err)
 		}
 		// Replaying an identical status and artifact must succeed without changing results.
-		if err = scoped.UpdateEvaluationJobOCI(job.Resource.ID, status(state), card); err != nil {
+		if err = scoped.UpdateEvaluationJobOCI(job.Resource.ID, status(state), card, nil); err != nil {
 			t.Fatalf("repeat %s update: %v", state, err)
 		}
 		got, err := scoped.GetEvaluationJob(job.Resource.ID)
@@ -79,7 +79,7 @@ func TestUpdateEvaluationJobOCIPreservesResultsAndTenant(t *testing.T) {
 			t.Fatal("unrelated status or results changed")
 		}
 	}
-	err = scoped.UpdateEvaluationJobOCI(job.Resource.ID, nil, nil)
+	err = scoped.UpdateEvaluationJobOCI(job.Resource.ID, nil, nil, nil)
 	_ = assertOCIServiceError(t, err, messages.InternalServerError, http.StatusInternalServerError)
 }
 
@@ -100,14 +100,14 @@ func TestUpdateEvaluationJobOCITerminalOutcomes(t *testing.T) {
 				t.Fatal(err)
 			}
 			scoped := store.WithTenant(job.Resource.Tenant)
-			if err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, status(api.OCIProcessingRunning), nil); err != nil {
+			if err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, status(api.OCIProcessingRunning), nil, nil); err != nil {
 				t.Fatal(err)
 			}
 			var card *api.OCIArtifactReference
 			if terminal == api.OCIProcessingCompleted {
 				card = &api.OCIArtifactReference{OCIDigest: "sha256:" + strings.Repeat("a", 64), OCIReference: "quay.io/team/results@sha256:" + strings.Repeat("a", 64)}
 			}
-			if err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, status(terminal), card); err != nil {
+			if err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, status(terminal), card, nil); err != nil {
 				t.Fatal(err)
 			}
 			before, err := scoped.GetEvaluationJob(job.Resource.ID)
@@ -115,7 +115,7 @@ func TestUpdateEvaluationJobOCITerminalOutcomes(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, next := range []api.OCIProcessingState{api.OCIProcessingRunning, api.OCIProcessingCompleted, api.OCIProcessingFailed} {
-				err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, status(next), nil)
+				err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, status(next), nil, nil)
 				if next == terminal {
 					if err != nil {
 						t.Fatalf("replay %s: %v", terminal, err)
@@ -150,7 +150,7 @@ func TestUpdateEvaluationJobOCIAcceptsCompletedAndPartiallyFailed(t *testing.T) 
 			}
 			scoped := store.WithTenant(job.Resource.Tenant)
 			status := &api.OCIProcessingStatus{State: api.OCIProcessingRunning, Message: &api.MessageInfo{Message: "Running", MessageCode: "OCI_RUNNING"}}
-			if err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, status, nil); err != nil {
+			if err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, status, nil, nil); err != nil {
 				t.Fatal(err)
 			}
 			got, err := scoped.GetEvaluationJob(job.Resource.ID)
@@ -186,7 +186,7 @@ func TestUpdateEvaluationJobOCINormalizesMessageOrigin(t *testing.T) {
 			MessageOrigin: api.MessageOriginRuntime,
 		},
 	}
-	if err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, status, nil); err != nil {
+	if err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, status, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if status.Message.MessageOrigin != api.MessageOriginRuntime {
@@ -210,7 +210,7 @@ func TestUpdateEvaluationJobOCINormalizesMessageOrigin(t *testing.T) {
 			MessageCode: "OCI_RUNNING",
 		},
 	}
-	if err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, duplicate, nil); err != nil {
+	if err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, duplicate, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if duplicate.Message.MessageOrigin != "" {
@@ -267,7 +267,7 @@ func TestUpdateEvaluationJobOCIRejectsIneligibleJob(t *testing.T) {
 				t.Fatal(err)
 			}
 			status := &api.OCIProcessingStatus{State: api.OCIProcessingRunning, Message: &api.MessageInfo{Message: "Running", MessageCode: "OCI_RUNNING"}}
-			err = scoped.UpdateEvaluationJobOCI(job.Resource.ID, status, nil)
+			err = scoped.UpdateEvaluationJobOCI(job.Resource.ID, status, nil, nil)
 			_ = assertOCIServiceError(t, err, messages.JobCanNotBeUpdated, http.StatusConflict)
 			if status.Message.MessageOrigin != "" {
 				t.Fatalf("rejected update changed caller origin to %q", status.Message.MessageOrigin)
@@ -293,4 +293,137 @@ func assertOCIServiceError(t *testing.T, err error, code *messages.MessageCode, 
 		t.Fatalf("expected %s (HTTP %d), got %s (HTTP %d): %v", code.GetCode(), httpStatus, serviceErr.MessageCode().GetCode(), serviceErr.MessageCode().GetStatusCode(), err)
 	}
 	return serviceErr
+}
+
+func ociStatus(state api.OCIProcessingState) *api.OCIProcessingStatus {
+	return &api.OCIProcessingStatus{State: state, Message: &api.MessageInfo{Message: "OCI processing", MessageCode: "oci_test", MessageOrigin: api.MessageOriginServer}}
+}
+
+func ociArtifact(name, hex string) *api.OCIArtifactReference {
+	digest := "sha256:" + strings.Repeat(hex, 64)
+	return &api.OCIArtifactReference{OCIDigest: digest, OCIReference: "quay.io/team/" + name + "@" + digest}
+}
+
+func ociTestJob() *api.EvaluationJobResource {
+	job := makeGitJob(common.GUID(), "main")
+	job.Status.State = api.OverallStateCompleted
+	job.Status.Message = &api.MessageInfo{Message: "Evaluation complete", MessageCode: "JOB_COMPLETED"}
+	job.Status.Benchmarks = []api.BenchmarkStatus{{ID: "bench-1", ProviderID: "prov", Status: api.StateCompleted, Phase: api.JobPhaseCompleted}}
+	job.Exports = &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{Coordinates: api.OCICoordinates{OCIHost: "quay.io", OCIRepository: "team/results"}}}
+	job.Results = &api.EvaluationJobResults{
+		Benchmarks: []api.BenchmarkResult{{ID: "bench-1", ProviderID: "prov", Metrics: map[string]any{"accuracy": 0.7}, Artifacts: map[string]any{"samples": "samples.json"}, MLFlowRunID: "run-1"}},
+		Test:       &api.EvaluationTest{Score: 0.7, Pass: true}, MLFlowExperimentURL: "https://mlflow.example/experiments/1",
+		OCI: &api.EvaluationOCIResults{Signing: &api.OCISigningResult{Type: "key-pair"}},
+	}
+	return job
+}
+
+func createOCITestJob(t *testing.T, job *api.EvaluationJobResource) (abstractions.Storage, string) {
+	t.Helper()
+	databaseName := getDBName()
+	store, err := getTestStorage(t, "sqlite", databaseName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CreateEvaluationJob(job); err != nil {
+		t.Fatal(err)
+	}
+	return store.WithTenant(job.Resource.Tenant), databaseName
+}
+
+func readOCITestJob(t *testing.T, store abstractions.Storage, id string) *api.EvaluationJobResource {
+	t.Helper()
+	job, err := store.GetEvaluationJob(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return job
+}
+
+func TestUpdateEvaluationJobOCIIndependentOutputs(t *testing.T) {
+	for _, output := range []string{"none", "card", "bundle"} {
+		t.Run(output, func(t *testing.T) {
+			job := ociTestJob()
+			job.Results = nil
+			scoped, _ := createOCITestJob(t, job)
+			card, bundle := ociArtifact("card", "a"), ociArtifact("bundle", "b")
+			var suppliedCard, suppliedBundle *api.OCIArtifactReference
+			if output == "card" {
+				suppliedCard = card
+			}
+			if output == "bundle" {
+				suppliedBundle = bundle
+			}
+			status := ociStatus(api.OCIProcessingFailed)
+			if err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, status, suppliedCard, suppliedBundle); err != nil {
+				t.Fatal(err)
+			}
+			got := readOCITestJob(t, scoped, job.Resource.ID)
+			want := &api.EvaluationOCIResults{Status: status, EvaluationCard: suppliedCard, EvaluationBundle: suppliedBundle}
+			if !reflect.DeepEqual(got.Results.OCI, want) {
+				t.Fatalf("OCI = %#v, want %#v", got.Results.OCI, want)
+			}
+			data, err := json.Marshal(got.Results.OCI)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for field, absent := range map[string]bool{"evaluation_card": suppliedCard == nil, "evaluation_bundle": suppliedBundle == nil, "signing": true} {
+				if strings.Contains(string(data), `"`+field+`"`) == absent {
+					t.Fatalf("unexpected optional field %s in %s", field, data)
+				}
+			}
+			// Adding a bundle with identical status/card must still write.
+			if err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, status, suppliedCard, bundle); err != nil {
+				t.Fatal(err)
+			}
+			got = readOCITestJob(t, scoped, job.Resource.ID)
+			if !reflect.DeepEqual(got.Results.OCI.EvaluationBundle, bundle) {
+				t.Fatal("bundle-only change was lost")
+			}
+		})
+	}
+}
+
+func TestUpdateEvaluationJobOCINoopAndDatabaseFailure(t *testing.T) {
+	job := ociTestJob()
+	status := ociStatus(api.OCIProcessingCompleted)
+	card, bundle := ociArtifact("card", "a"), ociArtifact("bundle", "b")
+	job.Results.OCI.Status, job.Results.OCI.EvaluationCard, job.Results.OCI.EvaluationBundle = status, card, bundle
+	scoped, databaseName := createOCITestJob(t, job)
+	before := readOCITestJob(t, scoped, job.Resource.ID)
+	triggerDB, err := sql.Open("sqlite", getDBInMemoryURL(databaseName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = triggerDB.Close() })
+	// This database contains only this job; rejecting every UPDATE observes no-ops
+	// and exercises a real database write failure without production injection hooks.
+	_, err = triggerDB.Exec(`CREATE TRIGGER reject_oci_update BEFORE UPDATE ON evaluations
+ BEGIN SELECT RAISE(FAIL, 'reject OCI update'); END;`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, outputs := range []struct{ card, bundle *api.OCIArtifactReference }{{card, bundle}, {nil, nil}, {card, nil}, {nil, bundle}} {
+		if err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, status, outputs.card, outputs.bundle); err != nil {
+			t.Fatalf("no-op attempted UPDATE: %v", err)
+		}
+	}
+	for _, change := range []struct {
+		name         string
+		status       *api.OCIProcessingStatus
+		card, bundle *api.OCIArtifactReference
+	}{
+		{"bundle only", status, card, ociArtifact("new-bundle", "c")},
+		{"all outputs", ociStatus(api.OCIProcessingCompleted), ociArtifact("new-card", "d"), ociArtifact("new-bundle", "e")},
+	} {
+		t.Run(change.name, func(t *testing.T) {
+			err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, change.status, change.card, change.bundle)
+			if err == nil || !strings.Contains(err.Error(), "reject OCI update") {
+				t.Fatalf("expected database write failure, got %v", err)
+			}
+			if !reflect.DeepEqual(before, readOCITestJob(t, scoped, job.Resource.ID)) {
+				t.Fatal("failed database write changed persisted job")
+			}
+		})
+	}
 }
