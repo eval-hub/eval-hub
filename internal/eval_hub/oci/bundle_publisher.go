@@ -1,6 +1,4 @@
-// Package ocibundles publishes evaluation indexes from recorded results. It is
-// independent of runtime mode, credential resolution, and workflow persistence.
-package ocibundles
+package oci
 
 import (
 	"context"
@@ -22,15 +20,17 @@ type RegistryClient interface {
 	PushIndex(context.Context, string, ociclient.Index) (*api.OCIArtifactReference, error)
 }
 
-// Publisher builds bundles using an injected, per-job registry client. The caller
+// BundlePublisher builds bundles using an injected, per-job registry client. The caller
 // must configure it with the job's OCI registry/repository and credentials.
-type Publisher struct{ client RegistryClient }
+type BundlePublisher struct{ client RegistryClient }
 
-// NewPublisher creates a publisher without resolving credentials or doing I/O.
-func NewPublisher(client RegistryClient) *Publisher { return &Publisher{client: client} }
+// NewBundlePublisher creates a publisher without resolving credentials or doing I/O.
+func NewBundlePublisher(client RegistryClient) *BundlePublisher {
+	return &BundlePublisher{client: client}
+}
 
-// Eligible reports whether the stored outcome and export settings allow bundling.
-func Eligible(job *api.EvaluationJobResource) bool {
+// EligibleForBundle reports whether the stored outcome and export settings allow bundling.
+func EligibleForBundle(job *api.EvaluationJobResource) bool {
 	return job != nil && job.Exports != nil && job.Exports.OCI != nil && job.Status != nil &&
 		(job.Status.State == api.OverallStateCompleted || job.Status.State == api.OverallStatePartiallyFailed)
 }
@@ -39,8 +39,8 @@ func Eligible(job *api.EvaluationJobResource) bool {
 // recorded completed result and the card must verify before any index PUT.
 // Membership comes solely from recorded results and statuses; no definitions or
 // collections are resolved. Neither the job nor its results are modified.
-func (p *Publisher) Publish(ctx context.Context, job *api.EvaluationJobResource, card *api.OCIArtifactReference) (*api.OCIArtifactReference, error) {
-	if !Eligible(job) {
+func (p *BundlePublisher) Publish(ctx context.Context, job *api.EvaluationJobResource, card *api.OCIArtifactReference) (*api.OCIArtifactReference, error) {
+	if !EligibleForBundle(job) {
 		return nil, nil
 	}
 	if p == nil || p.client == nil {

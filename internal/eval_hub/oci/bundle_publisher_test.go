@@ -1,4 +1,4 @@
-package ocibundles
+package oci
 
 import (
 	"bytes"
@@ -73,7 +73,7 @@ func (r *registryMock) PushIndex(_ context.Context, tag string, index ociclient.
 	return &api.OCIArtifactReference{OCIDigest: digest, OCIReference: "localhost:5000/repo:" + tag + "@" + digest}, nil
 }
 
-func TestPublisherDeterministicSelectionAndAnnotations(t *testing.T) {
+func TestBundlePublisherDeterministicSelectionAndAnnotations(t *testing.T) {
 	for _, state := range []api.OverallState{api.OverallStateCompleted, api.OverallStatePartiallyFailed} {
 		for _, collection := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/collection=%t", state, collection), func(t *testing.T) {
@@ -93,7 +93,7 @@ func TestPublisherDeterministicSelectionAndAnnotations(t *testing.T) {
 					t.Fatal(err)
 				}
 				registry := &registryMock{}
-				first, err := NewPublisher(registry).Publish(context.Background(), job, &cardRef)
+				first, err := NewBundlePublisher(registry).Publish(context.Background(), job, &cardRef)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -129,7 +129,7 @@ func TestPublisherDeterministicSelectionAndAnnotations(t *testing.T) {
 				firstBytes, _ := json.Marshal(index)
 				slices.Reverse(job.Results.Benchmarks)
 				slices.Reverse(job.Status.Benchmarks)
-				second, err := NewPublisher(registry).Publish(context.Background(), job, &cardRef)
+				second, err := NewBundlePublisher(registry).Publish(context.Background(), job, &cardRef)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -142,24 +142,24 @@ func TestPublisherDeterministicSelectionAndAnnotations(t *testing.T) {
 	}
 }
 
-func TestPublisherIneligibleJobs(t *testing.T) {
+func TestBundlePublisherIneligibleJobs(t *testing.T) {
 	for _, state := range []api.OverallState{api.OverallStatePending, api.OverallStateRunning, api.OverallStateFailed, api.OverallStateCancelled} {
 		job := completedJob()
 		job.Status.State = state
 		registry := &registryMock{}
-		ref, err := NewPublisher(registry).Publish(context.Background(), job, nil)
+		ref, err := NewBundlePublisher(registry).Publish(context.Background(), job, nil)
 		if err != nil || ref != nil || len(registry.gets) != 0 || registry.puts != 0 {
 			t.Fatalf("ineligible %s published: %v %v", state, ref, err)
 		}
 	}
 	for _, job := range []*api.EvaluationJobResource{nil, {}, {Status: &api.EvaluationJobStatus{EvaluationJobState: api.EvaluationJobState{State: api.OverallStateCompleted}}}} {
-		if ref, err := NewPublisher(nil).Publish(context.Background(), job, nil); ref != nil || err != nil {
+		if ref, err := NewBundlePublisher(nil).Publish(context.Background(), job, nil); ref != nil || err != nil {
 			t.Fatalf("unconfigured job not skipped: %v %v", ref, err)
 		}
 	}
 }
 
-func TestPublisherRejectsInvalidInputBeforeRegistryAccess(t *testing.T) {
+func TestBundlePublisherRejectsInvalidInputBeforeRegistryAccess(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		mutate func(*api.EvaluationJobResource)
@@ -192,7 +192,7 @@ func TestPublisherRejectsInvalidInputBeforeRegistryAccess(t *testing.T) {
 				tc.mutate(job)
 			}
 			registry := &registryMock{}
-			if _, err := NewPublisher(registry).Publish(context.Background(), job, tc.card); err == nil {
+			if _, err := NewBundlePublisher(registry).Publish(context.Background(), job, tc.card); err == nil {
 				t.Fatal("invalid input accepted")
 			}
 			if registry.puts != 0 || len(registry.gets) != 0 {
@@ -200,16 +200,16 @@ func TestPublisherRejectsInvalidInputBeforeRegistryAccess(t *testing.T) {
 			}
 		})
 	}
-	if _, err := NewPublisher(nil).Publish(context.Background(), completedJob(), &cardRef); err == nil {
+	if _, err := NewBundlePublisher(nil).Publish(context.Background(), completedJob(), &cardRef); err == nil {
 		t.Fatal("nil registry accepted")
 	}
 }
 
-func TestPublisherPreservesWrappedErrors(t *testing.T) {
+func TestBundlePublisherPreservesWrappedErrors(t *testing.T) {
 	for _, failed := range []string{cardRef.OCIDigest, benchmarkDigest, "put"} {
 		cause := &ociclient.RegistryHTTPError{Operation: "auth request", StatusCode: 403, Message: "token denied"}
 		registry := &registryMock{failDigest: failed, err: cause}
-		_, err := NewPublisher(registry).Publish(context.Background(), completedJob(), &cardRef)
+		_, err := NewBundlePublisher(registry).Publish(context.Background(), completedJob(), &cardRef)
 		var typed *ociclient.RegistryHTTPError
 		if !errors.Is(err, cause) || !errors.As(err, &typed) || typed.StatusCode != 403 {
 			t.Fatalf("lost typed error: %v", err)
@@ -226,12 +226,12 @@ func TestPublisherPreservesWrappedErrors(t *testing.T) {
 	}
 }
 
-func TestPublisherFinalTags(t *testing.T) {
+func TestBundlePublisherFinalTags(t *testing.T) {
 	for _, prefix := range []string{"", "custom", strings.Repeat("p", 200)} {
 		job := completedJob()
 		job.Exports.OCI.Coordinates.OCITag = prefix
 		registry := &registryMock{}
-		ref, err := NewPublisher(registry).Publish(context.Background(), job, &cardRef)
+		ref, err := NewBundlePublisher(registry).Publish(context.Background(), job, &cardRef)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -245,11 +245,11 @@ func TestPublisherFinalTags(t *testing.T) {
 	}
 }
 
-func TestPublisherUsesOnlyRecordedMembership(t *testing.T) {
+func TestBundlePublisherUsesOnlyRecordedMembership(t *testing.T) {
 	job := completedJob()
 	job.Results = nil
 	registry := &registryMock{}
-	if _, err := NewPublisher(registry).Publish(context.Background(), job, &cardRef); err != nil {
+	if _, err := NewBundlePublisher(registry).Publish(context.Background(), job, &cardRef); err != nil {
 		t.Fatal(err)
 	}
 	if len(registry.index.Manifests) != 1 || registry.index.Annotations["included_benchmark_count"] != "0" {
@@ -257,7 +257,7 @@ func TestPublisherUsesOnlyRecordedMembership(t *testing.T) {
 	}
 }
 
-func TestPublisherWithRegistryHTTPAndAuthenticatedTLS(t *testing.T) {
+func TestBundlePublisherWithRegistryHTTPAndAuthenticatedTLS(t *testing.T) {
 	for _, authenticated := range []bool{false, true} {
 		t.Run(fmt.Sprintf("authenticatedTLS=%t", authenticated), func(t *testing.T) {
 			config := `{"mediaType":"application/vnd.oci.empty.v1+json","size":2,"digest":"` + digestOf([]byte("{}")) + `"}`
@@ -328,7 +328,7 @@ func TestPublisherWithRegistryHTTPAndAuthenticatedTLS(t *testing.T) {
 				job.Results.Benchmarks[i].Artifacts["oci_digest"] = childDigest
 			}
 			card := api.OCIArtifactReference{OCIDigest: childDigest, OCIReference: "http://untrusted.invalid/other:tag"}
-			ref, err := NewPublisher(client).Publish(context.Background(), job, &card)
+			ref, err := NewBundlePublisher(client).Publish(context.Background(), job, &card)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -351,7 +351,7 @@ func TestPublisherWithRegistryHTTPAndAuthenticatedTLS(t *testing.T) {
 	}
 }
 
-func TestPublisherChildVerificationFailuresNeverPutIndex(t *testing.T) {
+func TestBundlePublisherChildVerificationFailuresNeverPutIndex(t *testing.T) {
 	for _, role := range []string{"card", "benchmark"} {
 		for _, failure := range []string{"missing", "forbidden", "token denied", "malformed", "digest mismatch", "oversize", "media type conflict", "digest header conflict"} {
 			t.Run(role+"/"+failure, func(t *testing.T) {
@@ -431,7 +431,7 @@ func TestPublisherChildVerificationFailuresNeverPutIndex(t *testing.T) {
 				for i := range job.Results.Benchmarks {
 					job.Results.Benchmarks[i].Artifacts["oci_digest"] = benchDigest
 				}
-				ref, err := NewPublisher(client).Publish(context.Background(), job, &api.OCIArtifactReference{OCIDigest: cardDigest})
+				ref, err := NewBundlePublisher(client).Publish(context.Background(), job, &api.OCIArtifactReference{OCIDigest: cardDigest})
 				if err == nil || ref != nil {
 					t.Fatalf("accepted invalid %s: %v %v", role, ref, err)
 				}
