@@ -10,8 +10,8 @@ import (
 )
 
 // UpdateEvaluationJobOCI uses the same tenant-scoped locked read as benchmark updates.
-// A status-only write preserves any previously recorded artifact reference.
-func (s *sqlStorage) UpdateEvaluationJobOCI(id string, status *api.OCIProcessingStatus, card *api.OCIArtifactReference) error {
+// It atomically merges status and supplied card/bundle references, preserving absent outputs.
+func (s *sqlStorage) UpdateEvaluationJobOCI(id string, status *api.OCIProcessingStatus, card, bundle *api.OCIArtifactReference) error {
 	if status == nil || status.Message == nil || status.Message.Message == "" || status.Message.MessageCode == "" {
 		return fmt.Errorf("complete OCI processing status and message are required")
 	}
@@ -20,13 +20,20 @@ func (s *sqlStorage) UpdateEvaluationJobOCI(id string, status *api.OCIProcessing
 	default:
 		return fmt.Errorf("invalid OCI processing state")
 	}
-	if card != nil {
+	if card != nil || bundle != nil {
 		validate, err := validation.NewValidator()
 		if err != nil {
 			return fmt.Errorf("create OCI artifact validator: %w", err)
 		}
-		if err := validate.Struct(card); err != nil {
-			return fmt.Errorf("invalid OCI artifact reference: %w", err)
+		if card != nil {
+			if err := validate.Struct(card); err != nil {
+				return fmt.Errorf("invalid OCI evaluation card reference: %w", err)
+			}
+		}
+		if bundle != nil {
+			if err := validate.Struct(bundle); err != nil {
+				return fmt.Errorf("invalid OCI evaluation bundle reference: %w", err)
+			}
 		}
 	}
 	return s.withTransaction("update evaluation job OCI results", id, func(txn *sql.Tx) error {
@@ -39,11 +46,13 @@ func (s *sqlStorage) UpdateEvaluationJobOCI(id string, status *api.OCIProcessing
 		}
 		if job.Results != nil && job.Results.OCI != nil {
 			results := job.Results.OCI
-			if reflect.DeepEqual(results.Status, status) && (card == nil || reflect.DeepEqual(results.EvaluationCard, card)) {
+			if reflect.DeepEqual(results.Status, status) &&
+				(card == nil || reflect.DeepEqual(results.EvaluationCard, card)) &&
+				(bundle == nil || reflect.DeepEqual(results.EvaluationBundle, bundle)) {
 				return nil
 			}
 		}
-		job.Results = api.UpdateOCIResults(job.Results, status, card)
+		job.Results = api.UpdateOCIResults(job.Results, status, card, bundle)
 		return s.updateEvaluationJobTxn(txn, id, job.Status.State, &EvaluationJobEntity{
 			Config: &job.EvaluationJobConfig, Status: job.Status, Results: job.Results,
 		})

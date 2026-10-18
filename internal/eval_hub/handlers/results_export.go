@@ -28,13 +28,13 @@ func (h *Handlers) exportEvaluationResults(ctx context.Context, storage abstract
 		if storage == nil {
 			err = errors.New("storage is not configured")
 		} else {
-			err = storage.UpdateEvaluationJobOCI(job.Resource.ID, status, card)
+			err = storage.UpdateEvaluationJobOCI(job.Resource.ID, status, card, nil)
 		}
 		if err != nil {
 			logger.Error("Failed to persist OCI evaluation-card processing", "job_id", job.Resource.ID, "operation", code, "error", err)
 			return false
 		}
-		job.Results = api.UpdateOCIResults(job.Results, status, card)
+		job.Results = api.UpdateOCIResults(job.Results, status, card, nil)
 		return true
 	}
 	// Log the cause even if storage is unavailable and saving the failure also fails.

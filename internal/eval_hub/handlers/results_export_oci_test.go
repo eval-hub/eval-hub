@@ -23,6 +23,7 @@ type ociReportingStorage struct {
 	job         *api.EvaluationJobResource
 	calls       []api.OCIProcessingState
 	cards       []*api.OCIArtifactReference
+	bundles     []*api.OCIArtifactReference
 	codes       []string
 	failAt      int
 	unavailable bool
@@ -31,12 +32,13 @@ type ociReportingStorage struct {
 func (s *ociReportingStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
 	return s.job, nil
 }
-func (s *ociReportingStorage) UpdateEvaluationJobOCI(id string, status *api.OCIProcessingStatus, card *api.OCIArtifactReference) error {
+func (s *ociReportingStorage) UpdateEvaluationJobOCI(id string, status *api.OCIProcessingStatus, card, bundle *api.OCIArtifactReference) error {
 	if id != s.job.Resource.ID {
 		return errors.New("wrong job")
 	}
 	s.calls = append(s.calls, status.State)
 	s.cards = append(s.cards, card)
+	s.bundles = append(s.bundles, bundle)
 	if s.unavailable || len(s.calls) == s.failAt {
 		return errors.New("database unavailable")
 	}
@@ -44,13 +46,7 @@ func (s *ociReportingStorage) UpdateEvaluationJobOCI(id string, status *api.OCIP
 		return errors.New("incomplete message")
 	}
 	s.codes = append(s.codes, status.Message.MessageCode)
-	if s.job.Results.OCI == nil {
-		s.job.Results.OCI = &api.EvaluationOCIResults{}
-	}
-	s.job.Results.OCI.Status = status
-	if card != nil {
-		s.job.Results.OCI.EvaluationCard = card
-	}
+	s.job.Results = api.UpdateOCIResults(s.job.Results, status, card, bundle)
 	return nil
 }
 
@@ -95,6 +91,9 @@ func TestOCIReportingSuccessAndUnchangedTerminalCallback(t *testing.T) {
 	}
 	if !reflect.DeepEqual(storage.cards, []*api.OCIArtifactReference{nil, publishedCard()}) {
 		t.Fatalf("expected card reference only in final completion update: %v", storage.cards)
+	}
+	if !reflect.DeepEqual(storage.bundles, []*api.OCIArtifactReference{nil, nil}) {
+		t.Fatalf("card workflow supplied bundle references: %v", storage.bundles)
 	}
 	if !reflect.DeepEqual(job.Results.OCI.EvaluationCard, publishedCard()) || job.Results.OCI.EvaluationBundle != nil || job.Results.OCI.Signing != nil {
 		t.Fatalf("OCI outputs = %#v", job.Results.OCI)
@@ -181,6 +180,11 @@ func TestOCIReportingFailures(t *testing.T) {
 			wantStates := []api.OCIProcessingState{api.OCIProcessingRunning, api.OCIProcessingFailed}
 			if tc.failAt == 2 {
 				wantStates = []api.OCIProcessingState{api.OCIProcessingRunning, api.OCIProcessingCompleted, api.OCIProcessingFailed}
+			}
+			for _, bundle := range storage.bundles {
+				if bundle != nil {
+					t.Fatal("card workflow supplied a bundle")
+				}
 			}
 			if !reflect.DeepEqual(storage.calls, wantStates) {
 				t.Fatalf("progress = %v, want %v", storage.calls, wantStates)
