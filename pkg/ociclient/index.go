@@ -196,5 +196,5 @@ func (c *Client) PushIndex(ctx context.Context, tag string, index Index) (*api.O
 		return nil, fmt.Errorf("push index: %w", err)
 	}
 	digest := blobDigest(body)
-	return &api.OCIArtifactReference{OCIDigest: digest, OCIReference: strings.TrimPrefix(strings.TrimPrefix(c.registry, "https://"), "http://") + "/" + c.repository + ":" + tag + "@" + digest}, nil
+	return c.artifactReference(tag, digest), nil
 }

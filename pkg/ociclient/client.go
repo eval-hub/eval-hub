@@ -91,13 +91,13 @@ func (c *Client) PushEvaluationCard(ctx context.Context, jobID string, cardJSON 
 	manifestBytes, err := json.Marshal(manifest{
 		SchemaVersion: 2,
 		MediaType:     MediaTypeImageManifest,
-		Config: descriptor{
+		Config: Descriptor{
 			MediaType:   MediaTypeArtifactConfig,
 			Size:        configSize,
 			Digest:      configDigest,
 			Annotations: configAnnotations(jobID),
 		},
-		Layers: []descriptor{{
+		Layers: []Descriptor{{
 			MediaType:   MediaTypeEvaluationCardLayer,
 			Size:        layerSize,
 			Digest:      layerDigest,
@@ -113,10 +113,15 @@ func (c *Client) PushEvaluationCard(ctx context.Context, jobID string, cardJSON 
 		return nil, fmt.Errorf("push manifest: %w", err)
 	}
 	digest := blobDigest(manifestBytes)
+	return c.artifactReference(tag, digest), nil
+}
+
+// artifactReference identifies a published manifest in the configured repository.
+func (c *Client) artifactReference(tag, digest string) *api.OCIArtifactReference {
 	return &api.OCIArtifactReference{
 		OCIDigest:    digest,
 		OCIReference: strings.TrimPrefix(strings.TrimPrefix(c.registry, "https://"), "http://") + "/" + c.repository + ":" + tag + "@" + digest,
-	}, nil
+	}
 }
 
 // UploadBlob streams content to the registry using chunked PATCH uploads. The digest is computed
