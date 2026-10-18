@@ -278,10 +278,6 @@ digest-qualified references to retrieve published outputs. `signing` remains
 omitted until a signing workflow supplies an actual outcome; configuring signing
 does not currently perform it.
 
-See the [API schema](docs/src/components/schemas/EvaluationOCIResults.yaml) for
-the response contract and the [bundle publisher](internal/eval_hub/ocibundles/publisher.go)
-for selection and annotation rules.
-
 ## Quick local OCI evaluation card check
 
 Developers can use `scripts/test-local-oci-export.sh` to simulate a quick OCI evaluation card

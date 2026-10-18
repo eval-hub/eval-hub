@@ -8,8 +8,6 @@ type Descriptor struct {
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
-type descriptor = Descriptor
-
 // Index is an OCI image index referencing independently published artifacts.
 type Index struct {
 	SchemaVersion int               `json:"schemaVersion"`
@@ -22,8 +20,8 @@ type Index struct {
 type manifest struct {
 	SchemaVersion int               `json:"schemaVersion"`
 	MediaType     string            `json:"mediaType"`
-	Config        descriptor        `json:"config"`
-	Layers        []descriptor      `json:"layers"`
-	Subject       *descriptor       `json:"subject,omitempty"`
+	Config        Descriptor        `json:"config"`
+	Layers        []Descriptor      `json:"layers"`
+	Subject       *Descriptor       `json:"subject,omitempty"`
 	Annotations   map[string]string `json:"annotations,omitempty"`
 }
