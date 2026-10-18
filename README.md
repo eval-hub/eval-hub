@@ -250,72 +250,11 @@ make cross-compile
 make build-wheel
 ```
 
-### Quick local OCI evaluation card check
+### Optional OCI exports
 
-Developers can use `scripts/test-local-oci-export.sh` to simulate a quick OCI evaluation card
-generation during development. It runs an evaluation with the local test adapter,
-downloads the exported card from a local OCI registry, and verifies it against
-the completed job, including the OCI export status and artifact reference.
-No model server is required.
-
-Check `results.oci.status.state` for the OCI export status: `running`, `completed`,
-or `failed`. After a successful export, `results.oci.evaluation_card` provides the
-manifest digest and digest-qualified reference for retrieving the card. An OCI
-export failure leaves the evaluation's completed status and benchmark results intact.
-
-OCI export currently supports evaluation cards. Evaluation bundles, signing,
-and automatic export retries are not currently supported.
-
-Install these dependencies before starting:
-
-- `curl`, `jq`, and `oras`, available on your `PATH`.
-- Go (the version specified in `go.mod`) and `uv` for the service setup.
-- A running container engine: Podman by default, or Docker with `DOCKER=docker`.
-
-From the repository root, start the registry and service:
-
-```sh
-make start-oci-registry
-make start-service
-```
-
-These targets start the registry at `localhost:5001` and build and start the
-service in local mode at `http://localhost:8080`, including the test adapter setup.
-For Docker, use `make start-oci-registry DOCKER=docker`.
-
-Run the check:
-
-```sh
-bash scripts/test-local-oci-export.sh
-OCI_TAG=custom OUTPUT_DIR=/tmp/local-oci-custom bash scripts/test-local-oci-export.sh
-```
-
-A successful run prints a verification message and saves these files in
-`./bin/local-oci/` by default:
-
-| File | Contents |
-| --- | --- |
-| `request.json` | Submitted evaluation job request |
-| `created.json` | Job creation response, including the job ID |
-| `job.json` | Latest job status response, with results on completion |
-| `manifest.json` | Exported OCI artifact manifest |
-| `artifact-config.json` | OCI artifact configuration |
-| `evaluation-card-<job-id>.json` | Downloaded evaluation card |
-
-Set `OUTPUT_DIR` to save verification files elsewhere:
-
-```sh
-OUTPUT_DIR=/tmp/local-oci-check bash scripts/test-local-oci-export.sh
-```
-
-When finished, stop the service and remove the registry container:
-
-```sh
-make stop-service
-make stop-oci-registry
-```
-
-If using Docker, use `make stop-oci-registry DOCKER=docker`.
+See [OCI exports](OCI.md) for evaluation cards, benchmark artifacts, evaluation
+bundles, annotation examples, job request and response snippets, and the local
+registry verification walkthrough.
 
 ### Exposing private functions for tests
 
