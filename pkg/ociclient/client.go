@@ -349,11 +349,16 @@ func (c *Client) completeBlobUpload(ctx context.Context, uploadURL, digest strin
 // putManifest publishes the artifact manifest under the given tag in the target repository.
 // It verifies the registry's SHA-256 digest, falling back to the local digest when the header is absent.
 func (c *Client) putManifest(ctx context.Context, tag string, manifestJSON []byte) (string, error) {
+	return c.putManifestWithMediaType(ctx, tag, manifestJSON, MediaTypeImageManifest)
+}
+
+// putManifestWithMediaType publishes the supplied bytes and verifies the registry digest.
+func (c *Client) putManifestWithMediaType(ctx context.Context, tag string, manifestJSON []byte, mediaType string) (string, error) {
 	req, err := c.newRequestWithBody(ctx, http.MethodPut, c.registryURL("/v2/"+c.repository+"/manifests/"+tag), manifestJSON)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Content-Type", MediaTypeImageManifest)
+	req.Header.Set("Content-Type", mediaType)
 	resp, err := c.do(req)
 	if err != nil {
 		return "", err
@@ -371,6 +376,7 @@ func (c *Client) putManifest(ctx context.Context, tag string, manifestJSON []byt
 		return "", fmt.Errorf("registry manifest digest %q does not match expected %q", digest, expected)
 	}
 	return digest, nil
+
 }
 
 // registryURL joins the configured registry origin with a Distribution API path.
