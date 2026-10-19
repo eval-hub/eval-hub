@@ -1,4 +1,4 @@
-package evalcards
+package oci
 
 import (
 	"crypto/rand"
@@ -17,19 +17,19 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 )
 
-func TestNewOCIHTTPClientDefaults(t *testing.T) {
+func TestNewHTTPClientDefaults(t *testing.T) {
 	t.Parallel()
 
-	client, err := NewOCIHTTPClient(nil, false, nil)
+	client, err := NewHTTPClient(nil, false, nil)
 	if err != nil {
-		t.Fatalf("NewOCIHTTPClient() err = %v", err)
+		t.Fatalf("NewHTTPClient() err = %v", err)
 	}
 	if client.Timeout != defaultOCIHTTPTimeout {
 		t.Fatalf("timeout = %v, want %v", client.Timeout, defaultOCIHTTPTimeout)
 	}
 }
 
-func TestNewOCIHTTPClientAppliesConfig(t *testing.T) {
+func TestNewHTTPClientAppliesConfig(t *testing.T) {
 	t.Parallel()
 
 	caPath := writeTestCACert(t)
@@ -41,9 +41,9 @@ func TestNewOCIHTTPClientAppliesConfig(t *testing.T) {
 			},
 		},
 	}
-	client, err := NewOCIHTTPClient(cfg, false, nil)
+	client, err := NewHTTPClient(cfg, false, nil)
 	if err != nil {
-		t.Fatalf("NewOCIHTTPClient() err = %v", err)
+		t.Fatalf("NewHTTPClient() err = %v", err)
 	}
 	if client.Timeout != 45*time.Second {
 		t.Fatalf("timeout = %v, want 45s", client.Timeout)
@@ -95,14 +95,14 @@ func TestBuildOCIHTTPClientTLSValidCA(t *testing.T) {
 	}
 }
 
-func TestNewOCIHTTPClientInvalidCA(t *testing.T) {
+func TestNewHTTPClientInvalidCA(t *testing.T) {
 	t.Parallel()
 
 	caPath := filepath.Join(t.TempDir(), "bad-ca.crt")
 	if err := os.WriteFile(caPath, []byte("not-a-cert"), 0o600); err != nil {
 		t.Fatalf("WriteFile() err = %v", err)
 	}
-	if _, err := NewOCIHTTPClient(&config.Config{
+	if _, err := NewHTTPClient(&config.Config{
 		Sidecar: &config.SidecarConfig{
 			OCI: &config.SidecarOCIConfig{CACertPath: caPath},
 		},
@@ -111,14 +111,14 @@ func TestNewOCIHTTPClientInvalidCA(t *testing.T) {
 	}
 }
 
-func TestNewOCIHTTPClientWithOTELEnabled(t *testing.T) {
+func TestNewHTTPClientWithOTELEnabled(t *testing.T) {
 	t.Parallel()
 
-	client, err := NewOCIHTTPClient(&config.Config{
+	client, err := NewHTTPClient(&config.Config{
 		OTEL: &config.OTELConfig{Enabled: true},
 	}, true, nil)
 	if err != nil {
-		t.Fatalf("NewOCIHTTPClient() err = %v", err)
+		t.Fatalf("NewHTTPClient() err = %v", err)
 	}
 	if client.Transport == nil {
 		t.Fatal("expected transport")

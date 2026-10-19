@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"log/slog"
 	"runtime/debug"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/evalcards"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/oci"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/otel"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -133,8 +134,7 @@ func (h *Handlers) exportEvaluationResults(ctx context.Context, storage abstract
 		return
 	}
 	if result.OCIError != nil {
-		// The OCI publisher returns no artifact when publication fails.
-		var exportErr *evalcards.OCIExportError
+		var exportErr *oci.OperationError
 		if errors.As(result.OCIError, &exportErr) {
 			failOCI(constants.MessageCodeOCIProcessingFailed, exportErr.Error(), nil, nil)
 		} else {
@@ -165,21 +165,21 @@ func (h *Handlers) exportEvaluationResults(ctx context.Context, storage abstract
 // publishEvaluationBundle publishes and validates the bundle without updating job progress.
 func (h *Handlers) publishEvaluationBundle(ctx context.Context, job *api.EvaluationJobResource, card *api.OCIArtifactReference) (*api.OCIArtifactReference, error) {
 	if h.bundlePublisherFactory == nil {
-		return nil, errors.New("Initialize evaluation bundle publisher: factory is unavailable")
+		return nil, &oci.OperationError{Operation: "Initialize evaluation bundle publisher", Reason: "factory is unavailable"}
 	}
 	publisher, err := h.bundlePublisherFactory.NewPublisher(ctx, job)
 	if err != nil {
-		return nil, fmt.Errorf("Initialize evaluation bundle publisher: %w", err)
+		return nil, &oci.OperationError{Operation: "Initialize evaluation bundle publisher", Err: err}
 	}
 	if publisher == nil {
-		return nil, errors.New("Initialize evaluation bundle publisher: publisher is unavailable")
+		return nil, &oci.OperationError{Operation: "Initialize evaluation bundle publisher", Reason: "publisher is unavailable"}
 	}
 	bundle, err := publisher.Publish(ctx, job, card)
 	if err != nil {
-		return nil, fmt.Errorf("Evaluation bundle OCI publication failed: %w", err)
+		return nil, &oci.OperationError{Operation: "Evaluation bundle OCI publication failed", Err: err}
 	}
-	if bundle == nil || bundle.OCIDigest == "" || bundle.OCIReference == "" {
-		return nil, errors.New("Publish evaluation bundle: no published manifest reference is available")
+	if !oci.HasPublishedReference(bundle) {
+		return nil, &oci.OperationError{Operation: "Publish evaluation bundle", Reason: "no published manifest reference is available"}
 	}
 	if err := h.validate.Struct(bundle); err != nil {
 		return nil, fmt.Errorf("Invalid evaluation bundle: %w", err)
