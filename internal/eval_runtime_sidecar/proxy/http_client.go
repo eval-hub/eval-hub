@@ -154,6 +154,12 @@ func NewMLFlowHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logge
 // CACertPath is always set to the potential ca_cert file in the real secret mount; if the
 // file does not exist (secret has no ca_cert key) the client falls back to system roots
 // rather than failing startup.
+//
+// TLS config is built when the primary model URL uses HTTPS or when a CA cert is present.
+// The CA-cert condition is essential because the model proxy is a multi-destination proxy:
+// *_url ref tokens (e.g. kfp_url) may route requests to HTTPS endpoints even when the
+// primary model endpoint is plain HTTP. Without loading the CA cert, those HTTPS
+// connections fail with "x509: certificate signed by unknown authority".
 func NewModelHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logger *slog.Logger) (*http.Client, error) {
 	if serviceConfig == nil || serviceConfig.Sidecar == nil {
 		return nil, nil
@@ -181,7 +187,7 @@ func NewModelHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logger
 		targetURL = mc.URL
 	}
 	var tlsConfig *tls.Config
-	if schemeRequiresTLS(targetURL) {
+	if caCertPath != "" || schemeRequiresTLS(targetURL) {
 		var err error
 		tlsConfig, err = buildTLSConfig(caCertPath, insecureSkipVerify, logger, "Model")
 		if err != nil {

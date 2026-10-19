@@ -228,11 +228,35 @@ func TestNewModelHTTPClient(t *testing.T) {
 		}
 	})
 
-	t.Run("http URL skips TLS config", func(t *testing.T) {
+	t.Run("http URL without CA cert skips TLS config", func(t *testing.T) {
 		cfg := &config.Config{
 			Sidecar: &config.SidecarConfig{
 				Model: &config.SidecarModelConfig{
 					URL: "http://localhost:8080",
+				},
+			},
+		}
+		client, err := NewModelHTTPClient(cfg, false, logger)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if client == nil {
+			t.Fatal("expected non-nil client")
+		}
+	})
+
+	t.Run("http URL with CA cert builds TLS config for multi-destination routing", func(t *testing.T) {
+		caPath := writeProxyTestCACert(t)
+		secretDir := filepath.Dir(caPath)
+		caCertPath := filepath.Join(secretDir, "ca_cert")
+		if err := os.Rename(caPath, caCertPath); err != nil {
+			t.Fatalf("rename CA cert: %v", err)
+		}
+		cfg := &config.Config{
+			Sidecar: &config.SidecarConfig{
+				Model: &config.SidecarModelConfig{
+					URL:                 "http://model.ns.svc.cluster.local/v1",
+					AuthSecretMountPath: secretDir,
 				},
 			},
 		}
