@@ -103,7 +103,7 @@ func TestHandleGetPostProcessing(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			storage := newPostProcessingHandlerStorage()
 			storage.source, storage.getErr = test.job, test.getErr
-			handler := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, nil)
+			handler := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, nil, nil)
 			recorder := httptest.NewRecorder()
 			request := &postProcessingPathRequest{MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/post-processing/"+test.id), id: test.id}
 			ctx := executioncontext.NewExecutionContext(context.Background(), "req-get-post-processing", slog.New(slog.NewTextHandler(io.Discard, nil)), "test-user", "test-tenant")
@@ -170,7 +170,7 @@ func TestHandleDeletePostProcessing(t *testing.T) {
 			if test.runtime != nil {
 				runtime = test.runtime
 			}
-			handler := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+			handler := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 			recorder := httptest.NewRecorder()
 			request := &postProcessingPathRequest{MockRequest: createMockRequest(http.MethodDelete, "/api/v1/evaluations/post-processing/"+test.id), id: test.id}
 			ctx := executioncontext.NewExecutionContext(context.Background(), "req-delete-post-processing", slog.New(slog.NewTextHandler(io.Discard, nil)), "test-user", "test-tenant")
@@ -400,7 +400,7 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			handler := handlers.New(test.storage, testhelpers.NewValidator(t), nil, nil, nil, test.serviceConfig, nil)
+			handler := handlers.New(test.storage, testhelpers.NewValidator(t), nil, nil, nil, test.serviceConfig, nil, nil)
 			recorder := httptest.NewRecorder()
 			request := &bodyRequest{
 				MockRequest: createMockRequest(http.MethodPost, "/api/v1/evaluations/post-processing"),
@@ -441,7 +441,7 @@ func TestHandleCreatePostProcessing(t *testing.T) {
 
 func TestHandleCreateEvaluationRejectsInternalPostProcessingProvider(t *testing.T) {
 	storage := newPostProcessingHandlerStorage()
-	handler := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, localPostProcessingConfig(), nil)
+	handler := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, localPostProcessingConfig(), nil, nil)
 	recorder := httptest.NewRecorder()
 	request := &bodyRequest{
 		MockRequest: createMockRequest(http.MethodPost, "/api/v1/evaluations/jobs"),

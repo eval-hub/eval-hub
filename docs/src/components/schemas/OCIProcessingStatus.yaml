@@ -16,7 +16,9 @@ properties:
       applicable phases. Workflow reporting normally uses running followed by completed or failed.
       Status may remain absent or running if the service is interrupted or persistence fails.
       failed means a required stage failed, with the stage and cause described in the
-      message. completed means all applicable stages succeeded; card-only completion
-      does not require bundle or signing outputs. No state is defaulted when status is absent.
+      message. For completed or partially_failed OCI-enabled evaluations, completed
+      confirms that both the evaluation card and bundle were published and their
+      references saved. Signing is not currently executed. Historical card-only
+      results remain readable. No state is defaulted when status is absent.
   message:
     $ref: ./MessageInfo.yaml
