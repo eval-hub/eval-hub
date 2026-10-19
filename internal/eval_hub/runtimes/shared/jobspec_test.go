@@ -487,3 +487,36 @@ func TestBuildJobSpec_NoPrimaryScoreWhenProviderBenchmarkMatchesButNil(t *testin
 		t.Fatalf("expected nil PrimaryScore when provider benchmark has none, got %+v", spec.PrimaryScore)
 	}
 }
+
+// TestBuildJobSpecReservesTagForBundle keeps the final-index prefix out of adapter specs without mutating the job.
+func TestBuildJobSpecReservesTagForBundle(t *testing.T) {
+	for _, prefix := range []string{"", "release", strings.Repeat("a", 200)} {
+		t.Run(prefix, func(t *testing.T) {
+			eval := baseEvaluation()
+			eval.Exports = &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{Coordinates: api.OCICoordinates{
+				OCIHost: "quay.io", OCIRepository: "team/results", OCITag: prefix,
+				Annotations: map[string]string{"purpose": "test"},
+			}}}
+			before, _ := json.Marshal(eval.Exports)
+			spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, err := json.Marshal(spec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(data), "oci_tag") {
+				t.Fatalf("adapter received job tag: %s", data)
+			}
+			coords := spec.Exports.OCI.Coordinates
+			if coords.OCIHost != "quay.io" || coords.OCIRepository != "team/results" || coords.Annotations["purpose"] != "test" {
+				t.Fatalf("adapter coordinates changed: %+v", coords)
+			}
+			after, _ := json.Marshal(eval.Exports)
+			if string(before) != string(after) {
+				t.Fatal("stored export configuration mutated")
+			}
+		})
+	}
+}

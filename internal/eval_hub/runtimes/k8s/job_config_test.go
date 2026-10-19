@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -646,6 +647,13 @@ func TestBuildJobConfigWithOCIExports(t *testing.T) {
 		t.Fatalf("expected oci_repository %q, got %v", "my-org/my-repo", coords.OCIRepository)
 	}
 
+	data, err := json.Marshal(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "oci_tag") || evaluation.Exports.OCI.Coordinates.OCITag != "eval-123" {
+		t.Fatalf("adapter tag override or mutated stored prefix: %s", data)
+	}
 }
 
 func TestNumExamplesFromParametersTypes(t *testing.T) {

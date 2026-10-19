@@ -235,7 +235,7 @@ func TestUpdateEvaluationJobOCIRejectsIneligibleJob(t *testing.T) {
 		exports *api.EvaluationExports
 	}{
 		{"running", api.OverallStateRunning, ociTestJob().Exports},
-		{"partially failed", api.OverallStatePartiallyFailed, ociTestJob().Exports},
+		{"pending", api.OverallStatePending, ociTestJob().Exports},
 		{"failed", api.OverallStateFailed, ociTestJob().Exports},
 		{"cancelled", api.OverallStateCancelled, ociTestJob().Exports},
 		{"no exports", api.OverallStateCompleted, nil},
@@ -295,6 +295,33 @@ func TestUpdateEvaluationJobOCINoopAndDatabaseFailure(t *testing.T) {
 			}
 			if !reflect.DeepEqual(before, readOCITestJob(t, scoped, job.Resource.ID)) {
 				t.Fatal("failed database write changed persisted job")
+			}
+		})
+	}
+}
+
+// TestUpdateEvaluationJobOCIPartiallyFailed persists OCI outputs while preserving the partial evaluation outcome.
+func TestUpdateEvaluationJobOCIPartiallyFailed(t *testing.T) {
+	for _, finalState := range []api.OCIProcessingState{api.OCIProcessingCompleted, api.OCIProcessingFailed} {
+		t.Run(string(finalState), func(t *testing.T) {
+			job := ociTestJob()
+			job.Status.State = api.OverallStatePartiallyFailed
+			job.Status.Message = &api.MessageInfo{Message: "One benchmark failed", MessageCode: "PARTIALLY_FAILED"}
+			scoped, _ := createOCITestJob(t, job)
+			before := readOCITestJob(t, scoped, job.Resource.ID)
+			if err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, ociStatus(api.OCIProcessingRunning), nil, nil); err != nil {
+				t.Fatal(err)
+			}
+			card, bundle := ociArtifact("card", "a"), ociArtifact("bundle", "b")
+			if err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, ociStatus(finalState), card, bundle); err != nil {
+				t.Fatal(err)
+			}
+			after := readOCITestJob(t, scoped, job.Resource.ID)
+			if !reflect.DeepEqual(after.Status, before.Status) || !reflect.DeepEqual(after.Results.Benchmarks, before.Results.Benchmarks) || !reflect.DeepEqual(after.Results.OCI.Signing, before.Results.OCI.Signing) {
+				t.Fatal("OCI update changed evaluation outcome or existing results")
+			}
+			if after.Results.OCI.Status.State != finalState || !reflect.DeepEqual(after.Results.OCI.EvaluationCard, card) || !reflect.DeepEqual(after.Results.OCI.EvaluationBundle, bundle) {
+				t.Fatalf("outputs not retrieved: %+v", after.Results.OCI)
 			}
 		})
 	}

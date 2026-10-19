@@ -15,7 +15,9 @@ properties:
       running means OCI processing has started and remains in progress throughout all
       applicable phases. Workflow reporting uses running followed by completed or failed.
       failed means a required stage failed, with the stage and cause described in the
-      message. completed means all applicable stages succeeded; card-only completion
-      does not require bundle or signing outputs. No state is defaulted when status is absent.
+      message. For completed or partially_failed OCI-enabled evaluations, completed
+      confirms that both the evaluation card and bundle were published and their
+      references saved. Signing is not currently executed. Historical card-only
+      results remain readable. No state is defaulted when status is absent.
   message:
     $ref: ./MessageInfo.yaml

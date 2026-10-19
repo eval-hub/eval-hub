@@ -3572,7 +3572,7 @@
               "failed",
               "completed"
             ],
-            "description": "running means OCI processing has started and remains in progress throughout all applicable phases. Workflow reporting uses running followed by completed or failed. failed means a required stage failed, with the stage and cause described in the message. completed means all applicable stages succeeded; card-only completion does not require bundle or signing outputs. No state is defaulted when status is absent."
+            "description": "running means OCI processing has started and remains in progress throughout all applicable phases. Workflow reporting uses running followed by completed or failed. failed means a required stage failed, with the stage and cause described in the message. For completed or partially_failed OCI-enabled evaluations, completed confirms that both the evaluation card and bundle were published and their references saved. Signing is not currently executed. Historical card-only results remain readable. No state is defaulted when status is absent."
           },
           "message": {
             "$ref": "#/components/schemas/MessageInfo"
@@ -3624,7 +3624,7 @@
       },
       "EvaluationOCIResults": {
         "type": "object",
-        "description": "Optional job-level OCI processing status, artifact references, and signing information. Unavailable objects are omitted, including on completed jobs. Status, artifacts, and signing are independently optional. Artifact references identify published outputs and are not derived from job IDs or registry tags. OCI workflows report running once at the start and save available outputs together with the final completed or failed status, without intermediate phase writes.",
+        "description": "Optional job-level OCI processing status, artifact references, and signing information. Unavailable objects are omitted, including on completed jobs. Status, artifacts, and signing are independently optional. Artifact references identify published outputs and are not derived from job IDs or registry tags. OCI workflows report running once at the start and save available outputs together with the final completed or failed status, without intermediate phase writes. Completed and partially_failed evaluations use the same OCI workflow. A bundle failure retains the published card and leaves the evaluation outcome unchanged.",
         "properties": {
           "status": {
             "$ref": "#/components/schemas/OCIProcessingStatus",
@@ -4515,7 +4515,7 @@
       },
       "EvaluationExportsOCI": {
         "type": "object",
-        "description": "OCI export configuration for local and Kubernetes evaluation jobs. Signing configuration is retained only; accepting it does not perform or schedule signing.",
+        "description": "OCI export configuration for local and Kubernetes evaluation jobs. Signing configuration is retained only; accepting it does not perform or schedule signing. Completed and partially_failed jobs publish an evaluation card and a final index containing recorded completed benchmark artifacts. Adapters use their own fallback tags; the job-level prefix is reserved for the final index.",
         "examples": [
           {
             "coordinates": {

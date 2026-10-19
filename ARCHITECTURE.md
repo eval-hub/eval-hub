@@ -185,3 +185,4 @@ Logging uses **slog** with **`internal/logging`** enriching logs from the incomi
 | Platform & components | [Architecture overview](https://eval-hub.github.io/#architecture-overview) |
 | End-user / SDK docs | [eval-hub.github.io](https://eval-hub.github.io/) |
 | Build, DB, sidecar dev notes | **`CLAUDE.md`** (this repo) |
+| OCI exports and service workflow | [OCI exports](OCI.md#service-export-workflow) |

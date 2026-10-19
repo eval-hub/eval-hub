@@ -60,6 +60,14 @@ type EvaluationOCIResults struct {
 	Signing          *OCISigningResult     `json:"signing,omitempty"`
 }
 
+// EligibleForOCIProcessing reports whether a job has OCI exports configured and
+// a completed or partially failed outcome. Publishing and progress persistence
+// use the same eligibility rule.
+func EligibleForOCIProcessing(job *EvaluationJobResource) bool {
+	return job != nil && job.Exports != nil && job.Exports.OCI != nil && job.Status != nil &&
+		(job.Status.State == OverallStateCompleted || job.Status.State == OverallStatePartiallyFailed)
+}
+
 // UpdateOCIResults updates workflow status and any supplied card and bundle references.
 // It initializes missing results and preserves all other fields. A nil reference
 // leaves the existing output unchanged; this function does not reset OCI results.

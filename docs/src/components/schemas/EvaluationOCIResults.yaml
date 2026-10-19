@@ -6,6 +6,8 @@ description: >-
   identify published outputs and are not derived from job IDs or registry tags.
   OCI workflows report running once at the start and save available outputs together
   with the final completed or failed status, without intermediate phase writes.
+  Completed and partially_failed evaluations use the same OCI workflow. A bundle
+  failure retains the published card and leaves the evaluation outcome unchanged.
 properties:
   status:
     $ref: ./OCIProcessingStatus.yaml

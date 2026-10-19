@@ -64,9 +64,12 @@ func BuildJobSpec(
 		spec.Tags = evaluation.Experiment.Tags
 	}
 	if evaluation.Exports != nil && evaluation.Exports.OCI != nil {
+		coordinates := evaluation.Exports.OCI.Coordinates
+		// The configured prefix belongs to the final index; adapters own their tags.
+		coordinates.OCITag = ""
 		spec.Exports = &JobSpecExports{
 			OCI: &JobSpecExportsOCI{
-				Coordinates: evaluation.Exports.OCI.Coordinates,
+				Coordinates: coordinates,
 			},
 		}
 	}

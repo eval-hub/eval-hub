@@ -603,6 +603,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 
 	ctx.Step(`^the service is running$`, tc.theServiceIsRunning)
 	ctx.Step(`^OCI is configured$`, tc.ociIsConfigured)
+	ctx.Step(`^I wait for OCI processing to complete$`, tc.iWaitForOCICompletion)
 	ctx.Step(`^queue is enabled for payloads$`, tc.queueIsEnabledForJsonnetPayloads)
 	ctx.Step(`^the model endpoint is reachable$`, tc.theModelEndpointIsReachable)
 	ctx.Step(`^there are system providers$`, tc.thereAreSystemProviders)

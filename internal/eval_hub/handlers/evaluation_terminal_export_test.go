@@ -57,7 +57,7 @@ func TestHandleUpdateEvaluationSkipsCardExportWhenNotTerminal(t *testing.T) {
 			},
 		},
 	}
-	h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, exporter)
+	h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, exporter, nil)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-running", logger, "test-user", "test-tenant")
 
@@ -95,7 +95,7 @@ func TestHandleUpdateEvaluationExportsCardOnTerminalTransition(t *testing.T) {
 			},
 		},
 	}
-	h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, exporter)
+	h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, exporter, nil)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-completed", logger, "test-user", "test-tenant")
 
@@ -133,7 +133,7 @@ func TestHandleUpdateEvaluationExportsCardOnFailedTransition(t *testing.T) {
 			},
 		},
 	}
-	h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, exporter)
+	h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, exporter, nil)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-failed", logger, "test-user", "test-tenant")
 
@@ -171,7 +171,7 @@ func TestHandleUpdateEvaluationSkipsCardExportWhenTerminalStateUnchanged(t *test
 			},
 		},
 	}
-	h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, exporter)
+	h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, exporter, nil)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-completed-again", logger, "test-user", "test-tenant")
 

@@ -41,8 +41,8 @@ func (s *sqlStorage) UpdateEvaluationJobOCI(id string, status *api.OCIProcessing
 		if err != nil {
 			return err
 		}
-		if job.Status == nil || job.Status.State != api.OverallStateCompleted || job.Exports == nil || job.Exports.OCI == nil {
-			return fmt.Errorf("OCI processing requires a completed OCI-enabled evaluation")
+		if !api.EligibleForOCIProcessing(job) {
+			return fmt.Errorf("OCI processing requires a completed or partially failed OCI-enabled evaluation")
 		}
 		if job.Results != nil && job.Results.OCI != nil {
 			results := job.Results.OCI

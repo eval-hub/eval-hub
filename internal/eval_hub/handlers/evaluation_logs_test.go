@@ -107,7 +107,7 @@ func TestHandleGetEvaluationJobLogs(t *testing.T) {
 			},
 		},
 	}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
@@ -164,7 +164,7 @@ func TestHandleGetEvaluationBenchmarkLogs(t *testing.T) {
 			},
 		},
 	}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-2", logger, "test-user", "test-tenant")
@@ -213,7 +213,7 @@ func TestHandleGetEvaluationJobLogsRejectsInvalidTailLines(t *testing.T) {
 		},
 	}
 	runtime := &logsRuntime{logs: "ignored"}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-3", logger, "test-user", "test-tenant")
@@ -248,7 +248,7 @@ func TestHandleGetEvaluationJobLogsRejectsEmptySinceSeconds(t *testing.T) {
 		},
 	}
 	runtime := &logsRuntime{logs: "ignored"}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-4", logger, "test-user", "test-tenant")
@@ -269,7 +269,7 @@ func TestHandleGetEvaluationJobLogsRejectsEmptySinceSeconds(t *testing.T) {
 }
 
 func TestHandleGetEvaluationJobLogsMissingJobID(t *testing.T) {
-	h := handlers.New(&fakeStorage{}, testhelpers.NewValidator(t), &logsRuntime{}, nil, nil, nil, nil)
+	h := handlers.New(&fakeStorage{}, testhelpers.NewValidator(t), &logsRuntime{}, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-5", logger, "test-user", "test-tenant")
@@ -286,7 +286,7 @@ func TestHandleGetEvaluationJobLogsMissingJobID(t *testing.T) {
 }
 
 func TestHandleGetEvaluationBenchmarkLogsMissingBenchmarkIndex(t *testing.T) {
-	h := handlers.New(&fakeStorage{}, testhelpers.NewValidator(t), &logsRuntime{}, nil, nil, nil, nil)
+	h := handlers.New(&fakeStorage{}, testhelpers.NewValidator(t), &logsRuntime{}, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-6", logger, "test-user", "test-tenant")
@@ -303,7 +303,7 @@ func TestHandleGetEvaluationBenchmarkLogsMissingBenchmarkIndex(t *testing.T) {
 }
 
 func TestHandleGetEvaluationBenchmarkLogsInvalidBenchmarkIndex(t *testing.T) {
-	h := handlers.New(&fakeStorage{}, testhelpers.NewValidator(t), &logsRuntime{}, nil, nil, nil, nil)
+	h := handlers.New(&fakeStorage{}, testhelpers.NewValidator(t), &logsRuntime{}, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-7", logger, "test-user", "test-tenant")
@@ -329,7 +329,7 @@ func TestHandleGetEvaluationJobLogsNoRuntime(t *testing.T) {
 			Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
 		},
 	}
-	h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-8", logger, "test-user", "test-tenant")
@@ -358,7 +358,7 @@ func TestHandleGetEvaluationJobLogsRuntimeError(t *testing.T) {
 			},
 		},
 	}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-9", logger, "test-user", "test-tenant")
@@ -384,7 +384,7 @@ func TestHandleGetEvaluationJobLogsRejectsTailLinesOverMax(t *testing.T) {
 		},
 	}
 	runtime := &logsRuntime{}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-10", logger, "test-user", "test-tenant")
@@ -414,7 +414,7 @@ func TestHandleGetEvaluationJobLogsAcceptsMinusOneForAllLines(t *testing.T) {
 			},
 		},
 	}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-all", logger, "test-user", "test-tenant")
@@ -445,7 +445,7 @@ func TestHandleGetEvaluationJobLogsRejectsMinusTwo(t *testing.T) {
 		},
 	}
 	runtime := &logsRuntime{}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-m2", logger, "test-user", "test-tenant")
@@ -470,7 +470,7 @@ func TestHandleGetEvaluationJobLogsRejectsNonPositiveSinceSeconds(t *testing.T) 
 		},
 	}
 	runtime := &logsRuntime{}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-11", logger, "test-user", "test-tenant")
@@ -511,7 +511,7 @@ func TestHandleGetEvaluationJobLogsResolvesCollectionBenchmarks(t *testing.T) {
 			},
 		},
 	}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-12", logger, "test-user", "test-tenant")
@@ -536,7 +536,7 @@ func TestHandleGetEvaluationJobLogsJobNotFound(t *testing.T) {
 		fakeStorage: fakeStorage{},
 		getJobErr:   serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", jobID),
 	}
-	h := handlers.New(storage, testhelpers.NewValidator(t), &logsRuntime{}, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), &logsRuntime{}, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-13", logger, "test-user", "test-tenant")
@@ -561,7 +561,7 @@ func TestHandleGetEvaluationJobLogsHidesPostProcessingJob(t *testing.T) {
 		}}},
 	}}
 	// Provide a runtime so the request reaches the workload-scoped storage lookup.
-	h := handlers.New(storage, testhelpers.NewValidator(t), &logsRuntime{}, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), &logsRuntime{}, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-ppi-logs", logger, "test-user", "test-tenant")
@@ -589,7 +589,7 @@ func TestHandleGetEvaluationJobLogsCollectionNotFound(t *testing.T) {
 			},
 		},
 	}
-	h := handlers.New(storage, testhelpers.NewValidator(t), &logsRuntime{}, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), &logsRuntime{}, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-14", logger, "test-user", "test-tenant")
@@ -613,7 +613,7 @@ func TestHandleGetEvaluationJobLogsRejectsInvalidSinceSeconds(t *testing.T) {
 		},
 	}
 	runtime := &logsRuntime{}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-15", logger, "test-user", "test-tenant")
@@ -638,7 +638,7 @@ func TestHandleGetEvaluationJobLogsRejectsInvalidTimestamps(t *testing.T) {
 		},
 	}
 	runtime := &logsRuntime{}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-16", logger, "test-user", "test-tenant")
@@ -668,7 +668,7 @@ func TestHandleGetEvaluationJobLogsTruncationSetsHeader(t *testing.T) {
 			},
 		},
 	}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-trunc", logger, "test-user", "test-tenant")
@@ -705,7 +705,7 @@ func TestHandleGetEvaluationJobLogsTruncationWithMaxBytes(t *testing.T) {
 			MaxLogResponseBytes: 10,
 		},
 	}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, cfg, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, cfg, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-maxbytes", logger, "test-user", "test-tenant")
@@ -746,7 +746,7 @@ func TestHandleGetEvaluationJobLogsWithMaxLogBytesConfig(t *testing.T) {
 	cfg := &config.Config{
 		Service: &config.ServiceConfig{MaxLogResponseBytes: 1024},
 	}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, cfg, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, cfg, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-cfg", logger, "test-user", "test-tenant")
@@ -784,7 +784,7 @@ func TestHandleGetEvaluationJobLogsWithConfiguredTimeout(t *testing.T) {
 			MaxLogResponseBytes: -1,
 		},
 	}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, cfg, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, cfg, nil, nil)
 	rec := httptest.NewRecorder()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-timeout", logger, "test-user", "test-tenant")

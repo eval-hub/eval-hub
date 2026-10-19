@@ -101,33 +101,17 @@ func NewOCIPublisherFactory(resolver oci.OCICredentialResolver, httpClient *http
 
 // NewPublisher resolves credentials and builds a client tagged for this evaluation job.
 func (f *ociPublisherFactory) NewPublisher(ctx context.Context, job *api.EvaluationJobResource) (OCIPublisher, error) {
-	if job == nil || job.Exports == nil || job.Exports.OCI == nil {
-		return nil, fmt.Errorf("oci export configuration is required")
+	if f == nil {
+		return nil, fmt.Errorf("oci publisher factory is not configured")
 	}
-	if f == nil || f.credentialResolver == nil {
-		return nil, fmt.Errorf("oci credential resolver is not configured")
-	}
-	if f.httpClient == nil {
-		return nil, fmt.Errorf("oci http client is not configured")
-	}
-
-	export := job.Exports.OCI
-	creds, err := f.credentialResolver.Resolve(ctx, oci.OCICredentialRequest{
-		RegistryHost: export.Coordinates.OCIHost,
-		Tenant:       job.Resource.Tenant.String(),
-		Connection:   export.K8s,
-	})
-	if err != nil {
-		return nil, err
-	}
-	client, err := ociclient.NewClient(export.Coordinates.OCIHost, export.Coordinates.OCIRepository, creds, f.httpClient)
+	client, err := oci.NewJobRegistryClient(ctx, job, f.credentialResolver, f.httpClient)
 	if err != nil {
 		return nil, err
 	}
 	return &ociPublisher{
 		client:      client,
 		jobID:       job.Resource.ID,
-		annotations: export.Coordinates.Annotations,
+		annotations: job.Exports.OCI.Coordinates.Annotations,
 	}, nil
 }
 

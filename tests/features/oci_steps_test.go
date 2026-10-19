@@ -118,85 +118,121 @@ func (tc *scenarioConfig) getOCIHTTPClient() *http.Client {
 	return tc.ociHTTPClient
 }
 
-// iFetchOCIManifestByRepoAndTag fetches OCI manifest and then the blob
+type ociManifestFetchResult struct {
+	statusCode int
+	body       []byte
+	data       map[string]interface{}
+}
+
+// iFetchOCIManifestByRepoAndTag records the requested manifest and fetches its results blob.
 func (tc *scenarioConfig) iFetchOCIManifestByRepoAndTag(repository, tag string) error {
 	repositoryResolved, err := tc.getValue(repository)
 	if err != nil {
 		return tc.logError(fmt.Errorf("failed to resolve repository value %q: %w", repository, err))
 	}
-
 	tagResolved, err := tc.getValue(tag)
 	if err != nil {
 		return tc.logError(fmt.Errorf("failed to resolve tag value %q: %w", tag, err))
 	}
 
-	token, err := tc.getOCIBearerToken(repositoryResolved)
+	manifest, err := tc.fetchOCIManifest(repositoryResolved, tagResolved)
+	tc.ociManifestStatusCode = manifest.statusCode
+	tc.ociManifestBody = manifest.body
+	tc.ociManifestData = manifest.data
+	tc.ociManifestError = err
 	if err != nil {
-		return tc.logError(fmt.Errorf("failed to obtain OCI Bearer token: %w", err))
+		// Let assertion steps inspect an expected HTTP failure for the requested manifest.
+		if manifest.statusCode != 0 && manifest.statusCode != http.StatusOK {
+			return nil
+		}
+		return tc.logError(err)
 	}
 
-	baseURL := ociBaseURL()
-	manifestURL := fmt.Sprintf("%s/v2/%s/manifests/%s", baseURL, repositoryResolved, tagResolved)
+	contentManifest := manifest
+	if manifest.data["mediaType"] == "application/vnd.oci.image.index.v1+json" {
+		digest, err := benchmarkManifestDigest(manifest.data)
+		if err != nil {
+			return tc.logError(err)
+		}
+		contentManifest, err = tc.fetchOCIManifest(repositoryResolved, digest)
+		if err != nil {
+			return tc.logError(fmt.Errorf("failed to fetch benchmark manifest: %w", err))
+		}
+		if contentManifest.data["mediaType"] == "application/vnd.oci.image.index.v1+json" {
+			return tc.logError(fmt.Errorf("unexpected nested OCI index"))
+		}
+	}
+	return tc.fetchOCIManifestBlob(repositoryResolved, contentManifest.data)
+}
 
+// fetchOCIManifest returns one response without changing scenario manifest state.
+func (tc *scenarioConfig) fetchOCIManifest(repository, reference string) (ociManifestFetchResult, error) {
+	var result ociManifestFetchResult
+	token, err := tc.getOCIBearerToken(repository)
+	if err != nil {
+		return result, fmt.Errorf("failed to obtain OCI Bearer token: %w", err)
+	}
+	manifestURL := fmt.Sprintf("%s/v2/%s/manifests/%s", ociBaseURL(), repository, reference)
 	req, err := http.NewRequest("GET", manifestURL, nil)
 	if err != nil {
-		return tc.logError(fmt.Errorf("failed to create manifest request: %w", err))
+		return result, fmt.Errorf("failed to create manifest request: %w", err)
 	}
-
-	req.Header.Set("Accept", "application/vnd.oci.image.manifest.v1+json")
+	req.Header.Set("Accept", "application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json")
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-
 	resp, err := tc.getOCIHTTPClient().Do(req)
 	if err != nil {
-		tc.ociManifestError = err
-		return tc.logError(fmt.Errorf("failed to fetch OCI manifest: %w", err))
+		return result, fmt.Errorf("failed to fetch OCI manifest: %w", err)
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
 			tc.logDebug("Failed to close OCI manifest response body: %v\n", closeErr)
 		}
 	}()
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		tc.ociManifestError = err
-		return tc.logError(fmt.Errorf("failed to read OCI manifest response: %w", err))
+		return result, fmt.Errorf("failed to read OCI manifest response: %w", err)
 	}
-
-	tc.ociManifestStatusCode = resp.StatusCode
-
+	result.statusCode, result.body = resp.StatusCode, body
 	if resp.StatusCode != http.StatusOK {
-		tc.ociManifestError = fmt.Errorf("OCI manifest fetch returned status %d: %s", resp.StatusCode, string(body))
-		tc.ociManifestBody = nil
-		// Don't fail the step - let validation steps check if this is expected
-		tc.logDebug("OCI manifest fetch returned non-200 status: %d\n", resp.StatusCode)
-		return nil
+		return result, fmt.Errorf("OCI manifest fetch returned status %d: %s", resp.StatusCode, string(body))
 	}
-
-	tc.ociManifestBody = body
-	tc.ociManifestError = nil
-	tc.logDebug("OCI manifest fetched successfully (%d bytes)\n", len(body))
-
-	// Parse manifest to extract blob digest and store for annotation verification
-	var manifestData map[string]interface{}
-	if err := json.Unmarshal(body, &manifestData); err != nil {
-		tc.ociManifestError = err
-		return tc.logError(fmt.Errorf("failed to parse OCI manifest JSON: %w", err))
+	if err := json.Unmarshal(body, &result.data); err != nil {
+		return result, fmt.Errorf("failed to parse OCI manifest JSON: %w", err)
 	}
-	tc.ociManifestData = manifestData // Store for later annotation assertions
+	return result, nil
+}
 
+// benchmarkManifestDigest selects the first benchmark child, skipping the evaluation card.
+func benchmarkManifestDigest(manifest map[string]interface{}) (string, error) {
+	manifests, _ := manifest["manifests"].([]interface{})
+	for _, item := range manifests {
+		descriptor, _ := item.(map[string]interface{})
+		annotations, _ := descriptor["annotations"].(map[string]interface{})
+		if annotations["artifact_role"] != "benchmark" {
+			continue
+		}
+		digest, _ := descriptor["digest"].(string)
+		if digest == "" {
+			return "", fmt.Errorf("benchmark descriptor has no digest")
+		}
+		return digest, nil
+	}
+	return "", fmt.Errorf("OCI index has no benchmark child")
+}
+
+// fetchOCIManifestBlob retrieves the first results layer from an already selected content manifest.
+func (tc *scenarioConfig) fetchOCIManifestBlob(repositoryResolved string, manifestData map[string]interface{}) error {
 	// Validate layers array exists and is non-empty
 	layers, err := jsonpath.Get("$.layers", manifestData)
 	if err != nil {
-		tc.ociManifestError = err
 		return tc.logError(fmt.Errorf("manifest has no layers array: %w", err))
 	}
 	layersArray, ok := layers.([]interface{})
 	if !ok || len(layersArray) == 0 {
-		tc.ociManifestError = fmt.Errorf("manifest layers array is empty or invalid")
-		return tc.logError(tc.ociManifestError)
+		err = fmt.Errorf("manifest layers array is empty or invalid")
+		return tc.logError(err)
 	}
 
 	tc.logDebug("OCI manifest has %d layer(s)\n", len(layersArray))
@@ -214,14 +250,13 @@ func (tc *scenarioConfig) iFetchOCIManifestByRepoAndTag(repository, tag string) 
 	// the tar for evaluation-card.json or falls back to the first .json file found.
 	digest, err := jsonpath.Get("$.layers[0].digest", manifestData)
 	if err != nil {
-		tc.ociManifestError = err
 		return tc.logError(fmt.Errorf("failed to extract digest from manifest: %w", err))
 	}
 
 	digestStr, ok := digest.(string)
 	if !ok {
-		tc.ociManifestError = fmt.Errorf("digest is not a string: %T", digest)
-		return tc.logError(tc.ociManifestError)
+		err = fmt.Errorf("digest is not a string: %T", digest)
+		return tc.logError(err)
 	}
 
 	tc.logDebug("Extracted blob digest: %s\n", digestStr)
@@ -492,4 +527,33 @@ func (tc *scenarioConfig) theOCIManifestShouldContainAnnotation(key, expectedVal
 
 	tc.logDebug("OCI manifest annotation %q = %q (verified)\n", key, actualStr)
 	return nil
+}
+
+// Evaluation completion precedes OCI completion, so wait for the saved workflow outcome.
+func (tc *scenarioConfig) iWaitForOCICompletion() error {
+	deadline := time.Now().Add(tc.waitDeadline)
+	for time.Now().Before(deadline) {
+		if err := tc.iSendARequestImpl(http.MethodGet, "/api/v1/evaluations/jobs/{id}", "", "wait for OCI completion"); err != nil {
+			return err
+		}
+		if tc.response.StatusCode != http.StatusOK {
+			return tc.logError(fmt.Errorf("job GET returned %d", tc.response.StatusCode))
+		}
+		state, _ := tc.getJsonPath("$.results.oci.status.state")
+		switch state {
+		case "completed":
+			for _, path := range []string{"$.results.oci.evaluation_card.oci_digest", "$.results.oci.evaluation_bundle.oci_digest"} {
+				value, err := tc.getJsonPath(path)
+				if err != nil || !strings.HasPrefix(value, "sha256:") {
+					return tc.logError(fmt.Errorf("missing published reference at %s", path))
+				}
+			}
+			return nil
+		case "failed":
+			message, _ := tc.getJsonPath("$.results.oci.status.message.message")
+			return tc.logError(fmt.Errorf("OCI processing failed: %s", message))
+		}
+		time.Sleep(tc.waitInterval)
+	}
+	return tc.logError(fmt.Errorf("timed out waiting for OCI completion"))
 }
