@@ -26,5 +26,7 @@ jobs:
           upstream-branch: main
           target-branch: main
           merge-strategy: merge
+          # This sync/ branch is automation-owned; reuse it after its PR merges.
+          allow-head-update: true
           fail-on-conflict: true
           labels: bot/sync-upstream,tide/merge-method-merge
