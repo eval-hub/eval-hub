@@ -214,6 +214,18 @@ func TestBundlePublisherPreservesWrappedErrors(t *testing.T) {
 		if !errors.Is(err, cause) || !errors.As(err, &typed) || typed.StatusCode != 403 {
 			t.Fatalf("lost typed error: %v", err)
 		}
+		operation := map[string]string{
+			cardRef.OCIDigest: "verify evaluation card manifest",
+			benchmarkDigest:   "verify benchmark 0 manifest",
+			"put":             "publish evaluation bundle",
+		}[failed]
+		var operationErr *OperationError
+		if !errors.As(err, &operationErr) || operationErr.Operation != operation || operationErr.Err != cause {
+			t.Fatalf("lost operation and cause: %v", err)
+		}
+		if want := operation + ": " + cause.Error(); err.Error() != want {
+			t.Fatalf("error = %q, want %q", err.Error(), want)
+		}
 		if failed != "put" && registry.puts != 0 {
 			t.Fatal("published despite child failure")
 		}
