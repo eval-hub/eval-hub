@@ -1,0 +1,30 @@
+name: Sync upstream main
+
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  sync:
+    if: ${{ github.repository == 'opendatahub-io/eval-hub' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: sync-upstream-main-into-main
+      cancel-in-progress: false
+    steps:
+      - name: Sync eval-hub/eval-hub main into main
+        uses: ruivieira/basic-ops-tasks@cdb560bd992944ab5ab656d6e8dbc0aa85bbb211 # v1.0.0
+        with:
+          upstream-repo: eval-hub/eval-hub
+          upstream-branch: main
+          target-branch: main
+          merge-strategy: merge
+          fail-on-conflict: true
+          labels: bot/sync-upstream,tide/merge-method-merge
