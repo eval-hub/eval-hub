@@ -42,13 +42,13 @@ func (p *BundlePublisher) Publish(ctx context.Context, job *api.EvaluationJobRes
 	}
 	tag, err := ociclient.EvaluationBundleManifestTag(job.Resource.ID, job.Exports.OCI.Coordinates.OCITag)
 	if err != nil {
-		return nil, fmt.Errorf("bundle tag: %w", err)
+		return nil, &OperationError{Operation: "bundle tag", Err: err}
 	}
 	if card == nil {
 		return nil, fmt.Errorf("published evaluation card is required")
 	}
 	if err := ociclient.ValidateSHA256Digest(card.OCIDigest); err != nil {
-		return nil, fmt.Errorf("evaluation card: %w", err)
+		return nil, &OperationError{Operation: "evaluation card", Err: err}
 	}
 	selected, skipped, err := extractBenchmarksForIndex(job)
 	if err != nil {
@@ -56,7 +56,7 @@ func (p *BundlePublisher) Publish(ctx context.Context, job *api.EvaluationJobRes
 	}
 	cardDescriptor, err := p.client.GetManifest(ctx, card.OCIDigest)
 	if err != nil {
-		return nil, fmt.Errorf("verify evaluation card manifest: %w", err)
+		return nil, &OperationError{Operation: "verify evaluation card manifest", Err: err}
 	}
 	cardDescriptor.Annotations = map[string]string{"artifact_role": "evaluation-card"}
 	descriptors := make([]ociclient.Descriptor, 0, len(selected)+1)
@@ -64,7 +64,7 @@ func (p *BundlePublisher) Publish(ctx context.Context, job *api.EvaluationJobRes
 	for _, result := range selected {
 		d, err := p.client.GetManifest(ctx, result.digest)
 		if err != nil {
-			return nil, fmt.Errorf("verify benchmark %d manifest: %w", result.index, err)
+			return nil, &OperationError{Operation: fmt.Sprintf("verify benchmark %d manifest", result.index), Err: err}
 		}
 		d.Annotations = map[string]string{
 			"artifact_role":   "benchmark",
@@ -87,7 +87,7 @@ func (p *BundlePublisher) Publish(ctx context.Context, job *api.EvaluationJobRes
 		Manifests: descriptors, Annotations: annotations,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("publish evaluation bundle: %w", err)
+		return nil, &OperationError{Operation: "publish evaluation bundle", Err: err}
 	}
 	return ref, nil
 }
@@ -127,7 +127,7 @@ func extractBenchmarksForIndex(job *api.EvaluationJobResource) ([]indexBenchmark
 				return nil, 0, fmt.Errorf("benchmark %d requires a string artifacts.oci_digest", result.BenchmarkIndex)
 			}
 			if err := ociclient.ValidateSHA256Digest(digest); err != nil {
-				return nil, 0, fmt.Errorf("benchmark %d: %w", result.BenchmarkIndex, err)
+				return nil, 0, &OperationError{Operation: fmt.Sprintf("benchmark %d", result.BenchmarkIndex), Err: err}
 			}
 			selected = append(selected, indexBenchmark{
 				index:      result.BenchmarkIndex,

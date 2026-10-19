@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/oci"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/cards"
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
@@ -310,7 +311,7 @@ func TestOCITargetExportFactoryError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from oci publisher factory")
 	}
-	var exportErr *OCIExportError
+	var exportErr *oci.OperationError
 	if !errors.As(err, &exportErr) || exportErr.Operation != "initialize OCI publisher and resolve registry credentials" {
 		t.Fatalf("factory error was not preserved: %v", err)
 	}
@@ -366,7 +367,7 @@ func TestOCITargetPublisherOutcomes(t *testing.T) {
 				}
 				return
 			}
-			var exportErr *OCIExportError
+			var exportErr *oci.OperationError
 			if !errors.As(err, &exportErr) || exportErr.Reason != tc.reason || !strings.Contains(err.Error(), tc.reason) || !errors.Is(err, result.OCIError) || result.OCIArtifact != nil {
 				t.Fatalf("failed outcome = %#v, error = %v", result, err)
 			}
@@ -464,7 +465,7 @@ func TestOCITargetGenerationAndSerializationFailures(t *testing.T) {
 		{card: cards.NewEvaluationCard(&api.EvaluationJobResource{Resource: job.Resource, Results: &api.EvaluationJobResults{Benchmarks: []api.BenchmarkResult{{Metrics: map[string]any{"invalid": make(chan int)}}}}}), operation: "serialize evaluation card"},
 	} {
 		_, err := NewOCITarget(errOCIFactory{}, nil).Export(context.Background(), job, tc.card)
-		var exportErr *OCIExportError
+		var exportErr *oci.OperationError
 		if !errors.As(err, &exportErr) || exportErr.Operation != tc.operation {
 			t.Fatalf("error=%v, want operation %s", err, tc.operation)
 		}

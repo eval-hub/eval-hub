@@ -8,6 +8,7 @@ import (
 	"log/slog"
 
 	evalhubmlflow "github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/oci"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/cards"
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
@@ -202,26 +203,26 @@ func (t *ociTarget) Enabled(job *api.EvaluationJobResource) bool {
 
 func (t *ociTarget) Export(ctx context.Context, job *api.EvaluationJobResource, card *cards.EvaluationCard) (*ExportResult, error) {
 	if card == nil || card.Metadata.EvaluationJobID == "" {
-		return nil, &OCIExportError{Operation: "generate evaluation card", Reason: "card is missing or has no evaluation job identity"}
+		return nil, &oci.OperationError{Operation: "generate evaluation card", Reason: "card is missing or has no evaluation job identity"}
 	}
 	cardJSON, err := json.Marshal(card)
 	if err != nil {
-		return nil, &OCIExportError{Operation: "serialize evaluation card", Err: err}
+		return nil, &oci.OperationError{Operation: "serialize evaluation card", Err: err}
 	}
 	publisher, err := t.factory.NewPublisher(ctx, job)
 	if err != nil {
-		return nil, &OCIExportError{Operation: "initialize OCI publisher and resolve registry credentials", Err: err}
+		return nil, &oci.OperationError{Operation: "initialize OCI publisher and resolve registry credentials", Err: err}
 	}
 	if publisher == nil {
-		return nil, &OCIExportError{Operation: "initialize OCI publisher", Reason: "publisher is unavailable"}
+		return nil, &oci.OperationError{Operation: "initialize OCI publisher", Reason: "publisher is unavailable"}
 	}
 	defer func() { _ = publisher.Close() }()
 	artifact, err := publisher.PublishEvalCard(ctx, cardJSON)
 	if err != nil {
-		return nil, &OCIExportError{Operation: "publish evaluation card to OCI", Err: err}
+		return nil, &oci.OperationError{Operation: "publish evaluation card to OCI", Err: err}
 	}
-	if artifact == nil || artifact.OCIDigest == "" || artifact.OCIReference == "" {
-		return nil, &OCIExportError{Operation: "publish evaluation card to OCI", Reason: "publisher returned no usable manifest reference"}
+	if !oci.HasPublishedReference(artifact) {
+		return nil, &oci.OperationError{Operation: "publish evaluation card to OCI", Reason: "publisher returned no usable manifest reference"}
 	}
 	return &ExportResult{OCIArtifact: artifact}, nil
 }

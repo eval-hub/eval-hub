@@ -196,7 +196,7 @@ func TestOCIReportingFailures(t *testing.T) {
 		wantCard    bool
 		wantExport  bool
 	}{
-		{name: "publisher failure", exportError: &evalcards.OCIExportError{Operation: "resolve credentials", Reason: "tenant connection Secret was not found"}, wantCode: "oci_processing_failed", wantExport: true},
+		{name: "publisher failure", exportError: &oci.OperationError{Operation: "resolve credentials", Reason: "tenant connection Secret was not found"}, wantCode: "oci_processing_failed", wantExport: true},
 		{name: "missing published reference", emptyResult: true, wantCode: "oci_processing_failed", wantExport: true},
 		{name: "untyped publisher error", result: &evalcards.ExportResult{OCIError: errors.New("publisher failed"), OCIArtifact: publishedCard()}, wantCode: "oci_processing_failed", wantMessage: "Publish evaluation card: OCI publisher failed", wantExport: true},
 		{name: "missing digest", result: &evalcards.ExportResult{OCIArtifact: &api.OCIArtifactReference{OCIReference: publishedCard().OCIReference}}, wantCode: "oci_processing_failed", wantMessage: "Publish evaluation card: no published manifest reference is available", wantExport: true},

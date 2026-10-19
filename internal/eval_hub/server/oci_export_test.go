@@ -94,6 +94,9 @@ func TestNewOCIPublisherFactoryReturnsErrorWhenHTTPClientInitFails(t *testing.T)
 	if err == nil {
 		t.Fatal("expected OCI initialization error from NewPublisher")
 	}
+	if _, bundleErr := bundleFactory.NewPublisher(context.Background(), nil); bundleErr != err {
+		t.Fatalf("bundle factory initialization error = %v, want shared error %v", bundleErr, err)
+	}
 }
 
 func TestKubernetesDockerConfigSecretGetter(t *testing.T) {
