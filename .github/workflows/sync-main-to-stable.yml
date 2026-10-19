@@ -1,0 +1,31 @@
+name: Sync main to stable
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  sync:
+    if: ${{ github.repository == 'opendatahub-io/eval-hub' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: sync-main-into-stable
+      cancel-in-progress: false
+    steps:
+      - name: Sync main into stable
+        uses: ruivieira/basic-ops-tasks@cdb560bd992944ab5ab656d6e8dbc0aa85bbb211 # v1.0.0
+        with:
+          mode: branch
+          source-branch: main
+          target-branch: stable
+          merge-strategy: merge
+          fail-on-conflict: true
+          labels: bot/sync-stable,tide/merge-method-merge

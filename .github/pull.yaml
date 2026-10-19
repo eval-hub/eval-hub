@@ -1,5 +1,0 @@
-tide/merge-method-mergeversion: "1"
-rules:
-  - base: main
-    upstream: eval-hub/eval-hub
-label: "tide/merge-method-merge"

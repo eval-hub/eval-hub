@@ -1,8 +1,0 @@
-version: "1"
-rules:
-  - base: main
-    upstream: eval-hub:main
-    mergeMethod: merge
-    mergeUnstable: false
-label: "bot/sync-upstream"
-conflictLabel: "merge-conflict"
