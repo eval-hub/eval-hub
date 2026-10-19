@@ -27,5 +27,7 @@ jobs:
           source-branch: main
           target-branch: stable
           merge-strategy: merge
+          # This sync/ branch is automation-owned; reuse it after its PR merges.
+          allow-head-update: true
           fail-on-conflict: true
           labels: bot/sync-stable,tide/merge-method-merge
