@@ -17,9 +17,9 @@ runtime:
       - python
       - main.py
     cpu_request: 500m
-    memory_request: 512Mi
+    memory_request: 8Gi
     cpu_limit: 2000m
-    memory_limit: 4Gi
+    memory_limit: 32Gi
   local:
     # used for local mode tests (FVT)
     # To run real benchmarks locally, override with the actual adapter path:
