@@ -18,7 +18,7 @@ type ResultsDataConfig struct {
 // Mapping keys are literal field names or dotted paths into nested JSON objects.
 type ResultsDataConfigEntry struct {
 	Format    string            `json:"format,omitempty" validate:"omitempty,oneof=auto json jsonl csv parquet"`
-	Path      string            `json:"path,omitempty" validate:"omitempty,notblank"`
+	Path      string            `json:"path,omitempty" validate:"omitempty,notblank,startsnotwith=/"`
 	Columns   map[string]string `json:"columns,omitempty" validate:"omitempty,dive,keys,oneof=sample_id prediction label metric benchmark_id provider_id,endkeys,notblank"`
 	Selection map[string]string `json:"selection,omitempty" validate:"omitnil,min=1,dive,keys,oneof=benchmark_id provider_id metric,endkeys,notblank"`
 	// Pointers distinguish null mapping targets from valid numeric zero values.

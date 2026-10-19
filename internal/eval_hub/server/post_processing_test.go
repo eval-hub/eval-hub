@@ -563,6 +563,9 @@ func TestPostProcessingResultDataConfigRoundTrip(t *testing.T) {
 		"selected array":            `[{"selection":{"provider_id":"provider-a"},"columns":{"prediction":"score"}},{"selection":{"provider_id":"provider-b"},"columns":{"prediction":"metrics.value"}}]`,
 		"single selected entry":     `[{"selection":{"provider_id":"provider-a"},"columns":{"sample_id":"id"}}]`,
 		"selected numeric mappings": `[{"selection":{"provider_id":"provider-a"},"value_mappings":{"prediction":{"correct":1,"incorrect":0},"label":{"correct":1,"incorrect":0}}}]`,
+		"relative path":             `{"path":"results/scores.json"}`,
+		"relative directory":        `{"path":"results/"}`,
+		"selected relative path":    `[{"selection":{"provider_id":"provider-a"},"path":"./results/scores.json"}]`,
 		"automatic":                 `{}`,
 	}
 	for name, config := range configs {
@@ -620,6 +623,11 @@ func TestPostProcessingRejectsInvalidResultDataConfig(t *testing.T) {
 		"empty array":                     `[]`,
 		"array without selection":         `[{"format":"json"}]`,
 		"invalid format":                  `{"format":"xml"}`,
+		"absolute path":                   `{"path":"/tmp/scores.json"}`,
+		"absolute root":                   `{"path":"/"}`,
+		"selected absolute path":          `[{"selection":{"provider_id":"provider-a"},"path":"/tmp/scores.json"}]`,
+		"blank path":                      `{"path":"   "}`,
+		"selected blank path":             `[{"selection":{"provider_id":"provider-a"},"path":"\t"}]`,
 		"unknown column role":             `{"columns":{"unknown":"x"}}`,
 		"blank column":                    `{"columns":{"prediction":" "}}`,
 		"unknown selection":               `{"selection":{"unknown":"x"}}`,
