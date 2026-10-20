@@ -18,6 +18,5 @@ test.oobCollectionRefJobWithBenchmarks(
     rulerBenchmark('qa-hotpotqa'),
     rulerBenchmark('niah-single-essay'),
     rulerBenchmark('variable-tracking'),
-    test.benchmark('longbenchv2', 'lm_evaluation_harness', { num_examples: 1 }),
   ],
 )
