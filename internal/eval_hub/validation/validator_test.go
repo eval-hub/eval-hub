@@ -32,6 +32,45 @@ func TestNewValidator(t *testing.T) {
 	}
 }
 
+func TestResultsDataConfigPathValidation(t *testing.T) {
+	validate := newTestValidator(t)
+	tests := []struct {
+		name    string
+		path    string
+		wantTag string
+	}{
+		{name: "omitted path"},
+		{name: "relative file", path: "scores.json"},
+		{name: "nested file", path: "results/scores.json"},
+		{name: "dot relative file", path: "./results/scores.json"},
+		{name: "relative directory", path: "results/"},
+		{name: "artifact root", path: "."},
+		{name: "absolute file", path: "/tmp/scores.json", wantTag: "startsnotwith"},
+		{name: "absolute root", path: "/", wantTag: "startsnotwith"},
+		{name: "double slash prefix", path: "//results/scores.json", wantTag: "startsnotwith"},
+		{name: "blank path", path: "   ", wantTag: "notblank"},
+		{name: "tab path", path: "\t", wantTag: "notblank"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := validate.Struct(api.ResultsDataConfigEntry{Path: test.path})
+			if test.wantTag == "" {
+				if err != nil {
+					t.Fatalf("valid relative path %q rejected: %v", test.path, err)
+				}
+				return
+			}
+			var validationErrors validator.ValidationErrors
+			if !errors.As(err, &validationErrors) || len(validationErrors) != 1 {
+				t.Fatalf("path %q: expected one validation error, got %v", test.path, err)
+			}
+			if validationErrors[0].Field() != "path" || validationErrors[0].Tag() != test.wantTag {
+				t.Fatalf("path %q: got field %q tag %q, want path with tag %q", test.path, validationErrors[0].Field(), validationErrors[0].Tag(), test.wantTag)
+			}
+		})
+	}
+}
+
 func TestCollectionConfigClassification(t *testing.T) {
 	validate := newTestValidator(t)
 	cases := []struct {
