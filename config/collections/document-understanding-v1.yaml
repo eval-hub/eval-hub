@@ -1,12 +1,12 @@
 id: document-understanding-v1
-curation_order: 2
+curation_order: 10
 name: Long-Context Document Comprehension v1
 description: >
   Evaluates bare-model understanding of supplied long-context documents and
-  passages using RULER and LongBench v2.
+  passages using six RULER benchmarks.
 # Coverage includes synthetic extraction,
-# passage QA, long-context retrieval and tracking, and broader long-context
-# reasoning. These benchmarks are proxies for enterprise document understanding;
+# passage QA, and long-context retrieval and tracking.
+# These benchmarks are proxies for enterprise document understanding;
 # summarization, schema-based extraction, citation/attribution, and explicit
 # grounding/faithfulness require additional datasets.
 # Scores are diagnostic summaries, not deployment qualification criteria.
@@ -29,17 +29,16 @@ tags:
   - information-extraction
   - bare-model
   - ruler
-  - longbench
   - standard
 
 pass_criteria:
-  threshold: 0.2125
+  threshold: 0.18333333333333335
 
 benchmarks:
-  # Primary metrics match keys returned by completed EvalHub RULER runs.
+  # RULER primary metric keys were verified in completed single-context smoke runs.
   - id: common-words-extraction
     provider_id: ruler
-    weight: 0.125
+    weight: 0.16666666666666666
     primary_score:
       metric: cwe.overall
       lower_is_better: false
@@ -56,7 +55,7 @@ benchmarks:
 
   - id: frequency-words-extraction
     provider_id: ruler
-    weight: 0.125
+    weight: 0.16666666666666666
     primary_score:
       metric: fwe.overall
       lower_is_better: false
@@ -73,7 +72,7 @@ benchmarks:
 
   - id: qa-squad
     provider_id: ruler
-    weight: 0.125
+    weight: 0.16666666666666666
     primary_score:
       metric: qa_1.overall
       lower_is_better: false
@@ -90,7 +89,7 @@ benchmarks:
 
   - id: qa-hotpotqa
     provider_id: ruler
-    weight: 0.125
+    weight: 0.16666666666666666
     primary_score:
       metric: qa_2.overall
       lower_is_better: false
@@ -107,7 +106,7 @@ benchmarks:
 
   - id: niah-single-essay
     provider_id: ruler
-    weight: 0.125
+    weight: 0.16666666666666666
     primary_score:
       metric: niah_single_2.overall
       lower_is_better: false
@@ -124,7 +123,7 @@ benchmarks:
 
   - id: variable-tracking
     provider_id: ruler
-    weight: 0.125
+    weight: 0.16666666666666666
     primary_score:
       metric: vt.overall
       lower_is_better: false
@@ -139,23 +138,10 @@ benchmarks:
       random_seed: 42
       batch_size: 1
 
-  - id: longbenchv2
-    provider_id: lm_evaluation_harness
-    weight: 0.25
-    primary_score:
-      metric: accuracy
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.30
-    parameters:
-      # Input-length and truncation settings remain unresolved.
-      num_fewshot: 0
-      apply_chat_template: true
-
 documentation:
   purpose: >-
     Diagnose bare-model comprehension of supplied long text, including retrieval, tracking, aggregation,
-    passage QA, and broader long-document reasoning.
+    and passage QA.
   selection:
   - provider_id: ruler
     benchmark_id: common-words-extraction
@@ -176,53 +162,44 @@ documentation:
   - provider_id: ruler
     benchmark_id: variable-tracking
     rationale: Variable tracking tests propagation of assignments through long inputs.
-  - provider_id: lm_evaluation_harness
-    benchmark_id: longbenchv2
-    rationale: LongBench v2 adds broader long-document reasoning to the synthetic RULER diagnostics.
   scoring:
     rows:
     - provider_id: ruler
       benchmark_id: common-words-extraction
       metric: cwe.overall
       lower_is_better: false
-      weight: 0.125
+      weight: 0.16666666666666666
       threshold: 0.1
     - provider_id: ruler
       benchmark_id: frequency-words-extraction
       metric: fwe.overall
       lower_is_better: false
-      weight: 0.125
+      weight: 0.16666666666666666
       threshold: 0.1
     - provider_id: ruler
       benchmark_id: qa-squad
       metric: qa_1.overall
       lower_is_better: false
-      weight: 0.125
+      weight: 0.16666666666666666
       threshold: 0.15
     - provider_id: ruler
       benchmark_id: qa-hotpotqa
       metric: qa_2.overall
       lower_is_better: false
-      weight: 0.125
+      weight: 0.16666666666666666
       threshold: 0.15
     - provider_id: ruler
       benchmark_id: niah-single-essay
       metric: niah_single_2.overall
       lower_is_better: false
-      weight: 0.125
+      weight: 0.16666666666666666
       threshold: 0.5
     - provider_id: ruler
       benchmark_id: variable-tracking
       metric: vt.overall
       lower_is_better: false
-      weight: 0.125
+      weight: 0.16666666666666666
       threshold: 0.1
-    - provider_id: lm_evaluation_harness
-      benchmark_id: longbenchv2
-      metric: accuracy
-      lower_is_better: false
-      weight: 0.25
-      threshold: 0.3
     units: >-
       Primary scores are interpreted as fractions on a 0-1 scale for these targets. Verify actual
       emitted units; metric names and catalog agreement alone do not establish them.
@@ -230,15 +207,16 @@ documentation:
       Use raw score for higher-is-better metrics and 1 - raw score for lower-is-better metrics, then
       take the weighted mean. The configured aggregate threshold is a diagnostic target.
     weight_rationale: >-
-      Six RULER rows each receive 0.125, totaling 75%; LongBench receives 25%. This intentionally
-      emphasizes synthetic long-context diagnostics.
+      Each of the six RULER rows receives a weight of 1/6, represented as 0.16666666666666666.
+      The weights sum to 1 within floating-point precision, giving each row equal influence.
     threshold_provenance: >-
-      Existing row and aggregate targets are retained and match the selected provider row targets.
-      Low targets are baseline diagnostics, not enterprise acceptance criteria.
-    collection_threshold: 0.2125
+      Existing row targets are retained and match the selected provider row targets. The aggregate
+      target is recalculated as their weighted mean after removing LongBench v2. Low targets are
+      baseline diagnostics, not enterprise acceptance criteria.
+    collection_threshold: 0.18333333333333335
     threshold_formula: >-
-      0.125 * (0.10 + 0.10 + 0.15 + 0.15 + 0.50 + 0.10) + 0.25 * 0.30 = 0.2125; no decimal rounding
-      required.
+      (0.10 + 0.10 + 0.15 + 0.15 + 0.50 + 0.10) / 6 = 0.18333333333333335
+      (rounded to floating-point precision).
     interpretation: >-
       A weighted aggregate does not guarantee that every benchmark passes or that every required metric
       is present. The review reports missing scores can be omitted and remaining weights renormalized.
@@ -305,11 +283,6 @@ documentation:
         num_samples: 100
         random_seed: 42
         batch_size: 1
-    - provider_id: lm_evaluation_harness
-      benchmark_id: longbenchv2
-      configured_parameters:
-        num_fewshot: 0
-        apply_chat_template: true
     choices:
     - >-
       Every RULER row explicitly requests context_lengths=[4096,8192,16384] tokens and num_samples=100
@@ -326,9 +299,6 @@ documentation:
     - >-
       tokens_to_generate remains unset to preserve the provider-documented per-task generation budget,
       rather than imposing a universal cap.
-    - >-
-      LongBench retains num_fewshot=0 and apply_chat_template=true from the existing collection. Its
-      input-length and truncation settings are not specified.
     verification_status: >-
       Configured values document intent, not measured execution. No model evaluations were run as
       part of this configuration change. Unspecified settings remain deployment or provider/task defaults,
@@ -338,34 +308,29 @@ documentation:
     Configured coverage stops at 16,384 tokens for RULER and does not establish quality at longer
     deployment contexts; an average can hide degradation at the longest length.
   - >-
-    Answer matching and multiple-choice accuracy do not establish citation quality or faithfulness.
+    Answer matching does not establish citation quality or faithfulness.
     Summarization, schema-based extraction, attribution, and explicit grounding remain gaps.
   - >-
-    The review reports that RULER emits task-qualified overall/per-length keys rather than the declared
-    string-match keys. Deployed-result verification remains outstanding.
+    RULER task-qualified overall and per-length result keys were verified in completed single-context
+    smoke runs. This does not verify evaluated counts or aggregation across the full configured
+    context-length range, or establish compatibility with every deployed adapter version.
   - >-
     Provider runtime definitions must be distinguished from real benchmark evidence: configured local
     simulator commands do not validate benchmark execution. Repository YAML documentation is not currently
     persisted or exposed as a documentation field by the service API.
   unresolved_inputs:
   - >-
-    Obtain deployed RULER fixtures proving exact result keys, units, evaluated counts, and per-length
-    behavior.
+    Verify RULER units, evaluated counts, and per-length aggregation for the configured 4,096-, 8,192-,
+    and 16,384-token contexts. Prior single-context smoke runs verify result keys, not the complete
+    collection configuration.
   - >-
     Select a tokenizer and prompt template appropriate for the evaluated model and verify actual input
     token lengths.
-  - >-
-    Establish supported LongBench input-length and truncation behavior from the deployed task and
-    model context window.
   - >-
     Record the actual adapter image, task/dataset revisions, selection policy, and relevant model/generation
     settings with real run results; no missing identifiers or settings are fabricated here.
   provenance:
   - path: config/providers/ruler.yaml
-    supports: >-
-      Declared benchmark IDs, metrics, directions, provider defaults, and runtime configuration; not
-      proof of deployed behavior.
-  - path: config/providers/lm_evaluation_harness.yaml
     supports: >-
       Declared benchmark IDs, metrics, directions, provider defaults, and runtime configuration; not
       proof of deployed behavior.
@@ -379,5 +344,4 @@ documentation:
       not established.
   - source: Implementation plan in the pull request description
     supports: >-
-      Approved membership, runtime-input choices, diagnostic interpretation, and the final curation policy
-      (seven existing target collections at 2, two new at 1, other collections unchanged at 0).
+      Approved membership, runtime-input choices, diagnostic interpretation.

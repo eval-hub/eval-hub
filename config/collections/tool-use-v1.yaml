@@ -1,5 +1,5 @@
 id: tool-use-v1
-curation_order: 2
+curation_order: 10
 name: Tool Use v1
 description: >
   Evaluates single-turn function-calling capability using supplied function
@@ -232,5 +232,4 @@ documentation:
       not established.
   - source: Implementation plan in the pull request description
     supports: >-
-      Approved membership, runtime-input choices, diagnostic interpretation, and the final curation policy
-      (seven existing target collections at 2, two new at 1, other collections unchanged at 0).
+      Approved membership, runtime-input choices, diagnostic interpretation.

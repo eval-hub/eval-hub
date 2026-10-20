@@ -1,0 +1,23 @@
+type: object
+title: DRAConfig
+description: >
+  Dynamic Resource Allocation (DRA) requirement for a Kubernetes provider
+  adapter. Mutually exclusive with `gpu` — a provider runtime must not
+  declare both. Omit both for CPU-only adapters. Unlike `gpu`, `dra` does
+  not carry a node selector: device placement is governed by the referenced
+  ResourceClaimTemplate's device class and topology constraints.
+properties:
+  resource_claim_template:
+    type: string
+    description: >
+      Name of the ResourceClaimTemplate in the job's namespace that defines
+      the device requests (device class, attributes, topology).
+    examples:
+      - gpu-claim-template
+  claim_name:
+    type: string
+    description: >
+      Pod-local claim name consumed by the adapter container via
+      `resources.claims`. Defaults to `gpu` when empty.
+    examples:
+      - gpu

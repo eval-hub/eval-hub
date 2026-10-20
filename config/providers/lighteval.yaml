@@ -9,9 +9,9 @@ runtime:
       - python
       - main.py
     cpu_request: 500m
-    memory_request: 1Gi
+    memory_request: 256Gi
     cpu_limit: 4000m
-    memory_limit: 8Gi
+    memory_limit: 512Gi
   local:
     # used for local mode tests (FVT)
     command: python tests/features/test_data/runtime/main.py
@@ -614,15 +614,15 @@ benchmarks:
       AtCoder. The fixed v6 release does not establish whether problems postdate
       the evaluated model's knowledge cutoff or exclude training contamination.
       Execution-based evaluation: generated code is run against hidden test cases.
-      Declared primary metric is codegen_pass@1; repeated seeded sampling must be
-      verified against the configured adapter.
+      Declared primary metric is lcb:codegeneration_v6.codegen_pass@1; repeated
+      seeded sampling must be verified against the configured adapter.
     category: code
     domains: [software]
     tasks: [code_generation]
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - codegen_pass@1
+      - lcb:codegeneration_v6.codegen_pass@1
     num_few_shot: 0
     tags:
       - code
@@ -630,7 +630,7 @@ benchmarks:
       - execution
       - lighteval
     primary_score:
-      metric: codegen_pass@1
+      metric: lcb:codegeneration_v6.codegen_pass@1
       lower_is_better: false
     pass_criteria:
       threshold: 0.25

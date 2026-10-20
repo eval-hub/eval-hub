@@ -138,11 +138,54 @@ func ValidateCollectionOverrides(overrides []api.EvaluationBenchmarkConfig, coll
 	return nil
 }
 
+// ValidateCollectionJudgeParameters checks the effective parameters of benchmarks
+// whose collection definition opts in to the flat judge_model contract. Other
+// collections and standalone jobs retain their existing parameter behavior.
+func ValidateCollectionJudgeParameters(collection *api.CollectionResource, benchmarks []api.EvaluationBenchmarkConfig) error {
+	if collection == nil {
+		return nil
+	}
+
+	type benchmarkKey struct{ providerID, id string }
+	judgeBenchmarks := make(map[benchmarkKey]struct{})
+	for _, benchmark := range collection.Benchmarks {
+		if _, enabled := benchmark.Parameters["judge_model"]; enabled {
+			judgeBenchmarks[benchmarkKey{benchmark.ProviderID, benchmark.ID}] = struct{}{}
+		}
+	}
+
+	for _, benchmark := range benchmarks {
+		if _, enabled := judgeBenchmarks[benchmarkKey{benchmark.ProviderID, benchmark.ID}]; !enabled {
+			continue
+		}
+		invalid := func(reason string) error {
+			return serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error",
+				fmt.Sprintf("benchmark %q (%s): %s", benchmark.ID, benchmark.ProviderID, reason))
+		}
+		name, ok := benchmark.Parameters["judge_model"].(string)
+		if !ok || strings.TrimSpace(name) == "" {
+			return invalid("judge_model must be a non-empty model name")
+		}
+	}
+	return nil
+}
+
 // validateBenchmarkHardwareConfigExclusive rejects combining a hardware profile name
-// with inline queue/cpu/memory/gpu overrides.
+// with inline queue/cpu/memory/gpu/dra overrides, and combining the legacy GPU
+// extended-resource override with a DRA claim reference.
 func validateBenchmarkHardwareConfigExclusive(sl validator.StructLevel) {
 	hw, ok := sl.Current().Interface().(api.BenchmarkHardwareConfig)
 	if !ok {
+		return
+	}
+	if hw.GPU != nil && hw.DRA != nil {
+		sl.ReportError(
+			hw.DRA,
+			"dra",
+			"DRA",
+			"hardware_config_gpu_dra_exclusive",
+			"gpu and dra are mutually exclusive within hardware_config",
+		)
 		return
 	}
 	if strings.TrimSpace(hw.HardwareProfileName) == "" {
@@ -154,7 +197,7 @@ func validateBenchmarkHardwareConfigExclusive(sl validator.StructLevel) {
 			"hardware_profile_name",
 			"HardwareProfileName",
 			"hardware_config_exclusive",
-			"hardware_profile_name cannot be combined with queue, cpu, memory, or gpu",
+			"hardware_profile_name cannot be combined with queue, cpu, memory, gpu, or dra",
 		)
 	}
 }

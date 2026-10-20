@@ -197,6 +197,95 @@ func TestPostProcessingCreate(t *testing.T) {
 	}
 }
 
+func TestPostProcessingGetMapsEvaluationJobResults(t *testing.T) {
+	handler, store, runtime := newPostProcessingServer(t)
+	source := createPostProcessingSource(t, store, api.OverallStateCompleted)
+	body := postProcessingBody(fmt.Sprintf(`{"eval_job":{"id":%q}}`, source.Resource.ID))
+	submitted := postProcessingRequest(handler, http.MethodPost, postProcessingPath, body)
+	if submitted.Code != http.StatusAccepted {
+		t.Fatalf("submit status %d: %s", submitted.Code, submitted.Body.String())
+	}
+	var created api.PostProcessingResource
+	if err := json.Unmarshal(submitted.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	event := &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+		ProviderID: postprocessing.ProviderID,
+		ID:         postprocessing.BenchmarkID,
+		Status:     api.StateCompleted,
+		AdditionalInfo: map[string]any{"confidence_interval": map[string]any{
+			"benchmarks": []any{map[string]any{
+				"id": "accuracy", "provider_id": "source-provider", "benchmark_index": 0,
+				"confidence_interval": map[string]any{"lower": 0.82, "upper": 0.94},
+			}},
+		}},
+	}}
+	if err := runtime.storage.UpdateEvaluationJob(created.Resource.ID, event); err != nil {
+		t.Fatal(err)
+	}
+
+	fetched := postProcessingRequest(handler, http.MethodGet, postProcessingPath+"/"+created.Resource.ID, "")
+	if fetched.Code != http.StatusOK {
+		t.Fatalf("get status %d: %s", fetched.Code, fetched.Body.String())
+	}
+	var resource api.PostProcessingResource
+	if err := json.Unmarshal(fetched.Body.Bytes(), &resource); err != nil {
+		t.Fatal(err)
+	}
+	if resource.Status.State != api.StateCompleted || resource.Results == nil || len(resource.Results.Benchmarks) != 1 {
+		t.Fatalf("GET response is missing mapped results: %+v", resource)
+	}
+	var responseJSON map[string]json.RawMessage
+	if err := json.Unmarshal(fetched.Body.Bytes(), &responseJSON); err != nil {
+		t.Fatal(err)
+	}
+	var statusJSON map[string]json.RawMessage
+	if err := json.Unmarshal(responseJSON["status"], &statusJSON); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := statusJSON["benchmarks"]; exists {
+		t.Fatal("post-processing status must not expose per-benchmark status")
+	}
+
+	wrongEvaluationGet := postProcessingRequest(handler, http.MethodGet, "/api/v1/evaluations/jobs/"+created.Resource.ID, "")
+	if wrongEvaluationGet.Code != http.StatusNotFound {
+		t.Fatalf("evaluation-job GET for post-processing ID returned %d, want 404: %s", wrongEvaluationGet.Code, wrongEvaluationGet.Body.String())
+	}
+	wrongEvaluationDelete := postProcessingRequest(handler, http.MethodDelete, "/api/v1/evaluations/jobs/"+created.Resource.ID+"?hard_delete=true", "")
+	if wrongEvaluationDelete.Code != http.StatusNotFound {
+		t.Fatalf("evaluation-job DELETE for post-processing ID returned %d, want 404: %s", wrongEvaluationDelete.Code, wrongEvaluationDelete.Body.String())
+	}
+	wrongPostProcessingGet := postProcessingRequest(handler, http.MethodGet, postProcessingPath+"/"+source.Resource.ID, "")
+	if wrongPostProcessingGet.Code != http.StatusNotFound {
+		t.Fatalf("post-processing GET for evaluation-job ID returned %d, want 404: %s", wrongPostProcessingGet.Code, wrongPostProcessingGet.Body.String())
+	}
+	wrongPostProcessingDelete := postProcessingRequest(handler, http.MethodDelete, postProcessingPath+"/"+source.Resource.ID, "")
+	if wrongPostProcessingDelete.Code != http.StatusNotFound {
+		t.Fatalf("post-processing DELETE for evaluation-job ID returned %d, want 404: %s", wrongPostProcessingDelete.Code, wrongPostProcessingDelete.Body.String())
+	}
+	listedEvaluationJobs := postProcessingRequest(handler, http.MethodGet, "/api/v1/evaluations/jobs", "")
+	if listedEvaluationJobs.Code != http.StatusOK {
+		t.Fatalf("evaluation-job list returned %d: %s", listedEvaluationJobs.Code, listedEvaluationJobs.Body.String())
+	}
+	var evaluationJobs api.EvaluationJobResourceList
+	if err := json.Unmarshal(listedEvaluationJobs.Body.Bytes(), &evaluationJobs); err != nil {
+		t.Fatal(err)
+	}
+	if len(evaluationJobs.Items) != 1 || evaluationJobs.Items[0].Resource.ID != source.Resource.ID {
+		t.Fatalf("evaluation-job list exposed the wrong resources: %+v", evaluationJobs.Items)
+	}
+	if _, err := store.GetEvaluationJob(created.Resource.ID); err != nil {
+		t.Fatalf("cross-API DELETE removed the post-processing job: %v", err)
+	}
+	if _, err := store.GetEvaluationJob(source.Resource.ID); err != nil {
+		t.Fatalf("cross-API DELETE removed the evaluation job: %v", err)
+	}
+	result := resource.Results.Benchmarks[0]
+	if result.ID != "accuracy" || result.ProviderID != "source-provider" || result.BenchmarkIndex != 0 || result.ConfidenceInterval.Lower != 0.82 || result.ConfidenceInterval.Upper != 0.94 {
+		t.Fatalf("GET response has incorrect mapped result: %+v", result)
+	}
+}
+
 func TestPostProcessingCompletionDoesNotUpdateSource(t *testing.T) {
 	handler, store, runtime := newPostProcessingServer(t)
 	source := createPostProcessingSource(t, store, api.OverallStateCompleted)
@@ -258,7 +347,7 @@ func TestPostProcessingCompletionDoesNotUpdateSource(t *testing.T) {
 	}
 	assertSourceUnchanged()
 	cancelled := submit()
-	response = postProcessingRequest(handler, http.MethodDelete, "/api/v1/evaluations/jobs/"+cancelled, "")
+	response = postProcessingRequest(handler, http.MethodDelete, postProcessingPath+"/"+cancelled, "")
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("cancel status %d: %s", response.Code, response.Body.String())
 	}
@@ -444,6 +533,17 @@ func TestPostProcessingMethodsAndIdentity(t *testing.T) {
 			t.Fatalf("%s returned %d", method, response.Code)
 		}
 	}
+	itemMethod := postProcessingRequest(handler, http.MethodPut, postProcessingPath+"/post-processing-id", "")
+	if itemMethod.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("PUT to a post-processing item returned %d, want 405", itemMethod.Code)
+	}
+	missingItemIdentity := httptest.NewRequest(http.MethodGet, postProcessingPath+"/post-processing-id", nil)
+	missingItemIdentity.Header.Set("X-Tenant", "tenant-a")
+	missingItemResponse := httptest.NewRecorder()
+	handler.ServeHTTP(missingItemResponse, missingItemIdentity)
+	if missingItemResponse.Code < 400 {
+		t.Fatalf("GET post-processing item without X-User returned %d", missingItemResponse.Code)
+	}
 	for _, missing := range []string{"X-Tenant", "X-User"} {
 		req := httptest.NewRequest(http.MethodPost, postProcessingPath, strings.NewReader(postProcessingBody(`{"pvc":{"claim_name":"results"}}`)))
 		req.Header.Set("X-Tenant", "tenant-a")
@@ -454,5 +554,106 @@ func TestPostProcessingMethodsAndIdentity(t *testing.T) {
 		if response.Code < 400 {
 			t.Fatalf("missing %s accepted", missing)
 		}
+	}
+}
+
+func TestPostProcessingResultDataConfigRoundTrip(t *testing.T) {
+	configs := map[string]string{
+		"object":                    `{"format":"json","columns":{"sample_id":"id","prediction":"scores.judge.value"},"value_mappings":{"prediction":{"C":1,"I":0}}}`,
+		"selected array":            `[{"selection":{"provider_id":"provider-a"},"columns":{"prediction":"score"}},{"selection":{"provider_id":"provider-b"},"columns":{"prediction":"metrics.value"}}]`,
+		"single selected entry":     `[{"selection":{"provider_id":"provider-a"},"columns":{"sample_id":"id"}}]`,
+		"selected numeric mappings": `[{"selection":{"provider_id":"provider-a"},"value_mappings":{"prediction":{"correct":1,"incorrect":0},"label":{"correct":1,"incorrect":0}}}]`,
+		"relative path":             `{"path":"results/scores.json"}`,
+		"relative directory":        `{"path":"results/"}`,
+		"selected relative path":    `[{"selection":{"provider_id":"provider-a"},"path":"./results/scores.json"}]`,
+		"automatic":                 `{}`,
+	}
+	for name, config := range configs {
+		t.Run(name, func(t *testing.T) {
+			handler, store, runtime := newPostProcessingServer(t)
+			source := createPostProcessingSource(t, store, api.OverallStateCompleted)
+			body := postProcessingBody(fmt.Sprintf(`{"eval_job":{"id":%q},"data_config":%s}`, source.Resource.ID, config))
+			response := postProcessingRequest(handler, http.MethodPost, postProcessingPath, body)
+			if response.Code != http.StatusAccepted {
+				t.Fatalf("submit status %d: %s", response.Code, response.Body.String())
+			}
+			var submitted api.PostProcessingResource
+			if err := json.Unmarshal(response.Body.Bytes(), &submitted); err != nil {
+				t.Fatal(err)
+			}
+			checkConfig := func(got *api.ResultsDataConfig) {
+				t.Helper()
+				encoded, err := json.Marshal(got)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var actual, expected any
+				if err := json.Unmarshal(encoded, &actual); err != nil {
+					t.Fatal(err)
+				}
+				if err := json.Unmarshal([]byte(config), &expected); err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(actual, expected) {
+					t.Fatalf("data_config = %s, want %s", encoded, config)
+				}
+			}
+			checkConfig(submitted.Operations.ConfidenceInterval.ResultsDataRef.DataConfig)
+			operations, err := postprocessing.OperationsFromJob(&runtime.job.EvaluationJobConfig)
+			if err != nil {
+				t.Fatal(err)
+			}
+			checkConfig(operations.ConfidenceInterval.ResultsDataRef.DataConfig)
+			fetched := postProcessingRequest(handler, http.MethodGet, postProcessingPath+"/"+submitted.Resource.ID, "")
+			if fetched.Code != http.StatusOK {
+				t.Fatalf("get status %d: %s", fetched.Code, fetched.Body.String())
+			}
+			var resource api.PostProcessingResource
+			if err := json.Unmarshal(fetched.Body.Bytes(), &resource); err != nil {
+				t.Fatal(err)
+			}
+			checkConfig(resource.Operations.ConfidenceInterval.ResultsDataRef.DataConfig)
+		})
+	}
+}
+
+func TestPostProcessingRejectsInvalidResultDataConfig(t *testing.T) {
+	configs := map[string]string{
+		"scalar":                          `"json"`,
+		"empty array":                     `[]`,
+		"array without selection":         `[{"format":"json"}]`,
+		"invalid format":                  `{"format":"xml"}`,
+		"absolute path":                   `{"path":"/tmp/scores.json"}`,
+		"absolute root":                   `{"path":"/"}`,
+		"selected absolute path":          `[{"selection":{"provider_id":"provider-a"},"path":"/tmp/scores.json"}]`,
+		"blank path":                      `{"path":"   "}`,
+		"selected blank path":             `[{"selection":{"provider_id":"provider-a"},"path":"\t"}]`,
+		"unknown column role":             `{"columns":{"unknown":"x"}}`,
+		"blank column":                    `{"columns":{"prediction":" "}}`,
+		"unknown selection":               `{"selection":{"unknown":"x"}}`,
+		"empty selection":                 `{"selection":{}}`,
+		"unknown mapped role":             `{"value_mappings":{"sample_id":{"x":1}}}`,
+		"empty value map":                 `{"value_mappings":{"prediction":{}}}`,
+		"boolean target":                  `{"value_mappings":{"prediction":{"yes":true}}}`,
+		"string target":                   `{"value_mappings":{"prediction":{"yes":"1"}}}`,
+		"nonfinite target":                `{"value_mappings":{"prediction":{"yes":1e999}}}`,
+		"null prediction target":          `{"value_mappings":{"prediction":{"correct":null,"incorrect":0}}}`,
+		"null label target":               `{"value_mappings":{"label":{"correct":null}}}`,
+		"selected null prediction target": `[{"selection":{"provider_id":"provider-a"},"value_mappings":{"prediction":{"correct":null,"incorrect":0}}}]`,
+		"selected null label target":      `[{"selection":{"provider_id":"provider-a"},"value_mappings":{"label":{"correct":null}}}]`,
+		"invalid selected entry":          `[{"selection":{"provider_id":"p"},"columns":{"prediction":""}}]`,
+	}
+	for name, config := range configs {
+		t.Run(name, func(t *testing.T) {
+			handler, _, runtime := newPostProcessingServer(t)
+			body := postProcessingBody(fmt.Sprintf(`{"pvc":{"claim_name":"results"},"data_config":%s}`, config))
+			response := postProcessingRequest(handler, http.MethodPost, postProcessingPath, body)
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("status %d: %s", response.Code, response.Body.String())
+			}
+			if runtime.job != nil {
+				t.Fatal("invalid mapping launched a job")
+			}
+		})
 	}
 }

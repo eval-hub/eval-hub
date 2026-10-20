@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -84,6 +85,21 @@ func buildEnvVars(jc *jobConfig, serviceConfig *config.Config) []corev1.EnvVar {
 			Value: ociAuthMountPath,
 		})
 		seen[envOCIAuthConfigPathName] = true
+	}
+
+	if len(jc.postProcessorPVCs) > 0 {
+		// Map claim roots; the adapter resolves each reference's sub_path.
+		mountPaths := make(map[string]string, len(jc.postProcessorPVCs))
+		for _, pvc := range jc.postProcessorPVCs {
+			mountPaths[pvc.claimName] = pvc.mountPath
+		}
+		// A map of strings cannot fail JSON encoding.
+		encodedMountPaths, _ := json.Marshal(mountPaths)
+		env = append(env, corev1.EnvVar{
+			Name:  envPostProcessorPVCMountsName,
+			Value: string(encodedMountPaths),
+		})
+		seen[envPostProcessorPVCMountsName] = true
 	}
 
 	// Set MLFLOW_TRACKING_SERVER_CERT_PATH so mlflow's tracking client trusts the
@@ -200,6 +216,13 @@ func buildResources(cfg *jobConfig) (corev1.ResourceRequirements, error) {
 		resources.Requests[corev1.ResourceName(cfg.gpuResource)] = gpuQty
 		resources.Limits[corev1.ResourceName(cfg.gpuResource)] = gpuQty
 	}
+	// DRA: the adapter container consumes the pod-level claim by its pod-local
+	// name (see buildResourceClaims); the sidecar and init containers stay CPU-only.
+	// Kueue reads the claim reference for quota accounting, replacing the extended
+	// resource requests above.
+	if cfg.draResourceClaimTemplate != "" {
+		resources.Claims = []corev1.ResourceClaim{{Name: cfg.draClaimName}}
+	}
 	if len(resources.Requests) == 0 {
 		resources.Requests = nil
 	}
@@ -207,4 +230,25 @@ func buildResources(cfg *jobConfig) (corev1.ResourceRequirements, error) {
 		resources.Limits = nil
 	}
 	return resources, nil
+}
+
+// buildResourceClaims returns the pod-level DRA claim declarations for the Job.
+// A single claim references a namespace-local ResourceClaimTemplate — never a
+// pre-created ResourceClaim, which would make the Job inadmissible to Kueue
+// (Kueue only admits workload objects that create their own claims). The claim
+// is consumed by the adapter container via resources.claims; the template, not
+// the Job, defines the device class, attribute selectors, and topology
+// constraints. Returns nil when DRA is not configured, leaving legacy pod specs
+// unchanged.
+func buildResourceClaims(cfg *jobConfig) []corev1.PodResourceClaim {
+	if cfg.draResourceClaimTemplate == "" {
+		return nil
+	}
+	templateName := cfg.draResourceClaimTemplate
+	return []corev1.PodResourceClaim{
+		{
+			Name:                      cfg.draClaimName,
+			ResourceClaimTemplateName: &templateName,
+		},
+	}
 }

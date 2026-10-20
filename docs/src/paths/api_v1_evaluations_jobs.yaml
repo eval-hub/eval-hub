@@ -58,6 +58,22 @@ post:
                 id: "standard-safety-collection"
               pass_criteria:
                 threshold: 0.5
+          CreateEvaluationWithCollectionJudge:
+            summary: Select a judge model using optional Secret-backed connection fields
+            value:
+              name: "trustworthiness-with-judge"
+              model:
+                url: "http://target-model.models.svc.cluster.local:8000/v1"
+                name: "target-model"
+                auth:
+                  secret_ref: "model-and-judge-credentials"
+              collection:
+                id: "trustworthiness-v1"
+                benchmarks:
+                  - id: "inspect/cyberseceval-2-pi"
+                    provider_id: "inspect"
+                    parameters:
+                      judge_model: "deployed-judge-model"
           CreateEvaluationWithAuthAndHardwareProfile:
             summary: Evaluate an authenticated model with HardwareProfile Kueue scheduling
             value:

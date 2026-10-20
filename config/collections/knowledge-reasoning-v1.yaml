@@ -1,5 +1,5 @@
 id: knowledge-reasoning-v1
-curation_order: 2
+curation_order: 10
 name: Knowledge and Reasoning v1
 description: >
   Evaluates closed-book, text-only knowledge and reasoning across difficult
@@ -60,6 +60,8 @@ benchmarks:
     parameters:
       # Screening cap; override num_examples in the request for other run sizes.
       num_examples: 50
+      # Select a deployed judge model for Inspect's grader role in each job.
+      judge_model: ""
       task_args:
         include_multi_modal: false
         only_hle_verified_gold: false
@@ -127,9 +129,14 @@ documentation:
       config/providers/inspect.yaml and config/providers/lighteval.yaml.
     hle: >-
       Uses the static text-only dataset without restricting it to verified-gold questions,
-      with a screening cap and one regex_judge grader. Bind model_roles.grader and its
-      credentials in the request. See examples/inspect-hle/README.md for the supported
-      runtime and a standalone request generated from this collection's settings.
+      with a screening cap and one regex_judge grader. For collection jobs, set
+      judge_model in the HLE benchmark request overrides. With no judge fields in
+      model.auth.secret_ref, the judge reuses the target connection. A judge_api-key
+      uses that credential; an optional judge_url selects a different endpoint.
+      judge_url alone is invalid. For standalone requests, bind
+      model_roles.grader and its credentials. See examples/inspect-hle/README.md for
+      the supported runtime and a standalone request generated from this collection's
+      settings.
   limitations:
   - >-
     Structured-table and structured-data analysis are outside this collection's scope.
