@@ -42,8 +42,8 @@ func newHTTPClient(timeout time.Duration, tlsConfig *tls.Config, isOTELEnabled b
 }
 
 // buildTLSConfig creates a TLS config from CA cert path and insecure flag.
-// When insecureSkipVerify is false and caCertPath is non-empty, the CA PEM is loaded into RootCAs
-// (production Eval Hub / MLflow / OCI behavior on cluster).
+// When insecureSkipVerify is false and caCertPath is non-empty, the CA PEM is appended to
+// the system roots so a shared client can reach both public and private HTTPS destinations.
 // When insecureSkipVerify is true, custom CA files are not read: verification is off, so loading a CA
 // would not affect trust and skipping avoids failing on missing paths in local/test environments.
 // When caCertPath is empty and insecureSkipVerify is false, system roots are used (default *tls.Config).
@@ -58,7 +58,10 @@ func buildTLSConfig(caCertPath string, insecureSkipVerify bool, logger *slog.Log
 		if err != nil {
 			return nil, fmt.Errorf("failed to read %s CA certificate at %s: %w", certLabel, caCertPath, err)
 		}
-		caCertPool := x509.NewCertPool()
+		caCertPool, err := x509.SystemCertPool()
+		if err != nil {
+			return nil, fmt.Errorf("failed to load system CA certificates for %s: %w", certLabel, err)
+		}
 		if !caCertPool.AppendCertsFromPEM(caCert) {
 			return nil, fmt.Errorf("failed to parse %s CA certificate at %s: file contains no valid PEM certificates", certLabel, caCertPath)
 		}
@@ -154,6 +157,12 @@ func NewMLFlowHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logge
 // CACertPath is always set to the potential ca_cert file in the real secret mount; if the
 // file does not exist (secret has no ca_cert key) the client falls back to system roots
 // rather than failing startup.
+//
+// TLS config is built when the primary model URL uses HTTPS or when a CA cert is present.
+// The CA-cert condition is essential because the model proxy is a multi-destination proxy:
+// *_url ref tokens (e.g. kfp_url) may route requests to HTTPS endpoints even when the
+// primary model endpoint is plain HTTP. Without loading the CA cert, those HTTPS
+// connections fail with "x509: certificate signed by unknown authority".
 func NewModelHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logger *slog.Logger) (*http.Client, error) {
 	if serviceConfig == nil || serviceConfig.Sidecar == nil {
 		return nil, nil
@@ -181,7 +190,7 @@ func NewModelHTTPClient(serviceConfig *config.Config, isOTELEnabled bool, logger
 		targetURL = mc.URL
 	}
 	var tlsConfig *tls.Config
-	if schemeRequiresTLS(targetURL) {
+	if caCertPath != "" || schemeRequiresTLS(targetURL) {
 		var err error
 		tlsConfig, err = buildTLSConfig(caCertPath, insecureSkipVerify, logger, "Model")
 		if err != nil {

@@ -22,17 +22,16 @@ Feature: Collections Endpoint
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "document-understanding-v1" at path "$.collection.id"
-    And the array at path "$.collection.benchmarks" in the response should have length 7
+    And the array at path "$.collection.benchmarks" in the response should have length 6
     And the response should contain the value "common-words-extraction" at path "$.collection.benchmarks[*].id"
     And the response should contain the value "frequency-words-extraction" at path "$.collection.benchmarks[*].id"
     And the response should contain the value "qa-squad" at path "$.collection.benchmarks[*].id"
     And the response should contain the value "qa-hotpotqa" at path "$.collection.benchmarks[*].id"
     And the response should contain the value "niah-single-essay" at path "$.collection.benchmarks[*].id"
     And the response should contain the value "variable-tracking" at path "$.collection.benchmarks[*].id"
-    And the response should contain the value "longbenchv2" at path "$.collection.benchmarks[*].id"
     And the response should contain the value "completed" at path "$.status.state"
     And the response should contain the value "Evaluation job is completed" at path "$.status.message.message"
-    And the array at path "$.results.benchmarks" in the response should have length 7
+    And the array at path "$.results.benchmarks" in the response should have length 6
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics
     And the response should contain the value "common-words-extraction" at path "$.results.benchmarks[*].id"
@@ -41,7 +40,6 @@ Feature: Collections Endpoint
     And the response should contain the value "qa-hotpotqa" at path "$.results.benchmarks[*].id"
     And the response should contain the value "niah-single-essay" at path "$.results.benchmarks[*].id"
     And the response should contain the value "variable-tracking" at path "$.results.benchmarks[*].id"
-    And the response should contain the value "longbenchv2" at path "$.results.benchmarks[*].id"
     And the response should contain "results"
 
   Scenario: Verify curated collection run and results - fairness-bias-v1
