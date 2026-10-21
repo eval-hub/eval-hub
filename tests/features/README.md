@@ -29,12 +29,20 @@ Set the model fields in the test payloads using environment variables:
 
 - `MODEL_URL` (defaults to `http://test.com`)
 - `MODEL_NAME` (defaults to `test`)
+- `FVT_BENCHMARK_TOKENIZER`: matching Hugging Face tokenizer ID or a path accessible
+  inside the adapter container. Set this separately when `MODEL_NAME` is a deployment alias.
+  Connected runs retain `google/flan-t5-small` when unset or empty; this default has
+  no chat template, so chat-template benchmarks require a compatible tokenizer override.
+  Disconnected runs continue to use `/test_data/tokenizer`, ignoring this override;
+  stage a tokenizer compatible with the model and benchmark requirements at that path.
 
 Example:
 
 ```bash
 export MODEL_URL="http://granite-llm-metrics.prabhu.svc.cluster.local:8080/v1"
 export MODEL_NAME="granite-llm"
+# Set this to the actual tokenizer for the model behind the endpoint:
+export FVT_BENCHMARK_TOKENIZER="<matching-tokenizer-id>"
 ```
 
 Run all feature tests:

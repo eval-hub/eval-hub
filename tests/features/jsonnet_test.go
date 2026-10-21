@@ -204,6 +204,60 @@ test.model()
 	}
 }
 
+func TestBenchmarkTokenizerConfiguration(t *testing.T) {
+	cases := []struct {
+		name        string
+		environment string
+		tokenizer   string
+		unset       bool
+		want        string
+	}{
+		{"connected default", "connected", "", true, "google/flan-t5-small"},
+		{"connected empty", "connected", "", false, "google/flan-t5-small"},
+		{"connected model tokenizer", "connected", "Qwen/Qwen3-VL-30B-A3B-Instruct", false, "Qwen/Qwen3-VL-30B-A3B-Instruct"},
+		{"connected local tokenizer", "connected", "/mounted/tokenizer", false, "/mounted/tokenizer"},
+		{"disconnected default", "disconnected", "", true, "/test_data/tokenizer"},
+		{"disconnected ignores connected override", "disconnected", "Qwen/Qwen3-VL-30B-A3B-Instruct", false, "/test_data/tokenizer"},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("ENVIRONMENT_ID", tt.environment)
+			t.Setenv("MODEL_NAME", "deployment-alias")
+			if tt.unset {
+				unsetEnvForTest(t, "FVT_BENCHMARK_TOKENIZER")
+			} else {
+				t.Setenv("FVT_BENCHMARK_TOKENIZER", tt.tokenizer)
+			}
+
+			sc := &scenarioConfig{}
+			out, err := sc.getFile("evaluation_job_instruction-output-v1.json")
+			if err != nil {
+				t.Fatalf("render instruction-output fixture: %v", err)
+			}
+			var job struct {
+				Collection struct {
+					Benchmarks []jsonnetBenchmarkPayload `json:"benchmarks"`
+				} `json:"collection"`
+			}
+			if err := json.Unmarshal([]byte(out), &job); err != nil {
+				t.Fatalf("unmarshal fixture: %v", err)
+			}
+			if len(job.Collection.Benchmarks) != 3 {
+				t.Fatalf("got %d benchmarks, want 3", len(job.Collection.Benchmarks))
+			}
+			for _, b := range job.Collection.Benchmarks {
+				if got := b.Parameters["tokenizer"]; got != tt.want {
+					t.Errorf("%s tokenizer = %v, want %q", b.ID, got, tt.want)
+				}
+			}
+			got := resolveEnvSubstitutionValue("FVT_BENCHMARK_TOKENIZER", "google/flan-t5-small", true)
+			if got != tt.want {
+				t.Errorf("assertion tokenizer = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestJsonnetModelAuth(t *testing.T) {
 	tc := &scenarioConfig{
 		values:                map[string]string{},
@@ -504,6 +558,7 @@ func TestEvaluateEvaluationJobJsonnetDisconnected(t *testing.T) {
 }
 
 func TestEvaluateEvaluationJobJsonnetConnected(t *testing.T) {
+	unsetEnvForTest(t, "FVT_BENCHMARK_TOKENIZER")
 	tc := &scenarioConfig{
 		values: map[string]string{},
 		jsonnetHarnessEnv: map[string]string{
@@ -1115,6 +1170,7 @@ func TestEvaluateEvaluationJobGitAndPvcJsonnet(t *testing.T) {
 }
 
 func TestEvaluateEvaluationJobJsonnetWithQueue(t *testing.T) {
+	unsetEnvForTest(t, "FVT_BENCHMARK_TOKENIZER")
 	queueJobJson := `
 	{
         "model": {
@@ -1408,6 +1464,9 @@ func evaluateJsonnetPayloadDocument(t *testing.T, tc *scenarioConfig, file strin
 func assertJsonnetBenchmarksDisconnectedAware(t *testing.T, file string, benchmarks []jsonnetBenchmarkPayload, disconnected bool) {
 	t.Helper()
 	wantTokenizer := "google/flan-t5-small"
+	if tokenizer := os.Getenv("FVT_BENCHMARK_TOKENIZER"); tokenizer != "" {
+		wantTokenizer = tokenizer
+	}
 	if disconnected {
 		wantTokenizer = "/test_data/tokenizer"
 	}
