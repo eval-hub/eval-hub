@@ -1,6 +1,9 @@
 type: object
 title: ConfidenceInterval
-description: Confidence interval for a computed result.
+description: >
+  Confidence interval for a computed result, including the point estimate and
+  computation metadata reported by the adapter. Metadata may be absent in
+  results produced by older adapters.
 properties:
   lower:
     type: number
@@ -10,6 +13,33 @@ properties:
     type: number
     format: float
     description: Upper confidence interval bound.
+  point_estimate:
+    type: number
+    format: float
+    description: Point estimate used to compute the interval.
+  n_labeled:
+    type: integer
+    minimum: 0
+    description: Number of labeled calibration samples used in the computation.
+  n_unlabeled:
+    type: integer
+    minimum: 0
+    description: Number of unlabeled samples used after excluding calibration overlap.
+  alpha:
+    type: number
+    format: float
+    exclusiveMinimum: 0
+    exclusiveMaximum: 1
+    description: Significance level used to compute the interval (confidence level is 1 - alpha).
+  method:
+    type: string
+    description: Method used to compute the interval; original_ppi denotes original prediction-powered inference.
+    examples:
+      - original_ppi
+  lambda:
+    type: number
+    format: float
+    description: PPI tuning parameter used in the computation; original PPI uses 1.
 required:
   - lower
   - upper

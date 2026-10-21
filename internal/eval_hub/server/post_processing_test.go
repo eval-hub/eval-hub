@@ -286,6 +286,74 @@ func TestPostProcessingGetMapsEvaluationJobResults(t *testing.T) {
 	}
 }
 
+func TestPostProcessingGetPreservesConfidenceIntervalMetadata(t *testing.T) {
+	for _, sourceKind := range []string{"evaluation job", "external"} {
+		for _, test := range []struct {
+			name     string
+			interval string
+		}{
+			{
+				name:     "audit metadata",
+				interval: `{"lower":0.75,"upper":0.85,"point_estimate":0.8,"n_labeled":100,"n_unlabeled":1000,"alpha":0.05,"method":"original_ppi","lambda":1}`,
+			},
+			{
+				name:     "zero point estimate",
+				interval: `{"lower":-0.1,"upper":0.1,"point_estimate":0,"n_labeled":20,"n_unlabeled":200,"alpha":0.05,"method":"original_ppi","lambda":1}`,
+			},
+			{
+				name:     "legacy bounds only",
+				interval: `{"lower":0.75,"upper":0.85}`,
+			},
+		} {
+			t.Run(sourceKind+"/"+test.name, func(t *testing.T) {
+				handler, store, _ := newPostProcessingServer(t)
+				sourceRef := `{"pvc":{"claim_name":"results-data"}}`
+				output := fmt.Sprintf(`{"confidence_interval":%s}`, test.interval)
+				if sourceKind == "evaluation job" {
+					source := createPostProcessingSource(t, store, api.OverallStateCompleted)
+					sourceRef = fmt.Sprintf(`{"eval_job":{"id":%q}}`, source.Resource.ID)
+					output = fmt.Sprintf(`{"benchmarks":[{"id":"accuracy","provider_id":"source-provider","benchmark_index":0,"confidence_interval":%s}]}`, test.interval)
+				}
+				submitted := postProcessingRequest(handler, http.MethodPost, postProcessingPath, postProcessingBody(sourceRef))
+				if submitted.Code != http.StatusAccepted {
+					t.Fatalf("submit status %d: %s", submitted.Code, submitted.Body.String())
+				}
+				var created api.PostProcessingResource
+				if err := json.Unmarshal(submitted.Body.Bytes(), &created); err != nil {
+					t.Fatal(err)
+				}
+				eventBody := fmt.Sprintf(`{"benchmark_status_event":{"id":%q,"provider_id":%q,"status":"completed","additional_info":{"confidence_interval":%s}}}`,
+					postprocessing.BenchmarkID, postprocessing.ProviderID, output)
+				event := postProcessingRequest(handler, http.MethodPost, "/api/v1/evaluations/jobs/"+created.Resource.ID+"/events", eventBody)
+				if event.Code != http.StatusNoContent {
+					t.Fatalf("event status %d: %s", event.Code, event.Body.String())
+				}
+				fetched := postProcessingRequest(handler, http.MethodGet, postProcessingPath+"/"+created.Resource.ID, "")
+				if fetched.Code != http.StatusOK {
+					t.Fatalf("get status %d: %s", fetched.Code, fetched.Body.String())
+				}
+				var resource struct {
+					Status  api.PostProcessingStatus `json:"status"`
+					Results map[string]any           `json:"results"`
+				}
+				if err := json.Unmarshal(fetched.Body.Bytes(), &resource); err != nil {
+					t.Fatal(err)
+				}
+				if resource.Status.State != api.StateCompleted {
+					t.Fatalf("state = %s, want completed", resource.Status.State)
+				}
+				var want map[string]any
+				if err := json.Unmarshal([]byte(output), &want); err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(resource.Results, want) {
+					t.Fatalf("GET results = %+v, want %+v", resource.Results, want)
+				}
+			})
+		}
+	}
+}
+
 func TestPostProcessingCompletionDoesNotUpdateSource(t *testing.T) {
 	handler, store, runtime := newPostProcessingServer(t)
 	source := createPostProcessingSource(t, store, api.OverallStateCompleted)

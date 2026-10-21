@@ -69,6 +69,12 @@ get:
                       confidence_interval:
                         lower: 0.75
                         upper: 0.85
+                        point_estimate: 0.8
+                        n_labeled: 100
+                        n_unlabeled: 1000
+                        alpha: 0.7
+                        method: original_ppi
+                        lambda: 1
             external:
               summary: External-result shape
               value:
@@ -119,6 +125,12 @@ get:
                   confidence_interval:
                     lower: 0.75
                     upper: 0.85
+                    point_estimate: 0.8
+                    n_labeled: 100
+                    n_unlabeled: 1000
+                    alpha: 0.7
+                    method: original_ppi
+                    lambda: 1
     '401':
       $ref: ../components/responses/Unauthorized.yaml
     '403':
