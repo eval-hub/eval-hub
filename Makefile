@@ -30,6 +30,27 @@ help: ## Display this help message
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
+KIND_CLUSTER_NAME ?= evalhub-dev
+IMAGE_TAG ?= kind-$(KIND_CLUSTER_NAME)
+SKIP_BUILD ?= false
+EVALHUB_HOST_PORT ?= 18443
+EVALHUB_NODE_PORT ?= 30443
+EVALHUB_REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+EVALHUB_REPO_PARENT := $(abspath $(EVALHUB_REPO_ROOT)/..)
+EVALHUB_CONTRIB_REPO ?= $(EVALHUB_REPO_PARENT)/eval-hub-contrib
+TRUSTYAI_OPERATOR_REPO ?= $(EVALHUB_REPO_PARENT)/trustyai-service-operator
+
+.PHONY: dev-deploy dev-deploy-help
+dev-deploy: ## Build and deploy the local EvalHub stack to Docker-backed kind
+	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" IMAGE_TAG="$(IMAGE_TAG)" \
+		SKIP_BUILD="$(SKIP_BUILD)" \
+		EVALHUB_HOST_PORT="$(EVALHUB_HOST_PORT)" EVALHUB_NODE_PORT="$(EVALHUB_NODE_PORT)" \
+		EVALHUB_CONTRIB_REPO="$(EVALHUB_CONTRIB_REPO)" \
+		TRUSTYAI_OPERATOR_REPO="$(TRUSTYAI_OPERATOR_REPO)" bash scripts/dev-deploy.sh
+
+dev-deploy-help: ## Show dev-deploy inputs and usage
+	@bash scripts/dev-deploy.sh --help
+
 PRE_COMMIT ?= .git/hooks/pre-commit
 
 ${PRE_COMMIT}: .pre-commit-config.yaml
