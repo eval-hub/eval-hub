@@ -5839,43 +5839,43 @@
       "ConfidenceInterval": {
         "type": "object",
         "title": "ConfidenceInterval",
-        "description": "Confidence interval for a computed result, including the point estimate and computation metadata reported by the adapter. The current adapter reports all metadata fields; fields absent from stored results are omitted from the response.\n",
+        "description": "Estimated range for the benchmark's average score, with details about the data and calculation. Details that were not reported with the result are omitted.\n",
         "properties": {
           "lower": {
             "type": "number",
             "format": "float",
-            "description": "Lower confidence interval bound."
+            "description": "Lower end of the estimated range for the average score."
           },
           "upper": {
             "type": "number",
             "format": "float",
-            "description": "Upper confidence interval bound."
+            "description": "Upper end of the estimated range for the average score."
           },
           "point_estimate": {
             "type": "number",
             "format": "float",
-            "description": "Point estimate used to compute the interval."
+            "description": "Estimated average benchmark score after correcting prediction errors using examples with known answers or scores. For accuracy, 0.8 means an estimated 80% correct.\n"
           },
           "n_labeled": {
             "type": "integer",
             "minimum": 0,
-            "description": "Number of labeled calibration samples used in the computation."
+            "description": "Number of examples with trusted answers or scores used to check and correct the predictions.\n"
           },
           "n_unlabeled": {
             "type": "integer",
             "minimum": 0,
-            "description": "Number of unlabeled samples used after excluding calibration overlap."
+            "description": "Number of examples whose predicted scores were used without known answers or scores. Examples already counted in n_labeled are excluded from this count.\n"
           },
           "alpha": {
             "type": "number",
             "format": "float",
             "exclusiveMinimum": 0,
             "exclusiveMaximum": 1,
-            "description": "Significance level used to compute the interval (confidence level is 1 - alpha)."
+            "description": "Value that sets the confidence level. For example, alpha = 0.05 gives a 95% confidence interval (1 - alpha = 0.95).\n"
           },
           "method": {
             "type": "string",
-            "description": "Method used to compute the interval; original_ppi denotes original prediction-powered inference.",
+            "description": "Calculation method used to produce the estimate and interval. The value original_ppi means original prediction-powered inference (PPI), which uses examples with known answers or scores to correct errors in predicted scores.\n",
             "examples": [
               "original_ppi"
             ]
@@ -5883,7 +5883,7 @@
           "lambda": {
             "type": "number",
             "format": "float",
-            "description": "PPI tuning parameter used in the computation; original PPI uses 1."
+            "description": "Weight applied to the predicted scores during the calculation. The original_ppi method uses 1.\n"
           }
         },
         "required": [
