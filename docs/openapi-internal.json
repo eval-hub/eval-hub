@@ -1406,7 +1406,13 @@
                             "benchmark_index": 0,
                             "confidence_interval": {
                               "lower": 0.75,
-                              "upper": 0.85
+                              "upper": 0.85,
+                              "point_estimate": 0.8,
+                              "n_labeled": 100,
+                              "n_unlabeled": 1000,
+                              "alpha": 0.7,
+                              "method": "original_ppi",
+                              "lambda": 1
                             }
                           }
                         ]
@@ -1480,7 +1486,13 @@
                       "results": {
                         "confidence_interval": {
                           "lower": 0.75,
-                          "upper": 0.85
+                          "upper": 0.85,
+                          "point_estimate": 0.8,
+                          "n_labeled": 100,
+                          "n_unlabeled": 1000,
+                          "alpha": 0.7,
+                          "method": "original_ppi",
+                          "lambda": 1
                         }
                       }
                     }
@@ -5827,17 +5839,51 @@
       "ConfidenceInterval": {
         "type": "object",
         "title": "ConfidenceInterval",
-        "description": "Confidence interval for a computed result.",
+        "description": "Estimated range for the benchmark's average score, with details about the data and calculation. Details that were not reported with the result are omitted.\n",
         "properties": {
           "lower": {
             "type": "number",
             "format": "float",
-            "description": "Lower confidence interval bound."
+            "description": "Lower end of the estimated range for the average score."
           },
           "upper": {
             "type": "number",
             "format": "float",
-            "description": "Upper confidence interval bound."
+            "description": "Upper end of the estimated range for the average score."
+          },
+          "point_estimate": {
+            "type": "number",
+            "format": "float",
+            "description": "Estimated average benchmark score after correcting prediction errors using examples with known answers or scores. For accuracy, 0.8 means an estimated 80% correct.\n"
+          },
+          "n_labeled": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of examples with trusted answers or scores used to check and correct the predictions.\n"
+          },
+          "n_unlabeled": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of examples whose predicted scores were used without known answers or scores. Examples already counted in n_labeled are excluded from this count.\n"
+          },
+          "alpha": {
+            "type": "number",
+            "format": "float",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "description": "Value that sets the confidence level. For example, alpha = 0.05 gives a 95% confidence interval (1 - alpha = 0.95).\n"
+          },
+          "method": {
+            "type": "string",
+            "description": "Calculation method used to produce the estimate and interval. The value original_ppi means original prediction-powered inference (PPI), which uses examples with known answers or scores to correct errors in predicted scores.\n",
+            "examples": [
+              "original_ppi"
+            ]
+          },
+          "lambda": {
+            "type": "number",
+            "format": "float",
+            "description": "Weight given to predicted scores in the score estimate and confidence interval. A value of 1 uses predictions together with a correction based on examples with known answers or scores. A value of 0 would use only those known answers or scores. The current original_ppi method always returns 1.\n"
           }
         },
         "required": [
