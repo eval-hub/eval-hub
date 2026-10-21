@@ -53,8 +53,11 @@ Inputs (also accepted as environment variables):
   TRUSTYAI_OPERATOR_REPO  operator checkout (default: sibling ../trustyai-service-operator)
 
 New clusters map the API NodePort to the host port on 127.0.0.1. Existing
-clusters are reused without modification; if they lack that mapping, use the
-printed kubectl port-forward command for host access.
+clusters are reused without modification. For registry mirror support, a reused
+cluster must use a kind node image from v0.27.0 or newer; older clusters must be
+recreated so the containerd registry config path can be enabled. If a reused
+cluster lacks the API NodePort mapping, use the printed kubectl port-forward
+command for host access.
 
 The private kubeconfig is written under XDG_CONFIG_HOME (default ~/.config),
 at evalhub/kubeconfigs/<cluster>.yaml.
@@ -146,6 +149,10 @@ ensure_cluster() {
     cat >"$kind_config" <<YAML
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry]
+      config_path = "/etc/containerd/certs.d"
 nodes:
   - role: control-plane
     extraPortMappings:
