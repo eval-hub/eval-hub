@@ -4005,7 +4005,7 @@ components:
           type: number
           format: float
           description: |
-            Weight applied to the predicted scores during the calculation. The original_ppi method uses 1.
+            Weight given to predicted scores in the score estimate and confidence interval. A value of 1 uses predictions together with a correction based on examples with known answers or scores. A value of 0 would use only those known answers or scores. The current original_ppi method always returns 1.
       required:
         - lower
         - upper
