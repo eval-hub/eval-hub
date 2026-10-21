@@ -300,10 +300,6 @@ func TestPostProcessingGetPreservesConfidenceIntervalMetadata(t *testing.T) {
 				name:     "zero point estimate",
 				interval: `{"lower":-0.1,"upper":0.1,"point_estimate":0,"n_labeled":20,"n_unlabeled":200,"alpha":0.05,"method":"original_ppi","lambda":1}`,
 			},
-			{
-				name:     "legacy bounds only",
-				interval: `{"lower":0.75,"upper":0.85}`,
-			},
 		} {
 			t.Run(sourceKind+"/"+test.name, func(t *testing.T) {
 				handler, store, _ := newPostProcessingServer(t)

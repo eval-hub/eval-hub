@@ -5839,7 +5839,7 @@
       "ConfidenceInterval": {
         "type": "object",
         "title": "ConfidenceInterval",
-        "description": "Confidence interval for a computed result, including the point estimate and computation metadata reported by the adapter. Metadata may be absent in results produced by older adapters.\n",
+        "description": "Confidence interval for a computed result, including the point estimate and computation metadata reported by the adapter.\n",
         "properties": {
           "lower": {
             "type": "number",
@@ -5888,7 +5888,13 @@
         },
         "required": [
           "lower",
-          "upper"
+          "upper",
+          "point_estimate",
+          "n_labeled",
+          "n_unlabeled",
+          "alpha",
+          "method",
+          "lambda"
         ],
         "additionalProperties": false
       },

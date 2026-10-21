@@ -14,17 +14,23 @@ func TestPostProcessingResourceResultsJSON(t *testing.T) {
 	}{
 		{name: "pending"},
 		{
-			name:    "external source",
-			results: &PostProcessingResults{ConfidenceInterval: &ConfidenceInterval{Lower: 0, Upper: 1}},
-			want:    `{"confidence_interval":{"lower":0,"upper":1}}`,
+			name: "external source with zero point estimate",
+			results: &PostProcessingResults{ConfidenceInterval: &ConfidenceInterval{
+				Lower: -0.1, Upper: 0.1, PointEstimate: 0,
+				NLabeled: 20, NUnlabeled: 200, Alpha: 0.05, Method: "original_ppi", Lambda: 1,
+			}},
+			want: `{"confidence_interval":{"lower":-0.1,"upper":0.1,"point_estimate":0,"n_labeled":20,"n_unlabeled":200,"alpha":0.05,"method":"original_ppi","lambda":1}}`,
 		},
 		{
 			name: "evaluation source",
 			results: &PostProcessingResults{Benchmarks: []PostProcessingBenchmarkResult{{
 				ID: "accuracy", ProviderID: "source-provider", BenchmarkIndex: 0,
-				ConfidenceInterval: ConfidenceInterval{Lower: 0.75, Upper: 0.85},
+				ConfidenceInterval: ConfidenceInterval{
+					Lower: 0.75, Upper: 0.85, PointEstimate: 0.8,
+					NLabeled: 100, NUnlabeled: 1000, Alpha: 0.05, Method: "original_ppi", Lambda: 1,
+				},
 			}}},
-			want: `{"benchmarks":[{"id":"accuracy","provider_id":"source-provider","benchmark_index":0,"confidence_interval":{"lower":0.75,"upper":0.85}}]}`,
+			want: `{"benchmarks":[{"id":"accuracy","provider_id":"source-provider","benchmark_index":0,"confidence_interval":{"lower":0.75,"upper":0.85,"point_estimate":0.8,"n_labeled":100,"n_unlabeled":1000,"alpha":0.05,"method":"original_ppi","lambda":1}}]}`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

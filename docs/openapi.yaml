@@ -3963,7 +3963,7 @@ components:
       type: object
       title: ConfidenceInterval
       description: |
-        Confidence interval for a computed result, including the point estimate and computation metadata reported by the adapter. Metadata may be absent in results produced by older adapters.
+        Confidence interval for a computed result, including the point estimate and computation metadata reported by the adapter.
       properties:
         lower:
           type: number
@@ -4003,6 +4003,12 @@ components:
       required:
         - lower
         - upper
+        - point_estimate
+        - n_labeled
+        - n_unlabeled
+        - alpha
+        - method
+        - lambda
       additionalProperties: false
     PostProcessingBenchmarkResult:
       type: object
