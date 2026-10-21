@@ -2,7 +2,8 @@ type: object
 title: ConfidenceInterval
 description: >
   Confidence interval for a computed result, including the point estimate and
-  computation metadata reported by the adapter.
+  computation metadata reported by the adapter. The current adapter reports all
+  metadata fields; fields absent from stored results are omitted from the response.
 properties:
   lower:
     type: number
@@ -42,10 +43,4 @@ properties:
 required:
   - lower
   - upper
-  - point_estimate
-  - n_labeled
-  - n_unlabeled
-  - alpha
-  - method
-  - lambda
 additionalProperties: false

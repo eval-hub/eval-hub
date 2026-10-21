@@ -183,14 +183,15 @@ type PostProcessingBenchmarkResult struct {
 }
 
 // ConfidenceInterval contains bounds and the computation metadata reported by
-// the adapter.
+// the adapter. Metadata pointers preserve absent fields without losing
+// explicitly reported zero values.
 type ConfidenceInterval struct {
-	Lower         float64 `json:"lower"`
-	Upper         float64 `json:"upper"`
-	PointEstimate float64 `json:"point_estimate"`
-	NLabeled      int     `json:"n_labeled"`
-	NUnlabeled    int     `json:"n_unlabeled"`
-	Alpha         float64 `json:"alpha"`
-	Method        string  `json:"method"`
-	Lambda        float64 `json:"lambda"`
+	Lower         float64  `json:"lower"`
+	Upper         float64  `json:"upper"`
+	PointEstimate *float64 `json:"point_estimate,omitempty"`
+	NLabeled      *int     `json:"n_labeled,omitempty"`
+	NUnlabeled    *int     `json:"n_unlabeled,omitempty"`
+	Alpha         *float64 `json:"alpha,omitempty"`
+	Method        *string  `json:"method,omitempty"`
+	Lambda        *float64 `json:"lambda,omitempty"`
 }

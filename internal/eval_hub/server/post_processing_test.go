@@ -300,6 +300,18 @@ func TestPostProcessingGetPreservesConfidenceIntervalMetadata(t *testing.T) {
 				name:     "zero point estimate",
 				interval: `{"lower":-0.1,"upper":0.1,"point_estimate":0,"n_labeled":20,"n_unlabeled":200,"alpha":0.05,"method":"original_ppi","lambda":1}`,
 			},
+			{
+				name:     "bounds only",
+				interval: `{"lower":0.75,"upper":0.85}`,
+			},
+			{
+				name:     "partial metadata with zero estimate",
+				interval: `{"lower":-0.1,"upper":0.1,"point_estimate":0}`,
+			},
+			{
+				name:     "explicit zero metadata",
+				interval: `{"lower":-0.1,"upper":0.1,"point_estimate":0,"n_labeled":0,"n_unlabeled":0,"alpha":0.05,"method":"","lambda":0}`,
+			},
 		} {
 			t.Run(sourceKind+"/"+test.name, func(t *testing.T) {
 				handler, store, _ := newPostProcessingServer(t)
