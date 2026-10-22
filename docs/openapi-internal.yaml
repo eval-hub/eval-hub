@@ -3922,7 +3922,12 @@ components:
           properties:
             sample_id:
               type: string
-              description: Dataset column containing the sample identifier.
+              description: |
+                Optional mapping to the sample identifier column. When omitted, each
+                record must contain `sample_id`, or `doc_id` when `sample_id` is absent
+                or null. Every record must have a nonempty string or integer identifier.
+                An explicit mapping takes precedence; canonical field fallback is not
+                used when the mapped field is absent or null.
             label:
               type: string
               description: Dataset column containing the observed or human label.
@@ -4026,6 +4031,12 @@ components:
             sample_id:
               type: string
               minLength: 1
+              description: |
+                Optional mapping to the sample identifier column. When omitted, each
+                record must contain `sample_id`, or `doc_id` when `sample_id` is absent
+                or null. Every record must have a nonempty string or integer identifier.
+                An explicit mapping takes precedence; canonical field fallback is not
+                used when the mapped field is absent or null.
             prediction:
               type: string
               minLength: 1
