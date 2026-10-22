@@ -1,0 +1,12 @@
+{
+  "parameters": {
+    "cooldown": 0,
+    "data": "prompt_tokens=16,output_tokens=8",
+    "max_requests": 1,
+    "max_seconds": 10,
+    "num_examples": 1,
+    "profile": "throughput",
+    "warmup": 0
+  },
+  "timeout": "5m"
+}
