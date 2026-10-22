@@ -1,0 +1,10 @@
+{
+  "notes": "Stage exactly one record in a JSONL file with input, actual_output, expected_output, context, and retrieval_context fields. No adapter sample cap; input size bounds work. Requires a structured-output judge.",
+  "parameters": {
+    "dataset_format": "jsonl",
+    "max_concurrent": 1,
+    "retry_max_attempts": 1
+  },
+  "test_data_ref_env": "DEEPEVAL_TEST_DATA_REF",
+  "timeout": "5m"
+}
