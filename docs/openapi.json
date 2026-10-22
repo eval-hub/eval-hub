@@ -4815,7 +4815,7 @@
             "properties": {
               "sample_id": {
                 "type": "string",
-                "description": "Dataset column containing the sample identifier."
+                "description": "Optional mapping to the sample identifier column. When omitted, each\nrecord must contain `sample_id`, or `doc_id` when `sample_id` is absent\nor null. Every record must have a nonempty string or integer identifier.\nAn explicit mapping takes precedence; canonical field fallback is not\nused when the mapped field is absent or null.\n"
               },
               "label": {
                 "type": "string",
@@ -4963,7 +4963,8 @@
             "properties": {
               "sample_id": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "description": "Optional mapping to the sample identifier column. When omitted, each\nrecord must contain `sample_id`, or `doc_id` when `sample_id` is absent\nor null. Every record must have a nonempty string or integer identifier.\nAn explicit mapping takes precedence; canonical field fallback is not\nused when the mapped field is absent or null.\n"
               },
               "prediction": {
                 "type": "string",

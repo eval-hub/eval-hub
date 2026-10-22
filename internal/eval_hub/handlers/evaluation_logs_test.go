@@ -198,6 +198,74 @@ func TestHandleGetEvaluationBenchmarkLogs(t *testing.T) {
 	}
 }
 
+// TestHandleGetEvaluationBenchmarkLogsIndexBounds checks that job and collection
+// benchmark indexes are validated before the log stream starts.
+func TestHandleGetEvaluationBenchmarkLogsIndexBounds(t *testing.T) {
+	for _, source := range []string{"job", "collection"} {
+		t.Run(source, func(t *testing.T) {
+			for _, tc := range []struct {
+				index      string
+				wantStatus int
+			}{
+				{index: "0", wantStatus: http.StatusOK},
+				{index: "1", wantStatus: http.StatusNotFound},
+				{index: "99", wantStatus: http.StatusNotFound},
+			} {
+				t.Run(tc.index, func(t *testing.T) {
+					jobID := "job-logs-index-bounds"
+					job := &api.EvaluationJobResource{
+						Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+						EvaluationJobConfig: api.EvaluationJobConfig{
+							Benchmarks: []api.EvaluationBenchmarkConfig{
+								{Ref: api.Ref{ID: "arc_easy"}, ProviderID: "provider-1"},
+							},
+						},
+					}
+					storage := &logsCollectionStorage{fakeStorage: fakeStorage{job: job}}
+					if source == "collection" {
+						job.Benchmarks = nil
+						job.Collection = &api.CollectionRef{ID: "coll-1"}
+						storage.collectionConfigs = map[string]api.CollectionResource{
+							"coll-1": {
+								Resource: api.Resource{ID: "coll-1"},
+								CollectionConfig: api.CollectionConfig{
+									Benchmarks: []api.CollectionBenchmarkConfig{
+										{Ref: api.Ref{ID: "arc_easy"}, ProviderID: "provider-1"},
+									},
+								},
+							},
+						}
+					}
+					runtime := &logsRuntime{logs: "benchmark logs"}
+					h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+					rec := httptest.NewRecorder()
+					logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+					ctx := executioncontext.NewExecutionContext(context.Background(), "req-index-bounds", logger, "test-user", "test-tenant")
+					req := &logsRequest{
+						MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/benchmarks/"+tc.index+"/logs"),
+						pathValues: map[string]string{
+							constants.PathParameterJobID:          jobID,
+							constants.PathParameterBenchmarkIndex: tc.index,
+						},
+					}
+
+					h.HandleGetEvaluationBenchmarkLogs(ctx, req, MockResponseWrapper{recorder: rec})
+
+					if rec.Code != tc.wantStatus {
+						t.Fatalf("status = %d, want %d", rec.Code, tc.wantStatus)
+					}
+					if wantStream := tc.wantStatus == http.StatusOK; runtime.streamLogsCalled != wantStream {
+						t.Fatalf("StreamEvaluationLogs called = %t, want %t", runtime.streamLogsCalled, wantStream)
+					}
+					if tc.wantStatus == http.StatusNotFound && rec.Header().Get("Trailer") != "" {
+						t.Fatal("unexpected log stream trailer on error response")
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestHandleGetEvaluationJobLogsRejectsInvalidTailLines(t *testing.T) {
 	jobID := "job-logs-invalid"
 	storage := &fakeStorage{
