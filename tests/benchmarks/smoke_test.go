@@ -80,10 +80,10 @@ func TestBenchmarkSmoke(t *testing.T) {
 					skipped.Add(1)
 					t.Skipf("no fixture: %s", path)
 				}
-				configured.Add(1)
 				if err != nil {
 					t.Fatalf("fixture %s: %v", path, err)
 				}
+				configured.Add(1)
 				if fixture.Unbounded && os.Getenv("BENCHMARK_ALLOW_UNBOUNDED") != "1" {
 					t.Fatal("adapter has no sample limit; review fixture notes and set BENCHMARK_ALLOW_UNBOUNDED=1 explicitly")
 				}

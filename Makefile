@@ -238,7 +238,8 @@ BENCHMARK_PARALLEL ?= 2
 BENCHMARK_TIMEOUT ?= 30m
 BENCHMARK_RUN ?= TestBenchmarkSmoke
 
-test-benchmarks: export MLFLOW_EXPERIMENT_NAME ?=
+# Ignore ambient experiments; an explicit command-line assignment still wins.
+test-benchmarks: export MLFLOW_EXPERIMENT_NAME =
 test-benchmarks: ## Run live benchmark smoke tests (requires SERVER_URL, MODEL_NAME, MODEL_URL)
 	BENCHMARK_SMOKE=1 go test ./tests/benchmarks -run='$(BENCHMARK_RUN)' -count=1 -parallel=$(BENCHMARK_PARALLEL) -timeout=$(BENCHMARK_TIMEOUT) -v
 

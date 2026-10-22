@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"net/url"
@@ -80,11 +81,9 @@ func generate(providersDir, outputDir string) error {
 			}
 			_, writeErr := file.Write(append(data, '\n'))
 			closeErr := file.Close()
-			if writeErr != nil {
-				return writeErr
-			}
-			if closeErr != nil {
-				return closeErr
+			if err := errors.Join(writeErr, closeErr); err != nil {
+				// Incomplete fixtures must not be preserved as reviewed on the next run.
+				return errors.Join(err, os.Remove(path))
 			}
 			created++
 		}

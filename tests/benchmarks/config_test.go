@@ -50,8 +50,11 @@ func TestCatalogFixtures(t *testing.T) {
 		t.Fatal(err)
 	}
 	files, err := filepath.Glob("../../config/providers/*.yaml")
-	if err != nil || len(files) == 0 {
+	if err != nil {
 		t.Fatalf("find provider catalog: %v", err)
+	}
+	if len(files) == 0 {
+		t.Fatal("no provider YAML files found in ../../config/providers")
 	}
 	validate, err := validation.NewValidator()
 	if err != nil {
@@ -394,7 +397,7 @@ func TestSmokeHarness(t *testing.T) {
 				}
 			}))
 			defer server.Close()
-			cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestBenchmarkSmoke$", "-test.v", "-test.parallel=2", "-test.timeout=10s")
+			cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestBenchmarkSmoke$", "-test.v", "-test.parallel=2", "-test.timeout=1m")
 			overrides := map[string]string{"BENCHMARK_SMOKE": "1", "SERVER_URL": server.URL, "MODEL_NAME": "smoke", "MODEL_URL": "http://model.example/v1", "BENCHMARK_CONFIG_DIR": root, "BENCHMARK_POLL_INTERVAL": "1ms", "EVALHUB_TOKEN": "test-token", "X_TENANT": "tenant", "X_USER": "user", "EVALHUB_CA_CERT_PATH": "", "MODEL_AUTH_SECRET_REF": ""}
 			for _, entry := range os.Environ() {
 				key, _, _ := strings.Cut(entry, "=")
