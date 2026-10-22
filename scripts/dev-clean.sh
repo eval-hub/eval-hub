@@ -15,6 +15,8 @@ REGISTRY_NAME="evalhub-registry-${KIND_CLUSTER_NAME}"
 REGISTRY_ALIAS="evalhub-reg-$(printf '%s' "$KIND_CLUSTER_NAME" | cksum | awk '{print $1}')"
 OWNERSHIP_ANNOTATION="io.evalhub.kind-smoke.cluster"
 NAMESPACE="system"
+LEGACY_DEPLOYMENT_MARKERS_CHECKED=false
+LEGACY_DEPLOYMENT_MARKERS=false
 
 log() {
   printf '[%s] [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S%z')" "$1" "$2"
@@ -151,9 +153,15 @@ prepare_kubeconfig() {
 }
 
 has_legacy_deployment_markers() {
-  [[ "$(resource_owner namespace "$NAMESPACE")" == "$KIND_CLUSTER_NAME" ]] &&
-    [[ "$(resource_owner deployment trustyai-service-operator-controller-manager "$NAMESPACE")" == "$KIND_CLUSTER_NAME" ]] &&
-    [[ "$(resource_owner service evalhub-local-nodeport "$NAMESPACE")" == "$KIND_CLUSTER_NAME" ]]
+  if [[ "$LEGACY_DEPLOYMENT_MARKERS_CHECKED" != true ]]; then
+    LEGACY_DEPLOYMENT_MARKERS_CHECKED=true
+    if [[ "$(resource_owner namespace "$NAMESPACE")" == "$KIND_CLUSTER_NAME" ]] &&
+      [[ "$(resource_owner deployment trustyai-service-operator-controller-manager "$NAMESPACE")" == "$KIND_CLUSTER_NAME" ]] &&
+      [[ "$(resource_owner service evalhub-local-nodeport "$NAMESPACE")" == "$KIND_CLUSTER_NAME" ]]; then
+      LEGACY_DEPLOYMENT_MARKERS=true
+    fi
+  fi
+  [[ "$LEGACY_DEPLOYMENT_MARKERS" == true ]]
 }
 
 validate_legacy_resource() {
@@ -215,7 +223,10 @@ delete_legacy_resource_if_unannotated() {
 }
 
 delete_evalhub_resource() {
-  local owner
+  local crd owner
+  crd="$(kubectl --kubeconfig "$KUBECONFIG_FILE" get crd evalhubs.trustyai.opendatahub.io \
+    --ignore-not-found -o name)" || fail "Could not check whether the EvalHub CRD is installed."
+  [[ -n "$crd" ]] || return 0
   resource_exists evalhub evalhub-local "$NAMESPACE" || return 0
   owner="$(resource_owner evalhub evalhub-local "$NAMESPACE")"
   if [[ "$owner" != "$KIND_CLUSTER_NAME" ]]; then
@@ -272,6 +283,9 @@ remove_registry_mirror_config() {
 clean_deployment_keep_cluster() {
   local remaining_evalhubs resource
   prepare_kubeconfig
+  # Cache ownership evidence before deleting any of the resources used to
+  # recognize deployments created before per-resource annotations were added.
+  has_legacy_deployment_markers || true
   validate_evalhub_instances
   delete_evalhub_workloads
 

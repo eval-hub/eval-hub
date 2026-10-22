@@ -617,6 +617,22 @@ YAML
   log PASS "EvalHub custom resource and service deployment are Ready."
 }
 
+restart_workloads_on_redeploy() {
+  local deployment
+  if [[ "$KIND_CLUSTER_CREATED" == true ]]; then
+    log INFO "New kind cluster; workloads already started from the freshly built images."
+    return
+  fi
+
+  for deployment in trustyai-service-operator-controller-manager evalhub-local; do
+    log INFO "Restarting $deployment so the reused kind cluster runs the current local image contents."
+    kubectl --kubeconfig "$KUBECONFIG_FILE" -n system rollout restart "deployment/$deployment"
+    kubectl --kubeconfig "$KUBECONFIG_FILE" -n system rollout status \
+      "deployment/$deployment" --timeout=300s
+  done
+  log PASS "Reused-cluster operator and EvalHub workloads now use the current local images."
+}
+
 install_host_api_service() {
   check_resource_ownership service evalhub-local-nodeport system
   log INFO "Creating the localhost-development NodePort service for EvalHub."
@@ -1022,6 +1038,7 @@ main() {
   prepare_namespace_and_certificates
   render_operator_overlay
   install_operator_and_evalhub
+  restart_workloads_on_redeploy
   install_host_api_service
   install_nodeport_ingress_policy
   install_mock_services
