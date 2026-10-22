@@ -57,6 +57,12 @@ explicit subtest skips. Subtest names contain provider and benchmark IDs; Go's
 
 ## Fixtures
 
+The runner and JSON fixtures are delivered in separate stacked PRs. The runner
+can be installed on its own with a custom `BENCHMARK_CONFIG_DIR` or generated
+fixtures. The offline catalog check skips when the bundled `testdata` directory
+is absent; when it exists, the check requires a valid fixture for every benchmark
+in the checked-in provider catalog.
+
 Each checked-in provider benchmark has one file under
 `testdata/<provider-id>/<benchmark-id>.json`. Runtime discovery uses the live API
 catalog, so a newly discovered benchmark without a file is skipped. Filenames

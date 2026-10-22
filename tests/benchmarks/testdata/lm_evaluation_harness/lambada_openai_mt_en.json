@@ -1,8 +1,0 @@
-{
-  "notes": "One example per underlying task; grouped benchmarks may expand into multiple tasks. Model endpoint must support the benchmark's request type (including loglikelihood where applicable).",
-  "parameters": {
-    "num_examples": 1,
-    "num_fewshot": 0
-  },
-  "timeout": "5m"
-}

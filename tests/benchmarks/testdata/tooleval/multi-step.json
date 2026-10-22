@@ -1,8 +1,0 @@
-{
-  "notes": "Requires a reachable ToolBench tool server and a model supporting tool calls; preserves the benchmark's default step count.",
-  "parameters": {
-    "num_tasks": 1,
-    "tool_server_url": "${TOOL_SERVER_URL}"
-  },
-  "timeout": "5m"
-}

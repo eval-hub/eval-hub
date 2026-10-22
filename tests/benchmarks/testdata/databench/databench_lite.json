@@ -1,9 +1,0 @@
-{
-  "parameters": {
-    "max_tokens": 128,
-    "num_examples": 1,
-    "request_timeout": 60,
-    "temperature": 0
-  },
-  "timeout": "5m"
-}

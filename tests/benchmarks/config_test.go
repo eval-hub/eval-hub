@@ -44,6 +44,11 @@ func writeFixture(t *testing.T, root, provider, benchmark, body string) string {
 }
 
 func TestCatalogFixtures(t *testing.T) {
+	if _, err := os.Stat("testdata"); errors.Is(err, os.ErrNotExist) {
+		t.Skip("catalog fixtures are optional; add the fixture PR or run make generate-benchmark-configs")
+	} else if err != nil {
+		t.Fatal(err)
+	}
 	files, err := filepath.Glob("../../config/providers/*.yaml")
 	if err != nil || len(files) == 0 {
 		t.Fatalf("find provider catalog: %v", err)
