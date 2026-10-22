@@ -13,6 +13,7 @@ IMAGE_TAG="${IMAGE_TAG:-kind-${KIND_CLUSTER_NAME}}"
 SKIP_BUILD="${SKIP_BUILD:-false}"
 EVALHUB_HOST_PORT="${EVALHUB_HOST_PORT:-18443}"
 EVALHUB_NODE_PORT="${EVALHUB_NODE_PORT:-30443}"
+EVALHUB_HOST_BIND_ADDRESS="${EVALHUB_HOST_BIND_ADDRESS:-127.0.0.1}"
 CONTRIB_REPO="${EVALHUB_CONTRIB_REPO:-${EVALHUB_REPO_PARENT}/eval-hub-contrib}"
 OPERATOR_REPO="${TRUSTYAI_OPERATOR_REPO:-${EVALHUB_REPO_PARENT}/trustyai-service-operator}"
 KUBECONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/evalhub/kubeconfigs"
@@ -23,7 +24,6 @@ REGISTRY_ALIAS=""
 REGISTRY_PORT=""
 PORT_FORWARD_PID=""
 KIND_CLUSTER_CREATED=false
-API_ACCESS_MODE=port-forward
 API_HOST_ACCESS_PORT="${EVALHUB_HOST_PORT}"
 
 log() {
@@ -50,15 +50,20 @@ Inputs (also accepted as environment variables):
   SKIP_BUILD=true         reuse locally built images with IMAGE_TAG
   EVALHUB_HOST_PORT       localhost API port (default: 18443)
   EVALHUB_NODE_PORT       kind NodePort for the API (default: 30443)
+  EVALHUB_HOST_BIND_ADDRESS host bind address (default: 127.0.0.1; loopback only)
   EVALHUB_CONTRIB_REPO    contrib checkout (default: sibling ../eval-hub-contrib)
   TRUSTYAI_OPERATOR_REPO  operator checkout (default: sibling ../trustyai-service-operator)
 
-New clusters map the API NodePort to the host port on 127.0.0.1. Existing
-clusters are reused without modification. For registry mirror support, a reused
-cluster must use a kind node image from v0.27.0 or newer; older clusters must be
-recreated so the containerd registry config path can be enabled. If a reused
-cluster lacks the API NodePort mapping, use the printed kubectl port-forward
-command for host access.
+New clusters map the API NodePort to the host port using
+EVALHUB_HOST_BIND_ADDRESS. The default 127.0.0.1 binds only on loopback; use
+0.0.0.0 only when access from other host interfaces is needed. Existing clusters
+are reused only when their mapping matches the requested bind address and host
+port; mappings cannot be changed without recreating the cluster. For registry
+mirror support, a reused cluster must use a kind node image from v0.27.0 or newer.
+
+A narrowly scoped NetworkPolicy allows the kind Docker network gateway to reach
+the EvalHub API on port 8443. This is required because the operator's default
+ingress policy otherwise blocks host requests forwarded through the NodePort.
 
 The private kubeconfig is written under XDG_CONFIG_HOME (default ~/.config),
 at evalhub/kubeconfigs/<cluster>.yaml.
@@ -103,6 +108,10 @@ validate_inputs() {
   [[ "$EVALHUB_NODE_PORT" =~ ^[0-9]{1,5}$ ]] &&
     ((10#$EVALHUB_NODE_PORT >= 30000 && 10#$EVALHUB_NODE_PORT <= 32767)) ||
     fail "EVALHUB_NODE_PORT must be a Kubernetes NodePort from 30000 to 32767."
+  case "$EVALHUB_HOST_BIND_ADDRESS" in
+    0.0.0.0|127.0.0.1) ;;
+    *) fail "EVALHUB_HOST_BIND_ADDRESS must be 0.0.0.0 or 127.0.0.1." ;;
+  esac
 }
 
 check_prerequisites() {
@@ -159,7 +168,7 @@ nodes:
     extraPortMappings:
       - containerPort: $EVALHUB_NODE_PORT
         hostPort: $EVALHUB_HOST_PORT
-        listenAddress: 127.0.0.1
+        listenAddress: $EVALHUB_HOST_BIND_ADDRESS
         protocol: TCP
 YAML
     kind_cmd create cluster --name "$KIND_CLUSTER_NAME" --config "$kind_config" \
@@ -169,23 +178,25 @@ YAML
   chmod 600 "$KUBECONFIG_FILE"
   kubectl --kubeconfig "$KUBECONFIG_FILE" wait --for=condition=Ready nodes --all --timeout=180s
   kubectl --kubeconfig "$KUBECONFIG_FILE" get nodes
-  API_ACCESS_MODE=port-forward
+  local found_mapping="" existing_mappings=""
   while IFS= read -r node; do
     [[ -n "$node" ]] || continue
     mapping="$(docker port "$node" "${EVALHUB_NODE_PORT}/tcp" 2>/dev/null || true)"
-    mapping="$(printf '%s\n' "$mapping" | awk '/^127\.0\.0\.1:/ {print; exit}')"
-    if [[ "$mapping" == 127.0.0.1:* ]]; then
-      API_ACCESS_MODE=nodeport
+    [[ -n "$existing_mappings" || -z "$mapping" ]] || existing_mappings="$mapping"
+    mapping="$(printf '%s\n' "$mapping" | awk -v bind_address="${EVALHUB_HOST_BIND_ADDRESS}:" 'index($0, bind_address) == 1 {print; exit}')"
+    if [[ -n "$mapping" ]]; then
+      found_mapping="$mapping"
       API_HOST_ACCESS_PORT="${mapping##*:}"
       break
     fi
   done < <(kind_cmd get nodes --name "$KIND_CLUSTER_NAME")
-  if [[ "$API_ACCESS_MODE" == nodeport ]]; then
-    log PASS "EvalHub host access is mapped to 127.0.0.1:${API_HOST_ACCESS_PORT}."
-  elif [[ "$KIND_CLUSTER_CREATED" == true ]]; then
-    fail "The new kind cluster did not publish NodePort $EVALHUB_NODE_PORT on 127.0.0.1:${EVALHUB_HOST_PORT}."
+  if [[ -n "$found_mapping" ]]; then
+    log PASS "EvalHub NodePort is mapped at ${found_mapping}."
   else
-    log INFO "The existing kind cluster has no localhost mapping for NodePort $EVALHUB_NODE_PORT; deployment health checks and manual access will use kubectl port-forward."
+    if [[ -n "$existing_mappings" ]]; then
+      fail "Existing kind cluster maps NodePort $EVALHUB_NODE_PORT at '${existing_mappings}', but this run expects '${EVALHUB_HOST_BIND_ADDRESS}:${EVALHUB_HOST_PORT}'. Port mappings are fixed at cluster creation; recreate the cluster to apply the requested mapping."
+    fi
+    fail "Kind cluster did not publish NodePort $EVALHUB_NODE_PORT at ${EVALHUB_HOST_BIND_ADDRESS}:${EVALHUB_HOST_PORT}."
   fi
   log PASS "kind cluster API is reachable and its nodes are Ready."
 }
@@ -409,19 +420,31 @@ prepare_namespace_and_certificates() {
     evalhub-local.system.svc \
     'DNS:evalhub-local.system.svc,DNS:evalhub-local.system.svc.cluster.local'
 
-  kubectl --kubeconfig "$KUBECONFIG_FILE" create namespace system --dry-run=client -o yaml |
-    kubectl --kubeconfig "$KUBECONFIG_FILE" apply -f - >/dev/null
+  if kubectl --kubeconfig "$KUBECONFIG_FILE" get namespace system >/dev/null 2>&1; then
+    kubectl --kubeconfig "$KUBECONFIG_FILE" create namespace system --dry-run=client -o yaml |
+      kubectl --kubeconfig "$KUBECONFIG_FILE" apply -f - >/dev/null
+  else
+    kubectl --kubeconfig "$KUBECONFIG_FILE" create namespace system >/dev/null
+    kubectl --kubeconfig "$KUBECONFIG_FILE" annotate namespace system \
+      "io.evalhub.kind-smoke.created-by=dev-deploy" --overwrite >/dev/null
+  fi
   kubectl --kubeconfig "$KUBECONFIG_FILE" annotate namespace system \
     "io.evalhub.kind-smoke.cluster=$KIND_CLUSTER_NAME" --overwrite >/dev/null
   kubectl --kubeconfig "$KUBECONFIG_FILE" -n system create secret tls webhook-server-cert \
     --cert="$cert_dir/webhook.crt" --key="$cert_dir/webhook.key" --dry-run=client -o yaml |
     kubectl --kubeconfig "$KUBECONFIG_FILE" apply -f - >/dev/null
+  kubectl --kubeconfig "$KUBECONFIG_FILE" -n system annotate secret webhook-server-cert \
+    "io.evalhub.kind-smoke.cluster=$KIND_CLUSTER_NAME" --overwrite >/dev/null
   kubectl --kubeconfig "$KUBECONFIG_FILE" -n system create secret tls evalhub-local-tls \
     --cert="$cert_dir/evalhub.crt" --key="$cert_dir/evalhub.key" --dry-run=client -o yaml |
     kubectl --kubeconfig "$KUBECONFIG_FILE" apply -f - >/dev/null
+  kubectl --kubeconfig "$KUBECONFIG_FILE" -n system annotate secret evalhub-local-tls \
+    "io.evalhub.kind-smoke.cluster=$KIND_CLUSTER_NAME" --overwrite >/dev/null
   kubectl --kubeconfig "$KUBECONFIG_FILE" -n system create configmap evalhub-local-service-ca \
     --from-file=service-ca.crt="$cert_dir/evalhub.crt" --dry-run=client -o yaml |
     kubectl --kubeconfig "$KUBECONFIG_FILE" apply -f - >/dev/null
+  kubectl --kubeconfig "$KUBECONFIG_FILE" -n system annotate configmap evalhub-local-service-ca \
+    "io.evalhub.kind-smoke.cluster=$KIND_CLUSTER_NAME" --overwrite >/dev/null
   log PASS "Prepared temporary webhook and EvalHub HTTPS certificates for kind."
 }
 
@@ -566,6 +589,8 @@ kind: EvalHub
 metadata:
   name: evalhub-local
   namespace: system
+  annotations:
+    io.evalhub.kind-smoke.cluster: $KIND_CLUSTER_NAME
 spec:
   tenancy: single
   database:
@@ -617,6 +642,43 @@ spec:
       nodePort: $EVALHUB_NODE_PORT
 YAML
   log PASS "EvalHub NodePort service is configured on port $EVALHUB_NODE_PORT."
+}
+
+install_nodeport_ingress_policy() {
+  local node gateway
+  node="$(kind_cmd get nodes --name "$KIND_CLUSTER_NAME" | sed -n '1p')"
+  [[ -n "$node" ]] || fail "Could not identify the kind node for the NodePort ingress policy."
+  gateway="$(docker inspect --format '{{range .NetworkSettings.Networks}}{{if .Gateway}}{{.Gateway}}{{"\n"}}{{end}}{{end}}' "$node" 2>/dev/null | sed -n '1p')"
+  [[ "$gateway" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] ||
+    fail "Could not determine the IPv4 gateway for kind node $node; cannot safely scope NodePort ingress."
+
+  check_resource_ownership networkpolicy evalhub-local-nodeport-host-ingress system
+  log INFO "Allowing NodePort traffic from kind network gateway $gateway to the EvalHub API only."
+  kubectl --kubeconfig "$KUBECONFIG_FILE" apply -f - <<YAML
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: evalhub-local-nodeport-host-ingress
+  namespace: system
+  annotations:
+    io.evalhub.kind-smoke.cluster: $KIND_CLUSTER_NAME
+spec:
+  podSelector:
+    matchLabels:
+      app: eval-hub
+      instance: evalhub-local
+      component: api
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - ipBlock:
+        cidr: ${gateway}/32
+    ports:
+    - protocol: TCP
+      port: 8443
+YAML
+  log PASS "Installed the kind-only ingress exception for the EvalHub NodePort."
 }
 
 install_mock_services() {
@@ -863,7 +925,7 @@ check_service_health() {
 
   http_code=""
   body=""
-  for attempt in {1..30}; do
+  for attempt in {1..10}; do
     if ! kill -0 "$PORT_FORWARD_PID" 2>/dev/null; then
       sed -n '1,80p' "$log_file" >&2 || true
       fail "Port-forward for service $service exited unexpectedly."
@@ -874,10 +936,12 @@ check_service_health() {
     : >"$WORK_DIR/health-body"
     if [[ "$scheme" == https ]]; then
       http_code="$(curl --silent --output "$WORK_DIR/health-body" --write-out '%{http_code}' \
-        --insecure --connect-timeout 2 "https://127.0.0.1:${local_port}${path}" 2>/dev/null || true)"
+        --insecure --connect-timeout 2 --max-time 4 \
+        "https://127.0.0.1:${local_port}${path}" 2>/dev/null || true)"
     else
       http_code="$(curl --silent --output "$WORK_DIR/health-body" --write-out '%{http_code}' \
-        --connect-timeout 2 "http://127.0.0.1:${local_port}${path}" 2>/dev/null || true)"
+        --connect-timeout 2 --max-time 4 \
+        "http://127.0.0.1:${local_port}${path}" 2>/dev/null || true)"
     fi
     body="$(<"$WORK_DIR/health-body")"
     if [[ "$http_code" == 200 && ( -z "$expected" || "$body" == *"$expected"* ) ]]; then
@@ -896,28 +960,26 @@ check_service_health() {
 }
 
 check_evalhub_health() {
-  if [[ "$API_ACCESS_MODE" != nodeport ]]; then
-    check_service_health evalhub-local 8443 https /api/v1/health ""
-    return
-  fi
-
   local http_code attempt
   local body_file="$WORK_DIR/evalhub-health-body"
   log INFO "Checking EvalHub health through https://127.0.0.1:${API_HOST_ACCESS_PORT}."
   http_code=""
-  for attempt in {1..30}; do
+  for attempt in {1..5}; do
     : >"$body_file"
     http_code="$(curl --silent --output "$body_file" --write-out '%{http_code}' \
-      --insecure --connect-timeout 2 \
+      --insecure --connect-timeout 2 --max-time 3 \
       "https://127.0.0.1:${API_HOST_ACCESS_PORT}/api/v1/health" 2>/dev/null || true)"
     if [[ "$http_code" == 200 ]]; then
       break
     fi
     sleep 1
   done
-  [[ "$http_code" == 200 ]] ||
-    fail "EvalHub health endpoint through localhost NodePort returned HTTP ${http_code:-no response}."
-  log PASS "EvalHub health endpoint returned HTTP 200 through the localhost NodePort."
+  if [[ "$http_code" == 200 ]]; then
+    log PASS "EvalHub health endpoint returned HTTP 200 through the localhost NodePort."
+    return
+  fi
+
+  fail "EvalHub health endpoint through NodePort at https://127.0.0.1:${API_HOST_ACCESS_PORT} returned HTTP ${http_code:-no response}."
 }
 
 verify_deployment() {
@@ -961,6 +1023,7 @@ main() {
   render_operator_overlay
   install_operator_and_evalhub
   install_host_api_service
+  install_nodeport_ingress_policy
   install_mock_services
   verify_deployment
 
@@ -968,13 +1031,7 @@ main() {
   log PASS "EvalHub development environment is deployed."
   log INFO "Dedicated kubeconfig: $KUBECONFIG_FILE"
   log INFO "Use it without changing your default context: KUBECONFIG='$KUBECONFIG_FILE' kubectl get pods -n system"
-  if [[ "$API_ACCESS_MODE" == nodeport ]]; then
-    log INFO "EvalHub API URL (local self-signed TLS): https://127.0.0.1:${API_HOST_ACCESS_PORT}"
-  else
-    log INFO "For host API access, run in another terminal:"
-    log INFO "  kubectl --kubeconfig '$KUBECONFIG_FILE' -n system port-forward --address 127.0.0.1 service/evalhub-local ${EVALHUB_HOST_PORT}:8443"
-    log INFO "Then use https://127.0.0.1:${EVALHUB_HOST_PORT} (local self-signed TLS)."
-  fi
+  log INFO "EvalHub API URL (local self-signed TLS): https://127.0.0.1:${API_HOST_ACCESS_PORT}"
   log INFO "No evaluation job was submitted; API behavior tests are intentionally separate."
 }
 

@@ -35,21 +35,32 @@ IMAGE_TAG ?= kind-$(KIND_CLUSTER_NAME)
 SKIP_BUILD ?= false
 EVALHUB_HOST_PORT ?= 18443
 EVALHUB_NODE_PORT ?= 30443
+EVALHUB_HOST_BIND_ADDRESS ?= 127.0.0.1
 EVALHUB_REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 EVALHUB_REPO_PARENT := $(abspath $(EVALHUB_REPO_ROOT)/..)
 EVALHUB_CONTRIB_REPO ?= $(EVALHUB_REPO_PARENT)/eval-hub-contrib
 TRUSTYAI_OPERATOR_REPO ?= $(EVALHUB_REPO_PARENT)/trustyai-service-operator
 
-.PHONY: dev-deploy dev-deploy-help
+.PHONY: dev-deploy dev-deploy-help dev-clean dev-clean-help
 dev-deploy: ## Build and deploy the local EvalHub stack to Docker-backed kind
 	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" IMAGE_TAG="$(IMAGE_TAG)" \
 		SKIP_BUILD="$(SKIP_BUILD)" \
 		EVALHUB_HOST_PORT="$(EVALHUB_HOST_PORT)" EVALHUB_NODE_PORT="$(EVALHUB_NODE_PORT)" \
+		EVALHUB_HOST_BIND_ADDRESS="$(EVALHUB_HOST_BIND_ADDRESS)" \
 		EVALHUB_CONTRIB_REPO="$(EVALHUB_CONTRIB_REPO)" \
 		TRUSTYAI_OPERATOR_REPO="$(TRUSTYAI_OPERATOR_REPO)" bash scripts/dev-deploy.sh
 
 dev-deploy-help: ## Show dev-deploy inputs and usage
 	@bash scripts/dev-deploy.sh --help
+
+DELETE_CLUSTER ?= false
+
+dev-clean: ## Remove the local EvalHub deployment; optionally delete its kind cluster
+	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" DELETE_CLUSTER="$(DELETE_CLUSTER)" \
+		bash scripts/dev-clean.sh
+
+dev-clean-help: ## Show dev-clean inputs and usage
+	@bash scripts/dev-clean.sh --help
 
 PRE_COMMIT ?= .git/hooks/pre-commit
 
