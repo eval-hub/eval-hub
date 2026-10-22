@@ -41,6 +41,7 @@ Usage: make dev-deploy [VARIABLE=value ...]
 
 Builds and deploys EvalHub, the operator, Inspect and FollowBench adapters,
 and local mock target/judge services to a Docker-backed kind cluster.
+All system collections packaged by the operator are discovered automatically.
 The cluster and deployment are retained. No evaluation jobs are submitted.
 
 Inputs (also accepted as environment variables):
@@ -106,7 +107,7 @@ validate_inputs() {
 
 check_prerequisites() {
   local tool
-  for tool in docker kind kubectl git curl openssl python3 awk sed grep base64 cp mktemp tr env cksum; do
+  for tool in docker kind kubectl git curl openssl python3 awk sed grep base64 cp mktemp tr env cksum sort; do
     need_command "$tool"
   done
   docker info >/dev/null 2>&1 || fail "Docker daemon is not reachable. Run this from the terminal where Docker works."
@@ -493,8 +494,35 @@ YAML
   log PASS "The temporary operator overlay renders all local image references."
 }
 
+discover_system_collections() {
+  local configmaps collection_names configmap_name collection_name duplicate_names
+
+  configmaps="$(kubectl --kubeconfig "$KUBECONFIG_FILE" -n system get configmaps \
+    --selector='trustyai.opendatahub.io/evalhub-collection-type=system' \
+    -o go-template='{{range .items}}{{.metadata.name}}{{"\t"}}{{index .metadata.labels "trustyai.opendatahub.io/evalhub-collection-name"}}{{"\n"}}{{end}}')" ||
+    fail "Could not list the operator-packaged system collection ConfigMaps."
+  [[ -n "$configmaps" ]] || fail "No operator-packaged system collection ConfigMaps were found in namespace system."
+
+  collection_names=""
+  while IFS=$'\t' read -r configmap_name collection_name; do
+    [[ -n "$configmap_name" ]] || continue
+    [[ -n "$collection_name" ]] ||
+      fail "System collection ConfigMap $configmap_name is missing the collection-name label."
+    [[ "$collection_name" =~ ^[A-Za-z0-9]([A-Za-z0-9_.-]*[A-Za-z0-9])?$ ]] ||
+      fail "System collection ConfigMap $configmap_name has an unsafe collection name: $collection_name"
+    collection_names+="${collection_name}"$'\n'
+  done <<<"$configmaps"
+  [[ -n "$collection_names" ]] || fail "No valid system collection names were discovered."
+
+  duplicate_names="$(printf '%s' "$collection_names" | LC_ALL=C sort | awk 'seen[$0]++ { print }')"
+  [[ -z "$duplicate_names" ]] ||
+    fail "Multiple operator ConfigMaps advertise the same system collection name(s): ${duplicate_names//$'\n'/, }"
+
+  printf '%s' "$collection_names" | LC_ALL=C sort -u
+}
+
 install_operator_and_evalhub() {
-  local cert_bundle config_root configmaps name owner
+  local cert_bundle config_root configmaps name owner collection_names collections_yaml collection_name collection_count
   config_root="$WORK_DIR/operator-config"
   log INFO "Applying the EvalHub-only operator overlay to namespace system."
   kubectl --kubeconfig "$KUBECONFIG_FILE" apply -k "$config_root/overlays/evalhub-kind"
@@ -520,7 +548,19 @@ install_operator_and_evalhub() {
     --type=json --patch "[{\"op\":\"add\",\"path\":\"/spec/conversion/webhook/clientConfig/caBundle\",\"value\":\"$cert_bundle\"}]" >/dev/null
   log PASS "Configured the CRD conversion webhook to trust the temporary certificate."
 
-  cat >"$WORK_DIR/evalhub.yaml" <<'YAML'
+  collection_names="$(discover_system_collections)"
+  collections_yaml=""
+  collection_count=0
+  while IFS= read -r collection_name; do
+    [[ -n "$collection_name" ]] || continue
+    collections_yaml+="    - \"${collection_name}\""$'\n'
+    collection_count=$((collection_count + 1))
+  done <<<"$collection_names"
+  ((collection_count > 0)) || fail "No packaged system collections are available for the EvalHub instance."
+  collections_yaml="${collections_yaml%$'\n'}"
+  log PASS "Discovered $collection_count packaged system collections for the EvalHub instance."
+
+  cat >"$WORK_DIR/evalhub.yaml" <<YAML
 apiVersion: trustyai.opendatahub.io/v1
 kind: EvalHub
 metadata:
@@ -539,27 +579,10 @@ spec:
     - ruler
     - ifbench
     - followbench
-  # Include all system collection ConfigMaps packaged by the operator.
+  # Set the full discovered list explicitly so the CRD's static default list
+  # does not limit collections available in this development deployment.
   collections:
-    - coding-v1
-    - document-understanding-v1
-    - evaluate-model-accuracy
-    - fairness-bias-v1
-    - instruction-following-v1
-    - instruction-output-v1
-    - knowledge-reasoning-v1
-    - leaderboard-v2
-    - model-validation
-    - multimodal-v1
-    - open-telco-v1
-    - reasoning-v1
-    - safety-and-fairness-v1
-    - safety-ethical-principles-v1
-    - software-v1
-    - standard-llm-evals-v1
-    - tool-use-v1
-    - toxicity-and-ethical-principles
-    - trustworthiness-v1
+${collections_yaml}
 YAML
   log INFO "Creating the local SQLite-backed EvalHub instance."
   kubectl --kubeconfig "$KUBECONFIG_FILE" apply -f "$WORK_DIR/evalhub.yaml"
