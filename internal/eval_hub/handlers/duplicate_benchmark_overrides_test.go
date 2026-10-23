@@ -293,15 +293,23 @@ func TestRepeatedBenchmarkOverridesRejectAmbiguousCountsBeforeCreatingJob(t *tes
 			if err := json.Unmarshal([]byte(`{"url":"http://model.example.com/v1","name":"test-model"}`), &job.Model); err != nil {
 				t.Fatal(err)
 			}
-			for range counts[1] {
+			for i := range counts[1] {
 				job.Collection.Benchmarks = append(job.Collection.Benchmarks, api.EvaluationBenchmarkConfig{
 					Ref: api.Ref{ID: "inspect/bfcl"}, ProviderID: "inspect",
+					Parameters: map[string]any{"num_examples": i + 1},
 				})
 			}
 			collectionBefore, requestBefore := benchmarkJSON(t, collection), benchmarkJSON(t, job)
 			got, err := handlers.GetJobBenchmarks(job, collection)
-			if err == nil || !strings.Contains(err.Error(), "collection occurrence order") || got != nil {
-				t.Fatalf("expected ambiguous-count error and no benchmarks, got %v, %v", got, err)
+			// Shared resolution must still accept configurations persisted by
+			// older versions, using their previous last-override-wins behavior.
+			if err != nil || len(got) != counts[0] {
+				t.Fatalf("legacy resolution: got %v, %v", got, err)
+			}
+			for _, benchmark := range got {
+				if benchmark.Parameters["num_examples"] != counts[1] {
+					t.Fatalf("legacy parameters = %v, want last override %d", benchmark.Parameters, counts[1])
+				}
 			}
 			storage := &collectionRunCountStorage{fakeStorage: &fakeStorage{}, collection: collection}
 			runtime := &repeatedBenchmarkCaptureRuntime{}

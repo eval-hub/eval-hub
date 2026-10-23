@@ -272,12 +272,10 @@ func GetJobBenchmarks(job *api.EvaluationJobResource, collection *api.Collection
 			// A single override retains its existing broadcast behavior. Multiple
 			// overrides for a repeated pair map by occurrence within that pair,
 			// independently of other pairs or provider-level hardware overrides.
-			if group.count > 1 && len(group.overrides) > 1 {
-				if len(group.overrides) != group.count {
-					return nil, serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error",
-						fmt.Sprintf("benchmark %q (%s) occurs %d times: provide one shared override or exactly %d overrides in collection occurrence order; got %d",
-							benchmark.ID, benchmark.ProviderID, group.count, group.count, len(group.overrides)))
-				}
+			// New requests reject mismatched counts in POST validation. Older
+			// persisted jobs may have them; preserve their previous merging behavior
+			// so shared resolution (including status callbacks) remains compatible.
+			if group.count > 1 && len(group.overrides) == group.count {
 				overrides = append([]api.EvaluationBenchmarkConfig{group.overrides[group.next]}, providerOverrides...)
 				group.next++
 			}
