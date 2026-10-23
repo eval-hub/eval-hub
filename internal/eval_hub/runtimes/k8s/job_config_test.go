@@ -83,8 +83,7 @@ func postProcessorPVCJobForEdgeCases(refs []api.CalibrationDataRef) *api.Evaluat
 				CalibrationDataRef: refs,
 				SignificanceLevel:  0.05,
 			},
-			ResultsDataRef: &api.PostProcessingResultsDataRef{PVC: &api.PVCTestDataRef{ClaimName: "results"}},
-			PrimaryScore:   &api.PrimaryScore{Metric: "accuracy"},
+			ResultsDataRef: &api.PostProcessingResultsDataRef{EvalJob: &api.EvaluationJobDataRef{ID: "source"}},
 		}},
 	}
 	return &api.EvaluationJobResource{EvaluationJobConfig: *postprocessing.ToEvaluationJob(request)}

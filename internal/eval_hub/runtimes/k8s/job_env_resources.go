@@ -87,6 +87,11 @@ func buildEnvVars(jc *jobConfig, serviceConfig *config.Config) []corev1.EnvVar {
 		seen[envOCIAuthConfigPathName] = true
 	}
 
+	if len(jc.postProcessorSecrets) > 0 {
+		env = append(env, corev1.EnvVar{Name: envPostProcessorSecretRoot, Value: postProcessorSecretMountPath})
+		seen[envPostProcessorSecretRoot] = true
+	}
+
 	if len(jc.postProcessorPVCs) > 0 {
 		// Map claim roots; the adapter resolves each reference's sub_path.
 		mountPaths := make(map[string]string, len(jc.postProcessorPVCs))
