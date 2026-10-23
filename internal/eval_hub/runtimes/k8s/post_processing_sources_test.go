@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"encoding/json"
+	corev1 "k8s.io/api/core/v1"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/internal/eval_runtime_sidecar/proxy"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -54,6 +56,7 @@ func TestPostProcessorSourceCombinations(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				cfg.testDataInitImage = "evalhub:test"
 				job, err := buildJob(cfg, nil)
 				if err != nil {
 					t.Fatal(err)
@@ -69,7 +72,11 @@ func TestPostProcessorSourceCombinations(t *testing.T) {
 					found := false
 					for _, volume := range job.Spec.Template.Spec.Volumes {
 						if volume.Secret != nil && volume.Secret.SecretName == requirement.secret {
-							mount := findVolumeMount(adapter.VolumeMounts, volume.Name)
+							init := findContainer(job.Spec.Template.Spec.InitContainers, initContainerName)
+							mount := findVolumeMount(init.VolumeMounts, volume.Name)
+							if findVolumeMount(adapter.VolumeMounts, volume.Name) != nil {
+								t.Fatal("source credentials exposed to adapter")
+							}
 							found = mount != nil && mount.ReadOnly && mount.MountPath == postProcessorSecretMountPath+"/"+requirement.secret
 						}
 					}
@@ -79,16 +86,16 @@ func TestPostProcessorSourceCombinations(t *testing.T) {
 				}
 				var mounts map[string]string
 				for _, env := range adapter.Env {
-					if env.Name == envPostProcessorPVCMountsName {
+					if env.Name == shared.PostProcessorDataPathsEnv {
 						if err := json.Unmarshal([]byte(env.Value), &mounts); err != nil {
 							t.Fatal(err)
 						}
 					}
 				}
-				if resultName == "pvc" && mounts["results-pvc"] == "" {
+				if resultName == "pvc" && mounts["results"] == "" {
 					t.Fatal("missing results PVC mapping")
 				}
-				if calibrationName == "pvc" && mounts["calibration-pvc"] == "" {
+				if calibrationName == "pvc" && mounts["calibration-0"] == "" {
 					t.Fatal("missing calibration PVC mapping")
 				}
 				if resultName == "oci" && (cfg.jobSpec.Exports == nil || cfg.jobSpec.Exports.OCI == nil || cfg.jobSpec.Exports.OCI.Coordinates.OCIRepository != "org/results" || cfg.ociCredentialsSecret != "registry-auth") {
@@ -100,69 +107,74 @@ func TestPostProcessorSourceCombinations(t *testing.T) {
 }
 
 func TestPostProcessorSecretProjection(t *testing.T) {
-	tests := []struct {
-		name        string
-		result      *api.PostProcessingResultsDataRef
-		calibration []api.CalibrationDataRef
-		want        []string
-	}{
-		{name: "results S3 only", result: &api.PostProcessingResultsDataRef{S3: &api.S3TestDataRef{SecretRef: "results-s3"}}, want: []string{"results-s3"}},
-		{name: "calibration S3 only", calibration: []api.CalibrationDataRef{{S3: &api.S3TestDataRef{SecretRef: "calibration-s3"}}}, want: []string{"calibration-s3"}},
-		{name: "shared S3 secret", result: &api.PostProcessingResultsDataRef{S3: &api.S3TestDataRef{SecretRef: "shared"}}, calibration: []api.CalibrationDataRef{{S3: &api.S3TestDataRef{SecretRef: "shared"}}, {S3: &api.S3TestDataRef{SecretRef: "other"}}}, want: []string{"shared", "other"}},
-		{name: "authenticated Git and HF", result: &api.PostProcessingResultsDataRef{Git: &api.GitTestDataRef{SecretRef: "git-auth"}}, calibration: []api.CalibrationDataRef{{HF: &api.HFTestDataRef{SecretRef: "hf-auth"}}}, want: []string{"git-auth", "hf-auth"}},
-		{name: "public Git and HF", result: &api.PostProcessingResultsDataRef{HF: &api.HFTestDataRef{RepoID: "org/data"}}, calibration: []api.CalibrationDataRef{{Git: &api.GitTestDataRef{URL: "https://example.org/repo"}}}},
+	evaluation := sourceTestJob(&api.PostProcessingResultsDataRef{Git: &api.GitTestDataRef{URL: "https://example.org/data", Ref: "main", SecretRef: "shared"}}, []api.CalibrationDataRef{{S3: &api.S3TestDataRef{Bucket: "data", Key: "labels", SecretRef: "shared"}}, {HF: &api.HFTestDataRef{RepoID: "org/data", SecretRef: "hf-auth"}}})
+	cfg, err := buildJobConfig(evaluation, postprocessing.RuntimeProvider(), &evaluation.Benchmarks[0], 0, nil, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			evaluation := sourceTestJob(tt.result, tt.calibration)
-			cfg, err := buildJobConfig(evaluation, postprocessing.RuntimeProvider(), &evaluation.Benchmarks[0], 0, nil, nil)
-			if err != nil {
+	cfg.testDataInitImage = "evalhub:test"
+	cfg.defaultEnv = []api.EnvVar{{Name: shared.PostProcessorDataPathsEnv, Value: "untrusted-provider-value"}}
+	job, err := buildJob(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	init := findContainer(job.Spec.Template.Spec.InitContainers, initContainerName)
+	adapter := findContainer(job.Spec.Template.Spec.Containers, adapterContainerName)
+	pathsCount := 0
+	for _, env := range adapter.Env {
+		if env.Name == shared.PostProcessorDataPathsEnv {
+			pathsCount++
+			var paths map[string]string
+			if err := json.Unmarshal([]byte(env.Value), &paths); err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(cfg.postProcessorSecrets, tt.want) {
-				t.Fatalf("secrets = %v, want %v", cfg.postProcessorSecrets, tt.want)
+			if len(paths) != 3 || paths["results"] != shared.PostProcessorStagingRoot+"/results" {
+				t.Fatalf("incorrect staged-path contract: %v", paths)
 			}
-			cfg.defaultEnv = []api.EnvVar{{Name: envPostProcessorSecretRoot, Value: "must-not-override"}}
-			job, err := buildJob(cfg, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			adapter := findContainer(job.Spec.Template.Spec.Containers, adapterContainerName)
-			sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
-			for _, name := range tt.want {
-				count := 0
-				for _, volume := range job.Spec.Template.Spec.Volumes {
-					if volume.Secret == nil || volume.Secret.SecretName != name {
-						continue
-					}
-					count++
-					mount := findVolumeMount(adapter.VolumeMounts, volume.Name)
-					if mount == nil || !mount.ReadOnly || mount.MountPath != postProcessorSecretMountPath+"/"+name || mount.SubPath != "" {
-						t.Fatalf("incorrect secret mount: %#v", mount)
-					}
-					if findVolumeMount(sidecar.VolumeMounts, volume.Name) != nil {
-						t.Fatal("source secret must not be mounted in the sidecar")
-					}
+		}
+	}
+	if pathsCount != 1 {
+		t.Fatalf("staged mapping count = %d", pathsCount)
+	}
+	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
+	if init == nil || init.Image != "evalhub:test" || !reflect.DeepEqual(init.Command, []string{defaultTestDataInitCmd}) {
+		t.Fatal("must reuse eval-runtime-init")
+	}
+	if job.Spec.Template.Spec.InitContainers[0].Name != initContainerName {
+		t.Fatal("staging must complete before the adapter starts")
+	}
+	for _, name := range []string{"shared", "hf-auth"} {
+		count := 0
+		for _, volume := range job.Spec.Template.Spec.Volumes {
+			if volume.Secret != nil && volume.Secret.SecretName == name {
+				count++
+				mount := findVolumeMount(init.VolumeMounts, volume.Name)
+				if mount == nil || !mount.ReadOnly || mount.MountPath != postProcessorSecretMountPath+"/"+name {
+					t.Fatal("missing init credential mount")
 				}
-				if count != 1 {
-					t.Fatalf("secret %q has %d volumes, want 1", name, count)
-				}
-			}
-			if len(tt.want) > 0 {
-				count := 0
-				for _, env := range adapter.Env {
-					if env.Name == envPostProcessorSecretRoot {
-						count++
-						if env.Value != postProcessorSecretMountPath {
-							t.Fatal("provider overrides trusted secret root")
-						}
-					}
-				}
-				if count != 1 {
-					t.Fatalf("secret root env count = %d", count)
+				if findVolumeMount(adapter.VolumeMounts, volume.Name) != nil || findVolumeMount(sidecar.VolumeMounts, volume.Name) != nil {
+					t.Fatal("source credentials must be confined to init")
 				}
 			}
-		})
+		}
+		if count != 1 {
+			t.Fatalf("secret %s mounted %d times", name, count)
+		}
+	}
+	cm, err := buildConfigMap(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plan shared.DataStagingPlan
+	if err := json.Unmarshal([]byte(cm.Data[shared.DataStagingPlanFile]), &plan); err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Sources) != 3 {
+		t.Fatalf("staging plan: %+v", plan)
+	}
+	staged := findVolumeMount(adapter.VolumeMounts, postProcessorDataVolumeName)
+	if staged == nil || !staged.ReadOnly {
+		t.Fatal("adapter staging mount must be read-only")
 	}
 }
 
@@ -183,6 +195,27 @@ func TestPostProcessorSecretNamesRejectUnsafeNames(t *testing.T) {
 	}
 }
 
+func TestPostProcessorPVCFileSubpath(t *testing.T) {
+	for _, subpath := range []string{"nested/results.json", "../escape", "/absolute"} {
+		t.Run(subpath, func(t *testing.T) {
+			job := sourceTestJob(&api.PostProcessingResultsDataRef{PVC: &api.PVCTestDataRef{ClaimName: "data", SubPath: subpath}}, nil)
+			pvcs, err := postProcessorPVCConfigs(job)
+			if subpath != "nested/results.json" {
+				if err == nil {
+					t.Fatal("unsafe subpath accepted")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(pvcs) != 1 || pvcs[0].mountPath != shared.PostProcessorPVCRoot+"/results/results.json" || pvcs[0].subPath != subpath {
+				t.Fatalf("file subpath must preserve its basename: %+v", pvcs)
+			}
+		})
+	}
+}
+
 func TestPostProcessorResultsPVCMounts(t *testing.T) {
 	for _, calibrationClaim := range []string{"", "results", "other"} {
 		t.Run("calibration-"+calibrationClaim, func(t *testing.T) {
@@ -196,12 +229,13 @@ func TestPostProcessorResultsPVCMounts(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := 1
-			if calibrationClaim == "other" {
+			if calibrationClaim != "" {
 				want = 2
 			}
 			if len(cfg.postProcessorPVCs) != want {
 				t.Fatalf("PVC count = %d, want %d", len(cfg.postProcessorPVCs), want)
 			}
+			cfg.testDataInitImage = "evalhub:test"
 			job, err := buildJob(cfg, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -209,7 +243,7 @@ func TestPostProcessorResultsPVCMounts(t *testing.T) {
 			adapter := findContainer(job.Spec.Template.Spec.Containers, adapterContainerName)
 			var mapping map[string]string
 			for _, env := range adapter.Env {
-				if env.Name == envPostProcessorPVCMountsName {
+				if env.Name == shared.PostProcessorDataPathsEnv {
 					if err := json.Unmarshal([]byte(env.Value), &mapping); err != nil {
 						t.Fatal(err)
 					}
@@ -220,12 +254,17 @@ func TestPostProcessorResultsPVCMounts(t *testing.T) {
 			}
 			for _, pvc := range cfg.postProcessorPVCs {
 				volume := findVolume(job.Spec.Template.Spec.Volumes, pvc.volumeName)
-				mount := findVolumeMount(adapter.VolumeMounts, pvc.volumeName)
+				var mount *corev1.VolumeMount
+				for i := range adapter.VolumeMounts {
+					if adapter.VolumeMounts[i].MountPath == pvc.mountPath {
+						mount = &adapter.VolumeMounts[i]
+					}
+				}
 				if volume == nil || volume.PersistentVolumeClaim == nil || !volume.PersistentVolumeClaim.ReadOnly {
 					t.Fatal("PVC must be mounted read-only")
 				}
-				if mount == nil || !mount.ReadOnly || mount.SubPath != "" {
-					t.Fatal("PVC must expose its read-only root; subpaths are applied by the adapter")
+				if mount == nil || !mount.ReadOnly || mount.SubPath != pvc.subPath {
+					t.Fatal("PVC must apply subpaths directly")
 				}
 			}
 		})
@@ -260,6 +299,7 @@ func TestPostProcessorExternalOCIConfiguresSidecar(t *testing.T) {
 				if cfg.ociCredentialsSecret != "registry-auth" {
 					t.Fatalf("missing registry credentials: %q", cfg.ociCredentialsSecret)
 				}
+				cfg.testDataInitImage = "evalhub:test"
 				job, err := buildJob(cfg, nil)
 				if err != nil {
 					t.Fatal(err)

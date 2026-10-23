@@ -40,15 +40,16 @@ func TestPostProcessorPVCConfigsEdgeCases(t *testing.T) {
 			}}),
 		},
 		{
-			name: "PVC claims are trimmed and deduplicated",
+			name: "PVC claims share volumes but preserve reference mounts",
 			job: postProcessorPVCJobForEdgeCases([]api.CalibrationDataRef{
 				{PVC: &api.PVCTestDataRef{ClaimName: " calibration-a "}, DataConfig: validColumns},
 				{PVC: &api.PVCTestDataRef{ClaimName: "calibration-a"}, DataConfig: validColumns},
 				{PVC: &api.PVCTestDataRef{ClaimName: "calibration-b"}, DataConfig: validColumns},
 			}),
 			want: []postProcessorPVCConfig{
-				{claimName: "calibration-a", volumeName: postProcessorCalibrationPVCVolumeNamePrefix + "0", mountPath: postProcessorCalibrationPVCMountPathPrefix + "/calibration-a"},
-				{claimName: "calibration-b", volumeName: postProcessorCalibrationPVCVolumeNamePrefix + "1", mountPath: postProcessorCalibrationPVCMountPathPrefix + "/calibration-b"},
+				{sourceName: "calibration-0", claimName: "calibration-a", volumeName: postProcessorCalibrationPVCVolumeNamePrefix + "0", mountPath: shared.PostProcessorPVCRoot + "/calibration-0"},
+				{sourceName: "calibration-1", claimName: "calibration-a", volumeName: postProcessorCalibrationPVCVolumeNamePrefix + "0", mountPath: shared.PostProcessorPVCRoot + "/calibration-1"},
+				{sourceName: "calibration-2", claimName: "calibration-b", volumeName: postProcessorCalibrationPVCVolumeNamePrefix + "1", mountPath: shared.PostProcessorPVCRoot + "/calibration-2"},
 			},
 		},
 		{
@@ -1835,21 +1836,25 @@ func TestPostProcessorPVCConfigs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("postProcessorPVCConfigs: %v", err)
 	}
-	if len(configs) != 2 {
-		t.Fatalf("got %d PVC configs, want 2", len(configs))
+	if len(configs) != 3 {
+		t.Fatalf("got %d PVC configs, want 3 references", len(configs))
 	}
 	want := []postProcessorPVCConfig{
 		{
+			sourceName: "calibration-0",
 			claimName:  "calibration-a",
 			volumeName: postProcessorCalibrationPVCVolumeNamePrefix + "0",
-			mountPath:  postProcessorCalibrationPVCMountPathPrefix + "/calibration-a",
+			mountPath:  shared.PostProcessorPVCRoot + "/calibration-0",
 		},
 		{
+			sourceName: "calibration-2",
 			claimName:  "calibration-b",
 			volumeName: postProcessorCalibrationPVCVolumeNamePrefix + "1",
-			mountPath:  postProcessorCalibrationPVCMountPathPrefix + "/calibration-b",
+			mountPath:  shared.PostProcessorPVCRoot + "/calibration-2",
 		},
 	}
+	want = append(want, postProcessorPVCConfig{sourceName: "calibration-3", claimName: "calibration-a", volumeName: postProcessorCalibrationPVCVolumeNamePrefix + "0", mountPath: shared.PostProcessorPVCRoot + "/calibration-3"})
+
 	for i := range want {
 		if configs[i] != want[i] {
 			t.Errorf("config[%d] = %#v, want %#v", i, configs[i], want[i])

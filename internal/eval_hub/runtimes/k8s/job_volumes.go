@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
@@ -201,25 +202,14 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		})
 	}
 
-	for i, name := range cfg.postProcessorSecrets {
-		volumeName := fmt.Sprintf("%s%d", postProcessorSecretVolumePrefix, i)
-		volumes = append(volumes, corev1.Volume{
-			Name:         volumeName,
-			VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: name}},
-		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      volumeName,
-			MountPath: postProcessorSecretMountPath + "/" + name,
-			ReadOnly:  true,
-		})
+	if cfg.postProcessorStaging != nil {
+		volumes = append(volumes, corev1.Volume{Name: postProcessorDataVolumeName, VolumeSource: corev1.VolumeSource{EmptyDir: testDataEmptyDirVolumeSource()}})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: postProcessorDataVolumeName, MountPath: shared.PostProcessorStagingRoot, ReadOnly: true})
 	}
 
 	// Post-processing results and calibration PVCs are independent of benchmark test data.
-	// They are mounted read-only in the adapter container, which receives a
-	// claim-name-to-path map through EVALHUB_POST_PROCESSOR_PVC_MOUNTS.
-	// Mount the claim root: the adapter applies each reference's sub_path.
-	// Setting SubPath here would apply it twice and prevent references to
-	// different subpaths of the same claim from sharing a mount.
+	// Each reference is mounted directly, with Kubernetes applying sub_path as
+	// for evaluation test data. A shared claim needs only one volume definition.
 	for _, pvc := range cfg.postProcessorPVCs {
 		volumes = append(volumes, corev1.Volume{
 			Name: pvc.volumeName,
@@ -234,6 +224,7 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 			Name:      pvc.volumeName,
 			MountPath: pvc.mountPath,
 			ReadOnly:  true,
+			SubPath:   pvc.subPath,
 		})
 	}
 
@@ -426,6 +417,13 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			corev1.ResourceCPU:    resource.MustParse(defaultInitCPULimit),
 			corev1.ResourceMemory: resource.MustParse(defaultInitMemoryLimit),
 		},
+	}
+	if cfg.postProcessorStaging != nil {
+		container, sourceVolumes, err := postProcessorInitContainer(cfg, initResources)
+		if err != nil {
+			return nil, nil, err
+		}
+		return []corev1.Container{*container}, sourceVolumes, nil
 	}
 
 	if hasS3TestData(cfg) {
