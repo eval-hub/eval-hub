@@ -149,9 +149,27 @@ make generate-benchmark-configs
 go test ./tests/benchmarks/...
 ```
 
-The generator reads `config/providers/*.yaml` and preserves existing files, so
-reviewed fixture edits survive regeneration. A new provider requires a reviewed
-workload profile in `generate/main.go`. The offline catalog test checks fixture
+The target runs `go run ./tests/benchmarks/generate`. It reads
+`config/providers/*.yaml` and creates missing JSON fixtures under
+`tests/benchmarks/testdata/<provider-id>/<benchmark-id>.json`, using the filename
+encoding described above. Generated fixtures contain provider-specific workload
+settings, a default `5m` timeout, and applicable environment placeholders and
+prerequisite notes. Generation only writes local files: it does not submit jobs
+or require a running EvalHub service. Review the generated settings and supply
+the required inputs before running the smoke tests.
+
+To use different provider or output directories, invoke the generator directly
+from the repository root:
+
+```bash
+go run ./tests/benchmarks/generate -providers /path/to/providers -output /path/to/fixtures
+```
+
+Existing files are never overwritten, so reviewed fixture edits survive
+regeneration. Changes to generator defaults therefore apply only to missing
+files; update existing fixtures manually when those defaults should change.
+A new provider requires a reviewed workload profile in `generate/main.go`;
+generation fails if one is missing. The offline catalog test checks fixture
 coverage and request validity with synthetic environment values; it does not
 certify adapter execution or that staged datasets have the expected contents.
 
