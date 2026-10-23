@@ -21,6 +21,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
+	validator "github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 )
 
@@ -75,10 +76,13 @@ func TestBenchmarkSmoke(t *testing.T) {
 			t.Run(provider.Resource.ID+"/"+benchmark.ID, func(t *testing.T) {
 				t.Parallel()
 				path := fixturePath(fixtureRoot, provider.Resource.ID, benchmark.ID)
-				fixture, err := loadFixture(path, os.LookupEnv)
+				fixture, err := loadFixture(path, smokeEnv)
 				if errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("missing JSON fixture for provider %q benchmark %q: expected %s; run make generate-benchmark-configs from the repository root or add a reviewed fixture at this path", provider.Resource.ID, benchmark.ID, path)
+				}
+				if errors.Is(err, errMissingInput) {
 					skipped.Add(1)
-					t.Skipf("no fixture: %s", path)
+					t.Skipf("fixture %s: %v; supply the missing input to run this benchmark", path, err)
 				}
 				if err != nil {
 					t.Fatalf("fixture %s: %v", path, err)
@@ -92,6 +96,19 @@ func TestBenchmarkSmoke(t *testing.T) {
 				}
 				jobConfig := fixture.jobConfig(provider.Resource.ID, benchmark.ID, model)
 				if err := validate.Struct(jobConfig); err != nil {
+					var fields validator.ValidationErrors
+					if errors.As(err, &fields) {
+						missingOnly := true
+						for _, field := range fields {
+							if field.Tag() != "required" {
+								missingOnly = false
+							}
+						}
+						if missingOnly {
+							skipped.Add(1)
+							t.Skipf("fixture %s: missing required request inputs: %v; complete these fields to run this benchmark", path, err)
+						}
+					}
 					t.Fatalf("invalid evaluation request: %v", err)
 				}
 				timeout, _ := positiveDuration(fixture.Timeout) // validated by loadFixture
@@ -123,6 +140,26 @@ func TestBenchmarkSmoke(t *testing.T) {
 			})
 		}
 	}
+}
+
+// smokeEnv accepts the aliases exported by the Shepard benchmark pipeline.
+// The primary name wins when it is nonempty.
+func smokeEnv(key string) (string, bool) {
+	names := []string{key}
+	switch key {
+	case "EVALHUB_TOKEN":
+		names = append(names, "AUTH_TOKEN")
+	case "JUDGE_MODEL_NAME":
+		names = append(names, "JUDGE_MODEL")
+	case "JUDGE_BASE_URL":
+		names = append(names, "JUDGE_API_BASE", "JUDGE_PROXY_URL")
+	}
+	for _, name := range names {
+		if value, ok := os.LookupEnv(name); ok && strings.TrimSpace(value) != "" {
+			return value, true
+		}
+	}
+	return "", false
 }
 
 func requiredEnv(t *testing.T, key string) string {
@@ -157,6 +194,8 @@ func fixturePath(root, provider, benchmark string) string {
 	return filepath.Join(root, fileID(provider), fileID(benchmark)+".json")
 }
 
+var errMissingInput = errors.New("missing required input")
+
 var envPattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
 func expandValues(value any, lookup func(string) (string, bool)) (any, error) {
@@ -172,7 +211,7 @@ func expandValues(value any, lookup func(string) (string, bool)) (any, error) {
 			return value
 		})
 		if missing != "" {
-			return nil, fmt.Errorf("required environment variable %s is missing", missing)
+			return nil, fmt.Errorf("%w: environment variable %s must be nonempty", errMissingInput, missing)
 		}
 		return result, nil
 	case map[string]any:
@@ -227,11 +266,17 @@ func loadFixture(path string, lookup func(string) (string, bool)) (fixture, erro
 	if err := decodeStrict(data, &f); err != nil {
 		return f, err
 	}
+	if _, ok := raw["parameters"]; !ok {
+		return f, fmt.Errorf("%w: fixture field parameters must be a JSON object", errMissingInput)
+	}
 	if f.Parameters == nil {
 		return f, errors.New("parameters must be a JSON object")
 	}
 	if f.ExperimentName != "" && strings.TrimSpace(f.ExperimentName) == "" {
 		return f, errors.New("experiment_name must not be blank")
+	}
+	if strings.TrimSpace(f.Timeout) == "" {
+		return f, fmt.Errorf("%w: fixture field timeout must be a positive Go duration (for example 5m)", errMissingInput)
 	}
 	if _, err := positiveDuration(f.Timeout); err != nil {
 		return f, fmt.Errorf("timeout: %w", err)
@@ -241,8 +286,8 @@ func loadFixture(path string, lookup func(string) (string, bool)) (fixture, erro
 			return f, errors.New("use either test_data_ref or test_data_ref_env")
 		}
 		value, ok := lookup(f.TestDataRefEnv)
-		if !ok || value == "" {
-			return f, fmt.Errorf("%s must contain a TestDataRef JSON object for a tiny staged dataset", f.TestDataRefEnv)
+		if !ok || strings.TrimSpace(value) == "" {
+			return f, fmt.Errorf("%w: environment variable %s must contain a TestDataRef JSON object for a tiny staged dataset", errMissingInput, f.TestDataRefEnv)
 		}
 		if err := decodeStrict([]byte(value), &f.TestDataRef); err != nil {
 			return f, fmt.Errorf("%s: invalid TestDataRef: %w", f.TestDataRefEnv, err)
@@ -406,9 +451,10 @@ func newHTTPClient() (*http.Client, error) {
 		}
 		transport.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
 	}
+	token, _ := smokeEnv("EVALHUB_TOKEN")
 	return &http.Client{
 		Timeout:   30 * time.Second,
-		Transport: identityTransport{base: transport, token: os.Getenv("EVALHUB_TOKEN"), tenant: os.Getenv("X_TENANT"), user: os.Getenv("X_USER")},
+		Transport: identityTransport{base: transport, token: token, tenant: os.Getenv("X_TENANT"), user: os.Getenv("X_USER")},
 		// Do not forward identity headers to redirects, including a different host.
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
 	}, nil

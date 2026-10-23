@@ -325,7 +325,7 @@ func TestCleanupJob(t *testing.T) {
 // Exercise the actual test entry point in a child process so skips, failures,
 // t.Parallel and cleanup are checked without contaminating the parent result.
 func TestSmokeHarness(t *testing.T) {
-	for _, mode := range []string{"parallel", "zero-configured", "failed", "timeout"} {
+	for _, mode := range []string{"parallel", "zero-configured", "missing-input", "missing-data-ref", "missing-parameters", "missing-timeout", "missing-model", "malformed", "failed", "timeout"} {
 		t.Run(mode, func(t *testing.T) {
 			root := t.TempDir()
 			if mode != "zero-configured" {
@@ -334,6 +334,20 @@ func TestSmokeHarness(t *testing.T) {
 					if mode == "timeout" {
 						timeout = "100ms"
 					}
+					extra := `{"parameters":{"task":"${BENCHMARK_REQUIRED_INPUT}"},"timeout":"1m"}`
+					switch mode {
+					case "missing-data-ref":
+						extra = `{"parameters":{},"timeout":"1m","test_data_ref_env":"BENCHMARK_REQUIRED_INPUT"}`
+					case "missing-parameters":
+						extra = `{"timeout":"1m"}`
+					case "missing-timeout":
+						extra = `{"parameters":{}}`
+					case "missing-model":
+						extra = `{"parameters":{},"timeout":"1m","model":{}}`
+					case "malformed":
+						extra = `{"parameters":`
+					}
+					writeFixture(t, root, provider, "missing", extra)
 					writeFixture(t, root, provider, "b", fmt.Sprintf(`{"parameters":{"num_examples":1},"timeout":%q}`, timeout))
 				}
 			}
@@ -398,7 +412,7 @@ func TestSmokeHarness(t *testing.T) {
 			}))
 			defer server.Close()
 			cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestBenchmarkSmoke$", "-test.v", "-test.parallel=2", "-test.timeout=1m")
-			overrides := map[string]string{"BENCHMARK_SMOKE": "1", "SERVER_URL": server.URL, "MODEL_NAME": "smoke", "MODEL_URL": "http://model.example/v1", "BENCHMARK_CONFIG_DIR": root, "BENCHMARK_POLL_INTERVAL": "1ms", "EVALHUB_TOKEN": "test-token", "X_TENANT": "tenant", "X_USER": "user", "EVALHUB_CA_CERT_PATH": "", "MODEL_AUTH_SECRET_REF": ""}
+			overrides := map[string]string{"BENCHMARK_SMOKE": "1", "SERVER_URL": server.URL, "MODEL_NAME": "smoke", "MODEL_URL": "http://model.example/v1", "BENCHMARK_CONFIG_DIR": root, "BENCHMARK_POLL_INTERVAL": "1ms", "EVALHUB_TOKEN": "test-token", "X_TENANT": "tenant", "X_USER": "user", "EVALHUB_CA_CERT_PATH": "", "MODEL_AUTH_SECRET_REF": "", "BENCHMARK_REQUIRED_INPUT": ""}
 			for _, entry := range os.Environ() {
 				key, _, _ := strings.Cut(entry, "=")
 				if _, ok := overrides[key]; !ok {
@@ -409,10 +423,11 @@ func TestSmokeHarness(t *testing.T) {
 				cmd.Env = append(cmd.Env, key+"="+value)
 			}
 			output, err := cmd.CombinedOutput()
-			if mode == "parallel" && err != nil {
+			wantSuccess := mode == "parallel" || strings.HasPrefix(mode, "missing-")
+			if wantSuccess && err != nil {
 				t.Fatalf("smoke suite failed: %v\n%s", err, output)
 			}
-			if mode != "parallel" && err == nil {
+			if !wantSuccess && err == nil {
 				t.Fatalf("smoke suite should fail:\n%s", output)
 			}
 			mu.Lock()
@@ -421,14 +436,48 @@ func TestSmokeHarness(t *testing.T) {
 				if created != 0 || !strings.Contains(string(output), "no configured benchmarks were submitted") {
 					t.Fatalf("zero-configured run: created=%d\n%s", created, output)
 				}
+				for _, message := range []string{"missing JSON fixture for provider", "benchmark", "make generate-benchmark-configs", root} {
+					if !strings.Contains(string(output), message) {
+						t.Fatalf("missing fixture diagnostic %q:\n%s", message, output)
+					}
+				}
 			} else if created != 2 || deleted != 2 {
 				t.Fatalf("created=%d deleted=%d\n%s", created, deleted, output)
+			}
+			if wantSuccess && (!strings.Contains(string(output), "missing required") || !strings.Contains(string(output), "skipped=2 submitted=2")) {
+				t.Fatalf("missing input diagnostic or counts absent:\n%s", output)
+			}
+			if mode == "malformed" && !strings.Contains(string(output), "unexpected EOF") {
+				t.Fatalf("malformed fixture did not fail clearly:\n%s", output)
 			}
 			if mode == "parallel" && maxActive != 2 {
 				t.Fatalf("cross-provider parallelism was %d\n%s", maxActive, output)
 			}
-			if !strings.Contains(string(output), "--- SKIP:") {
-				t.Fatalf("missing benchmark fixture was not skipped:\n%s", output)
+			if mode != "zero-configured" && mode != "malformed" && !strings.Contains(string(output), "--- SKIP:") {
+				t.Fatalf("missing input was not skipped:\n%s", output)
+			}
+		})
+	}
+}
+
+func TestSmokeEnvAliases(t *testing.T) {
+	for _, tc := range []struct{ primary, alias string }{
+		{"EVALHUB_TOKEN", "AUTH_TOKEN"},
+		{"JUDGE_MODEL_NAME", "JUDGE_MODEL"},
+		{"JUDGE_BASE_URL", "JUDGE_API_BASE"},
+		{"JUDGE_BASE_URL", "JUDGE_PROXY_URL"},
+	} {
+		t.Run(tc.alias, func(t *testing.T) {
+			for _, key := range []string{"EVALHUB_TOKEN", "AUTH_TOKEN", "JUDGE_MODEL_NAME", "JUDGE_MODEL", "JUDGE_BASE_URL", "JUDGE_API_BASE", "JUDGE_PROXY_URL"} {
+				t.Setenv(key, "")
+			}
+			t.Setenv(tc.alias, "alias-value")
+			if got, ok := smokeEnv(tc.primary); !ok || got != "alias-value" {
+				t.Fatalf("alias lookup = %q, %v", got, ok)
+			}
+			t.Setenv(tc.primary, "primary-value")
+			if got, _ := smokeEnv(tc.primary); got != "primary-value" {
+				t.Fatalf("primary must win: %q", got)
 			}
 		})
 	}

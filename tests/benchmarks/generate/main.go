@@ -106,7 +106,7 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 		p["num_examples"] = 1
 		f["notes"] = "One example per probe; broad probe groups still invoke multiple probes. garak-kfp additionally requires Data Science Pipelines."
 		if benchmark == "intents" {
-			p["intents_models"] = map[string]any{"judge": map[string]any{"name": "${MODEL_NAME}", "url": "${MODEL_URL}"}}
+			p["intents_models"] = map[string]any{"judge": map[string]any{"name": "${JUDGE_MODEL_NAME}", "url": "${JUDGE_BASE_URL}"}}
 			p["sdg_model"], p["sdg_api_base"] = "${MODEL_NAME}", "${MODEL_URL}"
 		}
 	case "guidellm":
@@ -127,7 +127,8 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 			p["max_concurrent"] = 1
 		}
 		if provider == "followbench" {
-			p["judge_model"], p["judge_url"] = "${MODEL_NAME}", "${MODEL_URL}"
+			p["judge_model"] = "${JUDGE_MODEL_NAME}"
+			f["notes"] = "Requires model.auth.secret_ref to contain judge_api-key and judge_url for the independent judge connection; judge_model cannot be combined with inline judge_url or judge_api_key."
 		}
 	case "ruler":
 		p["num_samples"], p["context_lengths"], p["batch_size"], p["tokens_to_generate"] = 1, []int{4096}, 1, 32
@@ -139,7 +140,13 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 		if strings.Contains(benchmark, "/petri-") || strings.Contains(benchmark, "/bloom-") {
 			p["max_turns"] = 1
 			p["auditor_model"], p["auditor_base_url"] = "${MODEL_NAME}", "${MODEL_URL}"
-			p["judge_model"], p["judge_base_url"] = "${MODEL_NAME}", "${MODEL_URL}"
+			p["judge_model"], p["judge_base_url"], p["judge_api_key"] = "${JUDGE_MODEL_NAME}", "${JUDGE_BASE_URL}", "${JUDGE_API_KEY}"
+		}
+		if benchmark == "inspect/hle" || benchmark == "inspect/cyberseceval-2-pi" {
+			p["judge_model"] = "${JUDGE_MODEL_NAME}"
+		}
+		if benchmark == "inspect/strong-reject" {
+			p["grader_model"], p["grader_base_url"] = "${JUDGE_MODEL_NAME}", "${JUDGE_BASE_URL}"
 		}
 		if benchmark == "inspect/custom" {
 			p["task"] = "${INSPECT_CUSTOM_TASK}"
@@ -147,12 +154,14 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 		if benchmark == "inspect/bloom-custom" {
 			p["bloom_template"] = "${INSPECT_BLOOM_TEMPLATE}"
 		}
-		f["notes"] = "One sample per task. Agent/code benchmarks may require sandbox and external services; configure those in this fixture for the target environment. Petri/Bloom need capable auditor and judge models."
+		f["notes"] = "One sample per task. Agent/code benchmarks may require sandbox and external services; configure those in this fixture for the target environment. Petri/Bloom require JUDGE_MODEL_NAME, JUDGE_BASE_URL, and JUDGE_API_KEY for the judge. HLE/CyberSecEval require judge_api-key and judge_url in model.auth.secret_ref for an independent judge connection. StrongREJECT requires Secret-backed OPENAI_JUDGE_API_KEY in the adapter environment."
 	case "ragas":
+		p["judge_model"], p["judge_url"], p["judge_api_key"] = "${JUDGE_MODEL_NAME}", "${JUDGE_BASE_URL}", "${JUDGE_API_KEY}"
 		p["num_examples"], p["max_workers"] = 1, 1
 		f["test_data_ref_env"] = "RAGAS_TEST_DATA_REF"
 		f["notes"] = "Stage a single complete RAG record as dataset.jsonl. Full-suite metrics additionally require an embeddings-capable endpoint."
 	case "deepeval":
+		p["eval_model_name"], p["eval_model_url"] = "${JUDGE_MODEL_NAME}", "${JUDGE_BASE_URL}"
 		p["dataset_format"], p["max_concurrent"], p["retry_max_attempts"] = "jsonl", 1, 1
 		f["test_data_ref_env"] = "DEEPEVAL_TEST_DATA_REF"
 		f["notes"] = "Stage exactly one record in a JSONL file with input, actual_output, expected_output, context, and retrieval_context fields. No adapter sample cap; input size bounds work. Requires a structured-output judge."
@@ -161,6 +170,7 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 		f["test_data_ref_env"] = "CLEAR_TEST_DATA_REF"
 		f["notes"] = "Stage a single short agent trace in CLEAR's expected trace format; the adapter has no sample limit."
 	case "atif":
+		f["model"] = map[string]any{"name": "${JUDGE_MODEL_NAME}", "url": "${JUDGE_BASE_URL}"}
 		p["max_trajectory_files"], p["max_total_steps"], p["max_steps_per_trajectory"], p["concurrency_limit"] = 1, 1, 1, 1
 		p["scoring_mode"], p["benchmark_name"], p["judge_max_attempts"], p["job_timeout_seconds"] = "benchmark", "humanevalfix", 1, 120
 		f["test_data_ref_env"], f["experiment"] = "ATIF_TEST_DATA_REF", true

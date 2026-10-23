@@ -12,7 +12,7 @@ model endpoint. The local FVT mock runtime does not validate real adapters.
 
 ```bash
 export SERVER_URL=https://evalhub.example
-export EVALHUB_TOKEN=...          # if the service requires a bearer token
+export EVALHUB_TOKEN=...          # if the service requires a bearer token; AUTH_TOKEN is also accepted
 export X_TENANT=my-namespace     # required in cluster mode
 export X_USER=my-user           # required when calling the service directly in cluster mode
 export MODEL_NAME=org/model
@@ -51,8 +51,9 @@ per-benchmark results for CI consumers.
 
 Ordinary `go test ./tests/benchmarks/...` runs offline harness checks and skips live
 evaluations. Live runs fail on invalid configuration, discovery errors, failed
-jobs, timeouts, or zero submitted benchmarks. Missing fixture files alone produce
-explicit subtest skips. Subtest names contain provider and benchmark IDs; Go's
+jobs, timeouts, missing fixture files, or zero submitted benchmarks. Missing
+required fixture inputs produce explicit subtest skips naming the missing field or
+environment variable and explaining how to enable the benchmark. Subtest names contain provider and benchmark IDs; Go's
 `-run` treats slash-separated portions as regular expressions.
 
 ## Fixtures
@@ -65,7 +66,8 @@ in the checked-in provider catalog.
 
 Each checked-in provider benchmark has one file under
 `testdata/<provider-id>/<benchmark-id>.json`. Runtime discovery uses the live API
-catalog, so a newly discovered benchmark without a file is skipped. Filenames
+catalog, so a newly discovered benchmark without a file fails with the expected
+path and instructions to generate or add the fixture. Filenames
 use Go's `url.PathEscape`, additionally encoding dots as `%2E`. For example,
 `inspect/petri-sycophancy` becomes `inspect%2Fpetri-sycophancy.json` under the
 `inspect` provider directory. Encoding `%` prevents collisions with escaped IDs.
@@ -104,8 +106,10 @@ Supported fixture fields:
 
 `${ENV_NAME}` in any fixture string is replaced with a nonempty environment value.
 Substitution preserves JSON escaping, does not recursively expand injected values,
-and fails if a required variable is missing. Unknown fixture fields and invalid
-API request shapes fail before job submission.
+and skips the benchmark if a required variable is missing or empty. Missing
+`parameters`, `timeout`, or required request fields also skip the benchmark with
+a diagnostic. Unknown fixture fields, malformed JSON, and invalid supplied values
+fail before job submission.
 
 To supply an MLflow experiment name through the environment, add this field to
 each fixture that should use it:
@@ -119,19 +123,20 @@ each fixture that should use it:
 ```
 
 ```bash
-export MLFLOW_EXPERIMENT_NAME=benchmark-smoke
-make test-benchmarks
-```
-
-The Makefile target also exports a value supplied as a Make variable:
-
-```bash
 make test-benchmarks MLFLOW_EXPERIMENT_NAME=benchmark-smoke
 ```
 
+The Makefile target clears ambient experiment names by default. To use an
+exported environment value with a direct Go invocation:
+
+```bash
+export MLFLOW_EXPERIMENT_NAME=benchmark-smoke
+BENCHMARK_SMOKE=1 go test ./tests/benchmarks -run TestBenchmarkSmoke -v
+```
+
 The environment variable alone does not change fixtures: they must reference it
-through `experiment_name`. A missing or empty referenced variable fails before
-submission. Multiple benchmark jobs can share the supplied experiment name while
+through `experiment_name`. A missing or empty referenced variable skips the
+benchmark before submission. Multiple benchmark jobs can share the supplied experiment name while
 their job names remain unique. With `experiment: true` and no explicit name,
 each job still uses its generated unique name. An empty literal
 `experiment_name` behaves as if omitted; whitespace-only names are rejected.
@@ -149,6 +154,50 @@ reviewed fixture edits survive regeneration. A new provider requires a reviewed
 workload profile in `generate/main.go`. The offline catalog test checks fixture
 coverage and request validity with synthetic environment values; it does not
 certify adapter execution or that staged datasets have the expected contents.
+
+## Jenkins environment and judge inputs
+
+The Shepard `Jenkinsfile.evalhub-benchmark-tests` currently runs the godog FVT
+suite through `run-fvt-tests.sh`, rather than `make test-benchmarks`. Its
+`SERVER_URL`, `MODEL_NAME`, `MODEL_URL`, `MODEL_AUTH_SECRET_REF`, and `X_TENANT`
+inputs match this runner. The runner also accepts Jenkins's `AUTH_TOKEN` as a
+fallback for `EVALHUB_TOKEN`; an explicit nonempty `EVALHUB_TOKEN` takes precedence.
+`WAIT_DEADLINE`, `FVT_CONCURRENCY`, `FVT_TEST_FILTER`, and
+`FVT_BENCHMARK_TOKENIZER` are FVT settings, not smoke-runner settings. Configure
+`BENCHMARK_TIMEOUT`, `BENCHMARK_PARALLEL`, `BENCHMARK_RUN`, and fixture parameters
+when invoking the smoke suite. The smoke runner keeps TLS verification enabled;
+provide `EVALHUB_CA_CERT_PATH` for a private service CA.
+
+Judge fixtures require nonempty `${JUDGE_MODEL_NAME}` and, where the adapter
+supports an inline endpoint, `${JUDGE_BASE_URL}`. The runner accepts `JUDGE_MODEL`
+as a fallback for `JUDGE_MODEL_NAME`, and `JUDGE_API_BASE` then `JUDGE_PROXY_URL`
+as fallbacks for `JUDGE_BASE_URL`. The primary nonempty name always wins.
+Petri/Bloom and RAGAS additionally require `${JUDGE_API_KEY}`. Jenkins sets this
+to `local` for its judge proxy in the collection stage; supply it explicitly when
+running these smoke fixtures elsewhere. Missing referenced inputs skip the
+benchmark with an actionable message.
+
+Generated fixtures use the adapter's field names:
+
+- Inspect Petri/Bloom: `judge_model`, `judge_base_url`, `judge_api_key`. Auditor
+  inputs continue to use the evaluated model's `MODEL_NAME` and `MODEL_URL`.
+- Inspect StrongREJECT: `grader_model`, `grader_base_url`; provision
+  `OPENAI_JUDGE_API_KEY` in the adapter environment through a Secret.
+- ATIF: the fixture `model` selects `JUDGE_MODEL_NAME` and `JUDGE_BASE_URL`,
+  because its model scores staged trajectories rather than generating them.
+- RAGAS: `judge_model`, `judge_url`, `judge_api_key`.
+- DeepEval: `eval_model_name`, `eval_model_url`; authentication comes from the
+  adapter's model credentials.
+- Garak/Garak KFP intents: `intents_models.judge.name` and `.url`. Synthetic data
+  generation continues to use `MODEL_NAME` and `MODEL_URL`.
+- FollowBench and Inspect HLE/CyberSecEval: `judge_model`. These adapters reject
+  inline judge URL/key parameters with this field. Configure `judge_url` and
+  `judge_api-key` in `MODEL_AUTH_SECRET_REF` for a separate judge connection.
+
+Proxy deployment settings such as `JUDGE_PROXY_UPSTREAM_URL` and
+`JUDGE_PROXY_SECRET_REF` configure Jenkins infrastructure, not evaluation inputs.
+Changing the generator preserves existing JSON files; update reviewed fixtures
+on the separate fixture branch when changing these bindings.
 
 ## Provider prerequisites and workload limits
 
@@ -217,5 +266,5 @@ make fmt lint
 The harness tests exercise discovery pagination, strict fixtures, safe paths and
 environment substitution, terminal failures, missing results, timeouts, and
 cleanup. Subprocess tests execute the live suite against an HTTP fake to verify
-parallel execution across providers, missing-fixture skips, zero-submission
+parallel execution across providers, missing-fixture failures, missing-input skips, zero-submission
 failure, authenticated requests, and cleanup on success/failure/timeout.
