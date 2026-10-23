@@ -114,6 +114,7 @@ type fakeRuntime struct {
 	err                    error
 	validateHWErr          error
 	called                 bool
+	runBenchmarks          []api.EvaluationBenchmarkConfig
 	validateHWCalled       bool
 	validateHWBenchmarks   []api.EvaluationBenchmarkConfig
 	notifiedJob            *api.EvaluationJobResource
@@ -128,10 +129,11 @@ func (r *fakeRuntime) WithContext(_ context.Context) abstractions.Runtime {
 func (r *fakeRuntime) Name() string { return "fake" }
 func (r *fakeRuntime) RunEvaluationJob(
 	_ *api.EvaluationJobResource,
-	_ []api.EvaluationBenchmarkConfig,
+	benchmarks []api.EvaluationBenchmarkConfig,
 	_ abstractions.RuntimeStorage,
 ) error {
 	r.called = true
+	r.runBenchmarks = benchmarks
 	return r.err
 }
 func (r *fakeRuntime) DeleteEvaluationJobResources(_ *api.EvaluationJobResource) error {

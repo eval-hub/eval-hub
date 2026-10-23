@@ -13,6 +13,58 @@ import (
 func TestMergeBenchmarkParameters(t *testing.T) {
 	t.Parallel()
 
+	t.Run("empty tokenizer placeholder is omitted unless overridden", func(t *testing.T) {
+		t.Parallel()
+		benchmark := api.CollectionBenchmarkConfig{
+			Ref:        api.Ref{ID: "truthfulqa_mc1"},
+			ProviderID: "lm_evaluation_harness",
+			Parameters: map[string]any{"num_few_shot": 0, "tokenizer": ""},
+		}
+
+		tests := []struct {
+			name       string
+			jobParams  map[string]any
+			wantParams map[string]any
+		}{
+			{
+				name:       "not supplied",
+				wantParams: map[string]any{"num_few_shot": 0},
+			},
+			{
+				name:      "blank override",
+				jobParams: map[string]any{"tokenizer": ""},
+				wantParams: map[string]any{
+					"num_few_shot": 0,
+				},
+			},
+			{
+				name:      "explicit override",
+				jobParams: map[string]any{"tokenizer": "org/model-tokenizer"},
+				wantParams: map[string]any{
+					"num_few_shot": 0,
+					"tokenizer":    "org/model-tokenizer",
+				},
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				var jobBenchmarks []api.EvaluationBenchmarkConfig
+				if tt.jobParams != nil {
+					jobBenchmarks = []api.EvaluationBenchmarkConfig{{
+						Ref:        api.Ref{ID: "truthfulqa_mc1"},
+						ProviderID: "lm_evaluation_harness",
+						Parameters: tt.jobParams,
+					}}
+				}
+				got := mergeBenchmarkParameters(benchmark, jobBenchmarks)
+				if !reflect.DeepEqual(got.Parameters, tt.wantParams) {
+					t.Fatalf("Parameters = %#v, want %#v", got.Parameters, tt.wantParams)
+				}
+			})
+		}
+	})
+
 	t.Run("no job overrides copies collection parameters", func(t *testing.T) {
 		t.Parallel()
 		benchmark := api.CollectionBenchmarkConfig{
