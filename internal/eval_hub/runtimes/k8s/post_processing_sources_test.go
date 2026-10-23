@@ -165,12 +165,20 @@ func TestPostProcessorSecretProjection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var plan shared.DataStagingPlan
-	if err := json.Unmarshal([]byte(cm.Data[shared.DataStagingPlanFile]), &plan); err != nil {
+	var spec shared.JobSpec
+	if err := json.Unmarshal([]byte(cm.Data[jobSpecFileName]), &spec); err != nil {
 		t.Fatal(err)
 	}
-	if len(plan.Sources) != 3 {
-		t.Fatalf("staging plan: %+v", plan)
+	refs, err := shared.PostProcessingDataSources(spec.Parameters)
+	if err != nil || len(refs) != 3 {
+		t.Fatalf("job sources: %+v error=%v", refs, err)
+	}
+	if _, exists := cm.Data["data-sources.json"]; exists {
+		t.Fatal("redundant staging plan must not be generated")
+	}
+	mount := findVolumeMount(init.VolumeMounts, jobSpecVolumeName)
+	if mount == nil || mount.SubPath != jobSpecFileName {
+		t.Fatal("init must consume the existing job.json")
 	}
 	staged := findVolumeMount(adapter.VolumeMounts, postProcessorDataVolumeName)
 	if staged == nil || !staged.ReadOnly {

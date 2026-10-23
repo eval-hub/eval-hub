@@ -17,33 +17,23 @@ const (
 	postProcessorDataVolumeName     = "post-processor-data"
 )
 
-func postProcessorReferences(evaluation *api.EvaluationJobResource) ([]shared.DataStagingSource, error) {
+func postProcessorReferences(evaluation *api.EvaluationJobResource) ([]shared.NamedDataSource, error) {
 	if evaluation == nil || !postprocessing.IsPostProcessingJob(&evaluation.EvaluationJobConfig) {
 		return nil, nil
 	}
-	operations, err := postprocessing.OperationsFromJob(&evaluation.EvaluationJobConfig)
+	refs, err := shared.PostProcessingDataSources(evaluation.Benchmarks[0].Parameters)
 	if err != nil {
 		return nil, fmt.Errorf("read post-processing calibration data refs: %w", err)
-	}
-	var refs []shared.DataStagingSource
-	ci := operations.ConfidenceInterval
-	if result := ci.ResultsDataRef; result != nil {
-		if result.S3 != nil || result.PVC != nil || result.Git != nil || result.HF != nil {
-			refs = append(refs, shared.DataStagingSource{Name: "results", Source: api.TestDataRef{S3: result.S3, PVC: result.PVC, Git: result.Git, HF: result.HF}})
-		}
-	}
-	for i, ref := range ci.CalibrationDataRef {
-		refs = append(refs, shared.DataStagingSource{Name: fmt.Sprintf("calibration-%d", i), Source: api.TestDataRef{S3: ref.S3, PVC: ref.PVC, Git: ref.Git, HF: ref.HF}})
 	}
 	return refs, nil
 }
 
-func postProcessorStagingPlan(evaluation *api.EvaluationJobResource) (*shared.DataStagingPlan, error) {
+func postProcessorDownloadSources(evaluation *api.EvaluationJobResource) ([]shared.NamedDataSource, error) {
 	refs, err := postProcessorReferences(evaluation)
 	if err != nil {
 		return nil, err
 	}
-	var sources []shared.DataStagingSource
+	var sources []shared.NamedDataSource
 	for _, ref := range refs {
 		if ref.Source.S3 != nil || ref.Source.Git != nil || ref.Source.HF != nil {
 			sources = append(sources, ref)
@@ -52,11 +42,11 @@ func postProcessorStagingPlan(evaluation *api.EvaluationJobResource) (*shared.Da
 	if len(sources) == 0 {
 		return nil, nil
 	}
-	return &shared.DataStagingPlan{Sources: sources}, nil
+	return sources, nil
 }
 
 func postProcessorInitContainer(cfg *jobConfig, resources corev1.ResourceRequirements) (*corev1.Container, []corev1.Volume, error) {
-	if cfg.postProcessorStaging == nil {
+	if cfg.postProcessorDownloads == nil {
 		return nil, nil, nil
 	}
 	if cfg.testDataInitImage == "" {
@@ -65,7 +55,7 @@ func postProcessorInitContainer(cfg *jobConfig, resources corev1.ResourceRequire
 	volumes := []corev1.Volume{{Name: postProcessorDataVolumeName, VolumeSource: corev1.VolumeSource{EmptyDir: testDataEmptyDirVolumeSource()}}}
 	mounts := []corev1.VolumeMount{
 		{Name: postProcessorDataVolumeName, MountPath: shared.PostProcessorStagingRoot},
-		{Name: jobSpecVolumeName, MountPath: "/meta/" + shared.DataStagingPlanFile, SubPath: shared.DataStagingPlanFile, ReadOnly: true},
+		{Name: jobSpecVolumeName, MountPath: "/meta/" + jobSpecFileName, SubPath: jobSpecFileName, ReadOnly: true},
 	}
 	for i, name := range cfg.postProcessorSecrets {
 		volume := fmt.Sprintf("%s%d", postProcessorSecretVolumePrefix, i)
@@ -79,7 +69,7 @@ func postProcessorInitContainer(cfg *jobConfig, resources corev1.ResourceRequire
 		Command:         []string{defaultTestDataInitCmd},
 		Resources:       resources,
 		SecurityContext: defaultSecurityContext(),
-		Env:             []corev1.EnvVar{{Name: shared.DataStagingPlanEnv, Value: "/meta/" + shared.DataStagingPlanFile}},
+		Env:             []corev1.EnvVar{{Name: shared.InitJobSpecPathEnv, Value: "/meta/" + jobSpecFileName}},
 		VolumeMounts:    mounts,
 	}, volumes, nil
 }

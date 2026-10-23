@@ -84,7 +84,7 @@ type jobConfig struct {
 	testDataPVC                pvcTestDataConfig
 	postProcessorPVCs          []postProcessorPVCConfig
 	postProcessorSecrets       []string
-	postProcessorStaging       *shared.DataStagingPlan
+	postProcessorDownloads     []shared.NamedDataSource
 	testDataGit                gitTestDataConfig
 	testDataHF                 hfTestDataConfig
 	testDataInitImage          string
@@ -306,7 +306,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	if err != nil {
 		return nil, err
 	}
-	staging, err := postProcessorStagingPlan(evaluation)
+	downloads, err := postProcessorDownloadSources(evaluation)
 	if err != nil {
 		return nil, err
 	}
@@ -373,9 +373,9 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 			claimName: testDataPVCClaimName,
 			subPath:   testDataPVCSubPath,
 		},
-		postProcessorPVCs:    postProcessorPVCs,
-		postProcessorSecrets: postProcessorSecrets,
-		postProcessorStaging: staging,
+		postProcessorPVCs:      postProcessorPVCs,
+		postProcessorSecrets:   postProcessorSecrets,
+		postProcessorDownloads: downloads,
 		testDataGit: gitTestDataConfig{
 			url:       testDataGitURL,
 			ref:       testDataGitRef,

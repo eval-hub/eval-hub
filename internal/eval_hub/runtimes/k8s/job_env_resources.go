@@ -88,10 +88,10 @@ func buildEnvVars(jc *jobConfig, serviceConfig *config.Config) []corev1.EnvVar {
 		seen[envOCIAuthConfigPathName] = true
 	}
 
-	if jc.postProcessorStaging != nil || len(jc.postProcessorPVCs) > 0 {
+	if jc.postProcessorDownloads != nil || len(jc.postProcessorPVCs) > 0 {
 		mountPaths := map[string]string{}
-		if jc.postProcessorStaging != nil {
-			for _, source := range jc.postProcessorStaging.Sources {
+		if jc.postProcessorDownloads != nil {
+			for _, source := range jc.postProcessorDownloads {
 				mountPaths[source.Name] = shared.PostProcessorStagingRoot + "/" + source.Name
 			}
 		}

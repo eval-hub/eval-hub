@@ -4,9 +4,10 @@
 
 Post-processing reuses the same `/app/eval-runtime-init` executable and configured
 init image as evaluation jobs. For S3, Git and Hugging Face references, eval-hub
-writes an internal `data-sources.json` plan and runs one container named `init`
-before the computation adapter. The existing downloaders stage results and each
-calibration reference into separate directories. Source credentials are mounted
+mounts the existing `job.json` into one container named `init`, which runs
+before the computation adapter. Init reads the results and calibration references
+from `parameters.operations.confidence_interval` and calls the existing downloaders
+directly, using separate configuration and destinations for each input. Source credentials are mounted
 only in init, while the adapter receives read-only staged data.
 
 PVC references use direct read-only mounts with Kubernetes applying `sub_path`.

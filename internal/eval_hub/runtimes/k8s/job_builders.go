@@ -7,7 +7,6 @@ import (
 	"regexp"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/internal/runtimeenv"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -140,13 +139,6 @@ func buildConfigMap(cfg *jobConfig) (*corev1.ConfigMap, error) {
 	}
 
 	data := map[string]string{jobSpecFileName: string(specJSON), sidecarConfigFileName: sidecarJSON}
-	if cfg.postProcessorStaging != nil {
-		plan, err := json.Marshal(cfg.postProcessorStaging)
-		if err != nil {
-			return nil, fmt.Errorf("marshal data staging plan: %w", err)
-		}
-		data[shared.DataStagingPlanFile] = string(plan)
-	}
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,

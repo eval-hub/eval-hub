@@ -202,7 +202,7 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		})
 	}
 
-	if cfg.postProcessorStaging != nil {
+	if cfg.postProcessorDownloads != nil {
 		volumes = append(volumes, corev1.Volume{Name: postProcessorDataVolumeName, VolumeSource: corev1.VolumeSource{EmptyDir: testDataEmptyDirVolumeSource()}})
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: postProcessorDataVolumeName, MountPath: shared.PostProcessorStagingRoot, ReadOnly: true})
 	}
@@ -418,7 +418,7 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			corev1.ResourceMemory: resource.MustParse(defaultInitMemoryLimit),
 		},
 	}
-	if cfg.postProcessorStaging != nil {
+	if cfg.postProcessorDownloads != nil {
 		container, sourceVolumes, err := postProcessorInitContainer(cfg, initResources)
 		if err != nil {
 			return nil, nil, err
