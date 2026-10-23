@@ -3,8 +3,8 @@
   "parameters": {
     "intents_models": {
       "judge": {
-        "name": "${MODEL_NAME}",
-        "url": "${MODEL_URL}"
+        "name": "${JUDGE_MODEL_NAME}",
+        "url": "${JUDGE_BASE_URL}"
       }
     },
     "num_examples": 1,

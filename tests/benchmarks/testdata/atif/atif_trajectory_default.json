@@ -1,5 +1,9 @@
 {
   "experiment": true,
+  "model": {
+    "name": "${JUDGE_MODEL_NAME}",
+    "url": "${JUDGE_BASE_URL}"
+  },
   "notes": "Stage one valid one-step ATIF trajectory; requires configured MLflow for artifact persistence.",
   "parameters": {
     "benchmark_name": "humanevalfix",

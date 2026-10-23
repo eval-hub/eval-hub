@@ -1,7 +1,8 @@
 {
-  "notes": "One sample per task. Agent/code benchmarks may require sandbox and external services; configure those in this fixture for the target environment. Petri/Bloom need capable auditor and judge models.",
+  "notes": "One sample per task. Agent/code benchmarks may require sandbox and external services; configure those in this fixture for the target environment. Petri/Bloom require JUDGE_MODEL_NAME, JUDGE_BASE_URL, and JUDGE_API_KEY for the judge. HLE/CyberSecEval require judge_api-key and judge_url in model.auth.secret_ref for an independent judge connection.",
   "parameters": {
     "epochs": 1,
+    "judge_model": "${JUDGE_MODEL_NAME}",
     "max_tasks": 1,
     "num_examples": 1
   },

@@ -1,6 +1,9 @@
 {
   "notes": "Stage a single complete RAG record as dataset.jsonl. Full-suite metrics additionally require an embeddings-capable endpoint.",
   "parameters": {
+    "judge_api_key": "${JUDGE_API_KEY}",
+    "judge_model": "${JUDGE_MODEL_NAME}",
+    "judge_url": "${JUDGE_BASE_URL}",
     "max_workers": 1,
     "num_examples": 1
   },
