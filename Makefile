@@ -233,6 +233,19 @@ FVT_OUTPUT ?= --godog.format=junit:${PWD}/$(BIN_DIR)/junit-fvt-report.xml,pretty
 FVT_TAGS ?= --godog.tags=~@ignore && ~@mlflow && ~@cluster && ~@local_runtime && ~@benchmark_providers
 FVT_CONCURRENCY ?= 1
 
+.PHONY: test-benchmarks generate-benchmark-configs
+BENCHMARK_PARALLEL ?= 2
+BENCHMARK_TIMEOUT ?= 30m
+BENCHMARK_RUN ?= TestBenchmarkSmoke
+
+# Ignore ambient experiments; an explicit command-line assignment still wins.
+test-benchmarks: export MLFLOW_EXPERIMENT_NAME =
+test-benchmarks: ## Run live benchmark smoke tests (requires SERVER_URL, MODEL_NAME, MODEL_URL)
+	BENCHMARK_SMOKE=1 go test ./tests/benchmarks -run='$(BENCHMARK_RUN)' -count=1 -parallel=$(BENCHMARK_PARALLEL) -timeout=$(BENCHMARK_TIMEOUT) -v
+
+generate-benchmark-configs: ## Create missing per-benchmark smoke fixtures from config/providers
+	go run ./tests/benchmarks/generate
+
 .PHONY: test-setup
 test-setup: venv ## Set up Python test environment (venv + eval-hub-sdk adapter)
 	@uv pip install "eval-hub-sdk[adapter]>=1.0.4"
