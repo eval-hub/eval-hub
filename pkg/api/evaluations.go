@@ -416,7 +416,11 @@ type EvaluationExports struct {
 }
 
 type CollectionRef struct {
-	ID         string                      `mapstructure:"id" json:"id" validate:"required"`
+	ID string `mapstructure:"id" json:"id" validate:"required"`
+	// Benchmarks override collection entries by provider_id and id. For a repeated
+	// pair, one override applies to every occurrence. New requests with multiple
+	// overrides must match the number of occurrences and use collection occurrence order.
+	// Other pairs may be omitted or reordered independently.
 	Benchmarks []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 
 	// CollectionUpdatedAt captures the collection's updated_at timestamp at job-creation time.
