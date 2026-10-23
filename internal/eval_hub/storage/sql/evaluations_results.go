@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -116,58 +117,109 @@ func (s *sqlStorage) computeBenchmarkTestResult(txn *sql.Tx, job *api.Evaluation
 		if benchmark.ID != benchmarkStatusEvent.ID || benchmark.ProviderID != benchmarkStatusEvent.ProviderID {
 			continue
 		}
-		primaryScore := benchmark.PrimaryScore
+
+		// Lazy provider load: only hit storage when job-level primary/pass_criteria
+		// are insufficient (keeps unit tests that omit a DB working).
 		var providerBench *api.BenchmarkResource
-		// if the primary score is not defined, we need to get the primary score from the provider
-		if (primaryScore == nil || primaryScore.Metric == "") && benchmark.ProviderID != "" {
+		providerLoaded := false
+		loadProviderBench := func() {
+			if providerLoaded || benchmark.ProviderID == "" {
+				return
+			}
+			// Unit tests construct a logger-only sqlStorage without a statement factory.
+			if s.statementsFactory == nil {
+				providerLoaded = true
+				return
+			}
+			providerLoaded = true
 			provider, err := s.getUserProviderTransactional(txn, benchmark.ProviderID)
 			if err == nil && provider != nil {
 				for i := range provider.Benchmarks {
 					if provider.Benchmarks[i].ID == benchmark.ID {
 						providerBench = &provider.Benchmarks[i]
-						break
+						return
 					}
 				}
 			}
-			if providerBench != nil && providerBench.PrimaryScore != nil && providerBench.PrimaryScore.Metric != "" {
-				primaryScore = providerBench.PrimaryScore
+		}
+
+		// Prefer the first primary_score whose metric is present in emitted metrics:
+		// job (explicit) → event (adapter-reported) → provider catalog.
+		// Exact key match only — no service-side metric heuristics.
+		pickPrimary := func(candidates []*api.PrimaryScore) (*api.PrimaryScore, any) {
+			for _, cand := range candidates {
+				if cand == nil || cand.Metric == "" {
+					continue
+				}
+				if v, ok := benchmarkStatusEvent.Metrics[cand.Metric]; ok {
+					return cand, v
+				}
+			}
+			return nil, nil
+		}
+
+		var tried []string
+		collectTried := func(candidates []*api.PrimaryScore) {
+			for _, cand := range candidates {
+				if cand != nil && cand.Metric != "" {
+					tried = append(tried, cand.Metric)
+				}
 			}
 		}
-		if primaryScore != nil && primaryScore.Metric != "" {
-			primaryMetric := primaryScore.Metric
-			primaryMetricValue, ok := benchmarkStatusEvent.Metrics[primaryMetric]
-			if !ok {
-				if len(benchmarkStatusEvent.Metrics) > 0 {
-					s.logger.Error("Primary score metric not present in benchmark metrics; test section omitted",
-						"benchmark_id", benchmarkStatusEvent.ID,
-						"provider_id", benchmarkStatusEvent.ProviderID,
-						"primary_metric", primaryMetric)
-				}
-				return nil
+
+		var early []*api.PrimaryScore
+		if benchmark.PrimaryScore != nil {
+			early = append(early, benchmark.PrimaryScore)
+		}
+		if benchmarkStatusEvent.PrimaryScore != nil {
+			early = append(early, benchmarkStatusEvent.PrimaryScore)
+		}
+		collectTried(early)
+		primaryScore, primaryMetricValue := pickPrimary(early)
+		if primaryScore == nil {
+			loadProviderBench()
+			var providerCandidates []*api.PrimaryScore
+			if providerBench != nil && providerBench.PrimaryScore != nil {
+				providerCandidates = append(providerCandidates, providerBench.PrimaryScore)
 			}
-			primaryMetricValueFloat, err := castAnyToFloat32(primaryMetricValue)
-			if err != nil {
-				s.logger.Error("Failed to cast primary metric value to float32", "error", err, "primary_metric", primaryMetric, "primary_metric_value", primaryMetricValue)
-				return nil
+			collectTried(providerCandidates)
+			primaryScore, primaryMetricValue = pickPrimary(providerCandidates)
+		}
+		if primaryScore == nil {
+			if len(benchmarkStatusEvent.Metrics) > 0 && len(tried) > 0 {
+				s.logger.Error("Primary score metric not present in benchmark metrics; test section omitted",
+					"benchmark_id", benchmarkStatusEvent.ID,
+					"provider_id", benchmarkStatusEvent.ProviderID,
+					"tried_primary_metrics", strings.Join(tried, ","))
 			}
-			var threshold float32
-			if benchmark.PassCriteria != nil && benchmark.PassCriteria.Threshold != nil {
-				threshold = *benchmark.PassCriteria.Threshold
-			} else if providerBench != nil && providerBench.PassCriteria != nil && providerBench.PassCriteria.Threshold != nil {
+			return nil
+		}
+
+		primaryMetricValueFloat, err := castAnyToFloat32(primaryMetricValue)
+		if err != nil {
+			s.logger.Error("Failed to cast primary metric value to float32", "error", err, "primary_metric", primaryScore.Metric, "primary_metric_value", primaryMetricValue)
+			return nil
+		}
+		var threshold float32
+		if benchmark.PassCriteria != nil && benchmark.PassCriteria.Threshold != nil {
+			threshold = *benchmark.PassCriteria.Threshold
+		} else {
+			loadProviderBench()
+			if providerBench != nil && providerBench.PassCriteria != nil && providerBench.PassCriteria.Threshold != nil {
 				threshold = *providerBench.PassCriteria.Threshold
 			} else {
 				return nil
 			}
-			pass := primaryMetricValueFloat >= threshold
-			if primaryScore.LowerIsBetter {
-				pass = primaryMetricValueFloat <= threshold
-			}
-			return &api.BenchmarkTest{
-				PrimaryScore:       primaryMetricValueFloat,
-				PrimaryScoreMetric: primaryMetric,
-				Threshold:          threshold,
-				Pass:               pass,
-			}
+		}
+		pass := primaryMetricValueFloat >= threshold
+		if primaryScore.LowerIsBetter {
+			pass = primaryMetricValueFloat <= threshold
+		}
+		return &api.BenchmarkTest{
+			PrimaryScore:       primaryMetricValueFloat,
+			PrimaryScoreMetric: primaryScore.Metric,
+			Threshold:          threshold,
+			Pass:               pass,
 		}
 	}
 	return nil

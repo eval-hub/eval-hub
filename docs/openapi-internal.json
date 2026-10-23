@@ -5184,6 +5184,10 @@
               "$ref": "#/components/schemas/MetricSchema"
             }
           },
+          "primary_score": {
+            "$ref": "#/components/schemas/PrimaryScore",
+            "description": "Optional adapter-reported primary metric for this completed run. When set, and the metric key is present in metrics, the service uses it to build results.benchmarks[].test if the job/catalog primary_score.metric is missing from metrics (exact key match only). Used by task-dependent adapters such as inspect/custom.\n"
+          },
           "additional_info": {
             "type": "object",
             "additionalProperties": true,

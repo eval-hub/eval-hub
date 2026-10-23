@@ -340,6 +340,10 @@ type BenchmarkStatusEvent struct {
 	Phase          JobPhase       `json:"phase,omitempty" validate:"omitempty,oneof=initializing loading_data running_evaluation post_processing persisting_artifacts completed"`
 	Metrics        map[string]any `json:"metrics,omitempty"`
 	MetricsSchema  []MetricSchema `json:"metrics_schema,omitempty" validate:"omitempty,dive"`
+	// PrimaryScore is the adapter-reported primary metric for this completed run.
+	// Used when the job/catalog primary_score.metric is absent from Metrics
+	// (e.g. inspect/custom task-dependent scorers). Exact key match only.
+	PrimaryScore   *PrimaryScore  `json:"primary_score,omitempty"`
 	AdditionalInfo map[string]any `json:"additional_info,omitempty"`
 	Artifacts      map[string]any `json:"artifacts,omitempty"`
 	ErrorMessage   *MessageInfo   `json:"error_message,omitempty"`

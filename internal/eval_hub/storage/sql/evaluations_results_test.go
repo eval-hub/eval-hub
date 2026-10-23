@@ -352,3 +352,52 @@ func TestComputeBenchmarkTestResult_MissingPrimaryMetricReturnsNil(t *testing.T)
 		t.Fatalf("expected nil when primary metric is missing from metrics, got %+v", result)
 	}
 }
+
+func TestComputeBenchmarkTestResult_EventPrimaryScoreFallback(t *testing.T) {
+	t.Parallel()
+	s := testResultsStorage()
+	// Job/catalog primary does not match emitted metrics (inspect/custom case).
+	job := jobWithBenchmark("inspect/custom", "inspect",
+		&api.PrimaryScore{Metric: "accuracy/accuracy"},
+		&api.PassCriteria{Threshold: threshold32(0.15)},
+	)
+	event := statusEvent("inspect/custom", "inspect", map[string]any{
+		"choice/accuracy": float64(0.2),
+		"choice/stderr":   float64(0.01),
+	})
+	event.PrimaryScore = &api.PrimaryScore{Metric: "choice/accuracy"}
+	result := s.computeBenchmarkTestResult(nil, job, event, nil)
+	if result == nil {
+		t.Fatal("expected test result from event primary_score fallback")
+	}
+	if result.PrimaryScoreMetric != "choice/accuracy" {
+		t.Errorf("PrimaryScoreMetric = %q, want choice/accuracy", result.PrimaryScoreMetric)
+	}
+	if result.PrimaryScore != 0.2 {
+		t.Errorf("PrimaryScore = %v, want 0.2", result.PrimaryScore)
+	}
+	if !result.Pass {
+		t.Errorf("expected Pass=true for 0.2 >= 0.15")
+	}
+}
+
+func TestComputeBenchmarkTestResult_JobPrimaryTakesPrecedenceOverEvent(t *testing.T) {
+	t.Parallel()
+	s := testResultsStorage()
+	job := jobWithBenchmark("inspect/custom", "inspect",
+		&api.PrimaryScore{Metric: "choice/accuracy"},
+		&api.PassCriteria{Threshold: threshold32(0.5)},
+	)
+	event := statusEvent("inspect/custom", "inspect", map[string]any{
+		"choice/accuracy": float64(0.2),
+		"match/accuracy":  float64(0.9),
+	})
+	event.PrimaryScore = &api.PrimaryScore{Metric: "match/accuracy"}
+	result := s.computeBenchmarkTestResult(nil, job, event, nil)
+	if result == nil {
+		t.Fatal("expected test result")
+	}
+	if result.PrimaryScoreMetric != "choice/accuracy" {
+		t.Errorf("PrimaryScoreMetric = %q, want job choice/accuracy", result.PrimaryScoreMetric)
+	}
+}
