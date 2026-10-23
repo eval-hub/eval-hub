@@ -102,6 +102,21 @@ func TestCatalogFixtures(t *testing.T) {
 }
 
 func TestLoadFixture(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		missing    bool
+	}{
+		{"null root", `null`, false},
+		{"missing parameters", `{"timeout":"1m"}`, true},
+	} {
+		t.Run(tc.name+" classification", func(t *testing.T) {
+			path := writeFixture(t, t.TempDir(), "p", "b", tc.body)
+			_, err := loadFixture(path, fixtureEnv)
+			if err == nil || errors.Is(err, errMissingInput) != tc.missing {
+				t.Fatalf("expected error with missing input=%v, got %v", tc.missing, err)
+			}
+		})
+	}
 	for _, tc := range []struct{ name, body string }{
 		{"malformed", `{"parameters":`},
 		{"unknown field", `{"config":{},"timeout":"1m"}`},

@@ -255,6 +255,9 @@ func loadFixture(path string, lookup func(string) (string, bool)) (fixture, erro
 	if err := decodeStrict(data, &raw); err != nil {
 		return fixture{}, err
 	}
+	if raw == nil {
+		return fixture{}, errors.New("fixture root must be a JSON object")
+	}
 	if _, err := expandValues(raw, lookup); err != nil {
 		return fixture{}, err
 	}
