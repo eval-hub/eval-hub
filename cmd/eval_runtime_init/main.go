@@ -19,6 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/internal/runtimeenv"
 )
 
@@ -60,6 +61,20 @@ func main() {
 }
 
 func run() error {
+	if plan := os.Getenv(shared.DataStagingPlanEnv); plan != "" {
+		return runStagingPlan(plan)
+	}
+	if value := os.Getenv(envInitDestination); value != "" {
+		destDir = value
+	}
+	if value := os.Getenv(envInitSecretDir); value != "" {
+		scrtDir = value
+	}
+	if value := os.Getenv(envInitMetadataDir); value != "" {
+		gitMetadataDir = value
+		// Keep downloader caches outside the dataset consumed by the adapter.
+		hfCacheDir = filepath.Join(value, "hf-cache")
+	}
 	if strings.TrimSpace(os.Getenv(envHFRepoID)) != "" {
 		return runHF()
 	}
