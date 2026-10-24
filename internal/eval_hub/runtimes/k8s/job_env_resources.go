@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
@@ -87,19 +88,23 @@ func buildEnvVars(jc *jobConfig, serviceConfig *config.Config) []corev1.EnvVar {
 		seen[envOCIAuthConfigPathName] = true
 	}
 
-	if len(jc.postProcessorPVCs) > 0 {
-		// Map claim roots; the adapter resolves each reference's sub_path.
-		mountPaths := make(map[string]string, len(jc.postProcessorPVCs))
+	if jc.postProcessorDownloads != nil || len(jc.postProcessorPVCs) > 0 {
+		mountPaths := map[string]string{}
+		if jc.postProcessorDownloads != nil {
+			for _, source := range jc.postProcessorDownloads {
+				mountPaths[source.Name] = shared.PostProcessorStagingRoot + "/" + source.Name
+			}
+		}
 		for _, pvc := range jc.postProcessorPVCs {
-			mountPaths[pvc.claimName] = pvc.mountPath
+			mountPaths[pvc.sourceName] = pvc.mountPath
 		}
 		// A map of strings cannot fail JSON encoding.
 		encodedMountPaths, _ := json.Marshal(mountPaths)
 		env = append(env, corev1.EnvVar{
-			Name:  envPostProcessorPVCMountsName,
+			Name:  shared.PostProcessorDataPathsEnv,
 			Value: string(encodedMountPaths),
 		})
-		seen[envPostProcessorPVCMountsName] = true
+		seen[shared.PostProcessorDataPathsEnv] = true
 	}
 
 	// Set MLFLOW_TRACKING_SERVER_CERT_PATH so mlflow's tracking client trusts the
