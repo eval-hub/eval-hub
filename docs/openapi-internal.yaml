@@ -3896,7 +3896,7 @@ components:
       title: OCIConnectionConfig
     OCISigningConfig:
       type: object
-      description: Optional signing configuration for the evaluation bundle, in local and Kubernetes modes. For key-pair signing, secret_ref can reference a tenant namespace Kubernetes Secret expected to contain private.key; the request never contains key material. This configuration does not perform secret lookup, key loading, or signing execution.
+      description: Optional signing configuration for the evaluation bundle, in local and Kubernetes modes. Key-pair signing requires a non-null, non-empty secret_ref. In local mode, use file:///absolute/path/to/signing-material to identify a directory on the EvalHub service filesystem, including when the service runs in a container. Only absolute file URIs with empty authority and no query or fragment are accepted; malformed escapes and NUL paths are rejected. File URIs are rejected in cluster mode before filesystem access. Kubernetes Secret names retain RFC1123 DNS-label syntax for future cluster signing integration. Creation validates syntax and mode without reading files. Signing execution is not yet wired into the export workflow. When invoked for signing, the local resolver reads private.key and optional passphrase.key through a directory-confined root with a combined 1 MiB limit. Passphrase bytes are exact, including whitespace and newlines; an absent passphrase file means an empty passphrase. There is no environment password fallback or interactive prompt. Public keys are not read by the service, and the request never contains private key material.
       properties:
         type:
           type: string
@@ -3904,14 +3904,30 @@ components:
             - key-pair
           description: Signing method. Only key-pair is currently supported.
         secret_ref:
-          type:
-            - string
-            - 'null'
+          type: string
           minLength: 1
-          pattern: \S
-          description: Optional name of the signing key Secret for key-pair signing. Must not be empty or whitespace-only when provided.
+          oneOf:
+            - pattern: ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$
+            - pattern: ^file:///[^?#]*$
+          description: Required for key-pair signing. A local directory file URI (local mode only), or a Kubernetes Secret name of at most 63 lowercase alphanumeric/hyphen characters with alphanumeric endpoints. File URI paths are decoded once with the standard URI parser, without shell expansion or a second unescape. The selected directory may resolve through a symlink; fixed-file reads remain confined to the opened directory. Filesystem accessibility and key validity are deferred to signing time. Secret-name acceptance preserves syntax for future Kubernetes integration; no Secret lookup is implemented.
+          examples:
+            - file:///absolute/path/to/signing-material
+            - my-cosign-secret
       required:
         - type
+      allOf:
+        - if:
+            properties:
+              type:
+                const: key-pair
+            required:
+              - type
+          then:
+            properties:
+              type: {}
+              secret_ref: {}
+            required:
+              - secret_ref
       additionalProperties: false
     EvaluationExportsOCI:
       type: object
@@ -3920,6 +3936,12 @@ components:
         - coordinates:
             oci_host: quay.io
             oci_repository: my-org/eval-results
+        - coordinates:
+            oci_host: localhost:5001
+            oci_repository: eval-results
+          signing:
+            type: key-pair
+            secret_ref: file:///absolute/path/to/signing-material
         - coordinates:
             oci_host: quay.io
             oci_repository: my-org/eval-results
@@ -3945,7 +3967,7 @@ components:
           description: Optional Kubernetes connection for OCI registry authentication
         signing:
           $ref: '#/components/schemas/OCISigningConfig'
-          description: Optional signing configuration. Signing is disabled when omitted.
+          description: Optional signing configuration. Signing is disabled when omitted or null. Key-pair signing requires secret_ref; local file URIs are rejected in cluster mode.
       required:
         - coordinates
       additionalProperties: false
