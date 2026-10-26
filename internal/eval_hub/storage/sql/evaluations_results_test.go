@@ -490,3 +490,73 @@ func TestComputeJobTestResult_LowerIsBetterSurvivesJSONRoundTrip(t *testing.T) {
 		t.Errorf("job Score = %v, want %v after reload", job.Results.Test.Score, wantScore)
 	}
 }
+
+func TestSelectPrimaryScore_FirstNumericMatch(t *testing.T) {
+	t.Parallel()
+	job := &api.PrimaryScore{Metric: "job_metric"}
+	event := &api.PrimaryScore{Metric: "event_metric"}
+	got, value, ok := selectPrimaryScore(
+		[]*api.PrimaryScore{job, event},
+		map[string]any{"event_metric": float64(0.4)},
+	)
+	if !ok || got != event {
+		t.Fatalf("expected event candidate, ok=%v got=%v", ok, got)
+	}
+	if value != 0.4 {
+		t.Errorf("value = %v, want 0.4", value)
+	}
+}
+
+func TestSelectPrimaryScore_SkipsNonNumericAndContinues(t *testing.T) {
+	t.Parallel()
+	job := &api.PrimaryScore{Metric: "accuracy/accuracy"}
+	event := &api.PrimaryScore{Metric: "choice/accuracy"}
+	got, value, ok := selectPrimaryScore(
+		[]*api.PrimaryScore{job, event},
+		map[string]any{
+			"accuracy/accuracy": "n/a",
+			"choice/accuracy":   float64(0.2),
+		},
+	)
+	if !ok || got != event {
+		t.Fatalf("expected event after non-numeric job metric, ok=%v got=%v", ok, got)
+	}
+	if value != 0.2 {
+		t.Errorf("value = %v, want 0.2", value)
+	}
+}
+
+func TestSelectPrimaryScore_NoMatch(t *testing.T) {
+	t.Parallel()
+	_, _, ok := selectPrimaryScore(
+		[]*api.PrimaryScore{{Metric: "missing"}},
+		map[string]any{"other": float64(1)},
+	)
+	if ok {
+		t.Fatal("expected no match")
+	}
+}
+
+func TestComputeBenchmarkTestResult_SkipsNonNumericJobPrimary(t *testing.T) {
+	t.Parallel()
+	s := testResultsStorage()
+	job := jobWithBenchmark("inspect/custom", "inspect",
+		&api.PrimaryScore{Metric: "accuracy/accuracy"},
+		&api.PassCriteria{Threshold: threshold32(0.15)},
+	)
+	event := statusEvent("inspect/custom", "inspect", map[string]any{
+		"accuracy/accuracy": "n/a",
+		"choice/accuracy":   float64(0.2),
+	})
+	event.PrimaryScore = &api.PrimaryScore{Metric: "choice/accuracy"}
+	result := s.computeBenchmarkTestResult(nil, job, event, nil)
+	if result == nil {
+		t.Fatal("expected fallback to numeric event primary_score")
+	}
+	if result.PrimaryScoreMetric != "choice/accuracy" {
+		t.Errorf("PrimaryScoreMetric = %q, want choice/accuracy", result.PrimaryScoreMetric)
+	}
+	if result.PrimaryScore != 0.2 {
+		t.Errorf("PrimaryScore = %v, want 0.2", result.PrimaryScore)
+	}
+}

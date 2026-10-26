@@ -152,49 +152,27 @@ func (s *sqlStorage) computeBenchmarkTestResult(txn *sql.Tx, job *api.Evaluation
 			}
 		}
 
-		// Prefer the first primary_score whose metric is present in emitted metrics:
-		// job (explicit) → event (adapter-reported) → provider catalog.
-		// Exact key match only — no service-side metric heuristics.
-		pickPrimary := func(candidates []*api.PrimaryScore) (*api.PrimaryScore, any) {
-			for _, cand := range candidates {
-				if cand == nil || cand.Metric == "" {
-					continue
-				}
-				if v, ok := benchmarkStatusEvent.Metrics[cand.Metric]; ok {
-					return cand, v
-				}
-			}
-			return nil, nil
-		}
-
-		var tried []string
-		collectTried := func(candidates []*api.PrimaryScore) {
-			for _, cand := range candidates {
-				if cand != nil && cand.Metric != "" {
-					tried = append(tried, cand.Metric)
-				}
-			}
-		}
-
-		var early []*api.PrimaryScore
-		if benchmark.PrimaryScore != nil {
-			early = append(early, benchmark.PrimaryScore)
+		// Prefer the first primary_score whose metric is present in emitted metrics
+		// and castable to float: job (explicit) → event (adapter-reported) →
+		// provider catalog. Exact key match only — no service-side heuristics.
+		jobPrimary := benchmark.PrimaryScore
+		candidates := make([]*api.PrimaryScore, 0, 3)
+		if jobPrimary != nil {
+			candidates = append(candidates, jobPrimary)
 		}
 		if benchmarkStatusEvent.PrimaryScore != nil {
-			early = append(early, benchmarkStatusEvent.PrimaryScore)
+			candidates = append(candidates, benchmarkStatusEvent.PrimaryScore)
 		}
-		collectTried(early)
-		primaryScore, primaryMetricValue := pickPrimary(early)
-		if primaryScore == nil {
+		primaryScore, primaryMetricValueFloat, ok := selectPrimaryScore(candidates, benchmarkStatusEvent.Metrics)
+		if !ok {
 			loadProviderBench()
-			var providerCandidates []*api.PrimaryScore
 			if providerBench != nil && providerBench.PrimaryScore != nil {
-				providerCandidates = append(providerCandidates, providerBench.PrimaryScore)
+				candidates = append(candidates, providerBench.PrimaryScore)
+				primaryScore, primaryMetricValueFloat, ok = selectPrimaryScore(candidates, benchmarkStatusEvent.Metrics)
 			}
-			collectTried(providerCandidates)
-			primaryScore, primaryMetricValue = pickPrimary(providerCandidates)
 		}
-		if primaryScore == nil {
+		if !ok {
+			tried := primaryScoreMetricNames(candidates)
 			if len(benchmarkStatusEvent.Metrics) > 0 && len(tried) > 0 {
 				s.logger.Error("Primary score metric not present in benchmark metrics; test section omitted",
 					"benchmark_id", benchmarkStatusEvent.ID,
@@ -204,11 +182,6 @@ func (s *sqlStorage) computeBenchmarkTestResult(txn *sql.Tx, job *api.Evaluation
 			return nil
 		}
 
-		primaryMetricValueFloat, err := castAnyToFloat32(primaryMetricValue)
-		if err != nil {
-			s.logger.Error("Failed to cast primary metric value to float32", "error", err, "primary_metric", primaryScore.Metric, "primary_metric_value", primaryMetricValue)
-			return nil
-		}
 		var threshold float32
 		if benchmark.PassCriteria != nil && benchmark.PassCriteria.Threshold != nil {
 			threshold = *benchmark.PassCriteria.Threshold
@@ -220,6 +193,24 @@ func (s *sqlStorage) computeBenchmarkTestResult(txn *sql.Tx, job *api.Evaluation
 				return nil
 			}
 		}
+
+		// Visibility when an explicit job/collection primary was configured but
+		// missing or non-numeric in metrics, so a lower-precedence candidate won.
+		if jobPrimary != nil && jobPrimary.Metric != "" && primaryScore.Metric != jobPrimary.Metric {
+			source := "event"
+			if providerBench != nil && providerBench.PrimaryScore != nil && primaryScore == providerBench.PrimaryScore {
+				source = "catalog"
+			}
+			s.logger.Warn("Configured primary_score.metric unavailable in metrics; using fallback",
+				"benchmark_id", benchmarkStatusEvent.ID,
+				"provider_id", benchmarkStatusEvent.ProviderID,
+				"skipped_primary_metric", jobPrimary.Metric,
+				"selected_primary_metric", primaryScore.Metric,
+				"selected_source", source,
+				"threshold", threshold,
+				"lower_is_better", primaryScore.LowerIsBetter)
+		}
+
 		pass := primaryMetricValueFloat >= threshold
 		if primaryScore.LowerIsBetter {
 			pass = primaryMetricValueFloat <= threshold
@@ -234,6 +225,37 @@ func (s *sqlStorage) computeBenchmarkTestResult(txn *sql.Tx, job *api.Evaluation
 		}
 	}
 	return nil
+}
+
+// selectPrimaryScore returns the first candidate whose metric key is present in
+// metrics and whose value casts to float32. Non-numeric values are skipped so a
+// lower-precedence candidate can still win.
+func selectPrimaryScore(candidates []*api.PrimaryScore, metrics map[string]any) (*api.PrimaryScore, float32, bool) {
+	for _, cand := range candidates {
+		if cand == nil || cand.Metric == "" {
+			continue
+		}
+		v, ok := metrics[cand.Metric]
+		if !ok {
+			continue
+		}
+		f, err := castAnyToFloat32(v)
+		if err != nil {
+			continue
+		}
+		return cand, f, true
+	}
+	return nil, 0, false
+}
+
+func primaryScoreMetricNames(candidates []*api.PrimaryScore) []string {
+	names := make([]string, 0, len(candidates))
+	for _, cand := range candidates {
+		if cand != nil && cand.Metric != "" {
+			names = append(names, cand.Metric)
+		}
+	}
+	return names
 }
 
 func castAnyToFloat32(primaryMetricValue any) (float32, error) {
