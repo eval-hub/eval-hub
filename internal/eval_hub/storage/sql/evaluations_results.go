@@ -67,8 +67,17 @@ func (s *sqlStorage) computeJobTestResult(job *api.EvaluationJobResource, collec
 			// if the benchmark weight is not defined, we set it to 1
 			benchmarkWeight = 1
 		}
+		// Prefer the direction persisted on the benchmark test result (includes
+		// event-reported LowerIsBetter). Fall back to the job/catalog PrimaryScore
+		// for older results that predate BenchmarkTest.LowerIsBetter.
+		lowerIsBetter := false
+		if benchmark.Test.LowerIsBetter != nil {
+			lowerIsBetter = *benchmark.Test.LowerIsBetter
+		} else if primaryScore := resolvedJobBenchmarks[benchmark.BenchmarkIndex].PrimaryScore; primaryScore != nil {
+			lowerIsBetter = primaryScore.LowerIsBetter
+		}
 		weightedScore := benchmarkWeight * benchmark.Test.PrimaryScore
-		if primaryScore := resolvedJobBenchmarks[benchmark.BenchmarkIndex].PrimaryScore; primaryScore != nil && primaryScore.LowerIsBetter {
+		if lowerIsBetter {
 			weightedScore = benchmarkWeight * (1 - benchmark.Test.PrimaryScore)
 		}
 		sumOfWeightedScores += weightedScore
@@ -215,9 +224,11 @@ func (s *sqlStorage) computeBenchmarkTestResult(txn *sql.Tx, job *api.Evaluation
 		if primaryScore.LowerIsBetter {
 			pass = primaryMetricValueFloat <= threshold
 		}
+		lowerIsBetter := primaryScore.LowerIsBetter
 		return &api.BenchmarkTest{
 			PrimaryScore:       primaryMetricValueFloat,
 			PrimaryScoreMetric: primaryScore.Metric,
+			LowerIsBetter:      &lowerIsBetter,
 			Threshold:          threshold,
 			Pass:               pass,
 		}

@@ -507,6 +507,10 @@ type EvaluationTest struct {
 type BenchmarkTest struct {
 	PrimaryScore       float32 `json:"primary_score"`
 	PrimaryScoreMetric string  `json:"primary_score_metric"`
-	Threshold          float32 `json:"threshold"`
-	Pass               bool    `json:"pass"`
+	// LowerIsBetter is the direction of the selected primary metric (job, event, or catalog).
+	// Used when aggregating job-level scores so event-reported direction is not lost.
+	// Pointer so omitted/legacy results can fall back to the job/catalog PrimaryScore.
+	LowerIsBetter *bool   `json:"lower_is_better,omitempty"`
+	Threshold     float32 `json:"threshold"`
+	Pass          bool    `json:"pass"`
 }

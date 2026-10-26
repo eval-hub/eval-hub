@@ -381,6 +381,50 @@ func TestComputeBenchmarkTestResult_EventPrimaryScoreFallback(t *testing.T) {
 	}
 }
 
+// Event-only lower_is_better must drive both benchmark Pass and job aggregate
+// inversion when the job/catalog has no matching PrimaryScore.
+func TestComputeJobTestResult_EventOnlyLowerIsBetter(t *testing.T) {
+	t.Parallel()
+	s := testResultsStorage()
+	// No job PrimaryScore — direction comes only from the completed event.
+	job := jobWithBenchmark("inspect/custom", "inspect", nil, &api.PassCriteria{Threshold: threshold32(0.3)})
+	job.PassCriteria = &api.PassCriteria{Threshold: threshold32(0.5)}
+	event := statusEvent("inspect/custom", "inspect", map[string]any{
+		"attack_success_rate": float64(0.1),
+	})
+	event.PrimaryScore = &api.PrimaryScore{Metric: "attack_success_rate", LowerIsBetter: true}
+
+	result := s.computeBenchmarkTestResult(nil, job, event, nil)
+	if result == nil {
+		t.Fatal("expected benchmark test from event primary_score")
+	}
+	if result.LowerIsBetter == nil || !*result.LowerIsBetter {
+		t.Fatal("expected LowerIsBetter=true persisted on BenchmarkTest")
+	}
+	// 0.1 <= 0.3 → pass at benchmark level
+	if !result.Pass {
+		t.Fatalf("benchmark Pass=false, want true for lower-is-better 0.1 <= 0.3; got %+v", result)
+	}
+
+	job.Results = &api.EvaluationJobResults{
+		Benchmarks: []api.BenchmarkResult{{
+			ID: "inspect/custom", ProviderID: "inspect", BenchmarkIndex: 0, Test: result,
+		}},
+	}
+	s.computeJobTestResult(job, nil)
+	if job.Results.Test == nil {
+		t.Fatal("expected job test aggregate")
+	}
+	// Aggregate must invert: score = 1 - 0.1 = 0.9 (>= job threshold 0.5 → pass)
+	wantScore := float32(0.9)
+	if math.Abs(float64(job.Results.Test.Score-wantScore)) > 1e-6 {
+		t.Errorf("job Score = %v, want %v (inverted)", job.Results.Test.Score, wantScore)
+	}
+	if !job.Results.Test.Pass {
+		t.Errorf("job Pass=false, want true so benchmark and job Pass agree")
+	}
+}
+
 func TestComputeBenchmarkTestResult_JobPrimaryTakesPrecedenceOverEvent(t *testing.T) {
 	t.Parallel()
 	s := testResultsStorage()

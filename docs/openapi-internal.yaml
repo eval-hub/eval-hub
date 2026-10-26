@@ -2842,6 +2842,13 @@ components:
           type: number
           format: float
           description: Primary score value
+        primary_score_metric:
+          type: string
+          description: Name of the metric used as the primary score
+        lower_is_better:
+          type: boolean
+          description: |
+            Direction of the selected primary metric (from job, completed status event, or provider catalog). Used when aggregating the job-level score so event-reported lower-is-better metrics are inverted consistently.
         threshold:
           type: number
           format: float
