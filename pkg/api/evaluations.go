@@ -511,10 +511,12 @@ type EvaluationTest struct {
 type BenchmarkTest struct {
 	PrimaryScore       float32 `json:"primary_score"`
 	PrimaryScoreMetric string  `json:"primary_score_metric"`
-	// LowerIsBetter is the direction of the selected primary metric (job, event, or catalog).
-	// Used when aggregating job-level scores so event-reported direction is not lost.
-	// Pointer so omitted/legacy results can fall back to the job/catalog PrimaryScore.
-	LowerIsBetter *bool   `json:"lower_is_better,omitempty"`
+	// LowerIsBetter is internal: direction of the selected primary (job, event, or
+	// catalog) used when aggregating job-level scores. Not serialized in the API
+	// or persisted results JSON (json:"-"); set only in-process after computing
+	// the benchmark test so computeJobTestResult can invert event-reported
+	// lower-is-better metrics. Legacy/reloaded results fall back to job/catalog.
+	LowerIsBetter *bool   `json:"-"`
 	Threshold     float32 `json:"threshold"`
 	Pass          bool    `json:"pass"`
 }
