@@ -51,6 +51,26 @@ Run all feature tests:
 go test ./tests/features/...
 ```
 
+### Ragas embedding endpoint (required for the Ragas provider scenario)
+
+Both Ragas suites call `/v1/embeddings`. Set an embedding model and an
+OpenAI-compatible base URL reachable from the adapter pods. A chat-only MaaS
+endpoint cannot serve these calls. For example, using your cluster's embedding
+deployment:
+
+```bash
+export RAGAS_EMBEDDING_MODEL="granite-embedding"
+export RAGAS_EMBEDDING_URL="http://granite-embedding:8080/v1"
+```
+
+Replace the model ID and service URL with those from your deployment. The Ragas
+payload requires both settings and reports a configuration error before job
+submission if either is missing or blank. These settings are independent of
+`MODEL_NAME` and `MODEL_URL`. Both benchmark suites receive the same embedding
+configuration. If the embedding service requires authentication, inject
+`OPENAI_API_KEY` into the adapter runtime from a Secret; the evaluated model's
+credential is scoped to its own endpoint.
+
 ### Local Server Mode (Default)
 
 If `SERVER_URL` is not set, the tests will automatically start the server in a separate goroutine before running the test suite. The server will be started on:

@@ -59,3 +59,18 @@ func TestATIFUsesJudgeModel(t *testing.T) {
 		t.Fatalf("ATIF job model must select the trajectory judge: %v", model)
 	}
 }
+
+func TestRagasProfilesRequireEmbeddingEndpoint(t *testing.T) {
+	for _, benchmark := range []string{"ragas_rag_default", "ragas_rag_full"} {
+		t.Run(benchmark, func(t *testing.T) {
+			f, err := minimalFixture("ragas", benchmark)
+			if err != nil {
+				t.Fatal(err)
+			}
+			parameters := f["parameters"].(map[string]any)
+			if parameters["embedding_model"] != "${RAGAS_EMBEDDING_MODEL}" || parameters["embedding_url"] != "${RAGAS_EMBEDDING_URL}" {
+				t.Fatalf("Ragas must configure a separate embedding endpoint: %v", parameters)
+			}
+		})
+	}
+}

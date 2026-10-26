@@ -157,9 +157,10 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 		f["notes"] = "One sample per task. Agent/code benchmarks may require sandbox and external services; configure those in this fixture for the target environment. Petri/Bloom require JUDGE_MODEL_NAME, JUDGE_BASE_URL, and JUDGE_API_KEY for the judge. HLE/CyberSecEval require judge_api-key and judge_url in model.auth.secret_ref for an independent judge connection. StrongREJECT requires Secret-backed OPENAI_JUDGE_API_KEY in the adapter environment."
 	case "ragas":
 		p["judge_model"], p["judge_url"], p["judge_api_key"] = "${JUDGE_MODEL_NAME}", "${JUDGE_BASE_URL}", "${JUDGE_API_KEY}"
+		p["embedding_model"], p["embedding_url"] = "${RAGAS_EMBEDDING_MODEL}", "${RAGAS_EMBEDDING_URL}"
 		p["num_examples"], p["max_workers"] = 1, 1
 		f["test_data_ref_env"] = "RAGAS_TEST_DATA_REF"
-		f["notes"] = "Stage a single complete RAG record as dataset.jsonl. Full-suite metrics additionally require an embeddings-capable endpoint."
+		f["notes"] = "Stage a single complete RAG record as dataset.jsonl. Both suites require RAGAS_EMBEDDING_MODEL and RAGAS_EMBEDDING_URL for an embeddings-capable endpoint."
 	case "deepeval":
 		p["eval_model_name"], p["eval_model_url"] = "${JUDGE_MODEL_NAME}", "${JUDGE_BASE_URL}"
 		p["dataset_format"], p["max_concurrent"], p["retry_max_attempts"] = "jsonl", 1, 1

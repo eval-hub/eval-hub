@@ -244,7 +244,12 @@ Use an S3, PVC, Git, or Hugging Face data reference supported by EvalHub. Refere
 point to data in the runtime environment, not this test process's filesystem.
 
 - RAGAS: one complete RAG record in `dataset.jsonl`, including metric-required
-  fields; the full suite also needs embeddings support.
+  fields. Both suites require `RAGAS_EMBEDDING_MODEL` and `RAGAS_EMBEDDING_URL`
+  pointing to an OpenAI-compatible service that serves `/v1/embeddings` (for
+  example, `granite-embedding` and `http://granite-embedding:8080/v1` for a
+  deployment with that model ID and service). Chat-only endpoints cannot serve
+  these calls. Inject `OPENAI_API_KEY` into the adapter runtime from a Secret if
+  the embedding service requires authentication.
 - DeepEval: one JSONL record containing `input`, `actual_output`, `expected_output`,
   `context`, and `retrieval_context`. It loads the staged dataset without a sample
   cap, so input size bounds the work.
