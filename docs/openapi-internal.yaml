@@ -2845,6 +2845,10 @@ components:
         primary_score_metric:
           type: string
           description: Name of the metric used as the primary score
+        lower_is_better:
+          type: boolean
+          description: |
+            Whether a lower primary_score is better for this benchmark. Taken from the resolved job, status-event, or catalog primary_score. Persisted so job-level aggregation can invert scores after a storage reload; omitted on legacy results (aggregation then falls back to job/catalog PrimaryScore).
         threshold:
           type: number
           format: float
