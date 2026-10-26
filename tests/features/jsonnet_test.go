@@ -258,6 +258,52 @@ func TestBenchmarkTokenizerConfiguration(t *testing.T) {
 	}
 }
 
+func TestGarakBenchmarkScanLimitsAndRouting(t *testing.T) {
+	for _, modelName := range []string{"Qwen/Qwen3-VL-30B-A3B-Instruct", "openai/Qwen/Qwen3-VL-30B-A3B-Instruct"} {
+		t.Run(modelName, func(t *testing.T) {
+			sc := &scenarioConfig{jsonnetHarnessEnv: map[string]string{
+				"MODEL_NAME": modelName,
+				"MODEL_URL":  "http://model.test/v1",
+			}}
+			out, err := sc.getFile("evaluation_job_garak.json")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var job struct {
+				Benchmarks []jsonnetBenchmarkPayload `json:"benchmarks"`
+			}
+			if err := json.Unmarshal([]byte(out), &job); err != nil {
+				t.Fatal(err)
+			}
+			wantIDs := []string{"quick", "owasp_llm_top10", "avid", "avid_security", "avid_ethics", "avid_performance", "quality", "cwe", "intents"}
+			var ids []string
+			for _, benchmark := range job.Benchmarks {
+				ids = append(ids, benchmark.ID)
+				params := benchmark.Parameters
+				if params["timeout_seconds"] != float64(600) {
+					t.Errorf("%s timeout = %v, want 600", benchmark.ID, params["timeout_seconds"])
+				}
+				garakConfig := params["garak_config"].(map[string]any)
+				run := garakConfig["run"].(map[string]any)
+				if run["generations"] != float64(1) || run["soft_probe_prompt_cap"] != float64(1) {
+					t.Errorf("%s run limits = %v", benchmark.ID, run)
+				}
+				if benchmark.ID == "intents" {
+					if params["sdg_model"] != "openai/Qwen/Qwen3-VL-30B-A3B-Instruct" {
+						t.Errorf("SDG model = %v", params["sdg_model"])
+					}
+					if params["sdg_api_base"] != "http://model.test/v1" || params["sdg_num_samples"] != float64(1) {
+						t.Errorf("SDG configuration = %v", params)
+					}
+				}
+			}
+			if !reflect.DeepEqual(ids, wantIDs) {
+				t.Errorf("benchmarks = %v, want %v", ids, wantIDs)
+			}
+		})
+	}
+}
+
 func TestJsonnetModelAuth(t *testing.T) {
 	tc := &scenarioConfig{
 		values:                map[string]string{},
