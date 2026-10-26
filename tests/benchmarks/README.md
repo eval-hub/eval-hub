@@ -206,7 +206,11 @@ Generated fixtures use the adapter's field names:
 - RAGAS: `judge_model` and `embedding_model` select model IDs. Configure
   `judge_api-key`/`judge_url` and `embedding_api-key`/`embedding_url` in
   `MODEL_AUTH_SECRET_REF` for independent sidecar connections; the fixtures do
-  not pass upstream URLs or API keys as parameters.
+  not pass upstream URLs or API keys as parameters. Existing `judge_url` and
+  `judge_api_key` parameter overrides remain supported and take precedence over
+  judge Secret defaults. In Kubernetes, an external `embedding_url` parameter
+  retains its legacy primary-sidecar fallback; omit that parameter to use the
+  embedding Secret connection.
 - DeepEval: `eval_model_name`, `eval_model_url`; authentication comes from the
   adapter's model credentials.
 - Garak/Garak KFP intents: `intents_models.judge.name` and `.url`. Synthetic data
