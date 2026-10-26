@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"encoding/json"
 	"log/slog"
 	"math"
 	"testing"
@@ -443,5 +444,49 @@ func TestComputeBenchmarkTestResult_JobPrimaryTakesPrecedenceOverEvent(t *testin
 	}
 	if result.PrimaryScoreMetric != "choice/accuracy" {
 		t.Errorf("PrimaryScoreMetric = %q, want job choice/accuracy", result.PrimaryScoreMetric)
+	}
+}
+
+// JSON round-trip must keep lower_is_better so computeJobTestResult still
+// inverts after reloading results from storage (multi-benchmark jobs).
+func TestComputeJobTestResult_LowerIsBetterSurvivesJSONRoundTrip(t *testing.T) {
+	t.Parallel()
+	s := testResultsStorage()
+	job := jobWithBenchmark("inspect/custom", "inspect", nil, &api.PassCriteria{Threshold: threshold32(0.3)})
+	job.PassCriteria = &api.PassCriteria{Threshold: threshold32(0.5)}
+	event := statusEvent("inspect/custom", "inspect", map[string]any{
+		"attack_success_rate": float64(0.1),
+	})
+	event.PrimaryScore = &api.PrimaryScore{Metric: "attack_success_rate", LowerIsBetter: true}
+
+	result := s.computeBenchmarkTestResult(nil, job, event, nil)
+	if result == nil {
+		t.Fatal("expected benchmark test")
+	}
+
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var reloaded api.BenchmarkTest
+	if err := json.Unmarshal(raw, &reloaded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if reloaded.LowerIsBetter == nil || !*reloaded.LowerIsBetter {
+		t.Fatalf("lower_is_better lost after JSON round-trip; payload=%s", raw)
+	}
+
+	job.Results = &api.EvaluationJobResults{
+		Benchmarks: []api.BenchmarkResult{{
+			ID: "inspect/custom", ProviderID: "inspect", BenchmarkIndex: 0, Test: &reloaded,
+		}},
+	}
+	s.computeJobTestResult(job, nil)
+	if job.Results.Test == nil {
+		t.Fatal("expected job test aggregate")
+	}
+	wantScore := float32(0.9)
+	if math.Abs(float64(job.Results.Test.Score-wantScore)) > 1e-6 {
+		t.Errorf("job Score = %v, want %v after reload", job.Results.Test.Score, wantScore)
 	}
 }

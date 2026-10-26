@@ -67,9 +67,9 @@ func (s *sqlStorage) computeJobTestResult(job *api.EvaluationJobResource, collec
 			// if the benchmark weight is not defined, we set it to 1
 			benchmarkWeight = 1
 		}
-		// Prefer the in-process direction on the benchmark test result (includes
-		// event-reported LowerIsBetter; not API-serialized). Fall back to the
-		// job/catalog PrimaryScore when reloading results that lack it.
+		// Prefer the direction stored on the benchmark test result (includes
+		// event-reported LowerIsBetter persisted via JSON). Fall back to the
+		// job/catalog PrimaryScore for legacy results that omit it.
 		lowerIsBetter := false
 		if benchmark.Test.LowerIsBetter != nil {
 			lowerIsBetter = *benchmark.Test.LowerIsBetter
