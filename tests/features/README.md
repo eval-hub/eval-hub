@@ -51,25 +51,31 @@ Run all feature tests:
 go test ./tests/features/...
 ```
 
-### Ragas embedding endpoint (required for the Ragas provider scenario)
+### Ragas model connections (required for the Ragas provider scenario)
 
-Both Ragas suites call `/v1/embeddings`. Set an embedding model and an
-OpenAI-compatible base URL reachable from the adapter pods. A chat-only MaaS
-endpoint cannot serve these calls. For example, using your cluster's embedding
-deployment:
+Both Ragas suites call `/v1/embeddings`. Set the embedding model ID and use the
+existing model-auth Secret for the connection. A chat-only MaaS endpoint cannot
+serve embedding calls. For example:
 
 ```bash
 export RAGAS_EMBEDDING_MODEL="granite-embedding"
-export RAGAS_EMBEDDING_URL="http://granite-embedding:8080/v1"
+export MODEL_AUTH_SECRET_REF="ragas-model-connections"
 ```
 
-Replace the model ID and service URL with those from your deployment. The Ragas
-payload requires both settings and reports a configuration error before job
-submission if either is missing or blank. These settings are independent of
-`MODEL_NAME` and `MODEL_URL`. Both benchmark suites receive the same embedding
-configuration. If the embedding service requires authentication, inject
-`OPENAI_API_KEY` into the adapter runtime from a Secret; the evaluated model's
-credential is scoped to its own endpoint.
+Use your deployment's actual model ID. In the Secret named by
+`MODEL_AUTH_SECRET_REF`, retain the evaluated model's `api-key` and add
+`embedding_api-key` and `embedding_url` (for example,
+`http://granite-embedding:8080/v1`). For an unauthenticated embedding service
+that ignores Authorization, the embedding key can be a nonempty dummy value.
+The adapter receives `embedding_api-key:ref` and a projected sidecar URL; the
+sidecar selects the embedding upstream and injects its real key. No embedding
+URL environment variable or `OPENAI_API_KEY` injection is required.
+
+Both suites receive `RAGAS_EMBEDDING_MODEL`; the payload reports a configuration
+error before submission if that setting is missing or blank. Use an adapter
+image that reads the role-specific projected Secret entries. Optional
+`judge_api-key` and `judge_url` entries select a separate judge connection;
+without them Ragas uses the evaluated model's endpoint and credential.
 
 ### Local Server Mode (Default)
 

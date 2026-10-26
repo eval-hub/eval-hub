@@ -1,14 +1,14 @@
 local test = import 'test.libsonnet';
 local collectionId = test.value('collection_id');
-// Chat-only model endpoints cannot serve the embedding metrics in either suite.
+// The embedding connection comes from embedding_url/embedding_api-key in the
+// Secret referenced by MODEL_AUTH_SECRET_REF; the adapter uses sidecar refs.
 local requiredEmbeddingEnv(name) =
   local value = std.stripChars(test.env(name), ' \t\r\n');
-  assert value != '' : 'Set ' + name + ' to an embedding-capable model/endpoint before running Ragas tests';
+  assert value != '' : 'Set ' + name + ' to the embedding model ID before running Ragas tests';
   value;
 local parameters = {
   num_examples: 1,
   embedding_model: requiredEmbeddingEnv('RAGAS_EMBEDDING_MODEL'),
-  embedding_url: requiredEmbeddingEnv('RAGAS_EMBEDDING_URL'),
 };
 
 test.mergeOptional(

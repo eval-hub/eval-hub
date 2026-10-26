@@ -1432,6 +1432,7 @@ type jsonnetBenchmarkPayload struct {
 
 type jsonnetPayloadDocument struct {
 	Name         string                    `json:"name"`
+	Model        *api.ModelRef             `json:"model"`
 	Benchmarks   []jsonnetBenchmarkPayload `json:"benchmarks"`
 	PassCriteria *struct {
 		Threshold float64 `json:"threshold"`
@@ -1472,10 +1473,14 @@ func TestJsonnetRagasEmbeddingEndpoint(t *testing.T) {
 				"ENVIRONMENT_ID":        environment,
 				"MODEL_NAME":            "Qwen/Qwen3-VL-30B-A3B-Instruct",
 				"MODEL_URL":             "https://chat.example/v1",
+				"MODEL_AUTH_SECRET_REF": "ragas-model-connections",
 				"RAGAS_EMBEDDING_MODEL": "granite-embedding",
-				"RAGAS_EMBEDDING_URL":   "http://granite-embedding:8080/v1",
+				"RAGAS_EMBEDDING_URL":   "https://ignored-legacy-value.example/v1",
 			}}
 			doc := evaluateJsonnetPayloadDocument(t, tc, "evaluation_job_ragas.jsonnet")
+			if doc.Model == nil || doc.Model.Auth == nil || doc.Model.Auth.SecretRef != "ragas-model-connections" {
+				t.Fatal("Ragas job must retain the model-auth Secret reference")
+			}
 			if len(doc.Benchmarks) != 2 {
 				t.Fatalf("got %d benchmarks, want 2", len(doc.Benchmarks))
 			}
@@ -1486,11 +1491,15 @@ func TestJsonnetRagasEmbeddingEndpoint(t *testing.T) {
 				}
 				for key, want := range map[string]any{
 					"embedding_model": "granite-embedding",
-					"embedding_url":   "http://granite-embedding:8080/v1",
 					"num_examples":    float64(1),
 				} {
 					if got := benchmark.Parameters[key]; got != want {
 						t.Errorf("%s parameters.%s = %v, want %v", id, key, got, want)
+					}
+				}
+				for _, key := range []string{"embedding_url", "judge_url", "judge_api_key"} {
+					if _, exists := benchmark.Parameters[key]; exists {
+						t.Errorf("%s parameters.%s must use the model-auth Secret", id, key)
 					}
 				}
 				if benchmark.TestDataRef == nil || benchmark.TestDataRef.S3.Key != "datasets/ragas/dataset.jsonl" {
@@ -1501,27 +1510,22 @@ func TestJsonnetRagasEmbeddingEndpoint(t *testing.T) {
 	}
 }
 
-func TestJsonnetRagasRequiresEmbeddingEndpoint(t *testing.T) {
-	for _, key := range []string{"RAGAS_EMBEDDING_MODEL", "RAGAS_EMBEDDING_URL"} {
-		for _, value := range []string{"unset", "", " \t "} {
-			t.Run(key+"/"+value, func(t *testing.T) {
-				env := map[string]string{
-					"RAGAS_EMBEDDING_MODEL": "granite-embedding",
-					"RAGAS_EMBEDDING_URL":   "http://granite-embedding:8080/v1",
-				}
-				tc := &scenarioConfig{jsonnetHarnessEnv: env}
-				if value == "unset" {
-					delete(env, key)
-					tc.jsonnetHarnessEnvOmit = []string{key}
-				} else {
-					env[key] = value
-				}
-				_, err := tc.evaluateJsonnetFile(jsonnetPayloadFilePath(t, "evaluation_job_ragas.jsonnet"))
-				if err == nil || !strings.Contains(err.Error(), key) {
-					t.Fatalf("expected actionable error naming %s, got %v", key, err)
-				}
-			})
-		}
+func TestJsonnetRagasRequiresEmbeddingModel(t *testing.T) {
+	const key = "RAGAS_EMBEDDING_MODEL"
+	for _, value := range []string{"unset", "", " \t "} {
+		t.Run(value, func(t *testing.T) {
+			env := map[string]string{}
+			tc := &scenarioConfig{jsonnetHarnessEnv: env}
+			if value == "unset" {
+				tc.jsonnetHarnessEnvOmit = []string{key}
+			} else {
+				env[key] = value
+			}
+			_, err := tc.evaluateJsonnetFile(jsonnetPayloadFilePath(t, "evaluation_job_ragas.jsonnet"))
+			if err == nil || !strings.Contains(err.Error(), key) {
+				t.Fatalf("expected actionable error naming %s, got %v", key, err)
+			}
+		})
 	}
 }
 
