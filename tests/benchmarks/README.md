@@ -190,7 +190,7 @@ Judge fixtures require nonempty `${JUDGE_MODEL_NAME}` and, where the adapter
 supports an inline endpoint, `${JUDGE_BASE_URL}`. The runner accepts `JUDGE_MODEL`
 as a fallback for `JUDGE_MODEL_NAME`, and `JUDGE_API_BASE` then `JUDGE_PROXY_URL`
 as fallbacks for `JUDGE_BASE_URL`. The primary nonempty name always wins.
-Petri/Bloom and RAGAS additionally require `${JUDGE_API_KEY}`. Jenkins sets this
+Petri/Bloom additionally require `${JUDGE_API_KEY}`. Jenkins sets this
 to `local` for its judge proxy in the collection stage; supply it explicitly when
 running these smoke fixtures elsewhere. Missing referenced inputs skip the
 benchmark with an actionable message.
@@ -203,7 +203,10 @@ Generated fixtures use the adapter's field names:
   `OPENAI_JUDGE_API_KEY` in the adapter environment through a Secret.
 - ATIF: the fixture `model` selects `JUDGE_MODEL_NAME` and `JUDGE_BASE_URL`,
   because its model scores staged trajectories rather than generating them.
-- RAGAS: `judge_model`, `judge_url`, `judge_api_key`.
+- RAGAS: `judge_model` and `embedding_model` select model IDs. Configure
+  `judge_api-key`/`judge_url` and `embedding_api-key`/`embedding_url` in
+  `MODEL_AUTH_SECRET_REF` for independent sidecar connections; the fixtures do
+  not pass upstream URLs or API keys as parameters.
 - DeepEval: `eval_model_name`, `eval_model_url`; authentication comes from the
   adapter's model credentials.
 - Garak/Garak KFP intents: `intents_models.judge.name` and `.url`. Synthetic data
@@ -244,7 +247,12 @@ Use an S3, PVC, Git, or Hugging Face data reference supported by EvalHub. Refere
 point to data in the runtime environment, not this test process's filesystem.
 
 - RAGAS: one complete RAG record in `dataset.jsonl`, including metric-required
-  fields; the full suite also needs embeddings support.
+  fields. Both suites require `RAGAS_EMBEDDING_MODEL` (for example,
+  `granite-embedding`). Put `embedding_api-key` and `embedding_url` in the Secret
+  named by `MODEL_AUTH_SECRET_REF`. The URL must serve `/v1/embeddings`; a
+  chat-only endpoint cannot serve these calls. An unauthenticated service can
+  use a nonempty dummy embedding key if it ignores Authorization. Use an
+  adapter image that resolves the projected role-specific credential references.
 - DeepEval: one JSONL record containing `input`, `actual_output`, `expected_output`,
   `context`, and `retrieval_context`. It loads the staged dataset without a sample
   cap, so input size bounds the work.
