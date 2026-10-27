@@ -36,12 +36,16 @@ SKIP_BUILD ?= false
 EVALHUB_HOST_PORT ?= 18443
 EVALHUB_NODE_PORT ?= 30443
 EVALHUB_HOST_BIND_ADDRESS ?= 127.0.0.1
+DEMO_SOURCE_COLLECTION_ID ?= instruction-output-v1
+DEMO_JOB_TIMEOUT_SECONDS ?= 900
+EVALHUB_API_BASE_URL ?=
+EVALHUB_KUBECONFIG_FILE ?=
 EVALHUB_REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 EVALHUB_REPO_PARENT := $(abspath $(EVALHUB_REPO_ROOT)/..)
 EVALHUB_CONTRIB_REPO ?= $(EVALHUB_REPO_PARENT)/eval-hub-contrib
 TRUSTYAI_OPERATOR_REPO ?= $(EVALHUB_REPO_PARENT)/trustyai-service-operator
 
-.PHONY: dev-deploy dev-deploy-help dev-clean dev-clean-help
+.PHONY: dev-deploy dev-deploy-help dev-clean dev-clean-help dev-demo dev-demo-help
 dev-deploy: ## Build and deploy the local EvalHub stack to Docker-backed kind
 	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" IMAGE_TAG="$(IMAGE_TAG)" \
 		SKIP_BUILD="$(SKIP_BUILD)" \
@@ -61,6 +65,17 @@ dev-clean: ## Remove the local EvalHub deployment; optionally delete its kind cl
 
 dev-clean-help: ## Show dev-clean inputs and usage
 	@bash scripts/dev-clean.sh --help
+
+dev-demo: ## List collections, clone one, and run a mock-backed evaluation on kind
+	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" EVALHUB_HOST_PORT="$(EVALHUB_HOST_PORT)" \
+		DEMO_SOURCE_COLLECTION_ID="$(DEMO_SOURCE_COLLECTION_ID)" \
+		DEMO_JOB_TIMEOUT_SECONDS="$(DEMO_JOB_TIMEOUT_SECONDS)" \
+		EVALHUB_API_BASE_URL="$(EVALHUB_API_BASE_URL)" \
+		EVALHUB_KUBECONFIG_FILE="$(EVALHUB_KUBECONFIG_FILE)" \
+		bash scripts/dev-demo.sh
+
+dev-demo-help: ## Show dev-demo inputs and usage
+	@bash scripts/dev-demo.sh --help
 
 PRE_COMMIT ?= .git/hooks/pre-commit
 
