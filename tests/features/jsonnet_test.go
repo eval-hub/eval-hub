@@ -288,6 +288,10 @@ func TestGarakBenchmarkScanLimitsAndRouting(t *testing.T) {
 				if run["generations"] != float64(1) || run["soft_probe_prompt_cap"] != float64(1) {
 					t.Errorf("%s run limits = %v", benchmark.ID, run)
 				}
+				plugins := garakConfig["plugins"].(map[string]any)
+				if plugins["extended_detectors"] != false {
+					t.Errorf("%s extended detectors = %v, want false", benchmark.ID, plugins["extended_detectors"])
+				}
 				if benchmark.ID == "intents" {
 					if params["sdg_model"] != "openai/Qwen/Qwen3-VL-30B-A3B-Instruct" {
 						t.Errorf("SDG model = %v", params["sdg_model"])
