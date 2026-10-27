@@ -7,14 +7,14 @@ func TestJudgeProfiles(t *testing.T) {
 		provider, benchmark string
 		fields              map[string]string
 	}{
-		{"inspect", "inspect/petri-sycophancy", map[string]string{"judge_model": "${JUDGE_MODEL_NAME}", "judge_base_url": "${JUDGE_BASE_URL}", "judge_api_key": "${JUDGE_API_KEY}"}},
-		{"inspect", "inspect/bloom-custom", map[string]string{"judge_model": "${JUDGE_MODEL_NAME}", "judge_base_url": "${JUDGE_BASE_URL}"}},
+		{"inspect", "inspect/petri-sycophancy", map[string]string{"judge_model": "${JUDGE_MODEL_NAME}"}},
+		{"inspect", "inspect/bloom-custom", map[string]string{"judge_model": "${JUDGE_MODEL_NAME}"}},
 		{"inspect", "inspect/hle", map[string]string{"judge_model": "${JUDGE_MODEL_NAME}"}},
 		{"inspect", "inspect/cyberseceval-2-pi", map[string]string{"judge_model": "${JUDGE_MODEL_NAME}"}},
-		{"inspect", "inspect/strong-reject", map[string]string{"grader_model": "${JUDGE_MODEL_NAME}", "grader_base_url": "${JUDGE_BASE_URL}"}},
+		{"inspect", "inspect/strong-reject", map[string]string{"grader_model": "${JUDGE_MODEL_NAME}"}},
 		{"followbench", "followbench", map[string]string{"judge_model": "${JUDGE_MODEL_NAME}"}},
 		{"ragas", "ragas_rag_default", map[string]string{"judge_model": "${JUDGE_MODEL_NAME}"}},
-		{"deepeval", "deepeval-faithfulness", map[string]string{"eval_model_name": "${JUDGE_MODEL_NAME}", "eval_model_url": "${JUDGE_BASE_URL}"}},
+		{"deepeval", "deepeval-faithfulness", map[string]string{"eval_model_name": "${JUDGE_MODEL_NAME}"}},
 	} {
 		t.Run(tc.provider+"/"+tc.benchmark, func(t *testing.T) {
 			f, err := minimalFixture(tc.provider, tc.benchmark)
@@ -27,11 +27,9 @@ func TestJudgeProfiles(t *testing.T) {
 					t.Errorf("%s = %v; want %s", field, p[field], want)
 				}
 			}
-			if tc.provider == "followbench" || tc.benchmark == "inspect/hle" || tc.benchmark == "inspect/cyberseceval-2-pi" {
-				for _, field := range []string{"judge_url", "judge_base_url", "judge_api_key"} {
-					if _, ok := p[field]; ok {
-						t.Errorf("%s conflicts with Secret-backed judge routing", field)
-					}
+			for _, field := range []string{"judge_url", "judge_base_url", "judge_api_key", "auditor_base_url", "grader_base_url", "eval_model_url", "embedding_url"} {
+				if _, ok := p[field]; ok {
+					t.Errorf("%s conflicts with Secret-backed judge routing", field)
 				}
 			}
 		})
