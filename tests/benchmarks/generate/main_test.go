@@ -13,7 +13,7 @@ func TestJudgeProfiles(t *testing.T) {
 		{"inspect", "inspect/cyberseceval-2-pi", map[string]string{"judge_model": "${JUDGE_MODEL_NAME}"}},
 		{"inspect", "inspect/strong-reject", map[string]string{"grader_model": "${JUDGE_MODEL_NAME}", "grader_base_url": "${JUDGE_BASE_URL}"}},
 		{"followbench", "followbench", map[string]string{"judge_model": "${JUDGE_MODEL_NAME}"}},
-		{"ragas", "ragas_rag_default", map[string]string{"judge_model": "${JUDGE_MODEL_NAME}", "judge_url": "${JUDGE_BASE_URL}", "judge_api_key": "${JUDGE_API_KEY}"}},
+		{"ragas", "ragas_rag_default", map[string]string{"judge_model": "${JUDGE_MODEL_NAME}"}},
 		{"deepeval", "deepeval-faithfulness", map[string]string{"eval_model_name": "${JUDGE_MODEL_NAME}", "eval_model_url": "${JUDGE_BASE_URL}"}},
 	} {
 		t.Run(tc.provider+"/"+tc.benchmark, func(t *testing.T) {
@@ -57,5 +57,25 @@ func TestATIFUsesJudgeModel(t *testing.T) {
 	model := f["model"].(map[string]any)
 	if model["name"] != "${JUDGE_MODEL_NAME}" || model["url"] != "${JUDGE_BASE_URL}" {
 		t.Fatalf("ATIF job model must select the trajectory judge: %v", model)
+	}
+}
+
+func TestRagasProfilesRequireEmbeddingEndpoint(t *testing.T) {
+	for _, benchmark := range []string{"ragas_rag_default", "ragas_rag_full"} {
+		t.Run(benchmark, func(t *testing.T) {
+			f, err := minimalFixture("ragas", benchmark)
+			if err != nil {
+				t.Fatal(err)
+			}
+			parameters := f["parameters"].(map[string]any)
+			if parameters["embedding_model"] != "${RAGAS_EMBEDDING_MODEL}" {
+				t.Fatalf("Ragas must select an embedding model: %v", parameters)
+			}
+			for _, key := range []string{"embedding_url", "judge_url", "judge_api_key"} {
+				if _, exists := parameters[key]; exists {
+					t.Errorf("%s must come from the model-auth Secret", key)
+				}
+			}
+		})
 	}
 }
