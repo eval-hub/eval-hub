@@ -60,7 +60,7 @@ dev-deploy-help: ## Show dev-deploy inputs and usage
 DELETE_CLUSTER ?= false
 
 dev-clean: ## Remove the local EvalHub deployment; optionally delete its kind cluster
-	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" DELETE_CLUSTER="$(DELETE_CLUSTER)" \
+	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" IMAGE_TAG="$(IMAGE_TAG)" DELETE_CLUSTER="$(DELETE_CLUSTER)" \
 		bash scripts/dev-clean.sh
 
 dev-clean-help: ## Show dev-clean inputs and usage

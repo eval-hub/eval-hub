@@ -22,6 +22,7 @@ WORK_DIR=""
 REGISTRY_NAME=""
 REGISTRY_ALIAS=""
 REGISTRY_PORT=""
+TEMP_REGISTRY_TAGS=()
 PORT_FORWARD_PID=""
 KIND_CLUSTER_CREATED=false
 API_HOST_ACCESS_PORT="${EVALHUB_HOST_PORT}"
@@ -48,6 +49,9 @@ Inputs (also accepted as environment variables):
   KIND_CLUSTER_NAME       kind cluster to create or reuse (default: evalhub-dev)
   IMAGE_TAG               tag for all locally built images (default: kind-<cluster>)
   SKIP_BUILD=true         reuse locally built images with IMAGE_TAG
+  Repeated builds use Docker's layer cache; the EvalHub build date is stable
+  for a source commit so a no-change deploy does not rebuild Go binaries.
+  Temporary localhost:<port> registry tags are removed after each successful push.
   EVALHUB_HOST_PORT       localhost API port (default: 18443)
   EVALHUB_NODE_PORT       kind NodePort for the API (default: 30443)
   EVALHUB_HOST_BIND_ADDRESS host bind address (default: 127.0.0.1; loopback only)
@@ -71,9 +75,32 @@ Use it explicitly: KUBECONFIG=<printed-path> kubectl get pods -n system
 USAGE
 }
 
+remove_temporary_registry_tag() {
+  local image_ref="$1" pending
+  local -a remaining=()
+  if ! docker image rm "$image_ref" >/dev/null 2>&1; then
+    log WARN "Could not remove temporary local registry tag $image_ref."
+    return 0
+  fi
+  for pending in "${TEMP_REGISTRY_TAGS[@]}"; do
+    [[ "$pending" == "$image_ref" ]] || remaining+=("$pending")
+  done
+  TEMP_REGISTRY_TAGS=("${remaining[@]}")
+  log INFO "Removed temporary local registry tag $image_ref."
+}
+
+remove_pending_registry_tags() {
+  local image_ref
+  for image_ref in "${TEMP_REGISTRY_TAGS[@]}"; do
+    docker image rm "$image_ref" >/dev/null 2>&1 || true
+  done
+  TEMP_REGISTRY_TAGS=()
+}
+
 cleanup() {
   local status=$?
   trap - EXIT
+  remove_pending_registry_tags
   if [[ -n "$PORT_FORWARD_PID" ]]; then
     kill "$PORT_FORWARD_PID" >/dev/null 2>&1 || true
     wait "$PORT_FORWARD_PID" 2>/dev/null || true
@@ -207,16 +234,19 @@ image_ref() {
 
 build_image() {
   local name="$1" context="$2" dockerfile="$3" target_arch="$4"
-  local image
+  local image build_date
   image="$(image_ref "$name")"
   [[ -f "$dockerfile" ]] || fail "Containerfile not found: $dockerfile"
   log INFO "Building $image from $context"
   case "$name" in
     eval-hub)
+      # A stable source timestamp keeps repeated local deployments from
+      # invalidating the Go build layers solely because the wall clock changed.
+      build_date="$(git -C "$EVALHUB_REPO" show -s --format=%cI HEAD)"
       docker build --platform "linux/${target_arch}" \
         --build-arg "TARGETARCH=${target_arch}" \
         --build-arg BUILD_NUMBER=kind-local \
-        --build-arg "BUILD_DATE=$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+        --build-arg "BUILD_DATE=${build_date}" \
         --build-arg "GIT_HASH=$(git -C "$EVALHUB_REPO" rev-parse --short HEAD)" \
         --tag "$image" --file "$dockerfile" "$context"
       ;;
@@ -268,7 +298,9 @@ tag_and_push() {
   local source="$1" destination="$2"
   docker image inspect "$source" >/dev/null 2>&1 || fail "Image missing before registry push: $source"
   docker image tag "$source" "$destination"
+  TEMP_REGISTRY_TAGS+=("$destination")
   docker image push "$destination"
+  remove_temporary_registry_tag "$destination"
 }
 
 ensure_registry() {
@@ -491,6 +523,22 @@ patches:
       - op: add
         path: /subjects/0/namespace
         value: system
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: controller-manager
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: controller-manager
+      spec:
+        template:
+          spec:
+            containers:
+              - name: manager
+                imagePullPolicy: Always
 YAML
   cat >>"$overlay/kustomization.yaml" <<YAML
 commonAnnotations:
@@ -512,6 +560,8 @@ YAML
     fail "Rendered operator config does not use the local kube-rbac-proxy image."
   grep -Fq 'name: trustyai-service-operator-controller-manager' "$manifest" ||
     fail "Rendered overlay lacks the expected operator deployment."
+  grep -Fq 'imagePullPolicy: Always' "$manifest" ||
+    fail "Rendered operator deployment does not pull the current local operator image."
   grep -Fq 'name: trustyai-service-operator-webhook-service' "$manifest" ||
     fail "Rendered overlay lacks the conversion webhook service."
   log PASS "The temporary operator overlay renders all local image references."
@@ -549,6 +599,12 @@ install_operator_and_evalhub() {
   config_root="$WORK_DIR/operator-config"
   log INFO "Applying the EvalHub-only operator overlay to namespace system."
   kubectl --kubeconfig "$KUBECONFIG_FILE" apply -k "$config_root/overlays/evalhub-kind"
+  local operator_pull_policy
+  operator_pull_policy="$(kubectl --kubeconfig "$KUBECONFIG_FILE" -n system get \
+    deployment/trustyai-service-operator-controller-manager \
+    -o 'jsonpath={.spec.template.spec.containers[?(@.name=="manager")].imagePullPolicy}')"
+  [[ "$operator_pull_policy" == Always ]] ||
+    fail "The local operator deployment must use imagePullPolicy Always; got ${operator_pull_policy:-unset}."
   kubectl --kubeconfig "$KUBECONFIG_FILE" annotate crd evalhubs.trustyai.opendatahub.io \
     "io.evalhub.kind-smoke.cluster=$KIND_CLUSTER_NAME" --overwrite >/dev/null
   configmaps="$(kubectl --kubeconfig "$KUBECONFIG_FILE" -n system get configmaps \

@@ -269,8 +269,10 @@ Delete the deployment and the selected cluster as well:
 make dev-clean DELETE_CLUSTER=true
 ```
 
-Both cleanup modes retain locally built host images and Docker's build cache.
-`make dev-deploy-help` and `make dev-clean-help` list the supported settings.
+Both cleanup modes retain the local build image tags and Docker's build cache.
+They remove temporary localhost:<port> tags used only to push images into the
+kind registry. Repeated deploys of unchanged EvalHub source reuse the Go build
+layers. `make dev-deploy-help` and `make dev-clean-help` list the settings.
 
 Run the API demo against the deployed cluster:
 

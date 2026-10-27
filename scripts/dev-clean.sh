@@ -6,6 +6,7 @@ set -Eeuo pipefail
 umask 077
 
 KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-evalhub-dev}"
+IMAGE_TAG="${IMAGE_TAG:-kind-${KIND_CLUSTER_NAME}}"
 DELETE_CLUSTER="${DELETE_CLUSTER:-false}"
 KUBECONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/evalhub/kubeconfigs"
 PRIVATE_KUBECONFIG="${KUBECONFIG_DIR}/${KIND_CLUSTER_NAME}.yaml"
@@ -40,10 +41,12 @@ keeping the kind cluster and its private kubeconfig.
 Pass DELETE_CLUSTER=true (or --delete-cluster) to remove the named kind cluster
 as well. Keeping the cluster still deletes active and completed evaluation-job
 workloads belonging to the evalhub-local service. Host images and Docker build
-cache are retained.
+cache are retained. Temporary localhost:<port> tags used for registry pushes
+are removed; pass the same IMAGE_TAG used by dev-deploy when overriding it.
 
 Inputs (also accepted as environment variables):
   KIND_CLUSTER_NAME  kind cluster to clean (default: evalhub-dev)
+  IMAGE_TAG          matching dev-deploy image tag (default: kind-<cluster>)
   DELETE_CLUSTER     true to delete that cluster too (default: false)
 
 The system namespace is retained to avoid deleting unrelated resources that may
@@ -97,6 +100,8 @@ validate_inputs() {
   [[ "$KIND_CLUSTER_NAME" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
     fail "Invalid kind cluster name: $KIND_CLUSTER_NAME"
   ((${#KIND_CLUSTER_NAME} <= 63)) || fail "KIND_CLUSTER_NAME must be at most 63 characters."
+  [[ "$IMAGE_TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] ||
+    fail "IMAGE_TAG must be 1-128 characters and contain only letters, digits, underscores, dots, or hyphens."
   case "$DELETE_CLUSTER" in true|false) ;; *) fail "DELETE_CLUSTER must be true or false." ;; esac
 }
 
@@ -119,6 +124,35 @@ check_registry_ownership() {
     fail "Container $REGISTRY_NAME exists but is not marked as this script's registry; refusing to remove it."
 }
 
+remove_temporary_registry_tags() {
+  local images repository tag suffix port image_ref
+  images="$(docker image ls --format '{{.Repository}}|{{.Tag}}')" ||
+    fail "Could not list local Docker image tags."
+  while IFS='|' read -r repository tag; do
+    [[ "$repository" == localhost:* ]] || continue
+    suffix="${repository#localhost:}"
+    port="${suffix%%/*}"
+    [[ "$port" =~ ^[0-9]+$ ]] || continue
+    suffix="${suffix#*/}"
+    case "$suffix" in
+      evalhub/eval-hub|evalhub/community-inspect|evalhub/community-followbench|evalhub/trustyai-service-operator|evalhub/kind-openai-mock)
+        [[ "$tag" == "$IMAGE_TAG" ]] || continue
+        ;;
+      opendatahub/odh-kube-rbac-proxy)
+        [[ "$tag" == odh-stable ]] || continue
+        ;;
+      *)
+        continue
+        ;;
+    esac
+    image_ref="${repository}:${tag}"
+    log INFO "Removing temporary local registry tag $image_ref."
+    if ! docker image rm "$image_ref" >/dev/null; then
+      log WARN "Could not remove temporary local registry tag $image_ref; it may be in use."
+    fi
+  done <<<"$images"
+}
+
 remove_registry() {
   local containers
   containers="$(docker container ls --all --format '{{.Names}}')" || fail "Could not list Docker containers."
@@ -129,6 +163,7 @@ remove_registry() {
   else
     log INFO "No local registry container exists for cluster $KIND_CLUSTER_NAME."
   fi
+  remove_temporary_registry_tags
 }
 
 prepare_kubeconfig() {
