@@ -1163,15 +1163,25 @@ benchmarks:
     tags: [multimodal, document-understanding, vision, inspect-evals]
 
   # Custom
+  # primary_score is intentionally omitted: the Inspect adapter reports the
+  # task-dependent metric key on the completed status event (exact match).
+  # pass_criteria.threshold assumes higher-is-better (SDK default). For
+  # lower-is-better scorers, set job primary_score.metric and lower_is_better.
   - id: inspect/custom
     name: Custom Inspect Task
     description: >
       Run any Inspect AI task by providing 'task' in parameters.
       Supports any inspect-evals task or user-authored task file.
+      Scorer metric names are task-dependent; the adapter reports primary_score
+      on the completed status event so results.benchmarks[].test can be built.
+      The default pass threshold (0.15) assumes a higher-is-better metric
+      (e.g. accuracy). For lower-is-better scorers, set the job's
+      primary_score.metric and primary_score.lower_is_better: true.
     category: custom
     domains: [custom]
     tasks: [custom]
-    metrics: [accuracy/accuracy]
+    pass_criteria:
+      threshold: 0.15
     tags: [custom, inspect-ai]
 
 parameters:

@@ -4083,6 +4083,14 @@
             "format": "float",
             "description": "Primary score value"
           },
+          "primary_score_metric": {
+            "type": "string",
+            "description": "Name of the metric used as the primary score"
+          },
+          "lower_is_better": {
+            "type": "boolean",
+            "description": "Whether a lower primary_score is better for this benchmark. Taken from the resolved job, status-event, or catalog primary_score. Persisted so job-level aggregation can invert scores after a storage reload; omitted on legacy results (aggregation then falls back to job/catalog PrimaryScore).\n"
+          },
           "threshold": {
             "type": "number",
             "format": "float",
@@ -5183,6 +5191,10 @@
             "items": {
               "$ref": "#/components/schemas/MetricSchema"
             }
+          },
+          "primary_score": {
+            "$ref": "#/components/schemas/PrimaryScore",
+            "description": "Optional adapter-reported primary metric for this completed run. When building results.benchmarks[].test, the service picks the first of these whose metric key is present in metrics (exact match): job/benchmark primary_score, then this event primary_score, then catalog/provider primary_score. Used by task-dependent adapters such as inspect/custom.\n"
           },
           "additional_info": {
             "type": "object",
