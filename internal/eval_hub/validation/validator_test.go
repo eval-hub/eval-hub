@@ -787,6 +787,50 @@ func TestValidateCollectionOverrides_EmptyOverrides(t *testing.T) {
 	}
 }
 
+func TestValidateCollectionOverrides_RepeatedBenchmarkCounts(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		rows      int
+		overrides int
+		wantError bool
+	}{
+		{name: "defaults", rows: 3, overrides: 0},
+		{name: "shared override", rows: 3, overrides: 1},
+		{name: "one override per occurrence", rows: 3, overrides: 3},
+		{name: "too few overrides", rows: 3, overrides: 2, wantError: true},
+		{name: "too many overrides", rows: 2, overrides: 3, wantError: true},
+		{name: "unique pair keeps existing behavior", rows: 1, overrides: 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var collection []api.CollectionBenchmarkConfig
+			for range tc.rows {
+				collection = append(collection, api.CollectionBenchmarkConfig{Ref: api.Ref{ID: "bfcl"}, ProviderID: "inspect"})
+			}
+			collection = append(collection, api.CollectionBenchmarkConfig{Ref: api.Ref{ID: "bfcl"}, ProviderID: "other"})
+			overrides := []api.EvaluationBenchmarkConfig{
+				{ProviderID: "inspect", HardwareConfig: &api.BenchmarkHardwareConfig{HardwareProfileName: "shared"}},
+				{Ref: api.Ref{ID: "bfcl"}, ProviderID: "other"},
+			}
+			for range tc.overrides {
+				overrides = append(overrides, api.EvaluationBenchmarkConfig{Ref: api.Ref{ID: "bfcl"}, ProviderID: "inspect"})
+			}
+			err := ValidateCollectionOverrides(overrides, collection)
+			if !tc.wantError {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			var se *serviceerrors.ServiceError
+			if !errors.As(err, &se) || se.MessageCode() != messages.RequestValidationFailed || !strings.Contains(err.Error(), "collection occurrence order") {
+				t.Fatalf("expected count validation error, got %v", err)
+			}
+		})
+	}
+}
+
 func TestTestDataRef_BothS3AndPVCRejected(t *testing.T) {
 	validate := newTestValidator(t)
 	ref := api.TestDataRef{
