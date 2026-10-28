@@ -251,11 +251,19 @@ FVT_CONCURRENCY ?= 1
 BENCHMARK_PARALLEL ?= 2
 BENCHMARK_TIMEOUT ?= 30m
 BENCHMARK_RUN ?= TestBenchmarkSmoke
+BENCHMARK_JUNIT ?= $(BIN_DIR)/junit-benchmarks-report.xml
+GOTESTSUM_VERSION ?= v1.13.0
+GOTESTSUM := $(abspath $(BIN_DIR)/tools/gotestsum-$(GOTESTSUM_VERSION))/gotestsum
+
+$(GOTESTSUM):
+	@mkdir -p '$(dir $(GOTESTSUM))'
+	GOBIN='$(dir $(GOTESTSUM))' go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 
 # Ignore ambient experiments; an explicit command-line assignment still wins.
 test-benchmarks: export MLFLOW_EXPERIMENT_NAME =
-test-benchmarks: ## Run live benchmark smoke tests (requires SERVER_URL, MODEL_NAME, MODEL_URL)
-	BENCHMARK_SMOKE=1 go test ./tests/benchmarks -run='$(BENCHMARK_RUN)' -count=1 -parallel=$(BENCHMARK_PARALLEL) -timeout=$(BENCHMARK_TIMEOUT) -v
+test-benchmarks: $(GOTESTSUM) ## Run live benchmark smoke tests (requires SERVER_URL, MODEL_NAME, MODEL_URL)
+	@mkdir -p '$(dir $(BENCHMARK_JUNIT))'
+	BENCHMARK_SMOKE=1 '$(GOTESTSUM)' --format standard-verbose --junitfile '$(BENCHMARK_JUNIT)' -- ./tests/benchmarks -run='$(BENCHMARK_RUN)' -count=1 -parallel=$(BENCHMARK_PARALLEL) -timeout=$(BENCHMARK_TIMEOUT) -v
 
 generate-benchmark-configs: ## Create missing per-benchmark smoke fixtures from config/providers
 	go run ./tests/benchmarks/generate
