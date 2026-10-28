@@ -187,7 +187,9 @@ when invoking the smoke suite. The smoke runner keeps TLS verification enabled;
 provide `EVALHUB_CA_CERT_PATH` for a private service CA.
 
 Judge fixtures require nonempty `${JUDGE_MODEL_NAME}`. The runner accepts
-`JUDGE_MODEL` as its fallback. Inspect, DeepEval, FollowBench, and Ragas fixtures
+`JUDGE_MODEL` as its fallback; a nonempty primary name takes precedence.
+Missing referenced inputs skip the benchmark with an actionable message.
+Inspect, DeepEval, FollowBench, and Ragas fixtures
 select model IDs in parameters; their auxiliary connections come from the model
 auth Secret, not URL/key environment placeholders.
 

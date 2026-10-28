@@ -2152,22 +2152,20 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - mc1
-  - mc2
-  - bleu
-  - rouge
+  - acc
+  - acc_norm
   num_few_shot: 0
   dataset_size: 651
   tags:
   - logic_reasoning
   - lm_eval
   primary_score:
-    metric: mc1
+    metric: acc_norm
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Multiple-choice accuracy (mc1); higher is better.
+    result_interpretation: Length-normalized accuracy on multiple-choice questions; higher is better.
     score_ranges:
     - range: 0.0-0.25
       meaning: Below random chance for 4-choice questions
