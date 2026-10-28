@@ -31,6 +31,13 @@ is streamed during the run, and test failures still fail the command. Override
 the report path with `BENCHMARK_JUNIT=/path/to/report.xml`; parent directories
 are created automatically. Setup failures are also included in the report.
 
+The report also includes the parent `TestBenchmarkSmoke` test case. Three
+benchmark subtests therefore produce four cases, and one failing benchmark can
+produce two failures because the parent also fails. When calculating per-benchmark
+pass rates, count only cases named `TestBenchmarkSmoke/<provider>/<benchmark>`.
+Inspect the parent separately for setup or cleanup failures, which can occur
+independently of benchmark outcomes.
+
 The service's authentication proxy determines the forwarded identity when used.
 Model credentials belong in the referenced Kubernetes Secret, not in JSON fixtures.
 TLS verification remains enabled. Identity headers are not forwarded to redirects.
