@@ -210,7 +210,7 @@ Judge fixtures require nonempty `${JUDGE_MODEL_NAME}` and, where the adapter
 supports an inline endpoint, `${JUDGE_BASE_URL}`. The runner accepts `JUDGE_MODEL`
 as a fallback for `JUDGE_MODEL_NAME`, and `JUDGE_API_BASE` then `JUDGE_PROXY_URL`
 as fallbacks for `JUDGE_BASE_URL`. The primary nonempty name always wins.
-Petri/Bloom additionally require `${JUDGE_API_KEY}`. Jenkins sets this
+Petri/Bloom and CyberSecEval interpreter abuse additionally require `${JUDGE_API_KEY}`. Jenkins sets this
 to `local` for its judge proxy in the collection stage; supply it explicitly when
 running these smoke fixtures elsewhere. Missing referenced inputs skip the
 benchmark with an actionable message.
@@ -232,7 +232,10 @@ Generated fixtures use the adapter's field names:
 - Garak/Garak KFP intents: `intents_models.judge.name` and `.url`. Synthetic data
   generation uses `openai/${MODEL_NAME}` and `MODEL_URL`; LiteLLM requires the
   provider prefix for an OpenAI-compatible endpoint.
-- FollowBench and Inspect HLE/CyberSecEval: `judge_model`. These adapters reject
+- Inspect CyberSecEval interpreter abuse: an explicit JSON `model_roles.grader`
+  binds `JUDGE_MODEL_NAME`, `JUDGE_BASE_URL`, and `JUDGE_API_KEY`.
+  `task_args.judge_llm=null` selects this role instead of the task default.
+- FollowBench and Inspect HLE/CyberSecEval prompt injection: `judge_model`. These adapters reject
   inline judge URL/key parameters with this field. Configure `judge_url` and
   `judge_api-key` in `MODEL_AUTH_SECRET_REF` for a separate judge connection.
 
@@ -339,12 +342,13 @@ Inspect family fixtures select one registered representative task with
 `parameters.task`, preserving the catalog benchmark ID. These names were checked
 against inspect-evals v0.26.0. Agent tasks still require their sandbox and external
 services, and GPQA requires dataset access. MakeMeSay is capped at one game turn;
-Make Me Pay runs one experiment with one conversation turn. MASK,
+Make Me Pay runs one experiment with `turn_cap=2` so the mark can respond. MASK,
 InstrumentalEval, and Agentic Misalignment use the target model as their smoke
 grader; Make Me Pay uses it for the mark role. These auxiliary models inherit the
 target's OpenAI-compatible endpoint and credentials. These are execution checks,
 not independent judge accuracy measurements. Existing independently configured
-Petri/Bloom, HLE, CyberSecEval, and StrongREJECT judges are unchanged.
+Petri/Bloom, HLE, and StrongREJECT judges are unchanged. CyberSecEval interpreter
+abuse explicitly binds its grader role to the independent judge connection.
 
 Garak KFP fixtures forward `KFP_ENDPOINT`, `KFP_NAMESPACE`, and
 `KFP_S3_SECRET_NAME` through `parameters.kfp_config`. Missing inputs produce

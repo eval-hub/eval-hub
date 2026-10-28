@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"encoding/json"
+	"os"
+	"reflect"
+	"testing"
+)
 
 func TestJudgeProfiles(t *testing.T) {
 	for _, tc := range []struct {
@@ -75,6 +80,61 @@ func TestRagasProfilesRequireEmbeddingEndpoint(t *testing.T) {
 				if _, exists := parameters[key]; exists {
 					t.Errorf("%s must come from the model-auth Secret", key)
 				}
+			}
+		})
+	}
+}
+
+// TestInspectSmokeRoles verifies both participants run and scoring uses a separate connection.
+func TestInspectSmokeRoles(t *testing.T) {
+	for _, benchmark := range []string{"inspect/make-me-pay", "inspect/cyberseceval-2"} {
+		t.Run(benchmark, func(t *testing.T) {
+			f, err := minimalFixture("inspect", benchmark)
+			if err != nil {
+				t.Fatal(err)
+			}
+			p := f["parameters"].(map[string]any)
+			args := p["task_args"].(map[string]any)
+			roles := p["model_roles"].(map[string]any)
+			if benchmark == "inspect/make-me-pay" {
+				if args["turn_cap"].(int) < 2 || roles["mark"] != "openai/${MODEL_NAME}" {
+					t.Fatalf("mark must get a turn using the configured model: %v", p)
+				}
+			} else {
+				if args["judge_llm"] != "null" {
+					t.Fatalf("task default must not bypass the grader role: %v", args)
+				}
+				var role map[string]any
+				if err := json.Unmarshal([]byte(roles["grader"].(string)), &role); err != nil {
+					t.Fatal(err)
+				}
+				for key, want := range map[string]string{"model": "openai/${JUDGE_MODEL_NAME}", "base_url": "${JUDGE_BASE_URL}", "api_key": "${JUDGE_API_KEY}"} {
+					if role[key] != want {
+						t.Errorf("%s = %v; want %s", key, role[key], want)
+					}
+				}
+				if role["model_args"].(map[string]any)["responses_api"] != false {
+					t.Fatal("OpenAI-compatible judge must use chat completions")
+				}
+			}
+			// Keep the checked-in fixtures consistent with regeneration.
+			data, err := os.ReadFile("../testdata/inspect/" + fileID(benchmark) + ".json")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var actual, expected map[string]any
+			if err := json.Unmarshal(data, &actual); err != nil {
+				t.Fatal(err)
+			}
+			generated, err := json.Marshal(f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(generated, &expected); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(actual, expected) {
+				t.Fatal("checked-in fixture differs from generator")
 			}
 		})
 	}
