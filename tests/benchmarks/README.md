@@ -366,3 +366,11 @@ compatibility, LightEval's missing loglikelihood implementation, dataset schema
 bugs, missing image dependencies, and unknown custom provider IDs need adapter,
 image, dataset, or environment changes. Adding ignored flags, increasing all
 deadlines, or removing benchmarks would not validate those fixes.
+
+For 11 of the 12 dataset-loader failures, the fixtures now use prepared offline data
+and a matching local tokenizer through `test_data_ref.hf`. See
+[offline preparation](offline/README.md) for the build command, runtime
+requirements, and `LM_EVAL_OFFLINE_HF_REPO_ID` / `LM_EVAL_OFFLINE_HF_REVISION`
+inputs. Point these at the prepared bundle, not the original dataset repository.
+Qasper data is included in the bundle, but its job remains unchanged because the
+SCROLLS adapter also needs to handle its metric cache on a read-only data mount.

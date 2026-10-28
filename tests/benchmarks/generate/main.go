@@ -99,6 +99,18 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 	case "lm_evaluation_harness":
 		p["num_examples"], p["num_fewshot"] = 1, 0
 		f["notes"] = "One example per underlying task; grouped benchmarks may expand into multiple tasks. Model endpoint must support the benchmark's request type (including loglikelihood where applicable)."
+		switch benchmark {
+		case "cmmlu_high_school_mathematics", "cmmlu_college_mathematics",
+			"cmmlu_traditional_chinese_medicine", "cmmlu_professional_medicine",
+			"aclue_ancient_chinese_culture",
+			"pile_youtubesubtitles", "pile_ubuntu-irc", "pile_openwebtext2",
+			"pile_hackernews", "pile_freelaw", "pile_arxiv":
+			p["tokenizer"] = "/test_data/tokenizer"
+			f["test_data_ref"] = map[string]any{"hf": map[string]any{
+				"repo_id": "${LM_EVAL_OFFLINE_HF_REPO_ID}", "revision": "${LM_EVAL_OFFLINE_HF_REVISION}",
+			}}
+			f["notes"] = "Requires a prepared offline bundle (tests/benchmarks/offline), published at LM_EVAL_OFFLINE_HF_REPO_ID and LM_EVAL_OFFLINE_HF_REVISION. Its tokenizer must match MODEL_NAME. One sample, zero few-shot examples; smoke execution only. Requires the downstream LM runtime's offline DatasetDict loading support."
+		}
 		if benchmark == "longbenchv2" {
 			p["max_length"] = 4096
 			p["loglikelihood_context_overflow"] = "truncate"
