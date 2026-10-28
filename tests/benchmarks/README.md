@@ -22,6 +22,15 @@ export EVALHUB_CA_CERT_PATH=/path/to/ca.pem      # optional private CA
 make test-benchmarks
 ```
 
+The target automatically installs the pinned gotestsum version into `bin/tools`
+using Go on the first run (requires network access), then reuses it. Override
+the pinned version with `GOTESTSUM_VERSION` if needed. It writes a JUnit XML report to
+`bin/junit-benchmarks-report.xml`, with a separate test case for each benchmark
+subtest, including passes, failures, skips, and diagnostic output. Console output
+is streamed during the run, and test failures still fail the command. Override
+the report path with `BENCHMARK_JUNIT=/path/to/report.xml`; parent directories
+are created automatically. Setup failures are also included in the report.
+
 The service's authentication proxy determines the forwarded identity when used.
 Model credentials belong in the referenced Kubernetes Secret, not in JSON fixtures.
 TLS verification remains enabled. Identity headers are not forwarded to redirects.
