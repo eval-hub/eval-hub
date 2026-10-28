@@ -66,6 +66,15 @@ func (s *runtimeStorage) GetProvider(id string) (*api.ProviderResource, error) {
 	return provider, nil
 }
 
+func (s *runtimeStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, error) {
+	job, err := s.scopedStorage().GetEvaluationJob(id)
+	if err != nil {
+		s.logger.Info("Failed to get evaluation job from storage", "job_id", id, "error", err)
+		return nil, err
+	}
+	return job, nil
+}
+
 func (h *Handlers) runtimeName() string {
 	if h.runtime == nil {
 		return "none"
@@ -772,95 +781,95 @@ func (h *Handlers) HandleCancelEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	err := h.withSpan(
-		ctx,
-		func(runtimeCtx context.Context) error {
-			scopedContext := storage.WithContext(runtimeCtx).WithWorkloadType(workloads.Evaluation)
-			job, err := scopedContext.GetEvaluationJob(evaluationJobID)
-			if err != nil {
-				return err
-			}
-			if h.runtime != nil {
-				if (job != nil) && (job.Status != nil) && (job.Status.State != api.OverallStateCancelled) {
-					if err := h.runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).DeleteEvaluationJobResources(job); err != nil {
-						// Cleanup failures shouldn't block deleting the storage record.
-						ctx.Logger.Error("Failed to delete evaluation runtime resources", "error", err, "id", evaluationJobID)
-					}
-				} else {
-					if (job != nil) && (job.Status != nil) {
-						ctx.Logger.Info(fmt.Sprintf("Evaluation job has has status %s so not deleting runtime resources", job.Status.State), "id", evaluationJobID)
-					} else {
-						ctx.Logger.Info("Evaluation job status not found so not deleting runtime resources", "id", evaluationJobID)
-					}
-				}
-			}
-			return nil
-		},
-		"runtime",
-		"delete-evaluation-job-resources",
-		"job.id", evaluationJobID,
-	)
-	if err != nil {
-		w.Error(err, ctx.RequestID)
-		return
-	}
-
-	operation := "cancel-evaluation-job"
 	hardDelete, err := GetParam(r, "hard_delete", true, false)
 	if err != nil {
 		w.Error(err, ctx.RequestID)
 		return
 	}
+	operation := "cancel-evaluation-job"
 	if hardDelete {
 		operation = "delete-evaluation-job"
 	}
 
-	_ = h.withSpan(
+	// Snapshot the job, then signal cancel/delete in storage BEFORE K8s cleanup so
+	// create loops on every replica observe the change and stop creating Jobs.
+	var jobSnapshot *api.EvaluationJobResource
+	var previousState api.OverallState
+	alreadyCancelled := false
+	err = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
 			scopedContext := storage.WithContext(runtimeCtx).WithWorkloadType(workloads.Evaluation)
-			if hardDelete {
-				err = scopedContext.DeleteEvaluationJob(evaluationJobID)
-				if err != nil {
-					ctx.Logger.Info("Failed to delete evaluation job", "error", err.Error(), "id", evaluationJobID)
-					w.Error(err, ctx.RequestID)
-					return err
-				}
-			} else {
-				var previousState api.OverallState
-				job, jobErr := scopedContext.GetEvaluationJob(evaluationJobID)
-				if jobErr == nil && job != nil && job.Status != nil {
-					previousState = job.Status.State
-				}
-				err = scopedContext.UpdateEvaluationJobStatus(evaluationJobID, api.OverallStateCancelled, api.WithMessageOrigin(&api.MessageInfo{
-					Message:     "Evaluation job cancelled",
-					MessageCode: constants.MessageCodeEvaluationJobCancelled,
-				}, api.MessageOriginServer))
-				if err != nil {
-					ctx.Logger.Info("Failed to cancel evaluation job", "error", err.Error(), "id", evaluationJobID)
-					w.Error(err, ctx.RequestID)
-					return err
-				}
-				tenant := ctx.Tenant.String()
-				metrics.RecordEvaluationJobCancelled(ctx.Ctx, tenant)
-				if jobErr == nil && job != nil && !previousState.IsTerminalState() {
-					cID := jobCollectionID(&job.EvaluationJobConfig)
-					pids := jobProviderIDs(nil, &job.EvaluationJobConfig)
-					recordEvaluationJobTerminalTransition(ctx.Ctx, previousState, api.OverallStateCancelled, pids, cID, job.Resource.CreatedAt, tenant)
-				} else {
-					// No job record available (fetch error or already terminal) —
-					// record the terminal-state completion counter only; the
-					// duration histogram requires CreatedAt from the job.
-					metrics.RecordEvaluationJobTerminalState(ctx.Ctx, previousState, api.OverallStateCancelled, tenant)
-				}
+			job, getErr := scopedContext.GetEvaluationJob(evaluationJobID)
+			if getErr != nil {
+				return getErr
 			}
-			w.WriteJSON(nil, 204)
+			jobSnapshot = job
+			if job != nil && job.Status != nil {
+				previousState = job.Status.State
+				alreadyCancelled = previousState == api.OverallStateCancelled
+			}
+			if hardDelete {
+				if delErr := scopedContext.DeleteEvaluationJob(evaluationJobID); delErr != nil {
+					ctx.Logger.Info("Failed to delete evaluation job", "error", delErr.Error(), "id", evaluationJobID)
+					return delErr
+				}
+				return nil
+			}
+			if alreadyCancelled {
+				return nil
+			}
+			if cancelErr := scopedContext.UpdateEvaluationJobStatus(evaluationJobID, api.OverallStateCancelled, api.WithMessageOrigin(&api.MessageInfo{
+				Message:     "Evaluation job cancelled",
+				MessageCode: constants.MessageCodeEvaluationJobCancelled,
+			}, api.MessageOriginServer)); cancelErr != nil {
+				ctx.Logger.Info("Failed to cancel evaluation job", "error", cancelErr.Error(), "id", evaluationJobID)
+				return cancelErr
+			}
+			tenant := ctx.Tenant.String()
+			metrics.RecordEvaluationJobCancelled(ctx.Ctx, tenant)
+			if job != nil && !previousState.IsTerminalState() {
+				cID := jobCollectionID(&job.EvaluationJobConfig)
+				pids := jobProviderIDs(nil, &job.EvaluationJobConfig)
+				recordEvaluationJobTerminalTransition(ctx.Ctx, previousState, api.OverallStateCancelled, pids, cID, job.Resource.CreatedAt, tenant)
+			} else {
+				metrics.RecordEvaluationJobTerminalState(ctx.Ctx, previousState, api.OverallStateCancelled, tenant)
+			}
 			return nil
 		},
 		"storage",
 		operation,
 		"job.id", evaluationJobID,
 	)
+	if err != nil {
+		w.Error(err, ctx.RequestID)
+		return
+	}
+
+	shouldCleanup := hardDelete || (jobSnapshot != nil && jobSnapshot.Status != nil && !alreadyCancelled)
+	if shouldCleanup && h.runtime != nil && jobSnapshot != nil {
+		_ = h.withSpan(
+			ctx,
+			func(runtimeCtx context.Context) error {
+				if cleanupErr := h.runtime.WithLogger(ctx.Logger).WithContext(runtimeCtx).DeleteEvaluationJobResources(jobSnapshot); cleanupErr != nil {
+					// Cleanup failures shouldn't fail the API response after storage was updated.
+					ctx.Logger.Error("Failed to delete evaluation runtime resources", "error", cleanupErr, "id", evaluationJobID)
+				}
+				return nil
+			},
+			"runtime",
+			"delete-evaluation-job-resources",
+			"job.id", evaluationJobID,
+		)
+	} else if h.runtime != nil {
+		if alreadyCancelled {
+			ctx.Logger.Info(fmt.Sprintf("Evaluation job has status %s so not deleting runtime resources", previousState), "id", evaluationJobID)
+		} else {
+			ctx.Logger.Info("Evaluation job status not found so not deleting runtime resources", "id", evaluationJobID)
+		}
+	}
+
+	w.WriteJSON(nil, 204)
 }
 
 // jobCollectionID returns the collection ID from the job config, or empty string.
