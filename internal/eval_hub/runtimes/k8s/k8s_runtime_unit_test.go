@@ -1533,6 +1533,108 @@ func TestDeleteEvaluationJobResourcesDeletesRefSecrets(t *testing.T) {
 	if len(secrets.Items) != 0 {
 		t.Fatalf("expected ref secret to be deleted, got %d secret(s)", len(secrets.Items))
 	}
+	// Fake clientset removes Jobs immediately on delete, so unowned ConfigMaps are swept.
+	if got := listConfigMapsByJobID(t, clientset, jobID); len(got) != 0 {
+		t.Fatalf("expected unowned ConfigMap deleted once Jobs are gone, got %d", len(got))
+	}
+}
+
+// TestDeleteEvaluationJobResourcesRemovesOrphanConfigMapsWithoutJob covers partial-create
+// leftovers: with no Job left, unlabeled-by-owner ConfigMaps are deleted.
+func TestDeleteEvaluationJobResourcesRemovesOrphanConfigMapsWithoutJob(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	jobID := evaluation.Resource.ID
+	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
+	labels := map[string]string{labelJobIDKey: sanitizeLabelValue(jobID)}
+
+	clientset := fake.NewClientset(&corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: "pre-job-cm", Namespace: namespace, Labels: labels},
+	})
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
+	}
+
+	if err := runtime.DeleteEvaluationJobResources(evaluation); err != nil {
+		t.Fatalf("DeleteEvaluationJobResources: %v", err)
+	}
+	if got := listConfigMapsByJobID(t, clientset, jobID); len(got) != 0 {
+		t.Fatalf("expected orphan ConfigMap without Job to be deleted, got %d", len(got))
+	}
+}
+
+// TestDeleteEvaluationJobResourcesRetainsConfigMapWhileJobRemains ensures we do not
+// delete ConfigMaps (and ConfigMap-owned NetworkPolicies) while a labeled Job still
+// exists after a failed Job delete.
+func TestDeleteEvaluationJobResourcesRetainsConfigMapWhileJobRemains(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	jobID := evaluation.Resource.ID
+	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
+	labels := map[string]string{labelJobIDKey: sanitizeLabelValue(jobID)}
+
+	clientset := fake.NewClientset(
+		&batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{Name: "stuck-job", Namespace: namespace, Labels: labels},
+		},
+		&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "job-cm", Namespace: namespace, Labels: labels},
+		},
+	)
+	clientset.PrependReactor("delete", "jobs", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		return true, nil, fmt.Errorf("job delete denied")
+	})
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
+	}
+
+	if err := runtime.DeleteEvaluationJobResources(evaluation); err == nil {
+		t.Fatal("expected Job delete error")
+	}
+	if got := listConfigMapsByJobID(t, clientset, jobID); len(got) != 1 {
+		t.Fatalf("expected ConfigMap retained while Job remains, got %d", len(got))
+	}
+	if got := listJobsByJobID(t, clientset, jobID); len(got) != 1 {
+		t.Fatalf("expected Job to remain after failed delete, got %d", len(got))
+	}
+}
+
+// TestDeleteEvaluationJobResourcesSkipsJobOwnedConfigMapWhenNoJobsRemain covers the
+// case where a ConfigMap still carries a Job owner ref after Jobs are gone: leave it
+// to Kubernetes GC rather than racing owner cleanup.
+func TestDeleteEvaluationJobResourcesSkipsJobOwnedConfigMapWhenNoJobsRemain(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	jobID := evaluation.Resource.ID
+	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
+	labels := map[string]string{labelJobIDKey: sanitizeLabelValue(jobID)}
+
+	clientset := fake.NewClientset(&corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "job-owned-cm",
+			Namespace: namespace,
+			Labels:    labels,
+			OwnerReferences: []metav1.OwnerReference{{
+				APIVersion: "batch/v1",
+				Kind:       "Job",
+				Name:       "already-gone",
+				UID:        "00000000-0000-0000-0000-000000000001",
+			}},
+		},
+	})
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
+	}
+
+	if err := runtime.DeleteEvaluationJobResources(evaluation); err != nil {
+		t.Fatalf("DeleteEvaluationJobResources: %v", err)
+	}
+	if got := listConfigMapsByJobID(t, clientset, jobID); len(got) != 1 {
+		t.Fatalf("expected Job-owned ConfigMap left to GC, got %d", len(got))
+	}
 }
 
 func TestDeleteEvaluationJobResourcesIgnoresMissingRefSecret(t *testing.T) {
