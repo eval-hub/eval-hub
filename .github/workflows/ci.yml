@@ -135,7 +135,7 @@ jobs:
         # make sure that we use the golang version required by the project
         GOSECGOVERSION: go1.26.10
         GOTOOLCHAIN: go1.26.10
-      uses: securego/gosec@deb54465fea23d19a77f037e11e6589021f8501d # v2.29.0
+      uses: securego/gosec@5eb1d104ef85ff2c905c877eb600e8c1dee33a22 # v2.30.0
       with:
         args: >-
           -fmt sarif -out gosec-results.sarif -stdout -verbose=text
