@@ -18,7 +18,7 @@ These are smoke execution inputs, not full benchmark or accuracy datasets.
 From the repository root:
 
 ```bash
-uv run --no-project --python 3.11 \
+uv run --isolated --no-project --python 3.11 \
   --with-requirements tests/benchmarks/offline/requirements.txt \
   python tests/benchmarks/offline/prepare.py \
   --tokenizer Qwen/Qwen3-VL-30B-A3B-Instruct \
@@ -31,6 +31,9 @@ Choose the tokenizer repository and revision matching the served model. If
 maximum exported rows per split; it does not change job sample counts.
 An existing output directory is rejected. Downloads are cached separately in
 `bin/benchmark-offline-cache` (`--cache-dir` overrides it).
+
+The preparation dependencies require Python 3.11 or newer. `--isolated` keeps
+the preparation environment separate from any existing workspace virtualenv.
 
 The output contains:
 
@@ -54,7 +57,7 @@ runtime; use a runtime that implements offline `DatasetDict` loading in
 To check a relocated bundle independently:
 
 ```bash
-uv run --no-project --python 3.11 \
+uv run --isolated --no-project --python 3.11 \
   --with-requirements tests/benchmarks/offline/requirements.txt \
   python tests/benchmarks/offline/prepare.py --verify /path/to/bundle
 ```
