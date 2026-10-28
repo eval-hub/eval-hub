@@ -139,14 +139,14 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 		p["num_examples"], p["epochs"], p["max_tasks"] = 1, 1, 1
 		if strings.Contains(benchmark, "/petri-") || strings.Contains(benchmark, "/bloom-") {
 			p["max_turns"] = 1
-			p["auditor_model"], p["auditor_base_url"] = "${MODEL_NAME}", "${MODEL_URL}"
-			p["judge_model"], p["judge_base_url"], p["judge_api_key"] = "${JUDGE_MODEL_NAME}", "${JUDGE_BASE_URL}", "${JUDGE_API_KEY}"
+			p["auditor_model"] = "${MODEL_NAME}"
+			p["judge_model"] = "${JUDGE_MODEL_NAME}"
 		}
 		if benchmark == "inspect/hle" || benchmark == "inspect/cyberseceval-2-pi" {
 			p["judge_model"] = "${JUDGE_MODEL_NAME}"
 		}
 		if benchmark == "inspect/strong-reject" {
-			p["grader_model"], p["grader_base_url"] = "${JUDGE_MODEL_NAME}", "${JUDGE_BASE_URL}"
+			p["grader_model"] = "${JUDGE_MODEL_NAME}"
 		}
 		if benchmark == "inspect/custom" {
 			p["task"] = "${INSPECT_CUSTOM_TASK}"
@@ -154,7 +154,7 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 		if benchmark == "inspect/bloom-custom" {
 			p["bloom_template"] = "${INSPECT_BLOOM_TEMPLATE}"
 		}
-		f["notes"] = "One sample per task. Agent/code benchmarks may require sandbox and external services; configure those in this fixture for the target environment. Petri/Bloom require JUDGE_MODEL_NAME, JUDGE_BASE_URL, and JUDGE_API_KEY for the judge. HLE/CyberSecEval require judge_api-key and judge_url in model.auth.secret_ref for an independent judge connection. StrongREJECT requires Secret-backed OPENAI_JUDGE_API_KEY in the adapter environment."
+		f["notes"] = "One sample per task. Agent/code benchmarks may require sandbox and external services. Model IDs remain job parameters; configure independent judge, auditor, scenarios, and realism connections with <role>_api-key/<role>_url in MODEL_AUTH_SECRET_REF. StrongREJECT uses the judge Secret pair for grader_model."
 	case "ragas":
 		p["judge_model"] = "${JUDGE_MODEL_NAME}"
 		p["embedding_model"] = "${RAGAS_EMBEDDING_MODEL}"
@@ -162,7 +162,7 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 		f["test_data_ref_env"] = "RAGAS_TEST_DATA_REF"
 		f["notes"] = "Stage a single complete RAG record as dataset.jsonl. Set RAGAS_EMBEDDING_MODEL. Configure embedding_api-key/embedding_url and optional judge_api-key/judge_url in MODEL_AUTH_SECRET_REF for sidecar routing."
 	case "deepeval":
-		p["eval_model_name"], p["eval_model_url"] = "${JUDGE_MODEL_NAME}", "${JUDGE_BASE_URL}"
+		p["eval_model_name"] = "${JUDGE_MODEL_NAME}"
 		p["dataset_format"], p["max_concurrent"], p["retry_max_attempts"] = "jsonl", 1, 1
 		f["test_data_ref_env"] = "DEEPEVAL_TEST_DATA_REF"
 		f["notes"] = "Stage exactly one record in a JSONL file with input, actual_output, expected_output, context, and retrieval_context fields. No adapter sample cap; input size bounds work. Requires a structured-output judge."

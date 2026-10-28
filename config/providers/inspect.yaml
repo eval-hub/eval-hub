@@ -1185,112 +1185,22 @@ benchmarks:
     tags: [custom, inspect-ai]
 
 parameters:
-  # ---------------------------------------------------------------------------
-  # Model configuration
-  #
-  # Every model role (target, auditor, judge, scenarios, realism) can point to
-  # any OpenAI-compatible endpoint including vLLM, Ollama, and OpenRouter.
-  #
-  # Per-role pattern:
-  #   {role}_model   — fully-qualified provider/model string
-  #   {role}_base_url — base URL override (overrides global OPENAI_BASE_URL)
-  #   {role}_api_key — API key override (overrides global OPENAI_API_KEY)
-  #
-  # ---------------------------------------------------------------------------
-  # Model names — bare model names only, no provider prefixes required.
-  # The adapter detects the correct API from credentials:
-  #   OPENAI_BASE_URL / OPENAI_API_KEY  → OpenAI-compatible (vLLM, Ollama, OpenRouter)
-  #   ANTHROPIC_API_KEY                 → Anthropic Messages API
-  #
-  # vLLM model names: use the exact HuggingFace ID the server was loaded with.
-  #   Examples: ibm-granite/granite-3.3-8b-instruct, meta-llama/Llama-3.3-70B-Instruct
-  #
-  # Ollama model names: use the Ollama library name as shown by `ollama list`.
-  #   Examples: granite4.1:3b, llama3.3, qwen3:32b, granite3.3:8b, phi4
-  #
-  # OpenRouter model names: use the provider/model ID from openrouter.ai/models.
-  #   Examples: meta-llama/llama-3.3-70b-instruct, qwen/qwen3.5-27b-20260224
-  #
-  # Anthropic model names: use the Claude API model ID from platform.claude.com.
-  #   Examples: claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5-20251001
-  # ---------------------------------------------------------------------------
-
-  # ---------------------------------------------------------------------------
-  # Model names and per-role credentials
-  #
-  # Each role (target, auditor, judge, scenarios, realism) supports:
-  #   {role}_model      — model name (bare or org/model, no provider prefix)
-  #   {role}_base_url   — OpenAI-compatible endpoint URL for this role
-  #   {role}_api_key    — API key for this role's endpoint
-  #
-  # Global fallbacks (apply to all roles that don't have per-role overrides):
-  #   job.model.url / OPENAI_BASE_URL   — OpenAI-compatible endpoint
-  #   OPENAI_API_KEY / api_key          — API key for OpenAI-compatible endpoint
-  #   ANTHROPIC_API_KEY / anthropic_api_key — Anthropic API key
-  #
-  # When a role has its own base_url, that role uses an inline endpoint config
-  # and does not inherit OPENAI_BASE_URL from the target model's job.model.url.
-  # This allows each role to target a different provider or server instance.
-  # ---------------------------------------------------------------------------
-
-  # --- Target model (the model being evaluated) ---
-  # Primary endpoint: job.model.url (sets OPENAI_BASE_URL globally).
-  # Use target_base_url only to override with a different endpoint than the global one.
-
-  - name: api_key
+  # Model IDs remain job parameters. Connections use <role>_api-key/<role>_url
+  # exclusively in model.auth.secret_ref; roles without entries reuse the primary.
+  - name: grader_model
     type: string
     default: null
     description: >
-      Global API key for OpenAI-compatible endpoints. Sets OPENAI_API_KEY.
-      Not required for unauthenticated vLLM. Falls back to OPENAI_API_KEY env var.
+      StrongREJECT grader model ID. Uses judge_api-key/judge_url from model.auth.secret_ref.
 
-  - name: target_base_url
-    type: string
-    default: null
-    description: >
-      Override endpoint URL for the target model when it differs from job.model.url.
-      Implies OpenAI-compatible API.
-
-  - name: target_api_key
-    type: string
-    default: null
-    description: API key for the target model endpoint, when different from api_key.
-
-  # --- Auditor model (drives the adversarial conversation) ---
   - name: auditor_model
     type: string
     default: "claude-sonnet-4-6"
     description: >
       Petri/Bloom auditor model name (bare or org/model — no provider prefix).
-      API is selected from credentials: ANTHROPIC_API_KEY → Anthropic API;
-      OPENAI_BASE_URL / OPENAI_API_KEY → OpenAI-compatible endpoint.
-      Per-role override: set auditor_base_url to use a dedicated endpoint.
+      Uses an OpenAI-compatible endpoint selected from model.auth.secret_ref.
+      Use auditor_api-key/auditor_url in model.auth.secret_ref for a dedicated connection.
 
-  - name: auditor_base_url
-    type: string
-    default: null
-    description: >
-      OpenAI-compatible endpoint URL for the auditor. Overrides global OPENAI_BASE_URL
-      for this role only. Set auditor_anthropic_base_url instead for Anthropic endpoints.
-
-  - name: auditor_api_key
-    type: string
-    default: null
-    description: OpenAI-compatible API key for the auditor endpoint.
-
-  - name: auditor_anthropic_base_url
-    type: string
-    default: null
-    description: >
-      Anthropic API base URL for the auditor (for proxies or on-prem deployments).
-      Overrides the global ANTHROPIC_BASE_URL for this role only.
-
-  - name: auditor_anthropic_api_key
-    type: string
-    default: null
-    description: Anthropic API key for the auditor, when different from anthropic_api_key.
-
-  # --- Judge model (scores transcripts on 38 alignment dimensions) ---
   - name: judge_model
     type: string
     default: "claude-opus-4-7"
@@ -1298,36 +1208,6 @@ parameters:
       Petri/Bloom judge model name. Use the strongest available model — judge
       quality has the largest impact on audit reliability.
 
-  - name: judge_base_url
-    type: string
-    default: null
-    description: OpenAI-compatible endpoint URL for the judge. Overrides global OPENAI_BASE_URL.
-
-  - name: judge_api_key
-    type: string
-    default: null
-    description: OpenAI-compatible API key for the judge endpoint.
-
-  - name: judge_anthropic_base_url
-    type: string
-    default: null
-    description: >
-      Anthropic API base URL for the judge (for proxies or on-prem deployments).
-      Overrides the global ANTHROPIC_BASE_URL for this role only.
-
-  - name: judge_anthropic_api_key
-    type: string
-    default: null
-    description: Anthropic API key for the judge, when different from anthropic_api_key.
-
-  # --- Anthropic API key (global fallback for Anthropic-hosted models) ---
-  - name: anthropic_api_key
-    type: string
-    default: null
-    description: >
-      API key for the Anthropic API. Falls back to ANTHROPIC_API_KEY env var.
-
-  # --- Scenarios model (Bloom only) ---
   - name: scenarios_model
     type: string
     default: null
@@ -1335,17 +1215,6 @@ parameters:
       Bloom only. Model for the 'bloom scenarios' generation step.
       Defaults to auditor_model when unset.
 
-  - name: scenarios_base_url
-    type: string
-    default: null
-    description: OpenAI-compatible endpoint URL for the scenarios model.
-
-  - name: scenarios_api_key
-    type: string
-    default: null
-    description: API key for the scenarios endpoint.
-
-  # --- Realism model (Petri optional) ---
   - name: realism_model
     type: string
     default: null
@@ -1353,17 +1222,6 @@ parameters:
       Petri only. Optional fourth model role for realism filtering.
       Defaults to auditor when unset.
 
-  - name: realism_base_url
-    type: string
-    default: null
-    description: OpenAI-compatible endpoint URL for the realism model.
-
-  - name: realism_api_key
-    type: string
-    default: null
-    description: API key for the realism endpoint.
-
-  # --- Bloom-specific ---
   - name: behavior_dir
     type: string
     default: null
