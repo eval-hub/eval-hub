@@ -43,7 +43,7 @@ func TestJudgeProfiles(t *testing.T) {
 		}
 		p := f["parameters"].(map[string]any)
 		judge := p["intents_models"].(map[string]any)["judge"].(map[string]any)
-		if judge["name"] != "${JUDGE_MODEL_NAME}" || judge["url"] != "${JUDGE_BASE_URL}" || p["sdg_model"] != "${MODEL_NAME}" {
+		if judge["name"] != "${JUDGE_MODEL_NAME}" || judge["url"] != "${JUDGE_BASE_URL}" || p["sdg_model"] != "openai/${MODEL_NAME}" {
 			t.Fatalf("%s must separate judge inputs from generation inputs: %v", provider, p)
 		}
 	}
