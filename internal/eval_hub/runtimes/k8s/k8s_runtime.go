@@ -102,12 +102,15 @@ func (r *K8sRuntime) RunEvaluationJob(
 			// row, soft cancel sets cancelled — either stops further Job creation.
 			if aborted, reason := evaluationCreateAborted(storage, jobID); aborted {
 				r.logger.Info(
-					"skipping remaining kubernetes job creation; evaluation deleted or cancelled",
+					"skipping remaining kubernetes job creation; evaluation deleted or cancelled; sweeping leftovers",
 					"job_id", jobID,
 					"benchmark_id", bench.ID,
 					"benchmark_index", idx,
 					"reason", reason,
 				)
+				// Retry cleanup if the cancel/delete handler's sweep failed or a prior
+				// benchmark left resources behind before this pre-check ran.
+				r.sweepEvaluationResourcesAfterAbort(evaluation, jobID, bench.ID)
 				return
 			}
 			// DetachedContext keeps request-trace linkage without inheriting the
