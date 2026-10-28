@@ -99,6 +99,35 @@ When running in local server mode, the tests will:
 2. Wait for the server to be ready by checking the health endpoint
 3. Automatically shut down the server after all tests complete
 
+## Benchmark provider selection
+
+The `@benchmark_providers` scenarios use a curated subset of the provider
+catalogs for runs against a model endpoint:
+
+- Garak uses `quick`, `avid_ethics`, and `avid_performance` to keep the provider
+  smoke run bounded.
+- GuideLLM uses `throughput` and `quick_perf_test`; the broader scheduling and
+  performance profiles are excluded from this baseline run.
+- LightEval uses two groups of generative tasks. The LiteLLM endpoint backend
+  does not implement loglikelihood, and the affected TruthfulQA generation
+  formatter requires fields absent from its dataset. The baseline also omits
+  the AIME and LiveCodeBench cases.
+- LM Evaluation Harness omits ACLUE, CMMLU, SCROLLS, and Pile tasks that fail
+  dataset loading because remote-code trust is not enabled. It also omits
+  `careqa_open_perplexity` and `tinyTruthfulQA`, which require additional
+  packages, and the affected HumanEval/MBPP tasks that require code execution
+  opt-in or are unavailable in the adapter.
+
+These selections do not change the provider catalogs. Individual catalog
+benchmarks can still be run through the opt-in [benchmark smoke suite](../benchmarks/README.md).
+Keep each scenario's expected `results.benchmarks` length aligned with its
+Jsonnet payload. CI checks this automatically; run the same check locally
+without a server or cluster:
+
+```bash
+go test ./tests/features -run '^TestBenchmarkProviderFixtureCounts$'
+```
+
 ## Test Structure
 
 - **Feature files** (`.feature`): Gherkin syntax test scenarios
