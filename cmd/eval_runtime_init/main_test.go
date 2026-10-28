@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -270,7 +271,7 @@ func TestRun_InvokesHFSuccessfully(t *testing.T) {
 	t.Setenv(envHFRepoID, repoID)
 	t.Setenv(envHFRevision, "")
 	t.Setenv(envHFSubPath, "")
-	t.Setenv(envHFTimeout, "")
+	t.Setenv(envInitTimeout, "")
 	t.Setenv(envGitURL, "")
 	t.Setenv(envBucket, "")
 	t.Setenv(envKey, "")
@@ -283,9 +284,31 @@ func TestRun_InvokesHFSuccessfully(t *testing.T) {
 	}
 }
 
+func TestResolveInitTimeout(t *testing.T) {
+	t.Run("configured init timeout", func(t *testing.T) {
+		t.Setenv(envInitTimeout, "45m")
+		got, err := resolveInitTimeout()
+		if err != nil {
+			t.Fatalf("resolveInitTimeout() error = %v", err)
+		}
+		if got != 45*time.Minute {
+			t.Fatalf("resolveInitTimeout() = %v, want 45m", got)
+		}
+	})
+	t.Run("default timeout", func(t *testing.T) {
+		got, err := resolveInitTimeout()
+		if err != nil {
+			t.Fatalf("resolveInitTimeout() error = %v", err)
+		}
+		if got != defaultTimeout {
+			t.Fatalf("resolveInitTimeout() = %v, want %v", got, defaultTimeout)
+		}
+	})
+}
+
 func TestRunHF_RoutesBeforeS3AndGit(t *testing.T) {
 	t.Setenv(envHFRepoID, "org/offline-dataset")
-	t.Setenv(envHFTimeout, "not-a-duration")
+	t.Setenv(envInitTimeout, "not-a-duration")
 	t.Setenv(envGitURL, "")
 	t.Setenv(envBucket, "")
 	t.Setenv(envKey, "")
@@ -294,8 +317,8 @@ func TestRunHF_RoutesBeforeS3AndGit(t *testing.T) {
 	if err == nil {
 		t.Fatal("run() = nil, want HF validation error")
 	}
-	if !strings.Contains(err.Error(), envHFTimeout) {
-		t.Fatalf("run() error = %v, want mention of %s", err, envHFTimeout)
+	if !strings.Contains(err.Error(), envInitTimeout) {
+		t.Fatalf("run() error = %v, want mention of %s", err, envInitTimeout)
 	}
 	if strings.Contains(err.Error(), envBucket) || strings.Contains(err.Error(), envKey) {
 		t.Fatalf("run() routed to S3, got: %v", err)
@@ -309,13 +332,13 @@ func TestRunHF_RejectsNonPositiveTimeout(t *testing.T) {
 	t.Setenv(envHFRepoID, "org/offline-dataset")
 	for _, raw := range []string{"0s", "-1s", "0"} {
 		t.Run(raw, func(t *testing.T) {
-			t.Setenv(envHFTimeout, raw)
+			t.Setenv(envInitTimeout, raw)
 			err := downloaderFromEnv().runHF()
 			if err == nil {
 				t.Fatal("runHF() = nil, want error for non-positive timeout")
 			}
-			if !strings.Contains(err.Error(), envHFTimeout) {
-				t.Fatalf("runHF() error = %v, want mention of %s", err, envHFTimeout)
+			if !strings.Contains(err.Error(), envInitTimeout) {
+				t.Fatalf("runHF() error = %v, want mention of %s", err, envInitTimeout)
 			}
 		})
 	}
@@ -324,7 +347,7 @@ func TestRunHF_RejectsNonPositiveTimeout(t *testing.T) {
 func TestRunS3_MissingSecretAccessKey(t *testing.T) {
 	t.Setenv(envBucket, "bucket")
 	t.Setenv(envKey, "prefix")
-	t.Setenv(envS3Timeout, "30s")
+	t.Setenv(envInitTimeout, "30s")
 
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, accessKeyIDKey), []byte("AKIA"), 0o600); err != nil {
@@ -349,13 +372,13 @@ func TestRunS3_RejectsNonPositiveTimeout(t *testing.T) {
 	t.Setenv(envKey, "prefix")
 	for _, raw := range []string{"0s", "-1s", "0"} {
 		t.Run(raw, func(t *testing.T) {
-			t.Setenv(envS3Timeout, raw)
+			t.Setenv(envInitTimeout, raw)
 			err := downloaderFromEnv().runS3()
 			if err == nil {
 				t.Fatal("runS3() = nil, want error for non-positive timeout")
 			}
-			if !strings.Contains(err.Error(), envS3Timeout) {
-				t.Fatalf("runS3() error = %v, want mention of %s", err, envS3Timeout)
+			if !strings.Contains(err.Error(), envInitTimeout) {
+				t.Fatalf("runS3() error = %v, want mention of %s", err, envInitTimeout)
 			}
 		})
 	}

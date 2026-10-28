@@ -447,16 +447,24 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			},
 		})
 
+		s3Env := []corev1.EnvVar{
+			{Name: envTestDataS3BucketName, Value: cfg.testDataS3.bucket},
+			{Name: envTestDataS3KeyName, Value: normalizeS3Key(cfg.testDataS3.key)},
+		}
+		if cfg.testDataInitTimeout > 0 {
+			s3Env = append(s3Env, corev1.EnvVar{
+				Name:  envTestDataInitTimeoutName,
+				Value: cfg.testDataInitTimeout.String(),
+			})
+		}
+
 		initContainers = append(initContainers, corev1.Container{
 			Name:            initContainerName,
 			Image:           cfg.testDataInitImage,
 			ImagePullPolicy: corev1.PullIfNotPresent,
 			Command:         []string{defaultTestDataInitCmd},
 			Resources:       initResources,
-			Env: []corev1.EnvVar{
-				{Name: envTestDataS3BucketName, Value: cfg.testDataS3.bucket},
-				{Name: envTestDataS3KeyName, Value: normalizeS3Key(cfg.testDataS3.key)},
-			},
+			Env:             s3Env,
 			SecurityContext: defaultSecurityContext(),
 			VolumeMounts: []corev1.VolumeMount{
 				{
@@ -493,6 +501,12 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 		envVars := []corev1.EnvVar{
 			{Name: envTestDataGitURLName, Value: cfg.testDataGit.url},
 			{Name: envTestDataGitRefName, Value: cfg.testDataGit.ref},
+		}
+		if cfg.testDataInitTimeout > 0 {
+			envVars = append(envVars, corev1.EnvVar{
+				Name:  envTestDataInitTimeoutName,
+				Value: cfg.testDataInitTimeout.String(),
+			})
 		}
 		if cfg.testDataGit.subPath != "" {
 			envVars = append(envVars, corev1.EnvVar{Name: envTestDataGitSubPathName, Value: cfg.testDataGit.subPath})
@@ -557,6 +571,12 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 
 		envVars := []corev1.EnvVar{
 			{Name: envTestDataHFRepoIDName, Value: cfg.testDataHF.repoID},
+		}
+		if cfg.testDataInitTimeout > 0 {
+			envVars = append(envVars, corev1.EnvVar{
+				Name:  envTestDataInitTimeoutName,
+				Value: cfg.testDataInitTimeout.String(),
+			})
 		}
 		if cfg.testDataHF.revision != "" {
 			envVars = append(envVars, corev1.EnvVar{Name: envTestDataHFRevisionName, Value: cfg.testDataHF.revision})

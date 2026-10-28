@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
@@ -116,6 +117,7 @@ func TestPostProcessorSecretProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg.testDataInitImage = "evalhub:test"
+	cfg.testDataInitTimeout = 45 * time.Minute
 	cfg.defaultEnv = []api.EnvVar{{Name: shared.PostProcessorDataPathsEnv, Value: "untrusted-provider-value"}}
 	job, err := buildJob(cfg, nil)
 	if err != nil {
@@ -145,6 +147,18 @@ func TestPostProcessorSecretProjection(t *testing.T) {
 	}
 	if job.Spec.Template.Spec.InitContainers[0].Name != initContainerName {
 		t.Fatal("staging must complete before the adapter starts")
+	}
+	timeoutEnv := false
+	for _, env := range init.Env {
+		if env.Name == envTestDataInitTimeoutName {
+			timeoutEnv = true
+			if env.Value != "45m0s" {
+				t.Fatalf("init timeout env = %q, want 45m0s", env.Value)
+			}
+		}
+	}
+	if !timeoutEnv {
+		t.Fatal("post-processing init must receive configured test data timeout")
 	}
 	for _, name := range []string{"shared", "hf-auth"} {
 		count := 0

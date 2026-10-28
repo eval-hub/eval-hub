@@ -27,7 +27,7 @@ const (
 	// S3 env vars
 	envBucket           = "TEST_DATA_S3_BUCKET"
 	envKey              = "TEST_DATA_S3_KEY"
-	envS3Timeout        = "TEST_DATA_S3_TIMEOUT"
+	envInitTimeout      = "TEST_DATA_INIT_TIMEOUT"
 	regionOptionalKey   = "AWS_DEFAULT_REGION"
 	endpointKey         = "AWS_S3_ENDPOINT"
 	accessKeyIDKey      = "AWS_ACCESS_KEY_ID"
@@ -37,10 +37,24 @@ const (
 	envGitURL     = "TEST_DATA_GIT_URL"
 	envGitRef     = "TEST_DATA_GIT_REF"
 	envGitSubPath = "TEST_DATA_GIT_SUBPATH"
-	envGitTimeout = "TEST_DATA_GIT_TIMEOUT"
 
 	defaultTimeout = 10 * time.Minute
 )
+
+func resolveInitTimeout() (time.Duration, error) {
+	raw := strings.TrimSpace(os.Getenv(envInitTimeout))
+	if raw == "" {
+		return defaultTimeout, nil
+	}
+	parsed, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: %w", envInitTimeout, err)
+	}
+	if parsed <= 0 {
+		return 0, fmt.Errorf("invalid %s: must be a positive duration", envInitTimeout)
+	}
+	return parsed, nil
+}
 
 // Paths and URL validation are package vars so unit tests can redirect mounts and
 // exercise runGit against local file:// repos without writing under /.
@@ -55,6 +69,9 @@ func main() {
 	slog.SetDefault(logger)
 	if err := run(); err != nil {
 		logger.Error("eval-runtime-init failed", "error", err)
+		// Git/S3 (and HF via failHF) must leave a non-empty termination message so
+		// eval-hub can surface timeout/init failures instead of an empty message=.
+		reportInitFailure(err)
 		os.Exit(1)
 	}
 	logger.Info("eval-runtime-init completed")
@@ -84,16 +101,9 @@ func (d downloader) runS3() error {
 	}
 
 	keyPrefix = strings.TrimPrefix(keyPrefix, "/")
-	timeout := defaultTimeout
-	if raw := strings.TrimSpace(os.Getenv(envS3Timeout)); raw != "" {
-		parsed, err := time.ParseDuration(raw)
-		if err != nil {
-			return fmt.Errorf("invalid %s: %w", envS3Timeout, err)
-		}
-		if parsed <= 0 {
-			return fmt.Errorf("invalid %s: must be a positive duration", envS3Timeout)
-		}
-		timeout = parsed
+	timeout, err := resolveInitTimeout()
+	if err != nil {
+		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -151,7 +161,7 @@ func (d downloader) runS3() error {
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
-			return fmt.Errorf("list objects: %w", err)
+			return wrapInitTimeout("s3 list objects", timeout, fmt.Errorf("list objects: %w", err))
 		}
 		for _, obj := range page.Contents {
 			if obj.Key == nil || *obj.Key == "" {
@@ -163,7 +173,7 @@ func (d downloader) runS3() error {
 			found = true
 			written, err := downloadObject(ctx, tm, destRoot, bucket, keyPrefix, *obj.Key)
 			if err != nil {
-				return err
+				return wrapInitTimeout("s3 download", timeout, err)
 			}
 			fileCount++
 			totalBytes += written

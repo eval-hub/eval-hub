@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
@@ -87,6 +88,7 @@ type jobConfig struct {
 	postProcessorDownloads     []shared.NamedDataSource
 	testDataGit                gitTestDataConfig
 	testDataHF                 hfTestDataConfig
+	testDataInitTimeout        time.Duration
 	testDataInitImage          string
 	sidecarConfig              *config.SidecarConfig
 	// queueKind and queueName come from a queue-backed HardwareProfile when set,
@@ -277,6 +279,10 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		testDataS3Key = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.Key)
 		testDataS3SecretRef = strings.TrimSpace(benchmarkConfig.TestDataRef.S3.SecretRef)
 	}
+	var testDataInitTimeout time.Duration
+	if serviceConfig != nil && serviceConfig.Service != nil {
+		testDataInitTimeout = serviceConfig.Service.Init.TestDataTimeout
+	}
 
 	var testDataPVCClaimName, testDataPVCSubPath string
 	if benchmarkConfig.TestDataRef != nil && benchmarkConfig.TestDataRef.PVC != nil {
@@ -391,6 +397,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 			subPath:   testDataHFSubPath,
 			secretRef: testDataHFSecretRef,
 		},
+		testDataInitTimeout: testDataInitTimeout,
 	}
 	applyHardwareProfileResources(out, hardwareProfile)
 	effectiveHW := api.EffectiveHardwareConfig(benchmarkConfig, &evaluation.EvaluationJobConfig)

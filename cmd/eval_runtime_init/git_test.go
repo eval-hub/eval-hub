@@ -447,7 +447,7 @@ func withRunGitTestEnv(t *testing.T, dest, meta, secret string) {
 		_ = os.Unsetenv(envGitURL)
 		_ = os.Unsetenv(envGitRef)
 		_ = os.Unsetenv(envGitSubPath)
-		_ = os.Unsetenv(envGitTimeout)
+		_ = os.Unsetenv(envInitTimeout)
 	})
 }
 
@@ -515,7 +515,7 @@ func TestRunGit_ValidationErrors(t *testing.T) {
 	t.Run("invalid timeout", func(t *testing.T) {
 		t.Setenv(envGitURL, "https://example.com/repo.git")
 		t.Setenv(envGitRef, "master")
-		t.Setenv(envGitTimeout, "not-a-duration")
+		t.Setenv(envInitTimeout, "not-a-duration")
 		if err := downloaderFromEnv().runGit(); err == nil {
 			t.Fatal("expected error for invalid timeout")
 		}
@@ -527,7 +527,7 @@ func TestRunGit_ValidationErrors(t *testing.T) {
 		})
 		t.Setenv(envGitURL, "https://localhost/repo.git")
 		t.Setenv(envGitRef, "master")
-		_ = os.Unsetenv(envGitTimeout)
+		_ = os.Unsetenv(envInitTimeout)
 		if err := downloaderFromEnv().runGit(); err == nil {
 			t.Fatal("expected SSRF validation error")
 		}

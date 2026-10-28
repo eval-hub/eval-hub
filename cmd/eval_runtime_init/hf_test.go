@@ -99,7 +99,7 @@ func withRunHFTestEnv(t *testing.T, dest, meta, secret, cache string) {
 	})
 	t.Setenv(envHFRevision, "")
 	t.Setenv(envHFSubPath, "")
-	t.Setenv(envHFTimeout, "")
+	t.Setenv(envInitTimeout, "")
 }
 
 func TestValidateHFSubPath(t *testing.T) {
@@ -495,10 +495,10 @@ func TestRunHF_InvalidTimeoutDuration(t *testing.T) {
 	cache := filepath.Join(t.TempDir(), "hf-cache")
 	withRunHFTestEnv(t, dest, meta, filepath.Join(t.TempDir(), "missing"), cache)
 	t.Setenv(envHFRepoID, "org/offline-dataset")
-	t.Setenv(envHFTimeout, "not-a-duration")
+	t.Setenv(envInitTimeout, "not-a-duration")
 
 	err := downloaderFromEnv().runHF()
-	if err == nil || !strings.Contains(err.Error(), envHFTimeout) {
+	if err == nil || !strings.Contains(err.Error(), envInitTimeout) {
 		t.Fatalf("runHF() = %v, want invalid timeout error", err)
 	}
 }
@@ -887,7 +887,7 @@ func TestRunHF_NestedFilePaths(t *testing.T) {
 	withRunHFTestEnv(t, dest, meta, secret, cache)
 	t.Setenv("HF_ENDPOINT", srv.URL)
 	t.Setenv(envHFRepoID, repoID)
-	t.Setenv(envHFTimeout, "30s")
+	t.Setenv(envInitTimeout, "30s")
 
 	if err := downloaderFromEnv().runHF(); err != nil {
 		t.Fatalf("runHF: %v", err)
