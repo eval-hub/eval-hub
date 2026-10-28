@@ -219,21 +219,20 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 	)
 
 	labelSelector := fmt.Sprintf("%s=%s", labelJobIDKey, sanitizeLabelValue(jobID))
-	// Two sweeps: callers signal cancel/delete in shared storage first so create loops
-	// stop; a second list catches Jobs that finished creating between the sweeps.
-	// Single delete entrypoint for Jobs, ref secrets, and — only once no Jobs remain —
-	// unowned ConfigMaps from partial create. Job-owned ConfigMaps/NetworkPolicies are
-	// left to Kubernetes GC while a Job still exists (so we never strip NetworkPolicy
-	// from running Pods). Add new labeled resource types here, not at call sites.
+	// Two sweeps with independent timeouts: storage was signalled first so create
+	// loops stop; the second list catches Jobs created between sweeps.
+	// Delete Jobs (and ref secrets). Job-owned ConfigMaps/NetworkPolicies are left to
+	// Kubernetes GC. Partial-create ConfigMaps (no Job owner yet) are rolled back by
+	// createBenchmarkResources — orphan-ConfigMap reconciliation is out of scope here.
 	cleanupSweep := func() error {
 		cleanupCtx, cancelCleanup := orphanCleanupContext()
 		defer cancelCleanup()
-		return r.deleteLabeledEvaluationResources(cleanupCtx, jobID, namespace, labelSelector, deleteOptions)
+		return r.deleteLabeledJobsAndRefSecrets(cleanupCtx, jobID, namespace, labelSelector, deleteOptions)
 	}
 	return errors.Join(cleanupSweep(), cleanupSweep())
 }
 
-func (r *K8sRuntime) deleteLabeledEvaluationResources(
+func (r *K8sRuntime) deleteLabeledJobsAndRefSecrets(
 	ctx context.Context,
 	jobID, namespace, labelSelector string,
 	deleteOptions metav1.DeleteOptions,
@@ -242,7 +241,7 @@ func (r *K8sRuntime) deleteLabeledEvaluationResources(
 	if err != nil {
 		return err
 	}
-	var jobDeleteErr error
+	var deleteErr error
 	for _, job := range jobs {
 		r.logger.Info(
 			"deleting evaluation runtime job",
@@ -251,10 +250,9 @@ func (r *K8sRuntime) deleteLabeledEvaluationResources(
 			"namespace", namespace,
 		)
 		if err := r.helper.DeleteJob(ctx, namespace, job.Name, deleteOptions); err != nil && !apierrors.IsNotFound(err) {
-			jobDeleteErr = errors.Join(jobDeleteErr, err)
+			deleteErr = errors.Join(deleteErr, err)
 		}
 	}
-	deleteErr := jobDeleteErr
 	// Delete ref secrets explicitly so they are never orphaned even if Job owner-ref
 	// GC is delayed or the owner ref was never set.
 	secrets, err := r.helper.ListSecrets(ctx, namespace, labelSelector)
@@ -269,95 +267,6 @@ func (r *K8sRuntime) deleteLabeledEvaluationResources(
 			"namespace", namespace,
 		)
 		if err := r.helper.DeleteSecret(ctx, namespace, secret.Name, deleteOptions); err != nil && !apierrors.IsNotFound(err) {
-			deleteErr = errors.Join(deleteErr, err)
-		}
-	}
-	// Foreground Job deletion leaves the Job visible until Pods are gone. Do not
-	// delete ConfigMaps while any labeled Job remains (would GC NetworkPolicies off
-	// running Pods). Unowned ConfigMaps from partial/uncertain create would otherwise
-	// leak — wait for Jobs in the background so DELETE/abort does not block on Pod GC
-	// (ingress 502 risk). Job-owned ConfigMaps are also removed by Job GC; this sweep
-	// covers leftovers that never got a Job owner.
-	remainingJobs, listErr := r.helper.ListJobs(ctx, namespace, labelSelector)
-	if listErr != nil {
-		return errors.Join(deleteErr, listErr)
-	}
-	if len(remainingJobs) > 0 {
-		if jobDeleteErr == nil {
-			r.logger.Info(
-				"scheduling configmap cleanup after evaluation jobs finish deleting",
-				"job_id", jobID,
-				"namespace", namespace,
-				"remaining_jobs", len(remainingJobs),
-			)
-			r.scheduleConfigMapCleanupAfterJobsGone(jobID, namespace, labelSelector)
-		}
-		return deleteErr
-	}
-	return errors.Join(deleteErr, r.deleteLabeledConfigMaps(ctx, jobID, namespace, labelSelector))
-}
-
-// scheduleConfigMapCleanupAfterJobsGone waits for labeled Jobs to finish foreground
-// deletion, then removes leftover ConfigMaps. Runs off the caller goroutine so
-// hard_delete / abort sweeps do not wait on Pod termination.
-func (r *K8sRuntime) scheduleConfigMapCleanupAfterJobsGone(jobID, namespace, labelSelector string) {
-	go func() {
-		waitCtx, cancelWait := orphanCleanupContext()
-		defer cancelWait()
-		waitErr := wait.PollUntilContextTimeout(waitCtx, 100*time.Millisecond, orphanCleanupTimeout, true, func(pollCtx context.Context) (bool, error) {
-			left, err := r.helper.ListJobs(pollCtx, namespace, labelSelector)
-			if err != nil {
-				return false, err
-			}
-			return len(left) == 0, nil
-		})
-		cleanupCtx, cancelCleanup := orphanCleanupContext()
-		defer cancelCleanup()
-		remainingJobs, listErr := r.helper.ListJobs(cleanupCtx, namespace, labelSelector)
-		if listErr != nil {
-			r.logger.Error(
-				"failed to list jobs before deferred configmap cleanup",
-				"error", listErr,
-				"job_id", jobID,
-				"namespace", namespace,
-			)
-			return
-		}
-		if len(remainingJobs) > 0 {
-			r.logger.Error(
-				"deferred configmap cleanup skipped; evaluation jobs still present",
-				"error", waitErr,
-				"job_id", jobID,
-				"namespace", namespace,
-				"remaining_jobs", len(remainingJobs),
-			)
-			return
-		}
-		if err := r.deleteLabeledConfigMaps(cleanupCtx, jobID, namespace, labelSelector); err != nil {
-			r.logger.Error(
-				"failed deferred configmap cleanup after job deletion",
-				"error", err,
-				"job_id", jobID,
-				"namespace", namespace,
-			)
-		}
-	}()
-}
-
-func (r *K8sRuntime) deleteLabeledConfigMaps(ctx context.Context, jobID, namespace, labelSelector string) error {
-	configMaps, err := r.helper.ListConfigMaps(ctx, namespace, labelSelector)
-	if err != nil {
-		return err
-	}
-	var deleteErr error
-	for _, cm := range configMaps {
-		r.logger.Info(
-			"deleting evaluation runtime configmap",
-			"job_id", jobID,
-			"configmap_name", cm.Name,
-			"namespace", namespace,
-		)
-		if err := r.helper.DeleteConfigMap(ctx, namespace, cm.Name); err != nil && !apierrors.IsNotFound(err) {
 			deleteErr = errors.Join(deleteErr, err)
 		}
 	}
@@ -583,9 +492,9 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 			logger.Warn("job create response was ambiguous; found matching persisted job", "namespace", job.Namespace, "name", job.Name)
 		case getErr != nil:
 			// Uncertain: create failed and confirm GET also failed. The Job may still
-			// exist — keep ConfigMap/secret (and ConfigMap-owned NetworkPolicy) until
-			// Job absence is confirmed (creator abort sweep deletes the Job, then any
-			// still-unowned ConfigMap).
+			// exist — keep ConfigMap/secret (and ConfigMap-owned NetworkPolicy) until a
+			// later Job delete (abort sweep / hard_delete). Do not delete supporting
+			// resources while Job presence is unconfirmed.
 			logger.Error(
 				"unable to confirm job creation outcome; preserving supporting resources",
 				"namespace", job.Namespace,
