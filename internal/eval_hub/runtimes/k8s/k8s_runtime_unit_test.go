@@ -2103,6 +2103,131 @@ func TestRunEvaluationJobPostCreateTransientThenDeletedSweeps(t *testing.T) {
 	}
 }
 
+func withCreateAbortRetryTuning(t *testing.T, retryAttempts, deferredAttempts int, retryInterval, deferredInterval, persistentInterval time.Duration) {
+	t.Helper()
+	origRetryAttempts := createAbortRetryAttempts
+	origRetryInterval := createAbortRetryInterval
+	origDeferredAttempts := createAbortDeferredAttempts
+	origDeferredInterval := createAbortDeferredInterval
+	origPersistentInterval := createAbortPersistentInterval
+	origStop := createAbortPersistentStop
+	createAbortRetryAttempts = retryAttempts
+	createAbortRetryInterval = retryInterval
+	createAbortDeferredAttempts = deferredAttempts
+	createAbortDeferredInterval = deferredInterval
+	createAbortPersistentInterval = persistentInterval
+	t.Cleanup(func() {
+		createAbortRetryAttempts = origRetryAttempts
+		createAbortRetryInterval = origRetryInterval
+		createAbortDeferredAttempts = origDeferredAttempts
+		createAbortDeferredInterval = origDeferredInterval
+		createAbortPersistentInterval = origPersistentInterval
+		createAbortPersistentStop = origStop
+	})
+}
+
+// TestRunEvaluationJobResumeCreatesAfterTransientThenActive covers P1: deferred
+// reconcile confirming active must resume the create loop so remaining benchmarks
+// still get Jobs.
+func TestRunEvaluationJobResumeCreatesAfterTransientThenActive(t *testing.T) {
+	withCreateAbortRetryTuning(t, 2, 3, time.Millisecond, time.Millisecond, time.Millisecond)
+
+	evaluation, jobID, clientset, storage := newSingleBenchmarkRaceFixture("provider-1")
+	evaluation.Benchmarks = []api.EvaluationBenchmarkConfig{
+		{Ref: api.Ref{ID: "bench-1"}, ProviderID: "provider-1", Parameters: map[string]any{"num_examples": 1}},
+		{Ref: api.Ref{ID: "bench-2"}, ProviderID: "provider-1", Parameters: map[string]any{"num_examples": 1}},
+	}
+	createLoopDone := make(chan struct{})
+	var postCreateArmed atomic.Bool
+	var probes atomic.Int32
+	activeJob := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{State: api.OverallStateRunning},
+		},
+	}
+
+	runtime := &K8sRuntime{
+		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper:        &KubernetesHelper{clientset: clientset},
+		ctx:           context.Background(),
+		serviceConfig: &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		afterCreateBenchmarkResources: func(err error) {
+			// Only the first post-create check should hit unknown→active; arm once.
+			if !postCreateArmed.CompareAndSwap(false, true) {
+				return
+			}
+			storage.setGetJobFn(func(id string) (*api.EvaluationJobResource, error) {
+				n := probes.Add(1)
+				// Exhaust resolve (2) + early deferred probes, then confirm active.
+				if n <= 4 {
+					return nil, fmt.Errorf("transient storage blip %d", n)
+				}
+				return activeJob, nil
+			})
+		},
+		afterCreateLoop: func() { close(createLoopDone) },
+	}
+	if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
+		t.Fatalf("RunEvaluationJob: %v", err)
+	}
+	waitClosed(t, createLoopDone, "timed out waiting for create loop")
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(listJobsByJobID(t, clientset, jobID)) == 2 {
+			if probes.Load() < 5 {
+				t.Fatalf("expected deferred reconcile probes before resume, got %d", probes.Load())
+			}
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("expected 2 Jobs after resume, got %d (probes=%d)", len(listJobsByJobID(t, clientset, jobID)), probes.Load())
+}
+
+// TestRunEvaluationJobPersistentReconcileScheduledAfterRetryExhaustion covers P2:
+// when both sync retry phases stay unknown, create stops but a persistent
+// reconcile remains scheduled and still sweeps once delete is visible.
+func TestRunEvaluationJobPersistentReconcileScheduledAfterRetryExhaustion(t *testing.T) {
+	withCreateAbortRetryTuning(t, 2, 2, time.Millisecond, time.Millisecond, time.Millisecond)
+	stopPersistent := make(chan struct{})
+	createAbortPersistentStop = stopPersistent
+	t.Cleanup(func() { close(stopPersistent) })
+
+	evaluation, jobID, clientset, storage := newSingleBenchmarkRaceFixture("provider-1")
+
+	scheduled := make(chan struct{})
+	reconcileDone := make(chan struct{})
+	createLoopDone := make(chan struct{})
+	runtime := &K8sRuntime{
+		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper:        &KubernetesHelper{clientset: clientset},
+		ctx:           context.Background(),
+		serviceConfig: &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		afterCreateBenchmarkResources: func(err error) {
+			// Keep storage unknown through both sync phases after the late Job exists.
+			storage.setGetJobFn(func(id string) (*api.EvaluationJobResource, error) {
+				return nil, fmt.Errorf("storage unavailable")
+			})
+		},
+		afterPersistentAbortReconcileScheduled: func() { close(scheduled) },
+		afterPersistentAbortReconcileDone:      func() { close(reconcileDone) },
+		afterCreateLoop:                        func() { close(createLoopDone) },
+	}
+	if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
+		t.Fatalf("RunEvaluationJob: %v", err)
+	}
+	waitClosed(t, createLoopDone, "timed out waiting for create loop")
+	waitClosed(t, scheduled, "expected persistent abort reconcile to remain scheduled")
+	if got := len(listJobsByJobID(t, clientset, jobID)); got != 1 {
+		t.Fatalf("expected late Job retained while storage unknown, got %d", got)
+	}
+
+	markEvaluationDeleted(storage, jobID)
+	waitLabeledJobsGone(t, clientset, jobID)
+	waitClosed(t, reconcileDone, "timed out waiting for persistent reconcile to finish after delete")
+}
+
 // TestRunEvaluationJobPreCheckAbortSweepsLeftovers covers the path where storage already
 // signals delete/cancel before the next benchmark create starts: skip create and still sweep
 // in case a prior handler cleanup failed.
