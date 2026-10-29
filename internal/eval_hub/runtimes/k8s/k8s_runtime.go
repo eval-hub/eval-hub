@@ -30,6 +30,38 @@ type K8sRuntime struct {
 	serviceConfig *config.Config
 	helper        *KubernetesHelper
 	ctx           context.Context
+	// shutdownCtx is cancelled by Close so in-flight create loops stop waiting
+	// on unknown abort checks during service shutdown.
+	shutdownCtx    context.Context
+	shutdownCancel context.CancelFunc
+	// Test hooks (nil in production). Used to pause/observe create vs delete races
+	// without blocking inside fake-clientset reactors (those hold the clientset lock).
+	beforeCreateBenchmarkResources func()
+	// beforeCreateJob runs after ConfigMap + NetworkPolicy exist and before CreateJob,
+	// covering the window where the ConfigMap still owns the NetworkPolicy.
+	beforeCreateJob               func()
+	afterCreateBenchmarkResources func(err error)
+	beforeSweepAfterAbort         func()
+	// afterCreateLoop runs when the RunEvaluationJob background goroutine exits
+	// (all benchmarks processed, or aborted early).
+	afterCreateLoop func()
+}
+
+// orphanCleanupTimeout bounds K8s deletes that must succeed even when the
+// caller's context (HTTP DELETE or cancelled create) is already done.
+const orphanCleanupTimeout = 30 * time.Second
+
+// createAbortBackoff* is the single capped exponential backoff used while the
+// create goroutine stays paused until evaluation state is known or shutdown
+// cancels. createAbortReadTimeout bounds each GetEvaluationJob. Tunable in tests.
+var (
+	createAbortBackoffInitial = 100 * time.Millisecond
+	createAbortBackoffMax     = 5 * time.Second
+	createAbortReadTimeout    = 5 * time.Second
+)
+
+func orphanCleanupContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), orphanCleanupTimeout)
 }
 
 // NewK8sRuntime creates a Kubernetes runtime.
@@ -38,31 +70,46 @@ func NewK8sRuntime(logger *slog.Logger, serviceConfig *config.Config) (abstracti
 	if err != nil {
 		return nil, err
 	}
-	return &K8sRuntime{logger: logger, serviceConfig: serviceConfig, helper: helper}, nil
+	shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
+	return &K8sRuntime{
+		logger:         logger,
+		serviceConfig:  serviceConfig,
+		helper:         helper,
+		shutdownCtx:    shutdownCtx,
+		shutdownCancel: shutdownCancel,
+	}, nil
 }
 
 func (r *K8sRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
 	return &K8sRuntime{
-		logger:        logger,
-		serviceConfig: r.serviceConfig,
-		helper:        r.helper,
-		ctx:           r.ctx,
+		logger:         logger,
+		serviceConfig:  r.serviceConfig,
+		helper:         r.helper,
+		ctx:            r.ctx,
+		shutdownCtx:    r.shutdownCtx,
+		shutdownCancel: r.shutdownCancel,
 	}
 }
 
 func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 	return &K8sRuntime{
-		logger:        r.logger,
-		serviceConfig: r.serviceConfig,
-		helper:        r.helper,
-		ctx:           ctx,
+		logger:         r.logger,
+		serviceConfig:  r.serviceConfig,
+		helper:         r.helper,
+		ctx:            ctx,
+		shutdownCtx:    r.shutdownCtx,
+		shutdownCancel: r.shutdownCancel,
 	}
 }
 
-// Close stops the Kubernetes EventBroadcaster background goroutines started by NewKubernetesHelper.
-// WithLogger/WithContext copies share the same helper pointer, so Close must be called exactly once
-// on the root runtime returned by NewK8sRuntime.
+// Close cancels in-flight abort waits and stops the Kubernetes EventBroadcaster
+// background goroutines started by NewKubernetesHelper.
+// WithLogger/WithContext copies share the same helper and shutdown cancel, so
+// Close must be called exactly once on the root runtime returned by NewK8sRuntime.
 func (r *K8sRuntime) Close() error {
+	if r.shutdownCancel != nil {
+		r.shutdownCancel()
+	}
 	if r.helper == nil {
 		return nil
 	}
@@ -78,30 +125,47 @@ func (r *K8sRuntime) RunEvaluationJob(
 		return serviceerrors.NewServiceError(messages.EvaluationJobEmpty, "EvaluationJobID", evaluation.Resource.ID)
 	}
 
+	jobID := evaluation.Resource.ID
 	go func() {
+		if r.afterCreateLoop != nil {
+			defer r.afterCreateLoop()
+		}
 		for idx, bench := range benchmarks {
-			// otel.DetachedContext (rather than a bare context.Background())
-			// preserves r.ctx's span context as a link source, so spans
-			// created while creating this benchmark's K8s resources can be
-			// associated back to the triggering request trace even though
-			// this goroutine outlives it (see OTEL.md "Trace continuity").
+			// Read evaluation state (retrying storage errors with capped backoff):
+			// deleted/cancelled → clean up and stop; active → create this benchmark.
+			if r.handleCreateAbortDecision(evaluation, storage, jobID, bench.ID, idx, nil, "pre-create") {
+				return
+			}
+			// DetachedContext keeps request-trace linkage without inheriting the
+			// HTTP request deadline (see OTEL.md "Trace continuity").
 			benchCtx := otel.DetachedContext(r.ctx)
-			if err := r.createBenchmarkResources(benchCtx, r.logger, evaluation, &bench, idx, storage); err != nil {
+			if r.beforeCreateBenchmarkResources != nil {
+				r.beforeCreateBenchmarkResources()
+			}
+			err := r.createBenchmarkResources(benchCtx, r.logger, evaluation, &bench, idx, storage)
+			if r.afterCreateBenchmarkResources != nil {
+				r.afterCreateBenchmarkResources(err)
+			}
+			// Read evaluation state again: deleted/cancelled → clean up late Job and
+			// stop; active → continue (and record confirmed create failures below).
+			if r.handleCreateAbortDecision(evaluation, storage, jobID, bench.ID, idx, err, "post-create") {
+				return
+			}
+			if err != nil {
 				metrics.RecordBenchmarkRuntimeError(benchCtx, r.Name(), evaluation.Resource.Tenant.String())
 				r.logger.Error(
 					"kubernetes job creation failed",
 					"error", err,
-					"job_id", evaluation.Resource.ID,
+					"job_id", jobID,
 					"benchmark_id", bench.ID,
 				)
-
 				if storage != nil {
 					runStatus := buildBenchmarkFailureStatus(&bench, idx, err)
-					if updateErr := storage.UpdateEvaluationJob(evaluation.Resource.ID, runStatus); updateErr != nil {
+					if updateErr := storage.UpdateEvaluationJob(jobID, runStatus); updateErr != nil {
 						r.logger.Error(
 							"failed to update benchmark status",
 							"error", updateErr,
-							"job_id", evaluation.Resource.ID,
+							"job_id", jobID,
 							"benchmark_id", bench.ID,
 						)
 					}
@@ -112,6 +176,181 @@ func (r *K8sRuntime) RunEvaluationJob(
 	return nil
 }
 
+// handleCreateAbortDecision pauses the create goroutine until evaluation state is
+// known (or shutdown). Returns true when the loop must stop.
+func (r *K8sRuntime) handleCreateAbortDecision(
+	evaluation *api.EvaluationJobResource,
+	storage abstractions.RuntimeStorage,
+	jobID, benchmarkID string,
+	benchmarkIndex int,
+	createErr error,
+	phase string,
+) bool {
+	status, reason := r.awaitCreateAbortStatus(storage, jobID, benchmarkID)
+	switch status {
+	case createAbortActive:
+		return false
+	case createAbortAborted:
+		r.logger.Info(
+			"kubernetes job creation aborted; evaluation deleted or cancelled; sweeping leftovers",
+			"job_id", jobID,
+			"benchmark_id", benchmarkID,
+			"benchmark_index", benchmarkIndex,
+			"reason", reason,
+			"phase", phase,
+			"error", createErr,
+		)
+		r.sweepEvaluationResourcesAfterAbort(evaluation, jobID, benchmarkID)
+		return true
+	default:
+		r.logger.Error(
+			"storage abort check interrupted by shutdown while still unknown; stopping creates",
+			"job_id", jobID,
+			"benchmark_id", benchmarkID,
+			"benchmark_index", benchmarkIndex,
+			"phase", phase,
+			"error", createErr,
+		)
+		return true
+	}
+}
+
+func (r *K8sRuntime) abortWaitContext() context.Context {
+	if r.shutdownCtx != nil {
+		return r.shutdownCtx
+	}
+	return context.Background()
+}
+
+// runtimeStorageWithContext is implemented by handlers.runtimeStorage so each
+// abort-check read can use a shutdown-linked timeout context.
+type runtimeStorageWithContext interface {
+	WithContext(ctx context.Context) abstractions.RuntimeStorage
+}
+
+// awaitCreateAbortStatus keeps creation paused and retries GetEvaluationJob with
+// capped exponential backoff until state is definitive or the runtime shuts down.
+func (r *K8sRuntime) awaitCreateAbortStatus(
+	storage abstractions.RuntimeStorage,
+	jobID, benchmarkID string,
+) (createAbortStatus, string) {
+	ctx := r.abortWaitContext()
+	interval := createAbortBackoffInitial
+	for attempt := 1; ; attempt++ {
+		status, reason := r.checkCreateAbort(ctx, storage, jobID)
+		switch status {
+		case createAbortAborted:
+			if attempt > 1 {
+				r.logger.Info(
+					"abort check confirmed delete/cancel after retries",
+					"job_id", jobID,
+					"benchmark_id", benchmarkID,
+					"reason", reason,
+					"attempt", attempt,
+				)
+			}
+			return status, reason
+		case createAbortActive:
+			if attempt > 1 {
+				r.logger.Info(
+					"abort check confirmed evaluation still active; resuming creates",
+					"job_id", jobID,
+					"benchmark_id", benchmarkID,
+					"attempt", attempt,
+				)
+			}
+			return status, reason
+		default:
+			r.logger.Warn(
+				"abort check storage state unknown; backing off",
+				"job_id", jobID,
+				"benchmark_id", benchmarkID,
+				"attempt", attempt,
+				"backoff", interval.String(),
+			)
+			timer := time.NewTimer(interval)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return createAbortUnknown, ""
+			case <-timer.C:
+			}
+			if next := interval * 2; next <= createAbortBackoffMax {
+				interval = next
+			} else {
+				interval = createAbortBackoffMax
+			}
+		}
+	}
+}
+
+// checkCreateAbort performs one storage read. Transient errors and cancelled /
+// timed-out reads are unknown so the caller retries. Each read uses a timeout
+// derived from the runtime shutdown context when storage supports WithContext.
+func (r *K8sRuntime) checkCreateAbort(
+	parent context.Context,
+	storage abstractions.RuntimeStorage,
+	jobID string,
+) (createAbortStatus, string) {
+	if storage == nil {
+		return createAbortActive, ""
+	}
+	readCtx, cancel := context.WithTimeout(parent, createAbortReadTimeout)
+	defer cancel()
+
+	scoped := storage
+	if withCtx, ok := storage.(runtimeStorageWithContext); ok {
+		scoped = withCtx.WithContext(readCtx)
+	} else if err := readCtx.Err(); err != nil {
+		return createAbortUnknown, ""
+	}
+
+	job, err := scoped.GetEvaluationJob(jobID)
+	if err != nil {
+		var serviceErr *serviceerrors.ServiceError
+		if errors.As(err, &serviceErr) && serviceErr.MessageCode() == messages.ResourceNotFound {
+			return createAbortAborted, "evaluation job deleted"
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return createAbortUnknown, ""
+		}
+		return createAbortUnknown, ""
+	}
+	if job == nil {
+		return createAbortAborted, "evaluation job deleted"
+	}
+	if job.Status != nil && job.Status.State == api.OverallStateCancelled {
+		return createAbortAborted, "evaluation job cancelled"
+	}
+	return createAbortActive, ""
+}
+
+// sweepEvaluationResourcesAfterAbort is the create-loop counterpart to hard_delete
+// cleanup: reuse DeleteEvaluationJobResources so new resource types only need one delete path.
+func (r *K8sRuntime) sweepEvaluationResourcesAfterAbort(evaluation *api.EvaluationJobResource, jobID, benchmarkID string) {
+	if r.beforeSweepAfterAbort != nil {
+		r.beforeSweepAfterAbort()
+	}
+	if cleanupErr := r.DeleteEvaluationJobResources(evaluation); cleanupErr != nil {
+		r.logger.Error(
+			"failed to sweep kubernetes resources created after evaluation delete/cancel",
+			"error", cleanupErr,
+			"job_id", jobID,
+			"benchmark_id", benchmarkID,
+		)
+	}
+}
+
+// createAbortStatus is the tri-state result of a create-loop storage check.
+// Unknown must not be treated as active: that leaves orphan Jobs after delete.
+type createAbortStatus int
+
+const (
+	createAbortActive createAbortStatus = iota
+	createAbortAborted
+	createAbortUnknown
+)
+
 // jobForegroundDeleteOptions deletes Job-owned Pods before removing the Job so stuck Init
 // pods cannot outlive a background Job delete during hard_delete or orphan cleanup.
 func jobForegroundDeleteOptions() metav1.DeleteOptions {
@@ -120,18 +359,40 @@ func jobForegroundDeleteOptions() metav1.DeleteOptions {
 }
 
 func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobResource) error {
+	jobID := evaluation.Resource.ID
 	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
 	deleteOptions := jobForegroundDeleteOptions()
 
 	r.logger.Info(
 		"deleting evaluation runtime resources",
-		"job_id", evaluation.Resource.ID,
+		"job_id", jobID,
 		"benchmark_count", len(evaluation.Benchmarks),
 		"namespace", namespace,
 	)
 
-	labelSelector := fmt.Sprintf("%s=%s", labelJobIDKey, sanitizeLabelValue(evaluation.Resource.ID))
-	jobs, err := r.helper.ListJobs(r.ctx, namespace, labelSelector)
+	labelSelector := fmt.Sprintf("%s=%s", labelJobIDKey, sanitizeLabelValue(jobID))
+	// Two sweeps with independent timeouts: storage was signalled first so create
+	// loops stop; the second list catches Jobs created between sweeps.
+	// Delete Jobs (and ref secrets). Job-owned ConfigMaps/NetworkPolicies are left to
+	// Kubernetes GC. Do not delete "unowned" ConfigMaps here: an empty Job list cannot
+	// prove another replica has stopped creating, and deleting a ConfigMap that still
+	// owns a NetworkPolicy would strip ingress protection from a late-created Job.
+	// Creator rollback covers confirmed-failed creates; uncertain leftovers need
+	// separate coordination (out of scope for the delete path).
+	cleanupSweep := func() error {
+		cleanupCtx, cancelCleanup := orphanCleanupContext()
+		defer cancelCleanup()
+		return r.deleteLabeledJobsAndRefSecrets(cleanupCtx, jobID, namespace, labelSelector, deleteOptions)
+	}
+	return errors.Join(cleanupSweep(), cleanupSweep())
+}
+
+func (r *K8sRuntime) deleteLabeledJobsAndRefSecrets(
+	ctx context.Context,
+	jobID, namespace, labelSelector string,
+	deleteOptions metav1.DeleteOptions,
+) error {
+	jobs, err := r.helper.ListJobs(ctx, namespace, labelSelector)
 	if err != nil {
 		return err
 	}
@@ -139,33 +400,28 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 	for _, job := range jobs {
 		r.logger.Info(
 			"deleting evaluation runtime job",
-			"job_id", evaluation.Resource.ID,
+			"job_id", jobID,
 			"job_name", job.Name,
 			"namespace", namespace,
 		)
-		if err := r.helper.DeleteJob(r.ctx, namespace, job.Name, deleteOptions); err != nil && !apierrors.IsNotFound(err) {
+		if err := r.helper.DeleteJob(ctx, namespace, job.Name, deleteOptions); err != nil && !apierrors.IsNotFound(err) {
 			deleteErr = errors.Join(deleteErr, err)
 		}
 	}
-	// Job-spec ConfigMaps own the per-execution NetworkPolicy until the Job is created,
-	// then both are owned by the Job. Leave them for foreground Job garbage collection so
-	// this cleanup does not remove ingress protection before Job-owned Pods terminate.
-	// If an owner-reference update failed, an orphan may remain; retaining policy coverage
-	// is safer than deleting it while a Pod could still be running.
-	// Delete ref secrets explicitly using the same label selector so they are never orphaned
-	// even if the Job's owner-reference GC is delayed or the owner ref was never set.
-	secrets, err := r.helper.ListSecrets(r.ctx, namespace, labelSelector)
+	// Delete ref secrets explicitly so they are never orphaned even if Job owner-ref
+	// GC is delayed or the owner ref was never set.
+	secrets, err := r.helper.ListSecrets(ctx, namespace, labelSelector)
 	if err != nil {
 		deleteErr = errors.Join(deleteErr, err)
 	}
 	for _, secret := range secrets {
 		r.logger.Info(
 			"deleting evaluation runtime ref secret",
-			"job_id", evaluation.Resource.ID,
+			"job_id", jobID,
 			"secret_name", secret.Name,
 			"namespace", namespace,
 		)
-		if err := r.helper.DeleteSecret(r.ctx, namespace, secret.Name, deleteOptions); err != nil && !apierrors.IsNotFound(err) {
+		if err := r.helper.DeleteSecret(ctx, namespace, secret.Name, deleteOptions); err != nil && !apierrors.IsNotFound(err) {
 			deleteErr = errors.Join(deleteErr, err)
 		}
 	}
@@ -323,11 +579,15 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		logger.Info("kubernetes internalModelRef secret created", "namespace", jobConfig.namespace, "name", jobConfig.modelInternalRefSecretName)
 	}
 
+	// Cleanup must not use ctx: hard_delete cancels the create context, and
+	// rollback of already-created objects still needs to reach the API.
 	cleanupModelRefSecret := func() {
 		if jobConfig.modelInternalRefSecretName == "" {
 			return
 		}
-		if cleanupErr := r.helper.DeleteSecret(ctx, jobConfig.namespace, jobConfig.modelInternalRefSecretName, metav1.DeleteOptions{}); cleanupErr != nil && !apierrors.IsNotFound(cleanupErr) {
+		cleanupCtx, cancel := orphanCleanupContext()
+		defer cancel()
+		if cleanupErr := r.helper.DeleteSecret(cleanupCtx, jobConfig.namespace, jobConfig.modelInternalRefSecretName, metav1.DeleteOptions{}); cleanupErr != nil && !apierrors.IsNotFound(cleanupErr) {
 			logger.Error("failed to delete internalModelRef secret after error", "error", cleanupErr)
 		}
 	}
@@ -343,7 +603,9 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 	}
 
 	cleanupConfigMap := func() {
-		if cleanupErr := r.helper.DeleteConfigMap(ctx, configMap.Namespace, configMap.Name); cleanupErr != nil && !apierrors.IsNotFound(cleanupErr) {
+		cleanupCtx, cancel := orphanCleanupContext()
+		defer cancel()
+		if cleanupErr := r.helper.DeleteConfigMap(cleanupCtx, configMap.Namespace, configMap.Name); cleanupErr != nil && !apierrors.IsNotFound(cleanupErr) {
 			logger.Error("failed to delete configmap after job creation error", "error", cleanupErr)
 		}
 	}
@@ -366,10 +628,17 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		return fmt.Errorf("job %s benchmark %s: create network policy: %w", evaluation.Resource.ID, benchmarkID, err)
 	}
 
+	if r.beforeCreateJob != nil {
+		r.beforeCreateJob()
+	}
+
 	createdJob, err := r.helper.CreateJob(ctx, job)
 	if err != nil {
 		logger.Error("kubernetes job create error", "namespace", job.Namespace, "name", job.Name, "error", err)
-		existingJob, getErr := r.helper.GetJob(ctx, job.Namespace, job.Name)
+		// Confirm/cleanup must not depend on ctx — it may already be cancelled by hard_delete.
+		confirmCtx, cancelConfirm := orphanCleanupContext()
+		defer cancelConfirm()
+		existingJob, getErr := r.helper.GetJob(confirmCtx, job.Namespace, job.Name)
 		switch {
 		case apierrors.IsNotFound(getErr):
 			cleanupModelRefSecret()
@@ -380,13 +649,27 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 			// carrying this request's server-generated identity; keep its policy in place.
 			createdJob = existingJob
 			logger.Warn("job create response was ambiguous; found matching persisted job", "namespace", job.Namespace, "name", job.Name)
+		case getErr != nil:
+			// Uncertain: create failed and confirm GET also failed. The Job may still
+			// exist — keep ConfigMap/secret (and ConfigMap-owned NetworkPolicy) until a
+			// later Job delete (abort sweep / hard_delete). Do not delete supporting
+			// resources while Job presence is unconfirmed.
+			logger.Error(
+				"unable to confirm job creation outcome; preserving supporting resources",
+				"namespace", job.Namespace,
+				"name", job.Name,
+				"create_error", err,
+				"confirm_error", getErr,
+			)
+			return errors.Join(
+				fmt.Errorf("job %s benchmark %s: create job: %w", evaluation.Resource.ID, benchmarkID, err),
+				fmt.Errorf("confirm job creation outcome: %w", getErr),
+			)
 		default:
-			if getErr != nil {
-				return errors.Join(
-					fmt.Errorf("job %s benchmark %s: create job: %w", evaluation.Resource.ID, benchmarkID, err),
-					fmt.Errorf("confirm job creation outcome: %w", getErr),
-				)
-			}
+			// A Job with this name exists but is not our execution — drop our supporting
+			// resources so they do not linger as orphans.
+			cleanupModelRefSecret()
+			cleanupConfigMap()
 			return errors.Join(
 				fmt.Errorf("job %s benchmark %s: create job: %w", evaluation.Resource.ID, benchmarkID, err),
 				fmt.Errorf("job %s exists but does not match the execution identity", job.Name),
@@ -403,13 +686,15 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 	if err := r.helper.SetNetworkPolicyOwner(ctx, networkPolicy.Namespace, networkPolicy.Name, ownerRef); err != nil {
 		ownerErr := fmt.Errorf("job %s benchmark %s: set network policy owner: %w", evaluation.Resource.ID, benchmarkID, err)
 		logger.Error("failed to set network policy owner reference; cleaning up job", "namespace", networkPolicy.Namespace, "name", networkPolicy.Name, "error", err)
-		if delErr := r.helper.DeleteJob(ctx, createdJob.Namespace, createdJob.Name, jobForegroundDeleteOptions()); delErr != nil && !apierrors.IsNotFound(delErr) {
+		cleanupCtx, cancelCleanup := orphanCleanupContext()
+		defer cancelCleanup()
+		if delErr := r.helper.DeleteJob(cleanupCtx, createdJob.Namespace, createdJob.Name, jobForegroundDeleteOptions()); delErr != nil && !apierrors.IsNotFound(delErr) {
 			return errors.Join(ownerErr, fmt.Errorf("delete job after network policy owner failure: %w", delErr))
 		}
 		// Foreground deletion is asynchronous. Retain the ConfigMap-owned policy until
 		// Job deletion completes, so cleanup cannot remove protection from running Pods.
-		if waitErr := wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
-			_, getErr := r.helper.GetJob(ctx, createdJob.Namespace, createdJob.Name)
+		if waitErr := wait.PollUntilContextTimeout(cleanupCtx, 100*time.Millisecond, orphanCleanupTimeout, true, func(pollCtx context.Context) (bool, error) {
+			_, getErr := r.helper.GetJob(pollCtx, createdJob.Namespace, createdJob.Name)
 			if apierrors.IsNotFound(getErr) {
 				return true, nil
 			}
@@ -423,12 +708,13 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 	}
 	if err := r.helper.SetConfigMapOwner(ctx, configMap.Namespace, configMap.Name, ownerRef); err != nil {
 		if apierrors.IsNotFound(err) {
-			// Race: hard_delete arrived during creation and removed the ConfigMap before the
-			// owner reference could be set. The K8s Job was created but can never mount the
-			// missing ConfigMap — delete it now to prevent an orphaned, permanently-stuck job.
-			logger.Warn("configmap deleted mid-creation (race with hard_delete) — cleaning up orphaned job",
+			// ConfigMap disappeared before ownership could be set (e.g. creator rollback or
+			// external delete). The Job can never mount it — delete the Job to avoid a stuck pod.
+			logger.Warn("configmap missing mid-creation — cleaning up orphaned job",
 				"namespace", createdJob.Namespace, "job", createdJob.Name, "configmap", configMap.Name)
-			if delErr := r.helper.DeleteJob(ctx, createdJob.Namespace, createdJob.Name, jobForegroundDeleteOptions()); delErr != nil && !apierrors.IsNotFound(delErr) {
+			cleanupCtx, cancelCleanup := orphanCleanupContext()
+			defer cancelCleanup()
+			if delErr := r.helper.DeleteJob(cleanupCtx, createdJob.Namespace, createdJob.Name, jobForegroundDeleteOptions()); delErr != nil && !apierrors.IsNotFound(delErr) {
 				logger.Error("failed to delete orphaned job", "namespace", createdJob.Namespace, "name", createdJob.Name, "error", delErr)
 				return delErr
 			}
