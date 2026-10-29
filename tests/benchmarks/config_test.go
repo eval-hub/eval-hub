@@ -22,6 +22,9 @@ import (
 )
 
 func fixtureEnv(key string) (string, bool) {
+	if key == "MODEL_MAX_LENGTH" {
+		return "4096", true
+	}
 	if strings.HasSuffix(key, "_TEST_DATA_REF") {
 		return `{"s3":{"bucket":"smoke","key":"single-record","secret_ref":"smoke-data"}}`, true
 	}
@@ -29,6 +32,58 @@ func fixtureEnv(key string) (string, bool) {
 		return "http://model.example/v1", true
 	}
 	return "smoke-model", true
+}
+
+func TestMaxLengthEnvironmentOverride(t *testing.T) {
+	for _, tc := range []struct {
+		name, value string
+		want        string
+	}{
+		{"unset uses fixture default", "", "4096"},
+		{"model context override", "32768", "32768"},
+		{"whitespace", " 8192 ", "8192"},
+		{"not a number", "model-context", ""},
+		{"fractional", "4096.5", ""},
+		{"zero", "0", ""},
+		{"one", "1", ""},
+		{"negative", "-4096", ""},
+		{"overflow", "999999999999999999999999999", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeFixture(t, t.TempDir(), "lm_evaluation_harness", "longbenchv2",
+				`{"parameters":{"max_length":4096},"max_length_env":"MODEL_MAX_LENGTH","timeout":"5m"}`)
+			f, err := loadFixture(path, func(key string) (string, bool) {
+				if key != "MODEL_MAX_LENGTH" {
+					t.Fatalf("unexpected environment lookup: %s", key)
+				}
+				return tc.value, tc.value != ""
+			})
+			if tc.want == "" {
+				if err == nil || errors.Is(err, errMissingInput) {
+					t.Fatalf("invalid context limit must fail, not skip: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			job := f.jobConfig("lm_evaluation_harness", "longbenchv2", api.ModelRef{Name: "smoke", URL: "http://model.example/v1"})
+			// The adapter rejects quoted numbers; check the value sent on the wire.
+			encoded, err := json.Marshal(job.Benchmarks[0].Parameters["max_length"])
+			if err != nil || string(encoded) != tc.want {
+				t.Fatalf("wire max_length = %s, %v; want integer %s", encoded, err, tc.want)
+			}
+		})
+	}
+	for _, fallback := range []string{`null`, `"4096"`, `true`, `0`, `1.5`} {
+		t.Run("invalid fallback "+fallback, func(t *testing.T) {
+			path := writeFixture(t, t.TempDir(), "p", "b",
+				`{"parameters":{"max_length":`+fallback+`},"max_length_env":"MODEL_MAX_LENGTH","timeout":"5m"}`)
+			if _, err := loadFixture(path, func(string) (string, bool) { return "", false }); err == nil {
+				t.Fatal("expected invalid context fallback to fail")
+			}
+		})
+	}
 }
 
 func writeFixture(t *testing.T, root, provider, benchmark, body string) string {
