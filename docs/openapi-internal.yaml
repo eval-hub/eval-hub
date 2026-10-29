@@ -5269,8 +5269,9 @@ components:
         evaluation_goal:
           type: string
           minLength: 1
+          maxLength: 2000
           pattern: \S
-          description: Non-blank natural-language evaluation goal; leading and trailing whitespace is trimmed.
+          description: Non-blank natural-language evaluation goal, up to 2000 characters; leading and trailing whitespace is trimmed.
         provider_filter:
           type: string
           minLength: 1
@@ -5278,8 +5279,9 @@ components:
         max_benchmarks:
           type: integer
           minimum: 1
+          maximum: 50
           default: 12
-          description: Maximum number of benchmarks in the generated collection.
+          description: Maximum number of benchmarks in the generated collection (1 to 50).
         strictness:
           type: string
           enum:
@@ -5332,6 +5334,19 @@ components:
             - topic_relevance
             - unsupported_capability
           description: Required when code is guardrails_rejected; absent for other error codes.
+      if:
+        properties:
+          code:
+            const: guardrails_rejected
+        required:
+          - code
+      then:
+        required:
+          - category
+      else:
+        not:
+          required:
+            - category
       additionalProperties: false
     CollectionGenerationStatus:
       type: object
@@ -5359,6 +5374,19 @@ components:
         error:
           $ref: '#/components/schemas/CollectionGenerationStatusError'
           description: Required for failed generations; absent in every other state.
+      if:
+        properties:
+          state:
+            const: failed
+        required:
+          - state
+      then:
+        required:
+          - error
+      else:
+        not:
+          required:
+            - error
       additionalProperties: false
     CollectionGenerationBenchmarkReason:
       type: object
@@ -5464,6 +5492,7 @@ components:
                 benchmarks:
                   minItems: 1
                 curation_order:
+                  minimum: 0
                   maximum: 0
               anyOf:
                 - required:
@@ -5538,6 +5567,23 @@ components:
         result:
           $ref: '#/components/schemas/CollectionGenerationResult'
           description: Required when status.state is completed; absent in every other state.
+      if:
+        properties:
+          status:
+            properties:
+              state:
+                const: completed
+            required:
+              - state
+        required:
+          - status
+      then:
+        required:
+          - result
+      else:
+        not:
+          required:
+            - result
       additionalProperties: false
     CollectionCloneRequest:
       type: object

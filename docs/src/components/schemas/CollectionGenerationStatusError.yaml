@@ -27,4 +27,14 @@ properties:
     type: string
     enum: [prompt_injection, exfiltration, topic_relevance, unsupported_capability]
     description: Required when code is guardrails_rejected; absent for other error codes.
+if:
+  properties:
+    code:
+      const: guardrails_rejected
+  required: [code]
+then:
+  required: [category]
+else:
+  not:
+    required: [category]
 additionalProperties: false

@@ -4,3 +4,18 @@
 docs/src/openapi.yaml:
   no-ambiguous-paths:
     - '#/paths/~1api~1v1~1evaluations~1collections~1{id}~1clones'
+# Redocly's static undefined-required-property rule does not follow JSON Schema
+# conditional branches back to the properties declared on their parent schema.
+# These conditionals enforce the state-dependent required/forbidden fields.
+docs/src/components/schemas/CollectionGenerationResource.yaml:
+  no-required-schema-properties-undefined:
+    - '#/then/required/0'
+    - '#/else/not/required/0'
+docs/src/components/schemas/CollectionGenerationStatus.yaml:
+  no-required-schema-properties-undefined:
+    - '#/then/required/0'
+    - '#/else/not/required/0'
+docs/src/components/schemas/CollectionGenerationStatusError.yaml:
+  no-required-schema-properties-undefined:
+    - '#/then/required/0'
+    - '#/else/not/required/0'

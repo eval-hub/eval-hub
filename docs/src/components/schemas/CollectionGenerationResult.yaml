@@ -23,6 +23,7 @@ properties:
           benchmarks:
             minItems: 1
           curation_order:
+            minimum: 0
             maximum: 0
         anyOf:
           - required: [category]

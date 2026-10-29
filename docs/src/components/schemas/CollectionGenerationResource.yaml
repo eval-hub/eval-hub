@@ -37,4 +37,17 @@ properties:
   result:
     $ref: ./CollectionGenerationResult.yaml
     description: Required when status.state is completed; absent in every other state.
+if:
+  properties:
+    status:
+      properties:
+        state:
+          const: completed
+      required: [state]
+  required: [status]
+then:
+  required: [result]
+else:
+  not:
+    required: [result]
 additionalProperties: false

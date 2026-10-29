@@ -18,4 +18,14 @@ properties:
   error:
     $ref: ./CollectionGenerationStatusError.yaml
     description: Required for failed generations; absent in every other state.
+if:
+  properties:
+    state:
+      const: failed
+  required: [state]
+then:
+  required: [error]
+else:
+  not:
+    required: [error]
 additionalProperties: false
