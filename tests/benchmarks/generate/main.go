@@ -99,15 +99,28 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 	case "lm_evaluation_harness":
 		p["num_examples"], p["num_fewshot"] = 1, 0
 		f["notes"] = "One example per underlying task; grouped benchmarks may expand into multiple tasks. Model endpoint must support the benchmark's request type (including loglikelihood where applicable)."
+		if benchmark == "longbenchv2" {
+			p["max_length"] = 4096
+			p["loglikelihood_context_overflow"] = "truncate"
+			f["max_length_env"] = "MODEL_MAX_LENGTH"
+			f["notes"] = "One LongBench example with a 4096-token smoke context budget. Set MODEL_MAX_LENGTH to the served model's context limit (integer >= 2); the budget must not exceed that limit. This short default does not validate full long-context accuracy."
+		}
 	case "lighteval":
 		p["num_examples"], p["num_few_shot"], p["batch_size"] = 1, 0, 1
 		f["notes"] = "One example per underlying task. Requires an endpoint supporting this task's request type and a compatible tokenizer."
+		if benchmark == "math" || benchmark == "math:algebra" || benchmark == "math:counting_and_probability" {
+			p["generation_parameters"] = map[string]any{"temperature": 0.1}
+		}
 	case "garak", "garak-kfp":
 		p["num_examples"] = 1
 		f["notes"] = "One example per probe; broad probe groups still invoke multiple probes. garak-kfp additionally requires Data Science Pipelines."
+		if provider == "garak-kfp" {
+			p["kfp_config"] = map[string]any{"endpoint": "${KFP_ENDPOINT}", "namespace": "${KFP_NAMESPACE}", "s3_secret_name": "${KFP_S3_SECRET_NAME}"}
+			f["notes"] = "Requires KFP_ENDPOINT, KFP_NAMESPACE, and KFP_S3_SECRET_NAME for a working Data Science Pipelines deployment and Data Connection Secret. Configure KFP authentication through the model auth Secret. One example per probe; broad groups still invoke multiple probes."
+		}
 		if benchmark == "intents" {
 			p["intents_models"] = map[string]any{"judge": map[string]any{"name": "${JUDGE_MODEL_NAME}", "url": "${JUDGE_BASE_URL}"}}
-			p["sdg_model"], p["sdg_api_base"] = "${MODEL_NAME}", "${MODEL_URL}"
+			p["sdg_model"], p["sdg_api_base"] = "openai/${MODEL_NAME}", "${MODEL_URL}"
 		}
 	case "guidellm":
 		p["num_examples"], p["max_requests"], p["max_seconds"] = 1, 1, 10
@@ -155,6 +168,43 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 			p["bloom_template"] = "${INSPECT_BLOOM_TEMPLATE}"
 		}
 		f["notes"] = "One sample per task. Agent/code benchmarks may require sandbox and external services; configure those in this fixture for the target environment. Petri/Bloom require JUDGE_MODEL_NAME, JUDGE_BASE_URL, and JUDGE_API_KEY for the judge. HLE/CyberSecEval require judge_api-key and judge_url in model.auth.secret_ref for an independent judge connection. StrongREJECT requires Secret-backed OPENAI_JUDGE_API_KEY in the adapter environment."
+		// These catalog IDs name task families rather than registered Inspect
+		// tasks. Select one representative task without changing the catalog ID.
+		tasks := map[string]string{
+			"inspect/arc":                    "arc_easy",
+			"inspect/mmlu":                   "mmlu_0_shot",
+			"inspect/gpqa":                   "gpqa_diamond",
+			"inspect/wmdp":                   "wmdp_bio",
+			"inspect/sad":                    "sad_facts_llms",
+			"inspect/gdm-stealth":            "gdm_oversight_pattern",
+			"inspect/gdm-self-reasoning":     "gdm_self_reasoning_approved_directories",
+			"inspect/gdm-self-proliferation": "gdm_sp01_e2e",
+			"inspect/cyberseceval-2":         "cyse2_interpreter_abuse",
+		}
+		if task, ok := tasks[benchmark]; ok {
+			p["task"] = "inspect_evals/" + task
+			f["notes"] = fmt.Sprintf("One example from representative task inspect_evals/%s. Agent/code tasks still require their sandbox and external services; GPQA requires dataset access.", task)
+		}
+		switch benchmark {
+		case "inspect/mask":
+			p["task_args"] = map[string]any{"binary_judge_model": "openai/${MODEL_NAME}", "numeric_judge_model": "openai/${MODEL_NAME}"}
+			f["notes"] = "One smoke sample, using the target model and its endpoint/credentials for both judges instead of unavailable task-default models. Not an independent accuracy assessment."
+		case "inspect/instrumental-eval", "inspect/agentic-misalignment":
+			p["task_args"] = map[string]any{"grader_model": "openai/${MODEL_NAME}"}
+			f["notes"] = "One smoke sample, using the target model and its endpoint/credentials as grader instead of an unavailable task-default model. Not an independent accuracy assessment."
+		case "inspect/cyberseceval-2":
+			// Disable the task's default judge so Inspect resolves the grader role.
+			p["task_args"] = map[string]any{"judge_llm": "null"}
+			p["model_roles"] = map[string]any{"grader": `{"model":"openai/${JUDGE_MODEL_NAME}","model_args":{"base_url":"${JUDGE_BASE_URL}","api_key":"${JUDGE_API_KEY}","responses_api":false}}`}
+			f["notes"] = "One interpreter-abuse sample. Requires JUDGE_MODEL_NAME, JUDGE_BASE_URL, and JUDGE_API_KEY for an independent OpenAI-compatible grader connection."
+		case "inspect/make-me-pay":
+			p["model_roles"] = map[string]any{"mark": "openai/${MODEL_NAME}"}
+			p["task_args"] = map[string]any{"num_experiments": 1, "turn_cap": 2}
+			f["notes"] = "One experiment with turn_cap=2 so the mark can respond, using the target model and its endpoint/credentials for the mark role instead of the default Google model. Smoke execution only."
+		case "inspect/makemesay":
+			p["task_args"] = map[string]any{"max_turns": 1}
+			f["notes"] = "One sample with one game turn to bound smoke workload; not a full multi-turn accuracy assessment."
+		}
 	case "ragas":
 		p["judge_model"] = "${JUDGE_MODEL_NAME}"
 		p["embedding_model"] = "${RAGAS_EMBEDDING_MODEL}"
