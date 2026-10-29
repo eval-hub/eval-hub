@@ -45,8 +45,11 @@ type fakeStorage struct {
 	// evaluationJob, when set, is returned by GetEvaluationJob (RuntimeStorage).
 	// getJobErr overrides that return. Default is a non-cancelled pending job so
 	// create loops are not aborted unless a test opts in.
+	// getJobFn, when set, takes precedence over evaluationJob/getJobErr (for
+	// sequenced transient→deleted abort checks).
 	evaluationJob *api.EvaluationJobResource
 	getJobErr     error
+	getJobFn      func(id string) (*api.EvaluationJobResource, error)
 	getJobMu      sync.Mutex
 }
 
@@ -72,12 +75,18 @@ func (f *fakeStorage) CreateEvaluationJobAndUpdateCollection(_ *api.EvaluationJo
 }
 func (f *fakeStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, error) {
 	f.getJobMu.Lock()
-	defer f.getJobMu.Unlock()
-	if f.getJobErr != nil {
-		return nil, f.getJobErr
+	fn := f.getJobFn
+	err := f.getJobErr
+	job := f.evaluationJob
+	f.getJobMu.Unlock()
+	if fn != nil {
+		return fn(id)
 	}
-	if f.evaluationJob != nil {
-		return f.evaluationJob, nil
+	if err != nil {
+		return nil, err
+	}
+	if job != nil {
+		return job, nil
 	}
 	return &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{Resource: api.Resource{ID: id}},
@@ -90,6 +99,13 @@ func (f *fakeStorage) setEvaluationJob(job *api.EvaluationJobResource, err error
 	defer f.getJobMu.Unlock()
 	f.evaluationJob = job
 	f.getJobErr = err
+	f.getJobFn = nil
+}
+
+func (f *fakeStorage) setGetJobFn(fn func(id string) (*api.EvaluationJobResource, error)) {
+	f.getJobMu.Lock()
+	defer f.getJobMu.Unlock()
+	f.getJobFn = fn
 }
 func (f *fakeStorage) GetEvaluationJobs(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
 	return nil, nil
@@ -1966,11 +1982,11 @@ func TestRunEvaluationJobSweepsFailedCreateAfterDeleteRace(t *testing.T) {
 	}
 }
 
-func TestEvaluationCreateAborted(t *testing.T) {
+func TestCheckCreateAbort(t *testing.T) {
 	t.Parallel()
 	jobID := "job-abort"
-	if aborted, _ := evaluationCreateAborted(nil, jobID); aborted {
-		t.Fatal("nil storage must not abort")
+	if status, _ := checkCreateAbort(nil, jobID); status != createAbortActive {
+		t.Fatalf("nil storage must be active, got %v", status)
 	}
 	storage := &fakeStorage{}
 	storage.setEvaluationJob(&api.EvaluationJobResource{
@@ -1979,8 +1995,8 @@ func TestEvaluationCreateAborted(t *testing.T) {
 			EvaluationJobState: api.EvaluationJobState{State: api.OverallStateRunning},
 		},
 	}, nil)
-	if aborted, _ := evaluationCreateAborted(storage, jobID); aborted {
-		t.Fatal("running job must not abort")
+	if status, _ := checkCreateAbort(storage, jobID); status != createAbortActive {
+		t.Fatalf("running job must be active, got %v", status)
 	}
 	storage.setEvaluationJob(&api.EvaluationJobResource{
 		Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
@@ -1988,16 +2004,102 @@ func TestEvaluationCreateAborted(t *testing.T) {
 			EvaluationJobState: api.EvaluationJobState{State: api.OverallStateCancelled},
 		},
 	}, nil)
-	if aborted, reason := evaluationCreateAborted(storage, jobID); !aborted || reason != "evaluation job cancelled" {
-		t.Fatalf("cancelled job abort=%v reason=%q", aborted, reason)
+	if status, reason := checkCreateAbort(storage, jobID); status != createAbortAborted || reason != "evaluation job cancelled" {
+		t.Fatalf("cancelled job status=%v reason=%q", status, reason)
 	}
 	markEvaluationDeleted(storage, jobID)
-	if aborted, reason := evaluationCreateAborted(storage, jobID); !aborted || reason != "evaluation job deleted" {
-		t.Fatalf("deleted job abort=%v reason=%q", aborted, reason)
+	if status, reason := checkCreateAbort(storage, jobID); status != createAbortAborted || reason != "evaluation job deleted" {
+		t.Fatalf("deleted job status=%v reason=%q", status, reason)
 	}
 	storage.setEvaluationJob(nil, fmt.Errorf("transient storage blip"))
-	if aborted, _ := evaluationCreateAborted(storage, jobID); aborted {
-		t.Fatal("transient storage errors must not abort")
+	if status, _ := checkCreateAbort(storage, jobID); status != createAbortUnknown {
+		t.Fatalf("transient storage errors must be unknown, got %v", status)
+	}
+}
+
+func TestResolveCreateAbortRetriesTransientThenDeleted(t *testing.T) {
+	origAttempts := createAbortRetryAttempts
+	origInterval := createAbortRetryInterval
+	createAbortRetryAttempts = 4
+	createAbortRetryInterval = time.Millisecond
+	t.Cleanup(func() {
+		createAbortRetryAttempts = origAttempts
+		createAbortRetryInterval = origInterval
+	})
+
+	jobID := "job-resolve-abort"
+	storage := &fakeStorage{}
+	var calls atomic.Int32
+	storage.setGetJobFn(func(id string) (*api.EvaluationJobResource, error) {
+		n := calls.Add(1)
+		if n < 3 {
+			return nil, fmt.Errorf("transient storage blip %d", n)
+		}
+		return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
+	})
+	status, reason := resolveCreateAbort(storage, jobID, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if status != createAbortAborted || reason != "evaluation job deleted" {
+		t.Fatalf("expected aborted/deleted after retries, got status=%v reason=%q calls=%d", status, reason, calls.Load())
+	}
+	if calls.Load() < 3 {
+		t.Fatalf("expected at least 3 storage probes, got %d", calls.Load())
+	}
+}
+
+// TestRunEvaluationJobPostCreateTransientThenDeletedSweeps covers Julian's P2:
+// a transient post-create storage error must not be treated as "still active"
+// (that left an orphan Job). Retries must eventually see delete and sweep.
+func TestRunEvaluationJobPostCreateTransientThenDeletedSweeps(t *testing.T) {
+	origAttempts := createAbortRetryAttempts
+	origInterval := createAbortRetryInterval
+	origDeferredAttempts := createAbortDeferredAttempts
+	origDeferredInterval := createAbortDeferredInterval
+	createAbortRetryAttempts = 5
+	createAbortRetryInterval = time.Millisecond
+	createAbortDeferredAttempts = 3
+	createAbortDeferredInterval = time.Millisecond
+	t.Cleanup(func() {
+		createAbortRetryAttempts = origAttempts
+		createAbortRetryInterval = origInterval
+		createAbortDeferredAttempts = origDeferredAttempts
+		createAbortDeferredInterval = origDeferredInterval
+	})
+
+	evaluation, jobID, clientset, storage := newSingleBenchmarkRaceFixture("provider-1")
+	enteredCreate := make(chan struct{})
+	releaseCreate := make(chan struct{})
+	createLoopDone := make(chan struct{})
+	beforeCreate, release := gateBeforeCreate(enteredCreate, releaseCreate)
+
+	var postCreateCalls atomic.Int32
+	runtime := &K8sRuntime{
+		logger:                         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper:                         &KubernetesHelper{clientset: clientset},
+		ctx:                            context.Background(),
+		serviceConfig:                  &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		beforeCreateBenchmarkResources: beforeCreate,
+		afterCreateBenchmarkResources: func(err error) {
+			// Simulate: Job created, then storage blips before the abort check
+			// can see the hard_delete that landed during create.
+			storage.setGetJobFn(func(id string) (*api.EvaluationJobResource, error) {
+				n := postCreateCalls.Add(1)
+				if n <= 2 {
+					return nil, fmt.Errorf("transient storage blip %d", n)
+				}
+				return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
+			})
+		},
+		afterCreateLoop: func() { close(createLoopDone) },
+	}
+	if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
+		t.Fatalf("RunEvaluationJob: %v", err)
+	}
+	waitClosed(t, enteredCreate, "timed out waiting to enter create")
+	release()
+	waitClosed(t, createLoopDone, "timed out waiting for create loop")
+	waitLabeledJobsGone(t, clientset, jobID)
+	if postCreateCalls.Load() < 3 {
+		t.Fatalf("expected post-create abort retries against storage, got %d calls", postCreateCalls.Load())
 	}
 }
 

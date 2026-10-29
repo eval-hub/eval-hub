@@ -47,6 +47,18 @@ type K8sRuntime struct {
 // caller's context (HTTP DELETE or cancelled create) is already done.
 const orphanCleanupTimeout = 30 * time.Second
 
+// createAbortRetry* bounds how long the create loop waits for a definitive
+// storage answer (deleted/cancelled vs still active) before stopping creates
+// and entering deferred reconciliation. Tunable in tests.
+var (
+	createAbortRetryAttempts = 5
+	createAbortRetryInterval = 100 * time.Millisecond
+	// createAbortDeferred* continues probing after the create loop stops so a
+	// late Job is not left behind when storage was only briefly unavailable.
+	createAbortDeferredAttempts = 10
+	createAbortDeferredInterval = 200 * time.Millisecond
+)
+
 func orphanCleanupContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), orphanCleanupTimeout)
 }
@@ -109,17 +121,9 @@ func (r *K8sRuntime) RunEvaluationJob(
 		for idx, bench := range benchmarks {
 			// Shared DB signal works across eval-hub replicas: hard_delete removes the
 			// row, soft cancel sets cancelled — either stops further Job creation.
-			if aborted, reason := evaluationCreateAborted(storage, jobID); aborted {
-				r.logger.Info(
-					"skipping remaining kubernetes job creation; evaluation deleted or cancelled; sweeping leftovers",
-					"job_id", jobID,
-					"benchmark_id", bench.ID,
-					"benchmark_index", idx,
-					"reason", reason,
-				)
-				// Retry cleanup if the cancel/delete handler's sweep failed or a prior
-				// benchmark left resources behind before this pre-check ran.
-				r.sweepEvaluationResourcesAfterAbort(evaluation, jobID, bench.ID)
+			// Transient storage errors are retried; still-unknown stops creates and
+			// reconciles so a late Job is not left behind after delete/cancel.
+			if r.handleCreateAbortDecision(evaluation, storage, jobID, bench.ID, idx, nil, "pre-create") {
 				return
 			}
 			// DetachedContext keeps request-trace linkage without inheriting the
@@ -134,16 +138,7 @@ func (r *K8sRuntime) RunEvaluationJob(
 			}
 			// After any create outcome: if storage already signalled delete/cancel,
 			// sweep leftovers (success or uncertain/failed persist) and stop.
-			if aborted, reason := evaluationCreateAborted(storage, jobID); aborted {
-				r.logger.Info(
-					"kubernetes job creation aborted; evaluation deleted or cancelled; sweeping leftovers",
-					"job_id", jobID,
-					"benchmark_id", bench.ID,
-					"benchmark_index", idx,
-					"reason", reason,
-					"error", err,
-				)
-				r.sweepEvaluationResourcesAfterAbort(evaluation, jobID, bench.ID)
+			if r.handleCreateAbortDecision(evaluation, storage, jobID, bench.ID, idx, err, "post-create") {
 				return
 			}
 			if err != nil {
@@ -171,6 +166,91 @@ func (r *K8sRuntime) RunEvaluationJob(
 	return nil
 }
 
+// handleCreateAbortDecision resolves storage abort status (with retries). Returns
+// true when the create loop must stop (aborted, or still unknown after reconcile).
+func (r *K8sRuntime) handleCreateAbortDecision(
+	evaluation *api.EvaluationJobResource,
+	storage abstractions.RuntimeStorage,
+	jobID, benchmarkID string,
+	benchmarkIndex int,
+	createErr error,
+	phase string,
+) bool {
+	status, reason := resolveCreateAbort(storage, jobID, r.logger)
+	switch status {
+	case createAbortActive:
+		return false
+	case createAbortAborted:
+		r.logger.Info(
+			"kubernetes job creation aborted; evaluation deleted or cancelled; sweeping leftovers",
+			"job_id", jobID,
+			"benchmark_id", benchmarkID,
+			"benchmark_index", benchmarkIndex,
+			"reason", reason,
+			"phase", phase,
+			"error", createErr,
+		)
+		r.sweepEvaluationResourcesAfterAbort(evaluation, jobID, benchmarkID)
+		return true
+	default:
+		r.logger.Warn(
+			"storage abort check still unknown after retries; stopping creates and reconciling",
+			"job_id", jobID,
+			"benchmark_id", benchmarkID,
+			"benchmark_index", benchmarkIndex,
+			"phase", phase,
+			"error", createErr,
+		)
+		r.reconcileCreateAbortUntilKnown(evaluation, storage, jobID, benchmarkID)
+		return true
+	}
+}
+
+// reconcileCreateAbortUntilKnown keeps probing storage after the create loop
+// stops on an unknown abort check, sweeping if delete/cancel becomes visible.
+func (r *K8sRuntime) reconcileCreateAbortUntilKnown(
+	evaluation *api.EvaluationJobResource,
+	storage abstractions.RuntimeStorage,
+	jobID, benchmarkID string,
+) {
+	for attempt := 1; attempt <= createAbortDeferredAttempts; attempt++ {
+		time.Sleep(createAbortDeferredInterval)
+		status, reason := checkCreateAbort(storage, jobID)
+		switch status {
+		case createAbortAborted:
+			r.logger.Info(
+				"deferred abort reconcile confirmed delete/cancel; sweeping leftovers",
+				"job_id", jobID,
+				"benchmark_id", benchmarkID,
+				"reason", reason,
+				"attempt", attempt,
+			)
+			r.sweepEvaluationResourcesAfterAbort(evaluation, jobID, benchmarkID)
+			return
+		case createAbortActive:
+			r.logger.Info(
+				"deferred abort reconcile confirmed evaluation still active",
+				"job_id", jobID,
+				"benchmark_id", benchmarkID,
+				"attempt", attempt,
+			)
+			return
+		default:
+			r.logger.Warn(
+				"deferred abort reconcile storage check still unknown",
+				"job_id", jobID,
+				"benchmark_id", benchmarkID,
+				"attempt", attempt,
+			)
+		}
+	}
+	r.logger.Error(
+		"deferred abort reconcile exhausted retries without definitive storage status; leftovers may remain until a later cleanup path",
+		"job_id", jobID,
+		"benchmark_id", benchmarkID,
+	)
+}
+
 // sweepEvaluationResourcesAfterAbort is the create-loop counterpart to hard_delete
 // cleanup: reuse DeleteEvaluationJobResources so new resource types only need one delete path.
 func (r *K8sRuntime) sweepEvaluationResourcesAfterAbort(evaluation *api.EvaluationJobResource, jobID, benchmarkID string) {
@@ -187,28 +267,63 @@ func (r *K8sRuntime) sweepEvaluationResourcesAfterAbort(evaluation *api.Evaluati
 	}
 }
 
-// evaluationCreateAborted reports whether create should stop because the evaluation
+// createAbortStatus is the tri-state result of a create-loop storage check.
+// Unknown must not be treated as active: that leaves orphan Jobs after delete.
+type createAbortStatus int
+
+const (
+	createAbortActive createAbortStatus = iota
+	createAbortAborted
+	createAbortUnknown
+)
+
+// checkCreateAbort reports whether create should stop because the evaluation
 // was hard-deleted or soft-cancelled in shared storage (visible to every replica).
-func evaluationCreateAborted(storage abstractions.RuntimeStorage, jobID string) (bool, string) {
+// Transient storage errors return createAbortUnknown so callers can retry.
+func checkCreateAbort(storage abstractions.RuntimeStorage, jobID string) (createAbortStatus, string) {
 	if storage == nil {
-		return false, ""
+		return createAbortActive, ""
 	}
 	job, err := storage.GetEvaluationJob(jobID)
 	if err != nil {
 		var serviceErr *serviceerrors.ServiceError
 		if errors.As(err, &serviceErr) && serviceErr.MessageCode() == messages.ResourceNotFound {
-			return true, "evaluation job deleted"
+			return createAbortAborted, "evaluation job deleted"
 		}
-		// Transient storage errors must not abort an in-progress create loop.
-		return false, ""
+		return createAbortUnknown, ""
 	}
 	if job == nil {
-		return true, "evaluation job deleted"
+		return createAbortAborted, "evaluation job deleted"
 	}
 	if job.Status != nil && job.Status.State == api.OverallStateCancelled {
-		return true, "evaluation job cancelled"
+		return createAbortAborted, "evaluation job cancelled"
 	}
-	return false, ""
+	return createAbortActive, ""
+}
+
+// resolveCreateAbort retries transient storage failures until the abort check is
+// definitive or attempts are exhausted.
+func resolveCreateAbort(storage abstractions.RuntimeStorage, jobID string, logger *slog.Logger) (createAbortStatus, string) {
+	var status createAbortStatus
+	var reason string
+	for attempt := 1; attempt <= createAbortRetryAttempts; attempt++ {
+		status, reason = checkCreateAbort(storage, jobID)
+		if status != createAbortUnknown {
+			return status, reason
+		}
+		if attempt < createAbortRetryAttempts {
+			if logger != nil {
+				logger.Warn(
+					"transient storage error checking evaluation abort status; retrying",
+					"job_id", jobID,
+					"attempt", attempt,
+					"max_attempts", createAbortRetryAttempts,
+				)
+			}
+			time.Sleep(createAbortRetryInterval)
+		}
+	}
+	return createAbortUnknown, ""
 }
 
 // jobForegroundDeleteOptions deletes Job-owned Pods before removing the Job so stuck Init
