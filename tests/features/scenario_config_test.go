@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -79,7 +80,7 @@ type apiFeature struct {
 	// MCP-specific fields
 	mcpServer        *mcp.Server
 	mcpClientSession *mcp.ClientSession
-	mcpServerSession *mcp.ServerSession
+	mcpHTTPServer    *httptest.Server
 	// otelLogsCollector captures OTLP log records exported by adapter
 	// subprocesses in local-runtime mode. Nil when running against a remote
 	// SERVER_URL (no embedded server is started).
@@ -108,6 +109,7 @@ type scenarioConfig struct {
 	mcpResourceError error
 	mcpPromptResult  *mcp.GetPromptResult
 	mcpPromptError   error
+	mcpCompletion    *mcp.CompleteResult
 
 	// assetsSync sync.Mutex
 	assets map[string][]string
@@ -364,6 +366,9 @@ func fvtDisconnected() bool {
 func fvtBenchmarkTokenizer() string {
 	if fvtDisconnected() {
 		return "/test_data/tokenizer"
+	}
+	if tokenizer := os.Getenv("FVT_BENCHMARK_TOKENIZER"); tokenizer != "" {
+		return tokenizer
 	}
 	return "google/flan-t5-small"
 }

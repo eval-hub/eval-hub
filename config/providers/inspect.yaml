@@ -12,13 +12,14 @@ description: UK AISI Inspect AI framework — Petri/Bloom alignment auditing and
 runtime:
   k8s:
     image: quay.io/evalhub/community-inspect:latest
+    image_pull_policy: always
     entrypoint:
       - python
       - main.py
     cpu_request: 500m
-    memory_request: 512Mi
+    memory_request: 8Gi
     cpu_limit: 2000m
-    memory_limit: 4Gi
+    memory_limit: 32Gi
   local:
     # used for local mode tests (FVT)
     # To run real benchmarks locally, override with the actual adapter path:
@@ -755,7 +756,9 @@ benchmarks:
     name: CyberSecEval 2 — Prompt Injection
     description: >
       Prompt injection subset of Meta's CyberSecEval 2 suite. Measures the percentage
-      of successful injection attacks against the model.
+      of successful injection attacks against the model. In the bundled collection,
+      set judge_model per job. Optional judge credentials and endpoint are selected
+      by judge_api-key and judge_url in model.auth.secret_ref.
     category: cybersecurity
     domains: [trustworthiness]
     tasks: [adversarial_prompt_injection_resistance]
@@ -1066,29 +1069,27 @@ benchmarks:
     metrics: [accuracy/accuracy]
     tags: [knowledge, factuality, inspect-evals]
 
-  # HLE requires a grader model for scoring. Pass model_roles.grader
-  # at run time via collection override, e.g.:
-  #   "parameters": { "model_roles": { "grader": "openai/gpt-4o-mini" } }
+  # knowledge-reasoning-v1 supplies the text-only, single-grader scorer settings
+  # and declares judge_model for per-job selection. Standalone jobs
+  # can bind model_roles.grader and pass the full task_args; see examples/inspect-hle/.
   - id: inspect/hle
     name: "Humanity's Last Exam"
     description: >
-      Frontier-difficulty questions across dozens of academic subjects. The source benchmark
-      includes image questions, but this configured run evaluates its text-only subset.
+      Frontier-difficulty questions across dozens of academic subjects, including image questions.
+      The knowledge-reasoning-v1 collection and standalone example select the text-only subset.
+      Set judge_model when using the bundled collection; judge_api-key and optional
+      judge_url in model.auth.secret_ref select a separate connection.
     category: knowledge
     domains: [knowledge_and_reasoning]
     tasks: [reasoning]
     modalities: [text]
     evaluation_targets: [model]
-    metrics: [regex_judge/accuracy]
+    metrics: [hle/regex_judge/hle/accuracy]
     primary_score:
-      metric: regex_judge/accuracy
+      metric: hle/regex_judge/hle/accuracy
       lower_is_better: false
     pass_criteria:
       threshold: 0.12
-    parameters:
-      task_args:
-        include_multi_modal: false
-        graders: [grader]
     tags: [knowledge, reasoning, inspect-evals]
 
   # Agent capabilities
@@ -1135,9 +1136,9 @@ benchmarks:
     tasks: [call_generation, parameter_type_correctness, relevance_no_call_detection]
     modalities: [text]
     evaluation_targets: [model]
-    metrics: [accuracy/accuracy]
+    metrics: [bfcl_scorer/accuracy]
     primary_score:
-      metric: accuracy/accuracy
+      metric: bfcl_scorer/accuracy
       lower_is_better: false
     pass_criteria:
       threshold: 0.60
@@ -1162,15 +1163,25 @@ benchmarks:
     tags: [multimodal, document-understanding, vision, inspect-evals]
 
   # Custom
+  # primary_score is intentionally omitted: the Inspect adapter reports the
+  # task-dependent metric key on the completed status event (exact match).
+  # pass_criteria.threshold assumes higher-is-better (SDK default). For
+  # lower-is-better scorers, set job primary_score.metric and lower_is_better.
   - id: inspect/custom
     name: Custom Inspect Task
     description: >
       Run any Inspect AI task by providing 'task' in parameters.
       Supports any inspect-evals task or user-authored task file.
+      Scorer metric names are task-dependent; the adapter reports primary_score
+      on the completed status event so results.benchmarks[].test can be built.
+      The default pass threshold (0.15) assumes a higher-is-better metric
+      (e.g. accuracy). For lower-is-better scorers, set the job's
+      primary_score.metric and primary_score.lower_is_better: true.
     category: custom
     domains: [custom]
     tasks: [custom]
-    metrics: [accuracy/accuracy]
+    pass_criteria:
+      threshold: 0.15
     tags: [custom, inspect-ai]
 
 parameters:

@@ -303,6 +303,31 @@
                     }
                   }
                 },
+                "CreateEvaluationWithCollectionJudge": {
+                  "summary": "Select a judge model using optional Secret-backed connection fields",
+                  "value": {
+                    "name": "trustworthiness-with-judge",
+                    "model": {
+                      "url": "http://target-model.models.svc.cluster.local:8000/v1",
+                      "name": "target-model",
+                      "auth": {
+                        "secret_ref": "model-and-judge-credentials"
+                      }
+                    },
+                    "collection": {
+                      "id": "trustworthiness-v1",
+                      "benchmarks": [
+                        {
+                          "id": "inspect/cyberseceval-2-pi",
+                          "provider_id": "inspect",
+                          "parameters": {
+                            "judge_model": "deployed-judge-model"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
                 "CreateEvaluationWithAuthAndHardwareProfile": {
                   "summary": "Evaluate an authenticated model with HardwareProfile Kueue scheduling",
                   "value": {
@@ -1181,7 +1206,7 @@
           "Evaluations"
         ],
         "summary": "Create Post-Processing Computation",
-        "description": "Create an asynchronous post-processing computation. Set `operation_order`\nto control execution order. If it is omitted, no operation order is\nguaranteed.\n",
+        "description": "Create an asynchronous post-processing computation. Set `operation_order`\nto control execution order. If it is omitted, no operation order is\nguaranteed.\n\nTo use results from a completed evaluation, set\n`operations.confidence_interval.results_data_ref.eval_job.id` to its ID.\nThe response's `resource.id` identifies the standalone post-processing job\nfor subsequent GET and DELETE requests.\n",
         "operationId": "create_evaluations_post_processing",
         "requestBody": {
           "required": true,
@@ -1214,6 +1239,19 @@
                           "eval_job": {
                             "id": "8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7",
                             "num_parallel_threads": 2
+                          },
+                          "data_config": {
+                            "format": "json",
+                            "columns": {
+                              "sample_id": "id",
+                              "prediction": "scores.telemath_scorer.value"
+                            },
+                            "value_mappings": {
+                              "prediction": {
+                                "C": 1,
+                                "I": 0
+                              }
+                            }
                           }
                         },
                         "calibration_data_ref": [
@@ -1273,7 +1311,7 @@
         }
       }
     },
-    "/api/v1/evaluations/post-processing/{id}": {
+    "/api/v1/evaluations/post-processing/{post_processing_job_id}": {
       "get": {
         "tags": [
           "Evaluations"
@@ -1283,7 +1321,7 @@
         "operationId": "get_evaluations_post_processing_id",
         "parameters": [
           {
-            "name": "id",
+            "name": "post_processing_job_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -1358,15 +1396,7 @@
                         }
                       },
                       "status": {
-                        "state": "completed",
-                        "benchmarks": [
-                          {
-                            "id": "accuracy-benchmark",
-                            "provider_id": "inspect",
-                            "benchmark_index": 0,
-                            "status": "completed"
-                          }
-                        ]
+                        "state": "completed"
                       },
                       "results": {
                         "benchmarks": [
@@ -1376,7 +1406,13 @@
                             "benchmark_index": 0,
                             "confidence_interval": {
                               "lower": 0.75,
-                              "upper": 0.85
+                              "upper": 0.85,
+                              "point_estimate": 0.8,
+                              "n_labeled": 100,
+                              "n_unlabeled": 1000,
+                              "alpha": 0.7,
+                              "method": "original_ppi",
+                              "lambda": 1
                             }
                           }
                         ]
@@ -1450,7 +1486,13 @@
                       "results": {
                         "confidence_interval": {
                           "lower": 0.75,
-                          "upper": 0.85
+                          "upper": 0.85,
+                          "point_estimate": 0.8,
+                          "n_labeled": 100,
+                          "n_unlabeled": 1000,
+                          "alpha": 0.7,
+                          "method": "original_ppi",
+                          "lambda": 1
                         }
                       }
                     }
@@ -1479,7 +1521,7 @@
         "operationId": "delete_evaluations_post_processing_id",
         "parameters": [
           {
-            "name": "id",
+            "name": "post_processing_job_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -1490,420 +1532,6 @@
         "responses": {
           "204": {
             "description": "Post-processing computation deleted."
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      }
-    },
-    "/api/v1/evaluations/jobs/{job_id}/post-processing": {
-      "post": {
-        "tags": [
-          "Evaluations"
-        ],
-        "summary": "Create Confidence Interval Post-Processing",
-        "description": "Create confidence interval computation for the benchmarks in an existing\nevaluation job. The operation is idempotent: if the same job already has a\nconfidence interval computation, the existing post-processing resource is\nreturned.\n\nThe computation runs independently for each benchmark. The `operations`\nobject is keyed by operation kind, so each kind can appear at most once.\nUse `operation_order` to control execution order. If it is omitted, no\noperation order is guaranteed.\n`hardware_config` applies to the post-processing job as a whole.\n",
-        "operationId": "post_evaluations_jobs_job_id_post_processing",
-        "parameters": [
-          {
-            "name": "job_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Job Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConfidenceIntervalPostProcessingRequest"
-              },
-              "examples": {
-                "request": {
-                  "summary": "Configure confidence interval computation",
-                  "value": {
-                    "name": "inspect-accuracy-confidence-interval",
-                    "hardware_config": {
-                      "cpu": {
-                        "request": "500m",
-                        "limit": "2"
-                      },
-                      "memory": {
-                        "request": "1Gi",
-                        "limit": "4Gi"
-                      }
-                    },
-                    "operation_order": [
-                      "confidence_interval"
-                    ],
-                    "operations": {
-                      "confidence_interval": {
-                        "num_parallel_threads": 2,
-                        "calibration_data_ref": [
-                          {
-                            "s3": {
-                              "bucket": "evaluation-data",
-                              "key": "calibration/accuracy",
-                              "secret_ref": "s3-secret"
-                            },
-                            "data_config": {
-                              "format": "jsonl",
-                              "columns": {
-                                "sample_id": "example_id",
-                                "label": "human_score",
-                                "prediction": "judge_score",
-                                "benchmark_id": "benchmark_id",
-                                "provider_id": "provider_id"
-                              },
-                              "selection": {
-                                "metric": "accuracy"
-                              }
-                            }
-                          }
-                        ],
-                        "significance_level": 0.7
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The existing post-processing resource is returned.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobPostProcessingResource"
-                },
-                "example": {
-                  "resource": {
-                    "id": "4b6510bd-cee3-4a80-8028-4a6cb60ae1cc",
-                    "tenant": "sagar",
-                    "created_at": "2026-09-21T05:57:34.477263Z",
-                    "updated_at": "2026-09-21T05:58:29.768663Z",
-                    "owner": "nbs"
-                  },
-                  "name": "inspect-accuracy-confidence-interval",
-                  "hardware_config": {
-                    "cpu": {
-                      "request": "500m",
-                      "limit": "2"
-                    },
-                    "memory": {
-                      "request": "1Gi",
-                      "limit": "4Gi"
-                    }
-                  },
-                  "operation_order": [
-                    "confidence_interval"
-                  ],
-                  "operations": {
-                    "confidence_interval": {
-                      "num_parallel_threads": 2,
-                      "calibration_data_ref": [
-                        {
-                          "s3": {
-                            "bucket": "evaluation-data",
-                            "key": "calibration/accuracy",
-                            "secret_ref": "s3-secret"
-                          },
-                          "data_config": {
-                            "format": "jsonl",
-                            "columns": {
-                              "sample_id": "example_id",
-                              "label": "human_score",
-                              "prediction": "judge_score",
-                              "benchmark_id": "benchmark_id",
-                              "provider_id": "provider_id"
-                            },
-                            "selection": {
-                              "metric": "accuracy"
-                            }
-                          }
-                        }
-                      ],
-                      "significance_level": 0.7
-                    }
-                  },
-                  "status": {
-                    "state": "completed",
-                    "benchmarks": [
-                      {
-                        "id": "accuracy-benchmark",
-                        "provider_id": "inspect",
-                        "benchmark_index": 0,
-                        "status": "completed"
-                      }
-                    ]
-                  },
-                  "results": {
-                    "benchmarks": [
-                      {
-                        "id": "accuracy-benchmark",
-                        "provider_id": "inspect",
-                        "benchmark_index": 0,
-                        "confidence_interval": {
-                          "lower": 0.75,
-                          "upper": 0.85
-                        }
-                      }
-                    ]
-                  }
-                }
-              }
-            }
-          },
-          "202": {
-            "description": "The post-processing resource is returned after the computation is accepted.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobPostProcessingResource"
-                },
-                "example": {
-                  "resource": {
-                    "id": "4b6510bd-cee3-4a52-91b4-6f0f00c2f8d7",
-                    "tenant": "sagar",
-                    "created_at": "2026-09-21T05:57:34.477263Z",
-                    "updated_at": "2026-09-21T05:57:34.477263Z",
-                    "owner": "nbs"
-                  },
-                  "name": "inspect-accuracy-confidence-interval",
-                  "hardware_config": {
-                    "cpu": {
-                      "request": "500m",
-                      "limit": "2"
-                    },
-                    "memory": {
-                      "request": "1Gi",
-                      "limit": "4Gi"
-                    }
-                  },
-                  "operation_order": [
-                    "confidence_interval"
-                  ],
-                  "operations": {
-                    "confidence_interval": {
-                      "num_parallel_threads": 2,
-                      "calibration_data_ref": [
-                        {
-                          "s3": {
-                            "bucket": "evaluation-data",
-                            "key": "calibration/accuracy",
-                            "secret_ref": "s3-secret"
-                          },
-                          "data_config": {
-                            "format": "jsonl",
-                            "columns": {
-                              "sample_id": "example_id",
-                              "label": "human_score",
-                              "prediction": "judge_score",
-                              "benchmark_id": "benchmark_id",
-                              "provider_id": "provider_id"
-                            },
-                            "selection": {
-                              "metric": "accuracy"
-                            }
-                          }
-                        }
-                      ],
-                      "significance_level": 0.7
-                    }
-                  },
-                  "status": {
-                    "state": "pending"
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "409": {
-            "$ref": "#/components/responses/Conflict"
-          }
-        }
-      }
-    },
-    "/api/v1/evaluations/jobs/{job_id}/post-processing/{post_processing_id}": {
-      "get": {
-        "tags": [
-          "Evaluations"
-        ],
-        "summary": "Get Job Post-Processing Computation",
-        "description": "Get a confidence interval computation associated with an evaluation job.",
-        "operationId": "get_evaluations_jobs_job_id_post_processing_post_processing_id",
-        "parameters": [
-          {
-            "name": "job_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Job Id"
-            }
-          },
-          {
-            "name": "post_processing_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Post Processing Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Job-scoped post-processing computation.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JobPostProcessingResource"
-                },
-                "example": {
-                  "resource": {
-                    "id": "pp-1234567890ab",
-                    "tenant": "sagar",
-                    "created_at": "2026-09-21T05:57:34.477263Z",
-                    "updated_at": "2026-09-21T05:58:29.768663Z",
-                    "owner": "nbs"
-                  },
-                  "name": "inspect-accuracy-confidence-interval",
-                  "hardware_config": {
-                    "cpu": {
-                      "request": "500m",
-                      "limit": "2"
-                    },
-                    "memory": {
-                      "request": "1Gi",
-                      "limit": "4Gi"
-                    }
-                  },
-                  "operation_order": [
-                    "confidence_interval"
-                  ],
-                  "operations": {
-                    "confidence_interval": {
-                      "num_parallel_threads": 2,
-                      "calibration_data_ref": [
-                        {
-                          "s3": {
-                            "bucket": "evaluation-data",
-                            "key": "calibration/accuracy",
-                            "secret_ref": "s3-secret"
-                          },
-                          "data_config": {
-                            "format": "jsonl",
-                            "columns": {
-                              "sample_id": "example_id",
-                              "label": "human_score",
-                              "prediction": "judge_score",
-                              "benchmark_id": "benchmark_id",
-                              "provider_id": "provider_id"
-                            },
-                            "selection": {
-                              "metric": "accuracy"
-                            }
-                          }
-                        }
-                      ],
-                      "significance_level": 0.7
-                    }
-                  },
-                  "status": {
-                    "state": "completed",
-                    "benchmarks": [
-                      {
-                        "id": "accuracy-benchmark",
-                        "provider_id": "inspect",
-                        "benchmark_index": 0,
-                        "status": "completed"
-                      }
-                    ]
-                  },
-                  "results": {
-                    "benchmarks": [
-                      {
-                        "id": "accuracy-benchmark",
-                        "provider_id": "inspect",
-                        "benchmark_index": 0,
-                        "confidence_interval": {
-                          "lower": 0.75,
-                          "upper": 0.85
-                        }
-                      }
-                    ]
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Evaluations"
-        ],
-        "summary": "Delete Job Post-Processing Computation",
-        "description": "Delete a confidence interval computation associated with an evaluation job.",
-        "operationId": "delete_evaluations_jobs_job_id_post_processing_post_processing_id",
-        "parameters": [
-          {
-            "name": "job_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Job Id"
-            }
-          },
-          {
-            "name": "post_processing_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Post Processing Id"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Job-scoped post-processing computation deleted."
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
@@ -4296,6 +3924,125 @@
           }
         ]
       },
+      "OCIProcessingStatus": {
+        "type": "object",
+        "description": "Common post-evaluation OCI workflow status for evaluation-card generation and publication, evaluation-bundle generation and publication, and future signing. Independent of the evaluation job status and completion message. Omit until actual workflow information is available; no state or message is defaulted.",
+        "required": [
+          "state",
+          "message"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "running",
+              "failed",
+              "completed"
+            ],
+            "description": "running means OCI processing has started and remains in progress throughout all applicable phases. Workflow reporting uses running followed by completed or failed. failed means a required stage failed, with the stage and cause described in the message. completed means all applicable stages succeeded; card-only completion does not require bundle or signing outputs. No state is defaulted when status is absent."
+          },
+          "message": {
+            "$ref": "#/components/schemas/MessageInfo"
+          }
+        }
+      },
+      "OCIArtifactReference": {
+        "type": "object",
+        "description": "OCI artifact reference.",
+        "properties": {
+          "oci_digest": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S",
+            "description": "Artifact digest.",
+            "examples": [
+              "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            ]
+          },
+          "oci_reference": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S",
+            "description": "Registry reference identifying the artifact by digest."
+          }
+        },
+        "required": [
+          "oci_digest",
+          "oci_reference"
+        ],
+        "additionalProperties": false
+      },
+      "OCISigningResult": {
+        "type": "object",
+        "description": "Signing information associated with the evaluation bundle digest. Omit until an actual signing outcome is available. Processing status is reported separately in results.oci.status; it does not change the evaluation job status.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "key-pair"
+            ],
+            "description": "Signing method. Only key-pair is currently supported."
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "EvaluationOCIResults": {
+        "type": "object",
+        "description": "Optional job-level OCI processing status, artifact references, and signing information. Unavailable objects are omitted, including on completed jobs. Status, artifacts, and signing are independently optional. Artifact references identify published outputs and are not derived from job IDs or registry tags. OCI workflows report running once at the start and save available outputs together with the final completed or failed status, without intermediate phase writes.",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/OCIProcessingStatus",
+            "description": "Optional common OCI workflow status; omit until actual workflow information is available."
+          },
+          "evaluation_card": {
+            "$ref": "#/components/schemas/OCIArtifactReference",
+            "description": "Optional evaluation card artifact; omit until available."
+          },
+          "evaluation_bundle": {
+            "$ref": "#/components/schemas/OCIArtifactReference",
+            "description": "Optional OCI index grouping the evaluation card and benchmark artifacts; omit until available."
+          },
+          "signing": {
+            "$ref": "#/components/schemas/OCISigningResult",
+            "description": "Optional signing information; omitted when no outcome is available."
+          }
+        },
+        "additionalProperties": false,
+        "examples": [
+          {
+            "status": {
+              "state": "running",
+              "message": {
+                "message": "OCI processing is running.",
+                "message_code": "oci_processing_running"
+              }
+            }
+          },
+          {
+            "status": {
+              "state": "completed",
+              "message": {
+                "message": "OCI processing completed.",
+                "message_code": "oci_processing_completed"
+              }
+            },
+            "evaluation_card": {
+              "oci_digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+              "oci_reference": "quay.io/my-org/eval-results@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            },
+            "evaluation_bundle": {
+              "oci_digest": "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+              "oci_reference": "quay.io/my-org/eval-results@sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+            },
+            "signing": {
+              "type": "key-pair"
+            }
+          }
+        ]
+      },
       "MetricSchema": {
         "type": "object",
         "description": "One entry in metrics_schema that names a metric and its result type.",
@@ -4335,6 +4082,14 @@
             "type": "number",
             "format": "float",
             "description": "Primary score value"
+          },
+          "primary_score_metric": {
+            "type": "string",
+            "description": "Name of the metric used as the primary score"
+          },
+          "lower_is_better": {
+            "type": "boolean",
+            "description": "Whether a lower primary_score is better for this benchmark. Taken from the resolved job, status-event, or catalog primary_score. Persisted so job-level aggregation can invert scores after a storage reload; omitted on legacy results (aggregation then falls back to job/catalog PrimaryScore).\n"
           },
           "threshold": {
             "type": "number",
@@ -4444,8 +4199,17 @@
       },
       "EvaluationJobResults": {
         "type": "object",
-        "description": "Results section for an evaluation job",
+        "description": "Results section shared by create, get, and list job resources. Unavailable OCI outputs are omitted. A signing request alone does not produce OCI processing status or signing results.",
+        "examples": [
+          {
+            "benchmarks": []
+          }
+        ],
         "properties": {
+          "oci": {
+            "$ref": "#/components/schemas/EvaluationOCIResults",
+            "description": "Optional job-level OCI reporting; omitted until values are available, including on completed jobs."
+          },
           "benchmarks": {
             "type": "array",
             "items": {
@@ -4623,7 +4387,7 @@
       "HardwareGPUConfig": {
         "type": "object",
         "title": "HardwareGPUConfig",
-        "description": "Optional GPU resource override for a benchmark's direct `hardware_config`. Kubernetes sets GPU requests and limits to the same value (`count`).\n",
+        "description": "Optional GPU resource override for a benchmark's direct `hardware_config`. Kubernetes sets GPU requests and limits to the same value (`count`). Mutually exclusive with `dra` — a request that sets both is rejected.\n",
         "properties": {
           "name": {
             "type": "string",
@@ -4642,16 +4406,44 @@
           }
         }
       },
+      "HardwareDRAConfig": {
+        "type": "object",
+        "title": "HardwareDRAConfig",
+        "description": "Optional Dynamic Resource Allocation (DRA) override for a benchmark's direct `hardware_config`. Accelerators are requested by referencing a ResourceClaimTemplate that already exists in the job's namespace; the template, not this object, defines the device class, attribute selectors, and topology constraints. Mutually exclusive with `gpu` — a request that sets both is rejected. Template references (rather than pre-created ResourceClaims) keep evaluation Jobs admissible to Kueue, which only accepts workload objects that create their own claims.\n",
+        "required": [
+          "resource_claim_template"
+        ],
+        "properties": {
+          "resource_claim_template": {
+            "type": "string",
+            "maxLength": 63,
+            "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$",
+            "description": "Name of the ResourceClaimTemplate in the job's namespace. Must conform to RFC 1123 DNS label naming. The referenced template defines the device requests (device class, attributes, topology).\n",
+            "examples": [
+              "gpu-claim-template"
+            ]
+          },
+          "claim_name": {
+            "type": "string",
+            "maxLength": 63,
+            "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$",
+            "description": "Pod-local claim name the adapter container references via `resources.claims`. Defaults to `gpu` when omitted.\n",
+            "examples": [
+              "gpu"
+            ]
+          }
+        }
+      },
       "BenchmarkHardwareConfig": {
         "type": "object",
         "title": "BenchmarkHardwareConfig",
-        "description": "Optional per-benchmark hardware override for Kubernetes runtimes.\nTwo mutually exclusive modes:\n- **Profile mode:** set `hardware_profile_name` to fetch a named OpenDataHub\n  `HardwareProfile` custom resource and apply its CPU, memory, and GPU resource\n  values plus optional scheduling (`spec.scheduling`) to the evaluation Job.\n  Node scheduling applies `nodeSelector` and `tolerations`; Queue scheduling\n  applies the Kueue LocalQueue name and optional priority class. When\n  `hardware_profile_name` is set, `queue`, `cpu`, `memory`, and `gpu` must not\n  be present — the request is rejected. Disabled profiles\n  (`opendatahub.io/disabled: \"true\"`) are rejected on create.\n\n- **Direct mode:** omit `hardware_profile_name` and set `queue`, `cpu`,\n  `memory`, and/or `gpu` directly. Values missing from these fields fall back\n  to the provider `runtime.k8s` configuration (and built-in defaults when those\n  are unset).\n",
+        "description": "Optional per-benchmark hardware override for Kubernetes runtimes.\nTwo mutually exclusive modes:\n- **Profile mode:** set `hardware_profile_name` to fetch a named OpenDataHub\n  `HardwareProfile` custom resource and apply its CPU, memory, and GPU resource\n  values plus optional scheduling (`spec.scheduling`) to the evaluation Job.\n  Node scheduling applies `nodeSelector` and `tolerations`; Queue scheduling\n  applies the Kueue LocalQueue name and optional priority class. When\n  `hardware_profile_name` is set, `queue`, `cpu`, `memory`, `gpu`, and `dra`\n  must not be present — the request is rejected. Disabled profiles\n  (`opendatahub.io/disabled: \"true\"`) are rejected on create.\n\n- **Direct mode:** omit `hardware_profile_name` and set `queue`, `cpu`,\n  `memory`, `gpu`, and/or `dra` directly. Values missing from these fields\n  fall back to the provider `runtime.k8s` configuration (and built-in\n  defaults when those are unset). `gpu` (legacy extended resource) and\n  `dra` (ResourceClaimTemplate reference) are mutually exclusive with each\n  other; an explicit request-level choice of either overrides the provider\n  default for the other mechanism.\n",
         "properties": {
           "hardware_profile_name": {
             "type": "string",
             "maxLength": 63,
             "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$",
-            "description": "Name of the OpenDataHub `HardwareProfile` custom resource (`hardwareprofiles.infrastructure.opendatahub.io`) in the platform namespace (`EVALHUB_HARDWARE_PROFILES_NAMESPACE`, typically `opendatahub` or `redhat-ods-applications`). Must conform to RFC 1123 DNS label naming (lowercase letters, digits, and internal hyphens; max 63 characters). Mutually exclusive with `queue`, `cpu`, `memory`, and `gpu`.\n",
+            "description": "Name of the OpenDataHub `HardwareProfile` custom resource (`hardwareprofiles.infrastructure.opendatahub.io`) in the platform namespace (`EVALHUB_HARDWARE_PROFILES_NAMESPACE`, typically `opendatahub` or `redhat-ods-applications`). Must conform to RFC 1123 DNS label naming (lowercase letters, digits, and internal hyphens; max 63 characters). Mutually exclusive with `queue`, `cpu`, `memory`, `gpu`, and `dra`.\n",
             "examples": [
               "default-profile",
               "gpu-profile-v1"
@@ -4668,6 +4460,9 @@
           },
           "gpu": {
             "$ref": "#/components/schemas/HardwareGPUConfig"
+          },
+          "dra": {
+            "$ref": "#/components/schemas/HardwareDRAConfig"
           }
         }
       },
@@ -4952,7 +4747,7 @@
               "parameters": {
                 "type": "object",
                 "additionalProperties": true,
-                "description": "Benchmark specific parameters."
+                "description": "Benchmark-specific parameters. For a collection benchmark that declares\n`judge_model`, supply a non-empty judge model identifier. With no\njudge-specific entries in the Secret named by `model.auth.secret_ref`,\nthe judge reuses the target endpoint and credential. `judge_api-key`\nselects a separate credential at the target endpoint; add `judge_url`\nfor a separate endpoint. `judge_url` without `judge_api-key` is invalid.\nThis applies only to benchmarks whose collection declares `judge_model`.\n"
               },
               "test_data_ref": {
                 "$ref": "#/components/schemas/TestDataRef",
@@ -5035,11 +4830,6 @@
             "title": "OCI Tag",
             "description": "OCI tag (e.g. 'eval-123')"
           },
-          "oci_subject": {
-            "type": "string",
-            "title": "OCI Subject",
-            "description": "Optional OCI subject identifier (in same registry and repo)"
-          },
           "annotations": {
             "type": "object",
             "additionalProperties": {
@@ -5072,9 +4862,57 @@
         "additionalProperties": false,
         "title": "OCIConnectionConfig"
       },
+      "OCISigningConfig": {
+        "type": "object",
+        "description": "Optional signing configuration for the evaluation bundle, in local and Kubernetes modes. For key-pair signing, secret_ref can reference a tenant namespace Kubernetes Secret expected to contain private.key; the request never contains key material. This configuration does not perform secret lookup, key loading, or signing execution.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "key-pair"
+            ],
+            "description": "Signing method. Only key-pair is currently supported."
+          },
+          "secret_ref": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "pattern": "\\S",
+            "description": "Optional name of the signing key Secret for key-pair signing. Must not be empty or whitespace-only when provided."
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "additionalProperties": false
+      },
       "EvaluationExportsOCI": {
         "type": "object",
-        "description": "OCI export configuration for an evaluation job.",
+        "description": "OCI export configuration for local and Kubernetes evaluation jobs. Signing configuration is retained only; accepting it does not perform or schedule signing.",
+        "examples": [
+          {
+            "coordinates": {
+              "oci_host": "quay.io",
+              "oci_repository": "my-org/eval-results"
+            }
+          },
+          {
+            "coordinates": {
+              "oci_host": "quay.io",
+              "oci_repository": "my-org/eval-results",
+              "oci_tag": "final"
+            },
+            "k8s": {
+              "connection": "my-oci-secret"
+            },
+            "signing": {
+              "type": "key-pair",
+              "secret_ref": "my-cosign-secret"
+            }
+          }
+        ],
         "properties": {
           "coordinates": {
             "$ref": "#/components/schemas/OCICoordinates",
@@ -5083,6 +4921,10 @@
           "k8s": {
             "$ref": "#/components/schemas/OCIConnectionConfig",
             "description": "Optional Kubernetes connection for OCI registry authentication"
+          },
+          "signing": {
+            "$ref": "#/components/schemas/OCISigningConfig",
+            "description": "Optional signing configuration. Signing is disabled when omitted."
           }
         },
         "required": [
@@ -5350,6 +5192,10 @@
               "$ref": "#/components/schemas/MetricSchema"
             }
           },
+          "primary_score": {
+            "$ref": "#/components/schemas/PrimaryScore",
+            "description": "Optional adapter-reported primary metric for this completed run. When building results.benchmarks[].test, the service picks the first of these whose metric key is present in metrics (exact match): job/benchmark primary_score, then this event primary_score, then catalog/provider primary_score. Used by task-dependent adapters such as inspect/custom.\n"
+          },
           "additional_info": {
             "type": "object",
             "additionalProperties": true,
@@ -5455,7 +5301,7 @@
             "properties": {
               "sample_id": {
                 "type": "string",
-                "description": "Dataset column containing the sample identifier."
+                "description": "Optional mapping to the sample identifier column. When omitted, each\nrecord must contain `sample_id`, or `doc_id` when `sample_id` is absent\nor null. Every record must have a nonempty string or integer identifier.\nAn explicit mapping takes precedence; canonical field fallback is not\nused when the mapped field is absent or null.\n"
               },
               "label": {
                 "type": "string",
@@ -5575,6 +5421,130 @@
           "significance_level"
         ]
       },
+      "ResultsDataConfigEntry": {
+        "type": "object",
+        "title": "ResultsDataConfigEntry",
+        "description": "Mapping from a result artifact to per-example scores for post-processing.",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "json",
+              "jsonl",
+              "csv",
+              "parquet"
+            ],
+            "default": "auto",
+            "description": "File serialization format. JSON may contain a samples or records array."
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Relative file or directory inside the downloaded artifact."
+          },
+          "columns": {
+            "type": "object",
+            "description": "Logical fields mapped to literal column names or dotted paths into nested JSON.",
+            "properties": {
+              "sample_id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Optional mapping to the sample identifier column. When omitted, each\nrecord must contain `sample_id`, or `doc_id` when `sample_id` is absent\nor null. Every record must have a nonempty string or integer identifier.\nAn explicit mapping takes precedence; canonical field fallback is not\nused when the mapped field is absent or null.\n"
+              },
+              "prediction": {
+                "type": "string",
+                "minLength": 1
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "metric": {
+                "type": "string",
+                "minLength": 1
+              },
+              "benchmark_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "provider_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          },
+          "selection": {
+            "type": "object",
+            "minProperties": 1,
+            "description": "Source benchmark identity used for selection and row filtering.",
+            "properties": {
+              "benchmark_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "provider_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "metric": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          },
+          "value_mappings": {
+            "type": "object",
+            "description": "Explicit conversion of string categories to finite numeric scores, after\ncolumn lookup. When configured for a role, every present value must be\na declared string category; unknown values fail the computation.\n",
+            "properties": {
+              "prediction": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "type": "number"
+                }
+              },
+              "label": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "type": "number"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "ResultsDataConfig": {
+        "title": "ResultsDataConfig",
+        "description": "Optional result format and field mappings, placed beside the source inside\nresults_data_ref. Omit this to use automatic format detection and canonical\nsample_id/prediction fields. An object applies to every result artifact.\nFor heterogeneous evaluation jobs, an array selects a configuration using\nbenchmark_id, provider_id, and/or metric; exactly one entry must match each\nsource benchmark. An array is intended for eval_job sources.\n",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ResultsDataConfigEntry"
+          },
+          {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ResultsDataConfigEntry"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "selection"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
       "NumParallelThreads": {
         "type": "integer",
         "title": "NumParallelThreads",
@@ -5587,6 +5557,9 @@
         "title": "EvaluationJobDataRef",
         "description": "Reference to a completed evaluation job whose stored results are consumed.",
         "properties": {
+          "data_config": {
+            "$ref": "#/components/schemas/ResultsDataConfig"
+          },
           "eval_job": {
             "type": "object",
             "description": "Evaluation job identifier and benchmark processing options.",
@@ -5615,6 +5588,9 @@
         "title": "MLflowDataRef",
         "description": "Reference to a result artifact stored in MLflow.",
         "properties": {
+          "data_config": {
+            "$ref": "#/components/schemas/ResultsDataConfig"
+          },
           "mlflow": {
             "type": "object",
             "properties": {
@@ -5644,6 +5620,9 @@
         "title": "OCIDataRef",
         "description": "Reference to a result artifact stored in an OCI registry.",
         "properties": {
+          "data_config": {
+            "$ref": "#/components/schemas/ResultsDataConfig"
+          },
           "oci": {
             "type": "object",
             "properties": {
@@ -5684,6 +5663,9 @@
           {
             "type": "object",
             "properties": {
+              "data_config": {
+                "$ref": "#/components/schemas/ResultsDataConfig"
+              },
               "s3": {
                 "$ref": "#/components/schemas/TestDataRefS3"
               }
@@ -5697,6 +5679,9 @@
           {
             "type": "object",
             "properties": {
+              "data_config": {
+                "$ref": "#/components/schemas/ResultsDataConfig"
+              },
               "pvc": {
                 "$ref": "#/components/schemas/TestDataRefPVC"
               }
@@ -5710,6 +5695,9 @@
           {
             "type": "object",
             "properties": {
+              "data_config": {
+                "$ref": "#/components/schemas/ResultsDataConfig"
+              },
               "git": {
                 "$ref": "#/components/schemas/TestDataRefGit"
               }
@@ -5723,6 +5711,9 @@
           {
             "type": "object",
             "properties": {
+              "data_config": {
+                "$ref": "#/components/schemas/ResultsDataConfig"
+              },
               "hf": {
                 "$ref": "#/components/schemas/TestDataRefHF"
               }
@@ -5851,13 +5842,6 @@
             "type": "string",
             "format": "date-time",
             "description": "RFC3339 completion time."
-          },
-          "benchmarks": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BenchmarkStatus"
-            },
-            "description": "Per-benchmark status when benchmark metadata is available."
           }
         },
         "required": [
@@ -5868,17 +5852,51 @@
       "ConfidenceInterval": {
         "type": "object",
         "title": "ConfidenceInterval",
-        "description": "Confidence interval for a computed result.",
+        "description": "Estimated range for the benchmark's average score, with details about the data and calculation. Details that were not reported with the result are omitted.\n",
         "properties": {
           "lower": {
             "type": "number",
             "format": "float",
-            "description": "Lower confidence interval bound."
+            "description": "Lower end of the estimated range for the average score."
           },
           "upper": {
             "type": "number",
             "format": "float",
-            "description": "Upper confidence interval bound."
+            "description": "Upper end of the estimated range for the average score."
+          },
+          "point_estimate": {
+            "type": "number",
+            "format": "float",
+            "description": "Estimated average benchmark score after correcting prediction errors using examples with known answers or scores. For accuracy, 0.8 means an estimated 80% correct.\n"
+          },
+          "n_labeled": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of examples with trusted answers or scores used to check and correct the predictions.\n"
+          },
+          "n_unlabeled": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of examples whose predicted scores were used without known answers or scores. Examples already counted in n_labeled are excluded from this count.\n"
+          },
+          "alpha": {
+            "type": "number",
+            "format": "float",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "description": "Value that sets the confidence level. For example, alpha = 0.05 gives a 95% confidence interval (1 - alpha = 0.95).\n"
+          },
+          "method": {
+            "type": "string",
+            "description": "Calculation method used to produce the estimate and interval. The value original_ppi means original prediction-powered inference (PPI), which uses examples with known answers or scores to correct errors in predicted scores.\n",
+            "examples": [
+              "original_ppi"
+            ]
+          },
+          "lambda": {
+            "type": "number",
+            "format": "float",
+            "description": "Weight given to predicted scores in the score estimate and confidence interval. A value of 1 uses predictions together with a correction based on examples with known answers or scores. A value of 0 would use only those known answers or scores. The current original_ppi method always returns 1.\n"
           }
         },
         "required": [
@@ -5987,90 +6005,6 @@
         ],
         "unevaluatedProperties": false
       },
-      "ConfidenceIntervalConfig": {
-        "type": "object",
-        "title": "ConfidenceIntervalConfig",
-        "description": "Configuration for confidence interval post-processing on an evaluation job.",
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/ConfidenceIntervalConfigCommon"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "num_parallel_threads": {
-                "$ref": "#/components/schemas/NumParallelThreads"
-              }
-            }
-          }
-        ],
-        "unevaluatedProperties": false
-      },
-      "JobPostProcessingOperations": {
-        "type": "object",
-        "title": "JobPostProcessingOperations",
-        "description": "Post-processing operations associated with an evaluation job. Each property\nnames an operation kind, so a kind can appear at most once. At least one\noperation must be configured.\n",
-        "minProperties": 1,
-        "properties": {
-          "confidence_interval": {
-            "$ref": "#/components/schemas/ConfidenceIntervalConfig"
-          }
-        },
-        "additionalProperties": false
-      },
-      "ConfidenceIntervalPostProcessingRequest": {
-        "title": "ConfidenceIntervalPostProcessingRequest",
-        "description": "Request to configure post-processing operations for an evaluation job.",
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/PostProcessingCommon"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "operations": {
-                "$ref": "#/components/schemas/JobPostProcessingOperations"
-              }
-            },
-            "required": [
-              "operations"
-            ]
-          }
-        ],
-        "unevaluatedProperties": false
-      },
-      "JobPostProcessingResource": {
-        "title": "JobPostProcessingResource",
-        "description": "Post-processing resource associated with an evaluation job.",
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/PostProcessingCommon"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "resource": {
-                "$ref": "#/components/schemas/Resource"
-              },
-              "operations": {
-                "$ref": "#/components/schemas/JobPostProcessingOperations"
-              },
-              "status": {
-                "$ref": "#/components/schemas/PostProcessingStatus"
-              },
-              "results": {
-                "$ref": "#/components/schemas/PostProcessingResultsEvalJob"
-              }
-            },
-            "required": [
-              "resource",
-              "operations",
-              "status"
-            ]
-          }
-        ],
-        "unevaluatedProperties": false
-      },
       "AgentMetadata": {
         "type": "object",
         "description": "Metadata for AI agent discoverability and operational guidance",
@@ -6157,6 +6091,27 @@
           }
         }
       },
+      "DRAConfig": {
+        "type": "object",
+        "title": "DRAConfig",
+        "description": "Dynamic Resource Allocation (DRA) requirement for a Kubernetes provider adapter. Mutually exclusive with `gpu` — a provider runtime must not declare both. Omit both for CPU-only adapters. Unlike `gpu`, `dra` does not carry a node selector: device placement is governed by the referenced ResourceClaimTemplate's device class and topology constraints.\n",
+        "properties": {
+          "resource_claim_template": {
+            "type": "string",
+            "description": "Name of the ResourceClaimTemplate in the job's namespace that defines the device requests (device class, attributes, topology).\n",
+            "examples": [
+              "gpu-claim-template"
+            ]
+          },
+          "claim_name": {
+            "type": "string",
+            "description": "Pod-local claim name consumed by the adapter container via `resources.claims`. Defaults to `gpu` when empty.\n",
+            "examples": [
+              "gpu"
+            ]
+          }
+        }
+      },
       "EnvVar": {
         "type": "object",
         "description": "Environment variable for job configuration",
@@ -6208,7 +6163,11 @@
           },
           "gpu": {
             "$ref": "#/components/schemas/GPUConfig",
-            "description": "GPU resource requirement for this adapter. Omit for CPU-only adapters; existing providers without this field are unchanged.\n"
+            "description": "GPU resource requirement for this adapter. Omit for CPU-only adapters; existing providers without this field are unchanged. Mutually exclusive with `dra`.\n"
+          },
+          "dra": {
+            "$ref": "#/components/schemas/DRAConfig",
+            "description": "Dynamic Resource Allocation requirement for this adapter via a ResourceClaimTemplate reference. Mutually exclusive with `gpu`; omit both for CPU-only adapters.\n"
           },
           "env": {
             "type": "array",
@@ -6552,7 +6511,7 @@
               "parameters": {
                 "type": "object",
                 "additionalProperties": true,
-                "description": "Benchmark specific parameters."
+                "description": "Benchmark-specific parameters. Collections may declare empty\n`judge_model` for judge-requiring benchmarks so clients can render a\nper-job input. The judge connection is selected by optional\n`judge_api-key` and `judge_url` entries in the job's model-auth Secret.\nEmpty collection defaults are not carried into a job; the caller must\nprovide a non-empty `judge_model`.\n"
               },
               "test_data_ref": {
                 "$ref": "#/components/schemas/TestDataRef",

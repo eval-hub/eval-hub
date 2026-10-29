@@ -1,9 +1,13 @@
 package sql
 
 import (
+	"encoding/json"
 	"log/slog"
+	"math"
 	"testing"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
@@ -15,6 +19,111 @@ func testResultsStorage() *sqlStorage {
 }
 
 func threshold32(v float32) *float32 { return &v }
+
+func TestCollectionLiveCodeBench_AdapterMetric(t *testing.T) {
+	s := testResultsStorage()
+	collections, err := config.LoadCollectionConfigs(s.logger, testhelpers.NewValidator(t), "../../../../config")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const metric = "lcb:codegeneration_v6.codegen_pass@1"
+	for _, id := range []string{"coding-v1", "software-v1", "standard-llm-evals-v1"} {
+		t.Run(id, func(t *testing.T) {
+			collection, ok := collections[id]
+			if !ok {
+				t.Fatalf("collection %s not found", id)
+			}
+			job := &api.EvaluationJobResource{
+				EvaluationJobConfig: api.EvaluationJobConfig{Collection: &api.CollectionRef{ID: id}},
+				Results:             &api.EvaluationJobResults{},
+			}
+			var weightedSum, totalWeight float32
+			found := false
+			for i, row := range collection.Benchmarks {
+				score := float32(0.8)
+				metricName := row.PrimaryScore.Metric
+				if row.ID == "lcb:codegeneration_v6" && row.ProviderID == "lighteval" {
+					found = true
+					// Use the emitted adapter key independently of the configured selector.
+					metricName, score = metric, 0.4
+				}
+				result := s.computeBenchmarkTestResult(nil, job, statusEvent(row.ID, row.ProviderID,
+					map[string]any{metricName: score}), &collection)
+				if result == nil || result.PrimaryScoreMetric != metricName || result.PrimaryScore != score || !result.Pass {
+					t.Fatalf("unexpected result for %s: %+v", row.ID, result)
+				}
+				job.Results.Benchmarks = append(job.Results.Benchmarks, api.BenchmarkResult{
+					ID: row.ID, ProviderID: row.ProviderID, BenchmarkIndex: i, Test: result,
+				})
+				weightedSum += row.Weight * score
+				totalWeight += row.Weight
+			}
+			if !found {
+				t.Fatal("LiveCodeBench benchmark not found")
+			}
+			s.computeJobTestResult(job, &collection)
+			want := weightedSum / totalWeight
+			if job.Results.Test == nil || math.Abs(float64(job.Results.Test.Score-want)) > 1e-6 || !job.Results.Test.Pass {
+				t.Fatalf("aggregate = %+v, want score %v including LiveCodeBench", job.Results.Test, want)
+			}
+		})
+	}
+}
+
+// Use the shipped collection definitions and the real row/aggregate scoring paths.
+// In particular, rounding the Safety/Fairness aggregate target upward must not
+// reject a result that meets every row target.
+func TestCollectionThresholds_AtAndAroundRowTargets(t *testing.T) {
+	s := testResultsStorage()
+	collections, err := config.LoadCollectionConfigs(s.logger, testhelpers.NewValidator(t), "../../../../config")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"model-validation", "safety-and-fairness-v1", "reasoning-v1", "instruction-following-v1"} {
+		t.Run(id, func(t *testing.T) {
+			collection, ok := collections[id]
+			if !ok {
+				t.Fatalf("collection %s not found", id)
+			}
+			for _, tc := range []struct {
+				name        string
+				improvement float32
+				wantPass    bool
+			}{
+				{name: "at_targets", wantPass: true},
+				{name: "better_than_targets", improvement: 0.01, wantPass: true},
+				{name: "worse_than_targets", improvement: -0.01, wantPass: false},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					job := &api.EvaluationJobResource{
+						EvaluationJobConfig: api.EvaluationJobConfig{
+							Collection: &api.CollectionRef{ID: id},
+						},
+						Results: &api.EvaluationJobResults{},
+					}
+					for i, row := range collection.Benchmarks {
+						score := *row.PassCriteria.Threshold + tc.improvement
+						if row.PrimaryScore.LowerIsBetter {
+							score = *row.PassCriteria.Threshold - tc.improvement
+						}
+						event := statusEvent(row.ID, row.ProviderID, map[string]any{row.PrimaryScore.Metric: score})
+						rowResult := s.computeBenchmarkTestResult(nil, job, event, &collection)
+						if rowResult == nil || rowResult.Pass != tc.wantPass {
+							t.Fatalf("unexpected row result for %s: %+v", row.ID, rowResult)
+						}
+						job.Results.Benchmarks = append(job.Results.Benchmarks, api.BenchmarkResult{
+							ID: row.ID, ProviderID: row.ProviderID, BenchmarkIndex: i, Test: rowResult,
+						})
+					}
+					s.computeJobTestResult(job, &collection)
+					if job.Results.Test == nil || job.Results.Test.Pass != tc.wantPass {
+						t.Fatalf("unexpected aggregate result: %+v; want pass=%v", job.Results.Test, tc.wantPass)
+					}
+				})
+			}
+		})
+	}
+}
 
 func jobWithBenchmark(id, providerID string, primaryScore *api.PrimaryScore, passCriteria *api.PassCriteria) *api.EvaluationJobResource {
 	return &api.EvaluationJobResource{
@@ -242,5 +351,212 @@ func TestComputeBenchmarkTestResult_MissingPrimaryMetricReturnsNil(t *testing.T)
 	result := s.computeBenchmarkTestResult(nil, job, event, nil)
 	if result != nil {
 		t.Fatalf("expected nil when primary metric is missing from metrics, got %+v", result)
+	}
+}
+
+func TestComputeBenchmarkTestResult_EventPrimaryScoreFallback(t *testing.T) {
+	t.Parallel()
+	s := testResultsStorage()
+	// Job/catalog primary does not match emitted metrics (inspect/custom case).
+	job := jobWithBenchmark("inspect/custom", "inspect",
+		&api.PrimaryScore{Metric: "accuracy/accuracy"},
+		&api.PassCriteria{Threshold: threshold32(0.15)},
+	)
+	event := statusEvent("inspect/custom", "inspect", map[string]any{
+		"choice/accuracy": float64(0.2),
+		"choice/stderr":   float64(0.01),
+	})
+	event.PrimaryScore = &api.PrimaryScore{Metric: "choice/accuracy"}
+	result := s.computeBenchmarkTestResult(nil, job, event, nil)
+	if result == nil {
+		t.Fatal("expected test result from event primary_score fallback")
+	}
+	if result.PrimaryScoreMetric != "choice/accuracy" {
+		t.Errorf("PrimaryScoreMetric = %q, want choice/accuracy", result.PrimaryScoreMetric)
+	}
+	if result.PrimaryScore != 0.2 {
+		t.Errorf("PrimaryScore = %v, want 0.2", result.PrimaryScore)
+	}
+	if !result.Pass {
+		t.Errorf("expected Pass=true for 0.2 >= 0.15")
+	}
+}
+
+// Event-only lower_is_better must drive both benchmark Pass and job aggregate
+// inversion when the job/catalog has no matching PrimaryScore.
+func TestComputeJobTestResult_EventOnlyLowerIsBetter(t *testing.T) {
+	t.Parallel()
+	s := testResultsStorage()
+	// No job PrimaryScore — direction comes only from the completed event.
+	job := jobWithBenchmark("inspect/custom", "inspect", nil, &api.PassCriteria{Threshold: threshold32(0.3)})
+	job.PassCriteria = &api.PassCriteria{Threshold: threshold32(0.5)}
+	event := statusEvent("inspect/custom", "inspect", map[string]any{
+		"attack_success_rate": float64(0.1),
+	})
+	event.PrimaryScore = &api.PrimaryScore{Metric: "attack_success_rate", LowerIsBetter: true}
+
+	result := s.computeBenchmarkTestResult(nil, job, event, nil)
+	if result == nil {
+		t.Fatal("expected benchmark test from event primary_score")
+	}
+	if result.LowerIsBetter == nil || !*result.LowerIsBetter {
+		t.Fatal("expected LowerIsBetter=true persisted on BenchmarkTest")
+	}
+	// 0.1 <= 0.3 → pass at benchmark level
+	if !result.Pass {
+		t.Fatalf("benchmark Pass=false, want true for lower-is-better 0.1 <= 0.3; got %+v", result)
+	}
+
+	job.Results = &api.EvaluationJobResults{
+		Benchmarks: []api.BenchmarkResult{{
+			ID: "inspect/custom", ProviderID: "inspect", BenchmarkIndex: 0, Test: result,
+		}},
+	}
+	s.computeJobTestResult(job, nil)
+	if job.Results.Test == nil {
+		t.Fatal("expected job test aggregate")
+	}
+	// Aggregate must invert: score = 1 - 0.1 = 0.9 (>= job threshold 0.5 → pass)
+	wantScore := float32(0.9)
+	if math.Abs(float64(job.Results.Test.Score-wantScore)) > 1e-6 {
+		t.Errorf("job Score = %v, want %v (inverted)", job.Results.Test.Score, wantScore)
+	}
+	if !job.Results.Test.Pass {
+		t.Errorf("job Pass=false, want true so benchmark and job Pass agree")
+	}
+}
+
+func TestComputeBenchmarkTestResult_JobPrimaryTakesPrecedenceOverEvent(t *testing.T) {
+	t.Parallel()
+	s := testResultsStorage()
+	job := jobWithBenchmark("inspect/custom", "inspect",
+		&api.PrimaryScore{Metric: "choice/accuracy"},
+		&api.PassCriteria{Threshold: threshold32(0.5)},
+	)
+	event := statusEvent("inspect/custom", "inspect", map[string]any{
+		"choice/accuracy": float64(0.2),
+		"match/accuracy":  float64(0.9),
+	})
+	event.PrimaryScore = &api.PrimaryScore{Metric: "match/accuracy"}
+	result := s.computeBenchmarkTestResult(nil, job, event, nil)
+	if result == nil {
+		t.Fatal("expected test result")
+	}
+	if result.PrimaryScoreMetric != "choice/accuracy" {
+		t.Errorf("PrimaryScoreMetric = %q, want job choice/accuracy", result.PrimaryScoreMetric)
+	}
+}
+
+// JSON round-trip must keep lower_is_better so computeJobTestResult still
+// inverts after reloading results from storage (multi-benchmark jobs).
+func TestComputeJobTestResult_LowerIsBetterSurvivesJSONRoundTrip(t *testing.T) {
+	t.Parallel()
+	s := testResultsStorage()
+	job := jobWithBenchmark("inspect/custom", "inspect", nil, &api.PassCriteria{Threshold: threshold32(0.3)})
+	job.PassCriteria = &api.PassCriteria{Threshold: threshold32(0.5)}
+	event := statusEvent("inspect/custom", "inspect", map[string]any{
+		"attack_success_rate": float64(0.1),
+	})
+	event.PrimaryScore = &api.PrimaryScore{Metric: "attack_success_rate", LowerIsBetter: true}
+
+	result := s.computeBenchmarkTestResult(nil, job, event, nil)
+	if result == nil {
+		t.Fatal("expected benchmark test")
+	}
+
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var reloaded api.BenchmarkTest
+	if err := json.Unmarshal(raw, &reloaded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if reloaded.LowerIsBetter == nil || !*reloaded.LowerIsBetter {
+		t.Fatalf("lower_is_better lost after JSON round-trip; payload=%s", raw)
+	}
+
+	job.Results = &api.EvaluationJobResults{
+		Benchmarks: []api.BenchmarkResult{{
+			ID: "inspect/custom", ProviderID: "inspect", BenchmarkIndex: 0, Test: &reloaded,
+		}},
+	}
+	s.computeJobTestResult(job, nil)
+	if job.Results.Test == nil {
+		t.Fatal("expected job test aggregate")
+	}
+	wantScore := float32(0.9)
+	if math.Abs(float64(job.Results.Test.Score-wantScore)) > 1e-6 {
+		t.Errorf("job Score = %v, want %v after reload", job.Results.Test.Score, wantScore)
+	}
+}
+
+func TestSelectPrimaryScore_FirstNumericMatch(t *testing.T) {
+	t.Parallel()
+	job := &api.PrimaryScore{Metric: "job_metric"}
+	event := &api.PrimaryScore{Metric: "event_metric"}
+	got, value, ok := selectPrimaryScore(
+		[]*api.PrimaryScore{job, event},
+		map[string]any{"event_metric": float64(0.4)},
+	)
+	if !ok || got != event {
+		t.Fatalf("expected event candidate, ok=%v got=%v", ok, got)
+	}
+	if value != 0.4 {
+		t.Errorf("value = %v, want 0.4", value)
+	}
+}
+
+func TestSelectPrimaryScore_SkipsNonNumericAndContinues(t *testing.T) {
+	t.Parallel()
+	job := &api.PrimaryScore{Metric: "accuracy/accuracy"}
+	event := &api.PrimaryScore{Metric: "choice/accuracy"}
+	got, value, ok := selectPrimaryScore(
+		[]*api.PrimaryScore{job, event},
+		map[string]any{
+			"accuracy/accuracy": "n/a",
+			"choice/accuracy":   float64(0.2),
+		},
+	)
+	if !ok || got != event {
+		t.Fatalf("expected event after non-numeric job metric, ok=%v got=%v", ok, got)
+	}
+	if value != 0.2 {
+		t.Errorf("value = %v, want 0.2", value)
+	}
+}
+
+func TestSelectPrimaryScore_NoMatch(t *testing.T) {
+	t.Parallel()
+	_, _, ok := selectPrimaryScore(
+		[]*api.PrimaryScore{{Metric: "missing"}},
+		map[string]any{"other": float64(1)},
+	)
+	if ok {
+		t.Fatal("expected no match")
+	}
+}
+
+func TestComputeBenchmarkTestResult_SkipsNonNumericJobPrimary(t *testing.T) {
+	t.Parallel()
+	s := testResultsStorage()
+	job := jobWithBenchmark("inspect/custom", "inspect",
+		&api.PrimaryScore{Metric: "accuracy/accuracy"},
+		&api.PassCriteria{Threshold: threshold32(0.15)},
+	)
+	event := statusEvent("inspect/custom", "inspect", map[string]any{
+		"accuracy/accuracy": "n/a",
+		"choice/accuracy":   float64(0.2),
+	})
+	event.PrimaryScore = &api.PrimaryScore{Metric: "choice/accuracy"}
+	result := s.computeBenchmarkTestResult(nil, job, event, nil)
+	if result == nil {
+		t.Fatal("expected fallback to numeric event primary_score")
+	}
+	if result.PrimaryScoreMetric != "choice/accuracy" {
+		t.Errorf("PrimaryScoreMetric = %q, want choice/accuracy", result.PrimaryScoreMetric)
+	}
+	if result.PrimaryScore != 0.2 {
+		t.Errorf("PrimaryScore = %v, want 0.2", result.PrimaryScore)
 	}
 }

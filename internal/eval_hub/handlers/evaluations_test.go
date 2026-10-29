@@ -19,6 +19,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -38,6 +39,7 @@ func (r *bodyRequest) BodyAsBytes() ([]byte, error) {
 
 type fakeStorage struct {
 	abstractions.Storage
+	workloadType        workloads.Type
 	lastStatusID        string
 	lastStatus          api.OverallState
 	job                 *api.EvaluationJobResource
@@ -50,6 +52,7 @@ type fakeStorage struct {
 func (f *fakeStorage) clone() *fakeStorage {
 	return &fakeStorage{
 		Storage:             f.Storage,
+		workloadType:        f.workloadType,
 		lastStatusID:        f.lastStatusID,
 		lastStatus:          f.lastStatus,
 		job:                 f.job,
@@ -62,8 +65,13 @@ func (f *fakeStorage) clone() *fakeStorage {
 
 func (f *fakeStorage) WithLogger(_ *slog.Logger) abstractions.Storage     { return f.clone() }
 func (f *fakeStorage) WithContext(_ context.Context) abstractions.Storage { return f.clone() }
-func (f *fakeStorage) WithTenant(_ api.Tenant) abstractions.Storage       { return f.clone() }
-func (f *fakeStorage) WithOwner(_ api.User) abstractions.Storage          { return f.clone() }
+func (f *fakeStorage) WithWorkloadType(workloadType workloads.Type) abstractions.Storage {
+	clone := f.clone()
+	clone.workloadType = workloadType
+	return clone
+}
+func (f *fakeStorage) WithTenant(_ api.Tenant) abstractions.Storage { return f.clone() }
+func (f *fakeStorage) WithOwner(_ api.User) abstractions.Storage    { return f.clone() }
 
 func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobResource) error {
 	return nil
@@ -75,7 +83,10 @@ func (f *fakeStorage) UpdateEvaluationJobStatus(id string, state api.OverallStat
 	return nil
 }
 
-func (f *fakeStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
+func (f *fakeStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, error) {
+	if f.workloadType != "" && (f.job == nil || workloads.TypeForJob(&f.job.EvaluationJobConfig) != f.workloadType) {
+		return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
+	}
 	return f.job, nil
 }
 

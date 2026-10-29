@@ -10,14 +10,17 @@ description: >
     values plus optional scheduling (`spec.scheduling`) to the evaluation Job.
     Node scheduling applies `nodeSelector` and `tolerations`; Queue scheduling
     applies the Kueue LocalQueue name and optional priority class. When
-    `hardware_profile_name` is set, `queue`, `cpu`, `memory`, and `gpu` must not
-    be present — the request is rejected. Disabled profiles
+    `hardware_profile_name` is set, `queue`, `cpu`, `memory`, `gpu`, and `dra`
+    must not be present — the request is rejected. Disabled profiles
     (`opendatahub.io/disabled: "true"`) are rejected on create.
 
   - **Direct mode:** omit `hardware_profile_name` and set `queue`, `cpu`,
-    `memory`, and/or `gpu` directly. Values missing from these fields fall back
-    to the provider `runtime.k8s` configuration (and built-in defaults when those
-    are unset).
+    `memory`, `gpu`, and/or `dra` directly. Values missing from these fields
+    fall back to the provider `runtime.k8s` configuration (and built-in
+    defaults when those are unset). `gpu` (legacy extended resource) and
+    `dra` (ResourceClaimTemplate reference) are mutually exclusive with each
+    other; an explicit request-level choice of either overrides the provider
+    default for the other mechanism.
 properties:
   hardware_profile_name:
     type: string
@@ -29,7 +32,7 @@ properties:
       namespace (`EVALHUB_HARDWARE_PROFILES_NAMESPACE`, typically `opendatahub`
       or `redhat-ods-applications`). Must conform to RFC 1123 DNS label naming
       (lowercase letters, digits, and internal hyphens; max 63 characters).
-      Mutually exclusive with `queue`, `cpu`, `memory`, and `gpu`.
+      Mutually exclusive with `queue`, `cpu`, `memory`, `gpu`, and `dra`.
     examples:
       - default-profile
       - gpu-profile-v1
@@ -41,3 +44,5 @@ properties:
     $ref: ./HardwareResourceQuantity.yaml
   gpu:
     $ref: ./HardwareGPUConfig.yaml
+  dra:
+    $ref: ./HardwareDRAConfig.yaml

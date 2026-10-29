@@ -32,6 +32,45 @@ func TestNewValidator(t *testing.T) {
 	}
 }
 
+func TestResultsDataConfigPathValidation(t *testing.T) {
+	validate := newTestValidator(t)
+	tests := []struct {
+		name    string
+		path    string
+		wantTag string
+	}{
+		{name: "omitted path"},
+		{name: "relative file", path: "scores.json"},
+		{name: "nested file", path: "results/scores.json"},
+		{name: "dot relative file", path: "./results/scores.json"},
+		{name: "relative directory", path: "results/"},
+		{name: "artifact root", path: "."},
+		{name: "absolute file", path: "/tmp/scores.json", wantTag: "startsnotwith"},
+		{name: "absolute root", path: "/", wantTag: "startsnotwith"},
+		{name: "double slash prefix", path: "//results/scores.json", wantTag: "startsnotwith"},
+		{name: "blank path", path: "   ", wantTag: "notblank"},
+		{name: "tab path", path: "\t", wantTag: "notblank"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := validate.Struct(api.ResultsDataConfigEntry{Path: test.path})
+			if test.wantTag == "" {
+				if err != nil {
+					t.Fatalf("valid relative path %q rejected: %v", test.path, err)
+				}
+				return
+			}
+			var validationErrors validator.ValidationErrors
+			if !errors.As(err, &validationErrors) || len(validationErrors) != 1 {
+				t.Fatalf("path %q: expected one validation error, got %v", test.path, err)
+			}
+			if validationErrors[0].Field() != "path" || validationErrors[0].Tag() != test.wantTag {
+				t.Fatalf("path %q: got field %q tag %q, want path with tag %q", test.path, validationErrors[0].Field(), validationErrors[0].Tag(), test.wantTag)
+			}
+		})
+	}
+}
+
 func TestCollectionConfigClassification(t *testing.T) {
 	validate := newTestValidator(t)
 	cases := []struct {
@@ -439,6 +478,13 @@ func TestBenchmarkHardwareConfig_ProfileWithDirectFieldsRejected(t *testing.T) {
 				Queue:               &api.QueueConfig{Kind: "kueue", Name: "my-queue"},
 			},
 		},
+		{
+			name: "with dra",
+			hw: &api.BenchmarkHardwareConfig{
+				HardwareProfileName: "my-hw-spec",
+				DRA:                 &api.HardwareDRAConfig{ResourceClaimTemplate: "gpu-claims"},
+			},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -476,6 +522,86 @@ func TestBenchmarkHardwareConfig_DirectFieldsAccepted(t *testing.T) {
 	}
 	if err := validate.Struct(cfg); err != nil {
 		t.Fatalf("expected no error for direct hardware_config, got: %v", err)
+	}
+}
+
+func TestBenchmarkHardwareConfig_DRAAccepted(t *testing.T) {
+	validate := newTestValidator(t)
+	cfg := api.EvaluationJobConfig{
+		Name:  "test-job",
+		Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
+		Benchmarks: []api.EvaluationBenchmarkConfig{
+			{
+				Ref:        api.Ref{ID: "b1"},
+				ProviderID: "provider-1",
+				HardwareConfig: &api.BenchmarkHardwareConfig{
+					DRA: &api.HardwareDRAConfig{ResourceClaimTemplate: "gpu-claims", ClaimName: "gpu"},
+				},
+			},
+		},
+	}
+	if err := validate.Struct(cfg); err != nil {
+		t.Fatalf("expected no error for dra hardware_config, got: %v", err)
+	}
+}
+
+func TestBenchmarkHardwareConfig_GPUAndDRARejected(t *testing.T) {
+	validate := newTestValidator(t)
+	cfg := api.EvaluationJobConfig{
+		Name:  "test-job",
+		Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
+		Benchmarks: []api.EvaluationBenchmarkConfig{
+			{
+				Ref:        api.Ref{ID: "b1"},
+				ProviderID: "provider-1",
+				HardwareConfig: &api.BenchmarkHardwareConfig{
+					GPU: &api.HardwareGPUConfig{Name: "nvidia.com/gpu", Count: 1},
+					DRA: &api.HardwareDRAConfig{ResourceClaimTemplate: "gpu-claims"},
+				},
+			},
+		},
+	}
+	if err := validate.Struct(cfg); err == nil {
+		t.Fatal("expected validation error for gpu and dra in the same hardware_config")
+	}
+}
+
+func TestBenchmarkHardwareConfig_InvalidDRANamesRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	cases := []struct {
+		name string
+		hw   *api.BenchmarkHardwareConfig
+	}{
+		{
+			name: "empty resource claim template",
+			hw:   &api.BenchmarkHardwareConfig{DRA: &api.HardwareDRAConfig{}},
+		},
+		{
+			name: "invalid resource claim template name",
+			hw:   &api.BenchmarkHardwareConfig{DRA: &api.HardwareDRAConfig{ResourceClaimTemplate: "Bad_Name"}},
+		},
+		{
+			name: "invalid claim name",
+			hw:   &api.BenchmarkHardwareConfig{DRA: &api.HardwareDRAConfig{ResourceClaimTemplate: "gpu-claims", ClaimName: "Bad Name"}},
+		},
+		{
+			name: "uppercase resource claim template",
+			hw:   &api.BenchmarkHardwareConfig{DRA: &api.HardwareDRAConfig{ResourceClaimTemplate: "GPU-Claims"}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := api.EvaluationJobConfig{
+				Name:  "test-job",
+				Model: &api.ModelRef{URL: "http://test.com", Name: "model"},
+				Benchmarks: []api.EvaluationBenchmarkConfig{
+					{Ref: api.Ref{ID: "b1"}, ProviderID: "provider-1", HardwareConfig: tc.hw},
+				},
+			}
+			if err := validate.Struct(cfg); err == nil {
+				t.Fatal("expected validation error")
+			}
+		})
 	}
 }
 
@@ -541,6 +667,70 @@ func TestK8sRuntimeImagePullPolicy_ValidValuesAccepted(t *testing.T) {
 	}
 }
 
+func TestK8sRuntimeDRA_InvalidNamesRejected(t *testing.T) {
+	validate := newTestValidator(t)
+	cases := []struct {
+		name string
+		dra  *api.DRAConfig
+	}{
+		{
+			name: "invalid resource claim template name",
+			dra:  &api.DRAConfig{ResourceClaimTemplate: "Bad_Name"},
+		},
+		{
+			name: "invalid claim name",
+			dra:  &api.DRAConfig{ResourceClaimTemplate: "gpu-claims", ClaimName: "Bad Name"},
+		},
+		{
+			name: "uppercase resource claim template",
+			dra:  &api.DRAConfig{ResourceClaimTemplate: "GPU-Claims"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := api.ProviderConfig{
+				Name: "test-provider",
+				Runtime: &api.Runtime{
+					K8s: &api.K8sRuntime{
+						Image:      "quay.io/example/adapter:latest",
+						Entrypoint: []string{"/bin/true"},
+						DRA:        tc.dra,
+					},
+				},
+				Benchmarks: []api.BenchmarkResource{{ID: "bench-1", Name: "Bench 1"}},
+			}
+			if err := validate.Struct(cfg); err == nil {
+				t.Fatal("expected validation error for invalid dra names")
+			}
+		})
+	}
+}
+
+func TestK8sRuntimeDRA_ValidAndOptionalNamesAccepted(t *testing.T) {
+	validate := newTestValidator(t)
+	for _, dra := range []*api.DRAConfig{
+		nil,
+		{},
+		{ResourceClaimTemplate: "gpu-claims"},
+		{ResourceClaimTemplate: "gpu-claims", ClaimName: "gpu"},
+	} {
+		cfg := api.ProviderConfig{
+			Name: "test-provider",
+			Runtime: &api.Runtime{
+				K8s: &api.K8sRuntime{
+					Image:      "quay.io/example/adapter:latest",
+					Entrypoint: []string{"/bin/true"},
+					DRA:        dra,
+				},
+			},
+			Benchmarks: []api.BenchmarkResource{{ID: "bench-1", Name: "Bench 1"}},
+		}
+		if err := validate.Struct(cfg); err != nil {
+			t.Errorf("dra %+v: expected no error, got: %v", dra, err)
+		}
+	}
+}
+
 func TestValidateCollectionOverrides_InvalidProviderID(t *testing.T) {
 	t.Parallel()
 	overrides := []api.EvaluationBenchmarkConfig{
@@ -594,6 +784,50 @@ func TestValidateCollectionOverrides_EmptyOverrides(t *testing.T) {
 	}
 	if err := ValidateCollectionOverrides(nil, collectionBenchmarks); err != nil {
 		t.Fatalf("expected no error for empty overrides, got: %v", err)
+	}
+}
+
+func TestValidateCollectionOverrides_RepeatedBenchmarkCounts(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		rows      int
+		overrides int
+		wantError bool
+	}{
+		{name: "defaults", rows: 3, overrides: 0},
+		{name: "shared override", rows: 3, overrides: 1},
+		{name: "one override per occurrence", rows: 3, overrides: 3},
+		{name: "too few overrides", rows: 3, overrides: 2, wantError: true},
+		{name: "too many overrides", rows: 2, overrides: 3, wantError: true},
+		{name: "unique pair keeps existing behavior", rows: 1, overrides: 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var collection []api.CollectionBenchmarkConfig
+			for range tc.rows {
+				collection = append(collection, api.CollectionBenchmarkConfig{Ref: api.Ref{ID: "bfcl"}, ProviderID: "inspect"})
+			}
+			collection = append(collection, api.CollectionBenchmarkConfig{Ref: api.Ref{ID: "bfcl"}, ProviderID: "other"})
+			overrides := []api.EvaluationBenchmarkConfig{
+				{ProviderID: "inspect", HardwareConfig: &api.BenchmarkHardwareConfig{HardwareProfileName: "shared"}},
+				{Ref: api.Ref{ID: "bfcl"}, ProviderID: "other"},
+			}
+			for range tc.overrides {
+				overrides = append(overrides, api.EvaluationBenchmarkConfig{Ref: api.Ref{ID: "bfcl"}, ProviderID: "inspect"})
+			}
+			err := ValidateCollectionOverrides(overrides, collection)
+			if !tc.wantError {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			var se *serviceerrors.ServiceError
+			if !errors.As(err, &se) || se.MessageCode() != messages.RequestValidationFailed || !strings.Contains(err.Error(), "collection occurrence order") {
+				t.Fatalf("expected count validation error, got %v", err)
+			}
+		})
 	}
 }
 

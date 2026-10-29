@@ -6,7 +6,7 @@
 [![CI](https://github.com/eval-hub/eval-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/eval-hub/eval-hub/actions/workflows/ci.yml)
 [![golangci-lint](https://github.com/eval-hub/eval-hub/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/eval-hub/eval-hub/actions/workflows/golangci-lint.yml)
 [![codecov](https://codecov.io/github/eval-hub/eval-hub/graph/badge.svg?token=LHJACCNC9A)](https://codecov.io/github/eval-hub/eval-hub)
-[![TrustyAI Operator ConfigMap Sync](https://github.com/eval-hub/eval-hub/actions/workflows/check-trustyai-service-operator-configmap-sync.yml/badge.svg)](https://github.com/eval-hub/eval-hub/actions/workflows/check-trustyai-service-operator-configmap-sync.yml)
+[![TrustyAI Operator ConfigMap Sync](https://github.com/eval-hub/eval-hub/actions/workflows/check-trustyai-service-operator-configmap-sync.yml/badge.svg)](https://github.com/eval-hub/eval-hub/actions/workflows/check-trustyai-service-operator-configmap-sync.yml)[![see sync](https://img.shields.io/badge/syncing_docs-here)](#syncing-providers-and-collections-to-the-trustyai-operator)
 [![license](https://img.shields.io/badge/License-Apache2.0-blue.svg?plastic)](https://github.com/eval-hub/eval-hub/blob/main/LICENSE)
 [![Signed release](https://github.com/eval-hub/eval-hub/actions/workflows/signed-release.yml/badge.svg)](https://github.com/eval-hub/eval-hub/actions/workflows/signed-release.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/eval-hub/eval-hub/badge)](https://scorecard.dev/viewer/?uri=github.com/eval-hub/eval-hub)
@@ -201,6 +201,18 @@ Apply the CR to your cluster:
 oc apply -f evalhub-cr.yaml
 oc get evalhub -n my-namespace    # check status
 ```
+
+## Post-processing
+
+Submit post-processing jobs with `POST /api/v1/evaluations/post-processing`.
+Retrieve or delete them with `GET` or `DELETE` on
+`/api/v1/evaluations/post-processing/{post_processing_job_id}`. To use a completed
+evaluation as input, put its ID in
+`operations.confidence_interval.results_data_ref.eval_job.id` in the request body.
+The submission returns a separate post-processing resource ID.
+
+See the [standalone post-processing example](examples/post-processing/README.md)
+for a request payload and create, get, and delete commands.
 
 ## Local development
 

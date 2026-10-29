@@ -1,0 +1,12 @@
+{
+  "notes": "One sample with one game turn to bound smoke workload; not a full multi-turn accuracy assessment.",
+  "parameters": {
+    "epochs": 1,
+    "max_tasks": 1,
+    "num_examples": 1,
+    "task_args": {
+      "max_turns": 1
+    }
+  },
+  "timeout": "5m"
+}

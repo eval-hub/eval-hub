@@ -18,7 +18,9 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -193,6 +195,74 @@ func TestHandleGetEvaluationBenchmarkLogs(t *testing.T) {
 	}
 	if runtime.capturedOpts.SinceSeconds != nil {
 		t.Fatalf("since_seconds = %v, want nil", runtime.capturedOpts.SinceSeconds)
+	}
+}
+
+// TestHandleGetEvaluationBenchmarkLogsIndexBounds checks that job and collection
+// benchmark indexes are validated before the log stream starts.
+func TestHandleGetEvaluationBenchmarkLogsIndexBounds(t *testing.T) {
+	for _, source := range []string{"job", "collection"} {
+		t.Run(source, func(t *testing.T) {
+			for _, tc := range []struct {
+				index      string
+				wantStatus int
+			}{
+				{index: "0", wantStatus: http.StatusOK},
+				{index: "1", wantStatus: http.StatusNotFound},
+				{index: "99", wantStatus: http.StatusNotFound},
+			} {
+				t.Run(tc.index, func(t *testing.T) {
+					jobID := "job-logs-index-bounds"
+					job := &api.EvaluationJobResource{
+						Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+						EvaluationJobConfig: api.EvaluationJobConfig{
+							Benchmarks: []api.EvaluationBenchmarkConfig{
+								{Ref: api.Ref{ID: "arc_easy"}, ProviderID: "provider-1"},
+							},
+						},
+					}
+					storage := &logsCollectionStorage{fakeStorage: fakeStorage{job: job}}
+					if source == "collection" {
+						job.Benchmarks = nil
+						job.Collection = &api.CollectionRef{ID: "coll-1"}
+						storage.collectionConfigs = map[string]api.CollectionResource{
+							"coll-1": {
+								Resource: api.Resource{ID: "coll-1"},
+								CollectionConfig: api.CollectionConfig{
+									Benchmarks: []api.CollectionBenchmarkConfig{
+										{Ref: api.Ref{ID: "arc_easy"}, ProviderID: "provider-1"},
+									},
+								},
+							},
+						}
+					}
+					runtime := &logsRuntime{logs: "benchmark logs"}
+					h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+					rec := httptest.NewRecorder()
+					logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+					ctx := executioncontext.NewExecutionContext(context.Background(), "req-index-bounds", logger, "test-user", "test-tenant")
+					req := &logsRequest{
+						MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/benchmarks/"+tc.index+"/logs"),
+						pathValues: map[string]string{
+							constants.PathParameterJobID:          jobID,
+							constants.PathParameterBenchmarkIndex: tc.index,
+						},
+					}
+
+					h.HandleGetEvaluationBenchmarkLogs(ctx, req, MockResponseWrapper{recorder: rec})
+
+					if rec.Code != tc.wantStatus {
+						t.Fatalf("status = %d, want %d", rec.Code, tc.wantStatus)
+					}
+					if wantStream := tc.wantStatus == http.StatusOK; runtime.streamLogsCalled != wantStream {
+						t.Fatalf("StreamEvaluationLogs called = %t, want %t", runtime.streamLogsCalled, wantStream)
+					}
+					if tc.wantStatus == http.StatusNotFound && rec.Header().Get("Trailer") != "" {
+						t.Fatal("unexpected log stream trailer on error response")
+					}
+				})
+			}
+		})
 	}
 }
 
@@ -550,6 +620,31 @@ func TestHandleGetEvaluationJobLogsJobNotFound(t *testing.T) {
 	}
 }
 
+func TestHandleGetEvaluationJobLogsHidesPostProcessingJob(t *testing.T) {
+	jobID := "post-processing-job"
+	storage := &fakeStorage{job: &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+		EvaluationJobConfig: api.EvaluationJobConfig{Benchmarks: []api.EvaluationBenchmarkConfig{{
+			Ref: api.Ref{ID: postprocessing.BenchmarkID}, ProviderID: postprocessing.ProviderID,
+		}}},
+	}}
+	// Provide a runtime so the request reaches the workload-scoped storage lookup.
+	h := handlers.New(storage, testhelpers.NewValidator(t), &logsRuntime{}, nil, nil, nil, nil)
+	rec := httptest.NewRecorder()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-ppi-logs", logger, "test-user", "test-tenant")
+	req := &logsRequest{
+		MockRequest: createMockRequest(http.MethodGet, "/api/v1/evaluations/jobs/"+jobID+"/logs"),
+		pathValues:  map[string]string{constants.PathParameterJobID: jobID},
+	}
+
+	h.HandleGetEvaluationJobLogs(ctx, req, MockResponseWrapper{recorder: rec})
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestHandleGetEvaluationJobLogsCollectionNotFound(t *testing.T) {
 	jobID := "job-logs-missing-collection"
 	storage := &logsCollectionStorage{
@@ -798,6 +893,12 @@ func (s *logsJobStorage) WithContext(ctx context.Context) abstractions.Storage {
 	return c
 }
 
+func (s *logsJobStorage) WithWorkloadType(workloadType workloads.Type) abstractions.Storage {
+	c := s.copy()
+	c.fakeStorage = *s.fakeStorage.WithWorkloadType(workloadType).(*fakeStorage)
+	return c
+}
+
 func (s *logsJobStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
 	c := s.copy()
 	c.fakeStorage = *s.fakeStorage.WithTenant(tenant).(*fakeStorage)
@@ -835,6 +936,12 @@ func (s *logsCollectionStorage) WithLogger(logger *slog.Logger) abstractions.Sto
 func (s *logsCollectionStorage) WithContext(ctx context.Context) abstractions.Storage {
 	c := s.copy()
 	c.fakeStorage = *s.fakeStorage.WithContext(ctx).(*fakeStorage)
+	return c
+}
+
+func (s *logsCollectionStorage) WithWorkloadType(workloadType workloads.Type) abstractions.Storage {
+	c := s.copy()
+	c.fakeStorage = *s.fakeStorage.WithWorkloadType(workloadType).(*fakeStorage)
 	return c
 }
 

@@ -204,6 +204,60 @@ test.model()
 	}
 }
 
+func TestBenchmarkTokenizerConfiguration(t *testing.T) {
+	cases := []struct {
+		name        string
+		environment string
+		tokenizer   string
+		unset       bool
+		want        string
+	}{
+		{"connected default", "connected", "", true, "google/flan-t5-small"},
+		{"connected empty", "connected", "", false, "google/flan-t5-small"},
+		{"connected model tokenizer", "connected", "Qwen/Qwen3-VL-30B-A3B-Instruct", false, "Qwen/Qwen3-VL-30B-A3B-Instruct"},
+		{"connected local tokenizer", "connected", "/mounted/tokenizer", false, "/mounted/tokenizer"},
+		{"disconnected default", "disconnected", "", true, "/test_data/tokenizer"},
+		{"disconnected ignores connected override", "disconnected", "Qwen/Qwen3-VL-30B-A3B-Instruct", false, "/test_data/tokenizer"},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("ENVIRONMENT_ID", tt.environment)
+			t.Setenv("MODEL_NAME", "deployment-alias")
+			if tt.unset {
+				unsetEnvForTest(t, "FVT_BENCHMARK_TOKENIZER")
+			} else {
+				t.Setenv("FVT_BENCHMARK_TOKENIZER", tt.tokenizer)
+			}
+
+			sc := &scenarioConfig{}
+			out, err := sc.getFile("evaluation_job_instruction-output-v1.json")
+			if err != nil {
+				t.Fatalf("render instruction-output fixture: %v", err)
+			}
+			var job struct {
+				Collection struct {
+					Benchmarks []jsonnetBenchmarkPayload `json:"benchmarks"`
+				} `json:"collection"`
+			}
+			if err := json.Unmarshal([]byte(out), &job); err != nil {
+				t.Fatalf("unmarshal fixture: %v", err)
+			}
+			if len(job.Collection.Benchmarks) != 3 {
+				t.Fatalf("got %d benchmarks, want 3", len(job.Collection.Benchmarks))
+			}
+			for _, b := range job.Collection.Benchmarks {
+				if got := b.Parameters["tokenizer"]; got != tt.want {
+					t.Errorf("%s tokenizer = %v, want %q", b.ID, got, tt.want)
+				}
+			}
+			got := resolveEnvSubstitutionValue("FVT_BENCHMARK_TOKENIZER", "google/flan-t5-small", true)
+			if got != tt.want {
+				t.Errorf("assertion tokenizer = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestJsonnetModelAuth(t *testing.T) {
 	tc := &scenarioConfig{
 		values:                map[string]string{},
@@ -504,6 +558,7 @@ func TestEvaluateEvaluationJobJsonnetDisconnected(t *testing.T) {
 }
 
 func TestEvaluateEvaluationJobJsonnetConnected(t *testing.T) {
+	unsetEnvForTest(t, "FVT_BENCHMARK_TOKENIZER")
 	tc := &scenarioConfig{
 		values: map[string]string{},
 		jsonnetHarnessEnv: map[string]string{
@@ -1115,6 +1170,7 @@ func TestEvaluateEvaluationJobGitAndPvcJsonnet(t *testing.T) {
 }
 
 func TestEvaluateEvaluationJobJsonnetWithQueue(t *testing.T) {
+	unsetEnvForTest(t, "FVT_BENCHMARK_TOKENIZER")
 	queueJobJson := `
 	{
         "model": {
@@ -1376,6 +1432,7 @@ type jsonnetBenchmarkPayload struct {
 
 type jsonnetPayloadDocument struct {
 	Name         string                    `json:"name"`
+	Model        *api.ModelRef             `json:"model"`
 	Benchmarks   []jsonnetBenchmarkPayload `json:"benchmarks"`
 	PassCriteria *struct {
 		Threshold float64 `json:"threshold"`
@@ -1405,9 +1462,79 @@ func evaluateJsonnetPayloadDocument(t *testing.T, tc *scenarioConfig, file strin
 	return doc
 }
 
+func TestJsonnetRagasEmbeddingEndpoint(t *testing.T) {
+	for _, disconnected := range []bool{false, true} {
+		t.Run(fmt.Sprintf("disconnected=%v", disconnected), func(t *testing.T) {
+			environment := "connected"
+			if disconnected {
+				environment = "disconnected"
+			}
+			tc := &scenarioConfig{jsonnetHarnessEnv: map[string]string{
+				"ENVIRONMENT_ID":        environment,
+				"MODEL_NAME":            "Qwen/Qwen3-VL-30B-A3B-Instruct",
+				"MODEL_URL":             "https://chat.example/v1",
+				"MODEL_AUTH_SECRET_REF": "ragas-model-connections",
+				"RAGAS_EMBEDDING_MODEL": "granite-embedding",
+				"RAGAS_EMBEDDING_URL":   "https://ignored-legacy-value.example/v1",
+			}}
+			doc := evaluateJsonnetPayloadDocument(t, tc, "evaluation_job_ragas.jsonnet")
+			if doc.Model == nil || doc.Model.Auth == nil || doc.Model.Auth.SecretRef != "ragas-model-connections" {
+				t.Fatal("Ragas job must retain the model-auth Secret reference")
+			}
+			if len(doc.Benchmarks) != 2 {
+				t.Fatalf("got %d benchmarks, want 2", len(doc.Benchmarks))
+			}
+			for i, id := range []string{"ragas_rag_default", "ragas_rag_full"} {
+				benchmark := doc.Benchmarks[i]
+				if benchmark.ID != id || benchmark.ProviderID != "ragas" {
+					t.Fatalf("unexpected benchmark: %+v", benchmark)
+				}
+				for key, want := range map[string]any{
+					"embedding_model": "granite-embedding",
+					"num_examples":    float64(1),
+				} {
+					if got := benchmark.Parameters[key]; got != want {
+						t.Errorf("%s parameters.%s = %v, want %v", id, key, got, want)
+					}
+				}
+				for _, key := range []string{"embedding_url", "judge_url", "judge_api_key"} {
+					if _, exists := benchmark.Parameters[key]; exists {
+						t.Errorf("%s parameters.%s must use the model-auth Secret", id, key)
+					}
+				}
+				if benchmark.TestDataRef == nil || benchmark.TestDataRef.S3.Key != "datasets/ragas/dataset.jsonl" {
+					t.Errorf("%s lost its RAG dataset reference", id)
+				}
+			}
+		})
+	}
+}
+
+func TestJsonnetRagasRequiresEmbeddingModel(t *testing.T) {
+	const key = "RAGAS_EMBEDDING_MODEL"
+	for _, value := range []string{"unset", "", " \t "} {
+		t.Run(value, func(t *testing.T) {
+			env := map[string]string{}
+			tc := &scenarioConfig{jsonnetHarnessEnv: env}
+			if value == "unset" {
+				tc.jsonnetHarnessEnvOmit = []string{key}
+			} else {
+				env[key] = value
+			}
+			_, err := tc.evaluateJsonnetFile(jsonnetPayloadFilePath(t, "evaluation_job_ragas.jsonnet"))
+			if err == nil || !strings.Contains(err.Error(), key) {
+				t.Fatalf("expected actionable error naming %s, got %v", key, err)
+			}
+		})
+	}
+}
+
 func assertJsonnetBenchmarksDisconnectedAware(t *testing.T, file string, benchmarks []jsonnetBenchmarkPayload, disconnected bool) {
 	t.Helper()
 	wantTokenizer := "google/flan-t5-small"
+	if tokenizer := os.Getenv("FVT_BENCHMARK_TOKENIZER"); tokenizer != "" {
+		wantTokenizer = tokenizer
+	}
 	if disconnected {
 		wantTokenizer = "/test_data/tokenizer"
 	}

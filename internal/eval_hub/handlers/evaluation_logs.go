@@ -12,6 +12,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/httpwrappers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/internal/logging"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -36,6 +37,8 @@ func (h *Handlers) HandleGetEvaluationBenchmarkLogs(ctx *executioncontext.Execut
 	h.handleGetEvaluationLogs(ctx, req, w, &benchmarkIndex)
 }
 
+// handleGetEvaluationLogs validates the job and benchmark selection before committing
+// the streaming response. A nil benchmarkIndex requests logs for all benchmarks.
 func (h *Handlers) handleGetEvaluationLogs(
 	ctx *executioncontext.ExecutionContext,
 	req httpwrappers.RequestWrapper,
@@ -65,14 +68,24 @@ func (h *Handlers) handleGetEvaluationLogs(
 	_ = h.withSpan(
 		ctx,
 		func(runtimeCtx context.Context) error {
-			job, err := storage.WithContext(runtimeCtx).GetEvaluationJob(evaluationJobID)
+			scopedContext := storage.WithContext(runtimeCtx).WithWorkloadType(workloads.Evaluation)
+			job, err := scopedContext.GetEvaluationJob(evaluationJobID)
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
 			}
 
-			benchmarks, err := h.resolveJobBenchmarks(storage.WithContext(runtimeCtx), job)
+			benchmarks, err := h.resolveJobBenchmarks(scopedContext, job)
 			if err != nil {
+				w.Error(err, ctx.RequestID)
+				return err
+			}
+			if benchmarkIndex != nil && *benchmarkIndex >= len(benchmarks) {
+				err := serviceerrors.NewServiceError(
+					messages.ResourceNotFound,
+					"Type", "benchmark",
+					"ResourceId", strconv.Itoa(*benchmarkIndex),
+				)
 				w.Error(err, ctx.RequestID)
 				return err
 			}
@@ -114,6 +127,8 @@ func (h *Handlers) handleGetEvaluationLogs(
 	)
 }
 
+// resolveJobBenchmarks returns the job's benchmarks, resolving collection references
+// and applying any benchmark overrides from the job.
 func (h *Handlers) resolveJobBenchmarks(storage interface {
 	GetCollection(id string) (*api.CollectionResource, error)
 }, job *api.EvaluationJobResource) ([]api.EvaluationBenchmarkConfig, error) {
@@ -137,6 +152,7 @@ func (a responseWriterAdapter) Write(p []byte) (int, error) {
 	return a.w.Write(p)
 }
 
+// parseEvaluationLogOptions applies defaults and validates the log query parameters.
 func parseEvaluationLogOptions(req httpwrappers.RequestWrapper) (api.EvaluationLogOptions, error) {
 	tailLines, err := GetParam(req, "tail_lines", true, api.DefaultLogTailLines)
 	if err != nil {

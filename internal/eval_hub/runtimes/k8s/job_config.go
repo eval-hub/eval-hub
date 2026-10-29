@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/google/uuid"
@@ -25,6 +26,7 @@ const (
 	defaultSidecarCPULimit      = "200m"
 	defaultSidecarMemoryLimit   = "256Mi"
 	defaultNamespace            = "default"
+	defaultDRAClaimName         = "gpu" // pod-local claim name when hardware_config.dra omits claim_name
 	evalHubInstanceNameEnv      = "EVALHUB_INSTANCE_NAME"
 	mlflowTrackingURIEnv        = "MLFLOW_TRACKING_URI"
 	inClusterNamespaceFile      = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
@@ -36,29 +38,31 @@ const (
 )
 
 type jobConfig struct {
-	jobID              string
-	resourceGUID       string
-	namespace          string
-	providerID         string
-	benchmarkID        string
-	benchmarkIndex     int
-	adapterImage       string
-	adapterPullPolicy  corev1.PullPolicy
-	sidecarImage       string
-	entrypoint         []string
-	defaultEnv         []api.EnvVar
-	cpuRequest         string
-	memoryRequest      string
-	cpuLimit           string
-	memoryLimit        string
-	gpuResource        string            // Kubernetes extended resource name (e.g. "nvidia.com/gpu")
-	gpuCount           int               // number of GPU units to request (0 = CPU-only)
-	nodeSelector       map[string]string // pod nodeSelector; nil when a queue is set (HardwareProfile or hardware_config.queue)
-	tolerations        []corev1.Toleration
-	priorityClassName  string // pod PriorityClassName and/or Kueue priority-class label
-	jobSpec            shared.JobSpec
-	serviceAccountName string
-	serviceCAConfigMap string
+	jobID                    string
+	resourceGUID             string
+	namespace                string
+	providerID               string
+	benchmarkID              string
+	benchmarkIndex           int
+	adapterImage             string
+	adapterPullPolicy        corev1.PullPolicy
+	sidecarImage             string
+	entrypoint               []string
+	defaultEnv               []api.EnvVar
+	cpuRequest               string
+	memoryRequest            string
+	cpuLimit                 string
+	memoryLimit              string
+	gpuResource              string            // Kubernetes extended resource name (e.g. "nvidia.com/gpu")
+	gpuCount                 int               // number of GPU units to request (0 = CPU-only)
+	draResourceClaimTemplate string            // ResourceClaimTemplate name for DRA scheduling; empty = no DRA
+	draClaimName             string            // pod-local DRA claim name consumed by the adapter container
+	nodeSelector             map[string]string // pod nodeSelector; nil when a queue is set (HardwareProfile or hardware_config.queue)
+	tolerations              []corev1.Toleration
+	priorityClassName        string // pod PriorityClassName and/or Kueue priority-class label
+	jobSpec                  shared.JobSpec
+	serviceAccountName       string
+	serviceCAConfigMap       string
 	// mlflowCABundleConfigMap is the operator-managed merged CA bundle
 	// ({instance}-mlflow-ca-bundle) in the job namespace. Set only after a
 	// Get confirms the ConfigMap exists; otherwise jobs fall back to service CA
@@ -78,6 +82,7 @@ type jobConfig struct {
 	sidecarResources           corev1.ResourceRequirements
 	testDataS3                 s3TestDataConfig
 	testDataPVC                pvcTestDataConfig
+	postProcessorPVCs          []postProcessorPVCConfig
 	testDataGit                gitTestDataConfig
 	testDataHF                 hfTestDataConfig
 	testDataInitImage          string
@@ -100,6 +105,12 @@ type pvcTestDataConfig struct {
 	subPath   string
 }
 
+type postProcessorPVCConfig struct {
+	claimName  string
+	volumeName string
+	mountPath  string
+}
+
 type gitTestDataConfig struct {
 	url       string
 	ref       string
@@ -112,6 +123,39 @@ type hfTestDataConfig struct {
 	revision  string
 	subPath   string
 	secretRef string
+}
+
+func postProcessorPVCConfigs(evaluation *api.EvaluationJobResource) ([]postProcessorPVCConfig, error) {
+	if evaluation == nil || !postprocessing.IsPostProcessingJob(&evaluation.EvaluationJobConfig) {
+		return nil, nil
+	}
+
+	operations, err := postprocessing.OperationsFromJob(&evaluation.EvaluationJobConfig)
+	if err != nil {
+		return nil, fmt.Errorf("read post-processing calibration data refs: %w", err)
+	}
+	seenClaims := make(map[string]struct{})
+	var configs []postProcessorPVCConfig
+	for _, ref := range operations.ConfidenceInterval.CalibrationDataRef {
+		if ref.PVC == nil {
+			continue
+		}
+		claimName := strings.TrimSpace(ref.PVC.ClaimName)
+		if claimName == "" {
+			return nil, fmt.Errorf("post-processing calibration PVC claim_name is required")
+		}
+		if _, exists := seenClaims[claimName]; exists {
+			continue
+		}
+		seenClaims[claimName] = struct{}{}
+
+		configs = append(configs, postProcessorPVCConfig{
+			claimName:  claimName,
+			volumeName: fmt.Sprintf("%s%d", postProcessorCalibrationPVCVolumeNamePrefix, len(configs)),
+			mountPath:  fmt.Sprintf("%s/%s", postProcessorCalibrationPVCMountPathPrefix, claimName),
+		})
+	}
+	return configs, nil
 }
 
 func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.ProviderResource, benchmarkConfig *api.EvaluationBenchmarkConfig, benchmarkIndex int, serviceConfig *config.Config, hardwareProfile *hardwareProfileResources) (*jobConfig, error) {
@@ -236,12 +280,24 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		testDataHFSecretRef = strings.TrimSpace(benchmarkConfig.TestDataRef.HF.SecretRef)
 	}
 
+	postProcessorPVCs, err := postProcessorPVCConfigs(evaluation)
+	if err != nil {
+		return nil, err
+	}
+
 	// GPU resource requests/limits are always propagated to the pod spec so that Kueue can
 	// account for GPU quota. Provider nodeSelector is the default; a HardwareProfile with
 	// Node scheduling overrides it, and a Queue-backed profile (or hardware_config.queue /
 	// deprecated evaluation.queue) clears it so Kueue ResourceFlavors govern placement.
 	gpuResource, gpuCount := resolveGPUConfig(runtime.K8s.GPU)
 	nodeSelector := resolveNodeSelector(runtime.K8s.GPU)
+	// DRA scheduling replaces the legacy GPU extended resource at the provider level.
+	// A ResourceClaimTemplate reference delegates device class, selectors, and topology
+	// to the template; there is no provider DRA node selector to resolve.
+	draResourceClaimTemplate, draClaimName := resolveDRAConfig(runtime.K8s.DRA)
+	if gpuCount > 0 && draResourceClaimTemplate != "" {
+		return nil, fmt.Errorf("provider %q runtime.k8s declares both gpu and dra; they are mutually exclusive", provider.Resource.ID)
+	}
 
 	adapterPullPolicy := resolveImagePullPolicy(runtime.K8s.ImagePullPolicy)
 
@@ -265,6 +321,8 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		memoryLimit:                memoryLimit,
 		gpuResource:                gpuResource,
 		gpuCount:                   gpuCount,
+		draResourceClaimTemplate:   draResourceClaimTemplate,
+		draClaimName:               draClaimName,
 		nodeSelector:               nodeSelector,
 		jobSpec:                    *spec,
 		serviceAccountName:         serviceAccountName,
@@ -289,6 +347,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 			claimName: testDataPVCClaimName,
 			subPath:   testDataPVCSubPath,
 		},
+		postProcessorPVCs: postProcessorPVCs,
 		testDataGit: gitTestDataConfig{
 			url:       testDataGitURL,
 			ref:       testDataGitRef,
@@ -309,10 +368,13 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	}
 	// Deprecated evaluation.queue: only when neither hardware_config supplied a queue.
 	applyQueueIfUnset(out, evaluation.Queue)
+	if err := finalizeAcceleratorConfig(out); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
-// applyDirectHardwareConfig applies inline hardware_config fields (queue/cpu/memory/gpu)
+// applyDirectHardwareConfig applies inline hardware_config fields (queue/cpu/memory/gpu/dra)
 // when no hardware_profile_name is set. Profile mode is handled separately via
 // applyHardwareProfileResources.
 func applyDirectHardwareConfig(cfg *jobConfig, hw *api.BenchmarkHardwareConfig) error {
@@ -359,6 +421,27 @@ func applyDirectHardwareConfig(cfg *jobConfig, hw *api.BenchmarkHardwareConfig) 
 		}
 		if hw.GPU.Count > 0 {
 			cfg.gpuCount = hw.GPU.Count
+		}
+		// An explicit GPU override selects the legacy extended-resource mechanism,
+		// dropping any provider-level DRA default. The same hardware_config cannot
+		// also set dra (rejected by validation), so the field is nil here in that case.
+		if strings.TrimSpace(hw.GPU.Name) != "" || hw.GPU.Count > 0 {
+			cfg.draResourceClaimTemplate = ""
+			cfg.draClaimName = ""
+		}
+	}
+	if hw.DRA != nil {
+		if template := strings.TrimSpace(hw.DRA.ResourceClaimTemplate); template != "" {
+			// An explicit DRA override selects claim-based allocation, dropping any
+			// provider-level GPU default: the device still reaches the adapter via the
+			// claim, only the scheduling mechanism changes. Kueue accounts quota from
+			// the claim, so no GPU extended resource is set.
+			cfg.gpuResource = ""
+			cfg.gpuCount = 0
+			cfg.draResourceClaimTemplate = template
+		}
+		if claim := strings.TrimSpace(hw.DRA.ClaimName); claim != "" {
+			cfg.draClaimName = claim
 		}
 	}
 	if hw.Queue != nil {
@@ -493,6 +576,37 @@ func resolveGPUConfig(gpu *api.GPUConfig) (resource string, count int) {
 		return "", 0
 	}
 	return strings.TrimSpace(gpu.Resource), gpu.Count
+}
+
+// resolveDRAConfig returns the provider-level DRA defaults. An empty template means
+// no DRA scheduling; the claim name may be defaulted later, after request-level
+// overrides have been applied.
+func resolveDRAConfig(dra *api.DRAConfig) (resourceClaimTemplate, claimName string) {
+	if dra == nil {
+		return "", ""
+	}
+	return strings.TrimSpace(dra.ResourceClaimTemplate), strings.TrimSpace(dra.ClaimName)
+}
+
+// finalizeAcceleratorConfig runs after provider defaults, HardwareProfile resources,
+// and direct hardware_config overrides have been resolved. It enforces the GPU/DRA
+// mutual exclusion that validation cannot catch (a HardwareProfile GPU combined with
+// a provider DRA default), defaults the pod-local claim name, and drops node
+// selectors for DRA-scheduled pods: placement is governed by the referenced
+// ResourceClaimTemplate's device class and topology constraints, and a GPU node
+// selector would fight the DRA scheduler (mirroring queue-mode behaviour).
+func finalizeAcceleratorConfig(cfg *jobConfig) error {
+	if cfg.draResourceClaimTemplate == "" {
+		return nil
+	}
+	if cfg.gpuCount > 0 {
+		return fmt.Errorf("gpu and dra allocation are mutually exclusive: the provider runtime config, hardware profile, and hardware_config combine a GPU extended resource request with a DRA ResourceClaimTemplate reference")
+	}
+	if cfg.draClaimName == "" {
+		cfg.draClaimName = defaultDRAClaimName
+	}
+	cfg.nodeSelector = nil
+	return nil
 }
 
 func defaultIfEmpty(value string, fallback string) string {

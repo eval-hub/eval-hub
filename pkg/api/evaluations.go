@@ -222,24 +222,47 @@ type HardwareResourceQuantity struct {
 // HardwareGPUConfig holds optional GPU resource overrides for a benchmark.
 // Name is the Kubernetes extended resource (e.g. "nvidia.com/gpu").
 // Count is the number of GPUs requested on the Job (requests == limits).
+// Mutually exclusive with DRA: a request must not set both.
 type HardwareGPUConfig struct {
 	Name  string `mapstructure:"name" json:"name,omitempty"`
 	Count int    `mapstructure:"count" json:"count,omitempty"`
+}
+
+// HardwareDRAConfig holds an optional Dynamic Resource Allocation (DRA) override
+// for a benchmark's hardware_config. Devices are requested by referencing a
+// ResourceClaimTemplate that already exists in the job's namespace; the template
+// (not this config) defines the device class, attribute selectors, and topology
+// constraints. Mutually exclusive with GPU. Template references (rather than
+// pre-created ResourceClaims) keep evaluation Jobs admissible to Kueue, which
+// only accepts workload objects that create their own claims.
+type HardwareDRAConfig struct {
+	// ResourceClaimTemplate is the name of a ResourceClaimTemplate in the job's
+	// namespace. Must conform to RFC 1123 DNS label naming.
+	ResourceClaimTemplate string `mapstructure:"resource_claim_template" json:"resource_claim_template" validate:"required,rfc1123_dns_label"`
+	// ClaimName is the pod-local claim name the adapter container references via
+	// resources.claims. Defaults to "gpu" when omitted.
+	ClaimName string `mapstructure:"claim_name" json:"claim_name,omitempty" validate:"omitempty,rfc1123_dns_label"`
 }
 
 // BenchmarkHardwareConfig is an optional per-benchmark hardware override for Kubernetes runtimes.
 //
 // Two mutually exclusive modes:
 //   - Profile mode: set HardwareProfileName to fetch an OpenDataHub HardwareProfile CR.
-//     Queue, CPU, Memory, and GPU must not be set.
-//   - Direct mode: omit HardwareProfileName and set Queue, CPU, Memory, and/or GPU directly.
-//     Values missing from direct fields fall back to the provider runtime.k8s configuration.
+//     Queue, CPU, Memory, GPU, and DRA must not be set.
+//   - Direct mode: omit HardwareProfileName and set Queue, CPU, Memory, GPU, and/or DRA
+//     directly. Values missing from direct fields fall back to the provider runtime.k8s
+//     configuration. GPU (legacy extended resource) and DRA (ResourceClaimTemplate
+//     reference) are mutually exclusive with each other; an explicit request-level
+//     choice of either overrides the provider default for the other mechanism.
 type BenchmarkHardwareConfig struct {
 	HardwareProfileName string                    `mapstructure:"hardware_profile_name" json:"hardware_profile_name,omitempty" validate:"omitempty,rfc1123_dns_label"`
 	Queue               *QueueConfig              `mapstructure:"queue" json:"queue,omitempty"`
 	CPU                 *HardwareResourceQuantity `mapstructure:"cpu" json:"cpu,omitempty"`
 	Memory              *HardwareResourceQuantity `mapstructure:"memory" json:"memory,omitempty"`
 	GPU                 *HardwareGPUConfig        `mapstructure:"gpu" json:"gpu,omitempty"`
+	// DRA requests accelerators via a namespace-local ResourceClaimTemplate reference
+	// instead of the legacy GPU extended resource. Mutually exclusive with GPU.
+	DRA *HardwareDRAConfig `mapstructure:"dra" json:"dra,omitempty"`
 }
 
 // HasDirectFields reports whether any inline (non-profile) hardware fields are set.
@@ -247,7 +270,7 @@ func (h *BenchmarkHardwareConfig) HasDirectFields() bool {
 	if h == nil {
 		return false
 	}
-	return h.Queue != nil || h.CPU != nil || h.Memory != nil || h.GPU != nil
+	return h.Queue != nil || h.CPU != nil || h.Memory != nil || h.GPU != nil || h.DRA != nil
 }
 
 // EvaluationBenchmarkConfig represents a benchmark reference in an evaluation job request or persisted job config.
@@ -317,6 +340,10 @@ type BenchmarkStatusEvent struct {
 	Phase          JobPhase       `json:"phase,omitempty" validate:"omitempty,oneof=initializing loading_data running_evaluation post_processing persisting_artifacts completed"`
 	Metrics        map[string]any `json:"metrics,omitempty"`
 	MetricsSchema  []MetricSchema `json:"metrics_schema,omitempty" validate:"omitempty,dive"`
+	// PrimaryScore is the adapter-reported primary metric for this completed run.
+	// Used when the job/catalog primary_score.metric is absent from Metrics
+	// (e.g. inspect/custom task-dependent scorers). Exact key match only.
+	PrimaryScore   *PrimaryScore  `json:"primary_score,omitempty"`
 	AdditionalInfo map[string]any `json:"additional_info,omitempty"`
 	Artifacts      map[string]any `json:"artifacts,omitempty"`
 	ErrorMessage   *MessageInfo   `json:"error_message,omitempty"`
@@ -356,9 +383,10 @@ type BenchmarkResult struct {
 
 // EvaluationJobResults represents results section for EvaluationJobResource
 type EvaluationJobResults struct {
-	Test                *EvaluationTest   `json:"test,omitempty"`
-	Benchmarks          []BenchmarkResult `json:"benchmarks,omitempty" validate:"omitempty,dive"`
-	MLFlowExperimentURL string            `json:"mlflow_experiment_url,omitempty"`
+	OCI                 *EvaluationOCIResults `json:"oci,omitempty"`
+	Test                *EvaluationTest       `json:"test,omitempty"`
+	Benchmarks          []BenchmarkResult     `json:"benchmarks,omitempty" validate:"omitempty,dive"`
+	MLFlowExperimentURL string                `json:"mlflow_experiment_url,omitempty"`
 }
 
 // OCICoordinates represents OCI artifact coordinates for persistence
@@ -367,7 +395,6 @@ type OCICoordinates struct {
 	OCIHost       string            `json:"oci_host" validate:"required"`
 	OCIRepository string            `json:"oci_repository" validate:"required"`
 	OCITag        string            `json:"oci_tag,omitempty"`
-	OCISubject    string            `json:"oci_subject,omitempty"`
 	Annotations   map[string]string `json:"annotations,omitempty"`
 }
 
@@ -384,6 +411,7 @@ type OCIConnectionConfig struct {
 type EvaluationExportsOCI struct {
 	Coordinates OCICoordinates       `json:"coordinates" validate:"required"`
 	K8s         *OCIConnectionConfig `json:"k8s,omitempty"`
+	Signing     *OCISigningConfig    `json:"signing,omitempty"`
 }
 
 // EvaluationExports represents optional exports configuration for an evaluation job
@@ -392,7 +420,11 @@ type EvaluationExports struct {
 }
 
 type CollectionRef struct {
-	ID         string                      `mapstructure:"id" json:"id" validate:"required"`
+	ID string `mapstructure:"id" json:"id" validate:"required"`
+	// Benchmarks override collection entries by provider_id and id. For a repeated
+	// pair, one override applies to every occurrence. New requests with multiple
+	// overrides must match the number of occurrences and use collection occurrence order.
+	// Other pairs may be omitted or reordered independently.
 	Benchmarks []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 
 	// CollectionUpdatedAt captures the collection's updated_at timestamp at job-creation time.
@@ -479,6 +511,11 @@ type EvaluationTest struct {
 type BenchmarkTest struct {
 	PrimaryScore       float32 `json:"primary_score"`
 	PrimaryScoreMetric string  `json:"primary_score_metric"`
-	Threshold          float32 `json:"threshold"`
-	Pass               bool    `json:"pass"`
+	// LowerIsBetter is the direction of the selected primary (job, event, or
+	// catalog). Serialized so it survives the storage round-trip before
+	// computeJobTestResult aggregates multi-benchmark jobs; omitted when unset
+	// (legacy results fall back to job/catalog PrimaryScore).
+	LowerIsBetter *bool   `json:"lower_is_better,omitempty"`
+	Threshold     float32 `json:"threshold"`
+	Pass          bool    `json:"pass"`
 }
