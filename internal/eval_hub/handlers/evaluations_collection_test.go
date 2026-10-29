@@ -238,3 +238,78 @@ func TestHandleCreateEvaluationValidatesDeclaredJudgeParameters(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleCreateEvaluationOptionalCollectionTokenizer(t *testing.T) {
+	tests := []struct {
+		name             string
+		benchmarkRequest string
+		wantTokenizer    string
+		wantTokenizerSet bool
+	}{
+		{
+			name: "omitted tokenizer uses adapter default",
+		},
+		{
+			name:             "explicit tokenizer is forwarded",
+			benchmarkRequest: `,"benchmarks":[{"id":"truthfulqa_mc1","provider_id":"lm_evaluation_harness","parameters":{"tokenizer":"org/model-tokenizer"}}]`,
+			wantTokenizer:    "org/model-tokenizer",
+			wantTokenizerSet: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage := &collectionRunCountStorage{
+				fakeStorage: &fakeStorage{providerConfigs: map[string]api.ProviderResource{
+					"lm_evaluation_harness": {
+						Resource: api.Resource{ID: "lm_evaluation_harness"},
+						ProviderConfig: api.ProviderConfig{Benchmarks: []api.BenchmarkResource{{
+							ID: "truthfulqa_mc1",
+						}}},
+					},
+				}},
+				collection: &api.CollectionResource{
+					Resource: api.Resource{ID: "trustworthiness-v1", Owner: "system"},
+					CollectionConfig: api.CollectionConfig{Benchmarks: []api.CollectionBenchmarkConfig{{
+						Ref:        api.Ref{ID: "truthfulqa_mc1"},
+						ProviderID: "lm_evaluation_harness",
+						Parameters: map[string]any{"num_few_shot": 0, "tokenizer": ""},
+					}}},
+				},
+			}
+			runtime := &fakeRuntime{}
+			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+			body := fmt.Sprintf(
+				`{"name":"evaluation","model":{"url":"http://test.com","name":"target"},"collection":{"id":"trustworthiness-v1"%s}}`,
+				tt.benchmarkRequest,
+			)
+			req := &bodyRequest{MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"), body: []byte(body)}
+			recorder := httptest.NewRecorder()
+			ctx := executioncontext.NewExecutionContext(context.Background(), "req-1", logger, "test-user", "test-tenant")
+
+			h.HandleCreateEvaluation(ctx, req, MockResponseWrapper{recorder: recorder})
+
+			if recorder.Code != http.StatusAccepted {
+				t.Fatalf("status = %d, want %d; body: %s", recorder.Code, http.StatusAccepted, recorder.Body.String())
+			}
+			if !runtime.called {
+				t.Fatal("expected runtime to receive the created job")
+			}
+			if len(runtime.runBenchmarks) != 1 {
+				t.Fatalf("runtime benchmarks = %#v, want exactly one", runtime.runBenchmarks)
+			}
+			parameters := runtime.runBenchmarks[0].Parameters
+			if got := parameters["num_few_shot"]; got != float64(0) && got != 0 {
+				t.Errorf("num_few_shot = %#v, want 0", got)
+			}
+			gotTokenizer, gotTokenizerSet := parameters["tokenizer"]
+			if gotTokenizerSet != tt.wantTokenizerSet {
+				t.Fatalf("tokenizer present = %t, want %t (parameters: %#v)", gotTokenizerSet, tt.wantTokenizerSet, parameters)
+			}
+			if gotTokenizerSet && gotTokenizer != tt.wantTokenizer {
+				t.Errorf("tokenizer = %#v, want %q", gotTokenizer, tt.wantTokenizer)
+			}
+		})
+	}
+}
