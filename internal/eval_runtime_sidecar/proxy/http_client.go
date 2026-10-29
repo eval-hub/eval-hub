@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"crypto/fips140"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/platform"
 	"github.com/eval-hub/eval-hub/internal/safefile"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -49,6 +51,9 @@ func newHTTPClient(timeout time.Duration, tlsConfig *tls.Config, isOTELEnabled b
 // When caCertPath is empty and insecureSkipVerify is false, system roots are used (default *tls.Config).
 // MLflow and OCI callers always pass insecureSkipVerify=false; skip-verify is not supported for those TLS paths.
 func buildTLSConfig(caCertPath string, insecureSkipVerify bool, logger *slog.Logger, certLabel string) (*tls.Config, error) {
+	if insecureSkipVerify && (platform.IsFIPS() || fips140.Enabled()) {
+		return nil, fmt.Errorf("%s: TLS certificate verification cannot be disabled in FIPS mode", certLabel)
+	}
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		MaxVersion: tls.VersionTLS13,
