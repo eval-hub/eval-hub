@@ -1533,15 +1533,17 @@ func TestDeleteEvaluationJobResourcesDeletesRefSecrets(t *testing.T) {
 	if len(secrets.Items) != 0 {
 		t.Fatalf("expected ref secret to be deleted, got %d secret(s)", len(secrets.Items))
 	}
-	// Fake clientset removes Jobs immediately on delete, so unowned ConfigMaps are swept.
-	if got := listConfigMapsByJobID(t, clientset, jobID); len(got) != 0 {
-		t.Fatalf("expected unowned ConfigMap deleted once Jobs are gone, got %d", len(got))
+	// DELETE must not sweep ConfigMaps: an empty/gone Job list cannot prove another
+	// replica has stopped creating against a ConfigMap-owned NetworkPolicy.
+	if got := listConfigMapsByJobID(t, clientset, jobID); len(got) != 1 {
+		t.Fatalf("expected ConfigMap left for Job GC / creator rollback, got %d", len(got))
 	}
 }
 
-// TestDeleteEvaluationJobResourcesRemovesOrphanConfigMapsWithoutJob covers partial-create
-// leftovers: with no Job left, unlabeled-by-owner ConfigMaps are deleted.
-func TestDeleteEvaluationJobResourcesRemovesOrphanConfigMapsWithoutJob(t *testing.T) {
+// TestDeleteEvaluationJobResourcesLeavesOrphanConfigMapsWithoutJob covers partial-create
+// leftovers: DELETE must not remove ConfigMaps that have no Job owner yet. Empty Job
+// lists are insufficient to prove creation has stopped on another replica.
+func TestDeleteEvaluationJobResourcesLeavesOrphanConfigMapsWithoutJob(t *testing.T) {
 	evaluation := sampleEvaluation("provider-1")
 	jobID := evaluation.Resource.ID
 	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
@@ -1559,8 +1561,8 @@ func TestDeleteEvaluationJobResourcesRemovesOrphanConfigMapsWithoutJob(t *testin
 	if err := runtime.DeleteEvaluationJobResources(evaluation); err != nil {
 		t.Fatalf("DeleteEvaluationJobResources: %v", err)
 	}
-	if got := listConfigMapsByJobID(t, clientset, jobID); len(got) != 0 {
-		t.Fatalf("expected orphan ConfigMap without Job to be deleted, got %d", len(got))
+	if got := listConfigMapsByJobID(t, clientset, jobID); len(got) != 1 {
+		t.Fatalf("expected orphan ConfigMap without Job to be retained, got %d", len(got))
 	}
 }
 
@@ -1770,6 +1772,73 @@ func gateBeforeCreate(entered, release chan struct{}) (func(), func()) {
 		}, func() {
 			close(release)
 		}
+}
+
+// TestDeleteEvaluationJobResourcesRetainsConfigMapWhileCreatePausedBeforeJob proves
+// DELETE does not remove a ConfigMap (and its ConfigMap-owned NetworkPolicy) while
+// another replica is paused after creating supporting resources and before CreateJob.
+func TestDeleteEvaluationJobResourcesRetainsConfigMapWhileCreatePausedBeforeJob(t *testing.T) {
+	evaluation, jobID, clientset, storage := newSingleBenchmarkRaceFixture("provider-1")
+	enteredBeforeJob := make(chan struct{})
+	releaseCreateJob := make(chan struct{})
+	createErrCh := make(chan error, 1)
+	allowAbortSweep := make(chan struct{})
+	var allowSweepOnce sync.Once
+	releaseAbortSweep := func() { allowSweepOnce.Do(func() { close(allowAbortSweep) }) }
+	var beforeJobOnce sync.Once
+	beforeCreateJob := func() {
+		beforeJobOnce.Do(func() { close(enteredBeforeJob) })
+		<-releaseCreateJob
+	}
+	defer func() {
+		select {
+		case <-releaseCreateJob:
+		default:
+			close(releaseCreateJob)
+		}
+		releaseAbortSweep()
+	}()
+
+	runtime := &K8sRuntime{
+		logger:                        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper:                        &KubernetesHelper{clientset: clientset},
+		ctx:                           context.Background(),
+		serviceConfig:                 &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		beforeCreateJob:               beforeCreateJob,
+		afterCreateBenchmarkResources: func(err error) { createErrCh <- err },
+		beforeSweepAfterAbort:         func() { <-allowAbortSweep },
+	}
+	if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
+		t.Fatalf("RunEvaluationJob: %v", err)
+	}
+	waitClosed(t, enteredBeforeJob, "timed out waiting for create to pause before CreateJob")
+
+	if got := listConfigMapsByJobID(t, clientset, jobID); len(got) != 1 {
+		t.Fatalf("expected ConfigMap before CreateJob, got %d", len(got))
+	}
+	if got := listJobsByJobID(t, clientset, jobID); len(got) != 0 {
+		t.Fatalf("expected no Job yet while paused before CreateJob, got %d", len(got))
+	}
+
+	markEvaluationDeleted(storage, jobID)
+	if err := runtime.DeleteEvaluationJobResources(evaluation); err != nil {
+		t.Fatalf("DeleteEvaluationJobResources: %v", err)
+	}
+	if got := listConfigMapsByJobID(t, clientset, jobID); len(got) != 1 {
+		t.Fatalf("expected DELETE to retain ConfigMap while create is paused before Job, got %d", len(got))
+	}
+
+	close(releaseCreateJob)
+	select {
+	case err := <-createErrCh:
+		if err != nil {
+			t.Fatalf("expected late CreateJob to succeed so abort sweep runs, got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for late CreateJob to finish")
+	}
+	releaseAbortSweep()
+	waitLabeledJobsGone(t, clientset, jobID)
 }
 
 // TestRunEvaluationJobSweepsSuccessfulCreateAfterDeleteRace covers the multi-replica

@@ -20,7 +20,6 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/otel"
 	"github.com/eval-hub/eval-hub/pkg/api"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -34,8 +33,11 @@ type K8sRuntime struct {
 	// Test hooks (nil in production). Used to pause/observe create vs delete races
 	// without blocking inside fake-clientset reactors (those hold the clientset lock).
 	beforeCreateBenchmarkResources func()
-	afterCreateBenchmarkResources  func(err error)
-	beforeSweepAfterAbort          func()
+	// beforeCreateJob runs after ConfigMap + NetworkPolicy exist and before CreateJob,
+	// covering the window where the ConfigMap still owns the NetworkPolicy.
+	beforeCreateJob               func()
+	afterCreateBenchmarkResources func(err error)
+	beforeSweepAfterAbort         func()
 }
 
 // orphanCleanupTimeout bounds K8s deletes that must succeed even when the
@@ -225,11 +227,12 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 	labelSelector := fmt.Sprintf("%s=%s", labelJobIDKey, sanitizeLabelValue(jobID))
 	// Two sweeps with independent timeouts: storage was signalled first so create
 	// loops stop; the second list catches Jobs created between sweeps.
-	// Delete Jobs and ref secrets. When no labeled Jobs remain, also delete labeled
-	// ConfigMaps that have no Job owner (partial-create leftovers). Job-owned
-	// ConfigMaps/NetworkPolicies are left to Kubernetes GC. We never delete ConfigMaps
-	// while a labeled Job still exists — that would GC ConfigMap-owned NetworkPolicies
-	// off running Pods during the Job-create window before SetConfigMapOwner.
+	// Delete Jobs (and ref secrets). Job-owned ConfigMaps/NetworkPolicies are left to
+	// Kubernetes GC. Do not delete "unowned" ConfigMaps here: an empty Job list cannot
+	// prove another replica has stopped creating, and deleting a ConfigMap that still
+	// owns a NetworkPolicy would strip ingress protection from a late-created Job.
+	// Creator rollback covers confirmed-failed creates; uncertain leftovers need
+	// separate coordination (out of scope for the delete path).
 	cleanupSweep := func() error {
 		cleanupCtx, cancelCleanup := orphanCleanupContext()
 		defer cancelCleanup()
@@ -273,49 +276,6 @@ func (r *K8sRuntime) deleteLabeledJobsAndRefSecrets(
 			"namespace", namespace,
 		)
 		if err := r.helper.DeleteSecret(ctx, namespace, secret.Name, deleteOptions); err != nil && !apierrors.IsNotFound(err) {
-			deleteErr = errors.Join(deleteErr, err)
-		}
-	}
-	// Foreground Job deletion leaves Jobs listed until Pods are gone. Skip ConfigMap
-	// cleanup while any remain so we do not strip NetworkPolicy from running Pods.
-	remainingJobs, listErr := r.helper.ListJobs(ctx, namespace, labelSelector)
-	if listErr != nil {
-		return errors.Join(deleteErr, listErr)
-	}
-	if len(remainingJobs) > 0 {
-		return deleteErr
-	}
-	return errors.Join(deleteErr, r.deleteUnownedLabeledConfigMaps(ctx, jobID, namespace, labelSelector))
-}
-
-func configMapHasJobOwner(cm corev1.ConfigMap) bool {
-	for _, owner := range cm.OwnerReferences {
-		if owner.Kind == "Job" {
-			return true
-		}
-	}
-	return false
-}
-
-// deleteUnownedLabeledConfigMaps removes labeled ConfigMaps that were never adopted by a
-// Job (partial / uncertain create). Job-owned ConfigMaps are left to Kubernetes GC.
-func (r *K8sRuntime) deleteUnownedLabeledConfigMaps(ctx context.Context, jobID, namespace, labelSelector string) error {
-	configMaps, err := r.helper.ListConfigMaps(ctx, namespace, labelSelector)
-	if err != nil {
-		return err
-	}
-	var deleteErr error
-	for _, cm := range configMaps {
-		if configMapHasJobOwner(cm) {
-			continue
-		}
-		r.logger.Info(
-			"deleting evaluation runtime configmap",
-			"job_id", jobID,
-			"configmap_name", cm.Name,
-			"namespace", namespace,
-		)
-		if err := r.helper.DeleteConfigMap(ctx, namespace, cm.Name); err != nil && !apierrors.IsNotFound(err) {
 			deleteErr = errors.Join(deleteErr, err)
 		}
 	}
@@ -520,6 +480,10 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 		cleanupModelRefSecret()
 		cleanupConfigMap()
 		return fmt.Errorf("job %s benchmark %s: create network policy: %w", evaluation.Resource.ID, benchmarkID, err)
+	}
+
+	if r.beforeCreateJob != nil {
+		r.beforeCreateJob()
 	}
 
 	createdJob, err := r.helper.CreateJob(ctx, job)
