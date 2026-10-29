@@ -2033,6 +2033,8 @@ func TestRunEvaluationJobStopsCreateLoopWhenJobCancelled(t *testing.T) {
 	evaluation, jobID, clientset, storage := newSingleBenchmarkRaceFixture("provider-1")
 	enteredCreate := make(chan struct{})
 	releaseCreate := make(chan struct{})
+	createErrCh := make(chan error, 1)
+	createLoopDone := make(chan struct{})
 	beforeCreate, release := gateBeforeCreate(enteredCreate, releaseCreate)
 
 	runtime := &K8sRuntime{
@@ -2041,6 +2043,8 @@ func TestRunEvaluationJobStopsCreateLoopWhenJobCancelled(t *testing.T) {
 		ctx:                            context.Background(),
 		serviceConfig:                  &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
 		beforeCreateBenchmarkResources: beforeCreate,
+		afterCreateBenchmarkResources:  func(err error) { createErrCh <- err },
+		afterCreateLoop:                func() { close(createLoopDone) },
 	}
 	if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
 		t.Fatalf("RunEvaluationJob: %v", err)
@@ -2054,7 +2058,18 @@ func TestRunEvaluationJobStopsCreateLoopWhenJobCancelled(t *testing.T) {
 		},
 	}, nil)
 	release()
-	waitLabeledJobsGone(t, clientset, jobID)
+	select {
+	case err := <-createErrCh:
+		if err != nil {
+			t.Fatalf("expected late create to succeed so the abort sweep runs, got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for late create to finish")
+	}
+	waitClosed(t, createLoopDone, "timed out waiting for create loop to exit after cancel")
+	if got := listJobsByJobID(t, clientset, jobID); len(got) != 0 {
+		t.Fatalf("expected cancelled create to be swept, got %d Jobs", len(got))
+	}
 	if storage.called {
 		t.Fatalf("expected no failed status write when create was aborted by cancel, got %#v", storage.runStatus)
 	}
