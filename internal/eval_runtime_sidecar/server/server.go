@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -103,10 +102,6 @@ func (s *SidecarServer) Start() error {
 		// bounded by each HTTP client's own Timeout (see http_client.go).
 		WriteTimeout: 0,
 		IdleTimeout:  60 * time.Second,
-		TLSConfig: &tls.Config{
-			MinVersion: tls.VersionTLS12,
-			MaxVersion: tls.VersionTLS13,
-		},
 	}
 
 	s.mu.Lock()
