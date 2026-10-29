@@ -1674,6 +1674,7 @@ func TestRunEvaluationJobStopsCreateLoopWhenJobDeleted(t *testing.T) {
 	clientset := fake.NewClientset()
 	var jobCreates atomic.Int32
 	firstCreateSeen := make(chan struct{})
+	createLoopDone := make(chan struct{})
 	var firstOnce sync.Once
 	clientset.PrependReactor("create", "jobs", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
 		n := jobCreates.Add(1)
@@ -1691,6 +1692,7 @@ func TestRunEvaluationJobStopsCreateLoopWhenJobDeleted(t *testing.T) {
 		serviceConfig: &config.Config{
 			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 		},
+		afterCreateLoop: func() { close(createLoopDone) },
 	}
 	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
 
@@ -1711,13 +1713,9 @@ func TestRunEvaluationJobStopsCreateLoopWhenJobDeleted(t *testing.T) {
 		t.Fatalf("DeleteEvaluationJobResources: %v", err)
 	}
 
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		if int(jobCreates.Load()) < len(evaluation.Benchmarks) && !storage.called {
-			break
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
+	// Wait for the create-loop goroutine to exit before asserting create count.
+	// Breaking on the first "creates < N" observation can race the background loop.
+	waitClosed(t, createLoopDone, "timed out waiting for create loop to exit after delete")
 	if got := int(jobCreates.Load()); got >= len(evaluation.Benchmarks) {
 		t.Fatalf("expected create loop to stop before all benchmarks, job creates=%d want <%d", got, len(evaluation.Benchmarks))
 	}

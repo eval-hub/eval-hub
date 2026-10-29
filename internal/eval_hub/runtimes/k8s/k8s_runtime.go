@@ -38,6 +38,9 @@ type K8sRuntime struct {
 	beforeCreateJob               func()
 	afterCreateBenchmarkResources func(err error)
 	beforeSweepAfterAbort         func()
+	// afterCreateLoop runs when the RunEvaluationJob background goroutine exits
+	// (all benchmarks processed, or aborted early).
+	afterCreateLoop func()
 }
 
 // orphanCleanupTimeout bounds K8s deletes that must succeed even when the
@@ -100,6 +103,9 @@ func (r *K8sRuntime) RunEvaluationJob(
 
 	jobID := evaluation.Resource.ID
 	go func() {
+		if r.afterCreateLoop != nil {
+			defer r.afterCreateLoop()
+		}
 		for idx, bench := range benchmarks {
 			// Shared DB signal works across eval-hub replicas: hard_delete removes the
 			// row, soft cancel sets cancelled — either stops further Job creation.
