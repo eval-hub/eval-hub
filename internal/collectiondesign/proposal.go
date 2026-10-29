@@ -2,12 +2,13 @@ package collectiondesign
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
 	"sort"
-	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -59,6 +60,10 @@ type providerCatalog struct {
 	benchmarks map[benchmarkKey]api.BenchmarkResource
 }
 
+// collectionValidator is reused because its registrations are static and the
+// validator supports concurrent use after initialization.
+var collectionValidator = sync.OnceValues(validation.NewValidator)
+
 // ValidateCollection checks the registered collection request rules and
 // provider/benchmark consistency against a tenant-scoped catalog. It does not
 // apply collection-generation options or mutate the candidate. Callers must
@@ -72,8 +77,11 @@ func ValidateCollection(ctx context.Context, source CatalogSource, candidate api
 // The returned config is a deep copy with server-enriched benchmark URLs
 // removed. If issues are returned, the config must not be submitted.
 func ValidateProposal(ctx context.Context, source CatalogSource, options Options, candidate api.CollectionConfig) (api.CollectionConfig, []Issue, error) {
-	proposal := cloneCollectionConfig(candidate)
-	normalized, optionIssues := normalizeProposalOptions(options)
+	proposal, err := cloneCollectionConfig(candidate)
+	if err != nil {
+		return api.CollectionConfig{}, nil, fmt.Errorf("copy collection proposal: %w", err)
+	}
+	normalized, optionIssues := validateProposalOptions(options)
 	preflightIssues := append(optionIssues, validateProposalFields(proposal)...)
 	catalog, issues, err := validateCollectionWithCatalog(ctx, source, proposal, preflightIssues)
 	if err != nil {
@@ -90,8 +98,11 @@ func ValidateProposal(ctx context.Context, source CatalogSource, options Options
 // to storage, and returns explicit decisions for selected and unavailable
 // values.
 func CalibrateProposal(ctx context.Context, source CatalogSource, options Options, validated api.CollectionConfig) (api.CollectionConfig, []CalibrationDecision, error) {
-	proposal := cloneCollectionConfig(validated)
-	normalized, optionIssues := normalizeProposalOptions(options)
+	proposal, err := cloneCollectionConfig(validated)
+	if err != nil {
+		return api.CollectionConfig{}, nil, fmt.Errorf("copy collection proposal: %w", err)
+	}
+	normalized, optionIssues := validateProposalOptions(options)
 	preflightIssues := append(optionIssues, validateProposalFields(proposal)...)
 	catalog, issues, err := validateCollectionWithCatalog(ctx, source, proposal, preflightIssues)
 	if err != nil {
@@ -165,7 +176,8 @@ func CalibrateProposal(ctx context.Context, source CatalogSource, options Option
 				Reason: "preserved the explicit threshold",
 			})
 		} else {
-			threshold, ids := calibratedThreshold(references, providerBenchmark, benchmark.PrimaryScore, normalized.Strictness)
+			thresholdReferences := comparableThresholdReferences(references, *benchmark)
+			threshold, ids := calibratedThreshold(thresholdReferences, providerBenchmark, benchmark.PrimaryScore, normalized.Strictness)
 			if threshold == nil {
 				decisions = append(decisions, noDecision(*benchmark, pathPrefix+".pass_criteria.threshold", "no finite comparable system-reference thresholds with a trusted direction"))
 			} else {
@@ -193,20 +205,18 @@ func CalibrateProposal(ctx context.Context, source CatalogSource, options Option
 	return proposal, decisions, nil
 }
 
-func normalizeProposalOptions(options Options) (Options, []Issue) {
-	normalized, err := ParseOptions(options.Goal, options.ProviderFilter, strconv.Itoa(options.MaxBenchmarks), options.Strictness)
-	if err == nil {
-		return normalized, nil
+func validateProposalOptions(options Options) (Options, []Issue) {
+	issues := make([]Issue, 0, 3)
+	if strings.TrimSpace(options.Goal) == "" {
+		issues = append(issues, Issue{Code: issueInvalidOptions, Path: "evaluation_goal", Message: "evaluation_goal is required"})
 	}
-	path := "options"
-	if strings.Contains(err.Error(), "evaluation_goal") {
-		path = "evaluation_goal"
-	} else if strings.Contains(err.Error(), "max_benchmarks") {
-		path = "max_benchmarks"
-	} else if strings.Contains(err.Error(), "strictness") {
-		path = "strictness"
+	if options.MaxBenchmarks <= 0 {
+		issues = append(issues, Issue{Code: issueInvalidOptions, Path: "max_benchmarks", Message: "max_benchmarks must be a positive integer"})
 	}
-	return Options{}, []Issue{{Code: issueInvalidOptions, Path: path, Message: err.Error()}}
+	if !isValidStrictness(options.Strictness) {
+		issues = append(issues, Issue{Code: issueInvalidOptions, Path: "strictness", Message: fmt.Sprintf("invalid strictness %q; valid values: %s", options.Strictness, strings.Join(ValidStrictness(), ", "))})
+	}
+	return options, issues
 }
 
 // validateCollectionWithCatalog runs the shared rules once and returns the
@@ -237,7 +247,7 @@ func validateCollectionWithCatalog(ctx context.Context, source CatalogSource, ca
 }
 
 func validateCollectionConfig(candidate api.CollectionConfig) ([]Issue, error) {
-	instance, err := validation.NewValidator()
+	instance, err := collectionValidator()
 	if err != nil {
 		return nil, fmt.Errorf("initialize collection validator: %w", err)
 	}
@@ -336,7 +346,7 @@ func validateAgainstCatalog(candidate api.CollectionConfig, catalog *providerCat
 		// LowerIsBetter is a plain bool, so an omitted false cannot be
 		// distinguished from an explicit false when the provider default is true.
 		if selected.PrimaryScore != nil && defaultScore != nil && selected.PrimaryScore.Metric == defaultScore.Metric && selected.PrimaryScore.LowerIsBetter != defaultScore.LowerIsBetter {
-			issues = append(issues, Issue{Code: issueDirectionConflict, Path: path + ".primary_score.lower_is_better", Message: "primary-score direction conflicts with the provider-advertised default"})
+			issues = append(issues, Issue{Code: issueDirectionConflict, Path: path + ".primary_score.lower_is_better", Message: fmt.Sprintf("lower_is_better must match the provider-advertised default (expected %t)", defaultScore.LowerIsBetter)})
 		}
 		effectiveScore := selected.PrimaryScore
 		if effectiveScore == nil {
@@ -413,6 +423,45 @@ func matchingReferenceBenchmarks(collections []api.CollectionResource, key bench
 		}
 	}
 	return unique
+}
+
+// comparableThresholdReferences limits threshold evidence to system benchmarks
+// with the same configured parameters and test-data identity as the candidate.
+// Provider metadata does not expose parameter defaults, and mutable test-data
+// sources need a resolved content identity, so unknown equivalence is excluded.
+func comparableThresholdReferences(references []referenceBenchmark, candidate api.CollectionBenchmarkConfig) []referenceBenchmark {
+	comparable := make([]referenceBenchmark, 0, len(references))
+	for _, reference := range references {
+		if !sameConfiguredParameters(candidate.Parameters, reference.benchmark.Parameters) {
+			continue
+		}
+		if !sameTestDataIdentity(candidate.TestDataRef, reference.benchmark.TestDataRef) {
+			continue
+		}
+		comparable = append(comparable, reference)
+	}
+	return comparable
+}
+
+func sameConfiguredParameters(left, right map[string]any) bool {
+	if len(left) == 0 && len(right) == 0 {
+		return true
+	}
+	return reflect.DeepEqual(left, right)
+}
+
+func sameTestDataIdentity(left, right *api.TestDataRef) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	if left.ResolvedSHA == "" || left.ResolvedSHA != right.ResolvedSHA {
+		return false
+	}
+	leftSource := *left
+	rightSource := *right
+	leftSource.ResolvedSHA = ""
+	rightSource.ResolvedSHA = ""
+	return reflect.DeepEqual(leftSource, rightSource)
 }
 
 type referenceBenchmark struct {
@@ -571,7 +620,7 @@ func finite(value float64) bool {
 	return !math.IsNaN(value) && !math.IsInf(value, 0)
 }
 
-func cloneCollectionConfig(candidate api.CollectionConfig) api.CollectionConfig {
+func cloneCollectionConfig(candidate api.CollectionConfig) (api.CollectionConfig, error) {
 	copy := candidate
 	copy.Tags = cloneStrings(candidate.Tags)
 	copy.Domains = cloneStrings(candidate.Domains)
@@ -582,7 +631,10 @@ func cloneCollectionConfig(candidate api.CollectionConfig) api.CollectionConfig 
 	copy.PassCriteria = clonePassCriteria(candidate.PassCriteria)
 	copy.Agent = cloneCollectionAgent(candidate.Agent)
 	if candidate.Custom != nil {
-		custom := cloneAnyMap(*candidate.Custom)
+		custom, err := cloneJSONMap(*candidate.Custom)
+		if err != nil {
+			return api.CollectionConfig{}, fmt.Errorf("custom: %w", err)
+		}
 		copy.Custom = &custom
 	}
 	copy.Benchmarks = make([]api.CollectionBenchmarkConfig, len(candidate.Benchmarks))
@@ -591,10 +643,14 @@ func cloneCollectionConfig(candidate api.CollectionConfig) api.CollectionConfig 
 		copy.Benchmarks[i].URL = ""
 		copy.Benchmarks[i].PrimaryScore = clonePrimaryScore(benchmark.PrimaryScore)
 		copy.Benchmarks[i].PassCriteria = clonePassCriteria(benchmark.PassCriteria)
-		copy.Benchmarks[i].Parameters = cloneAnyMap(benchmark.Parameters)
+		parameters, err := cloneJSONMap(benchmark.Parameters)
+		if err != nil {
+			return api.CollectionConfig{}, fmt.Errorf("benchmarks[%d].parameters: %w", i, err)
+		}
+		copy.Benchmarks[i].Parameters = parameters
 		copy.Benchmarks[i].TestDataRef = cloneTestDataRef(benchmark.TestDataRef)
 	}
-	return copy
+	return copy, nil
 }
 
 func cloneCollectionAgent(agent *api.CollectionAgentMetadata) *api.CollectionAgentMetadata {
@@ -658,79 +714,19 @@ func cloneStrings(values []string) []string {
 	return append([]string(nil), values...)
 }
 
-func cloneAnyMap(values map[string]any) map[string]any {
+// cloneJSONMap copies a JSON-shaped object through the same representation the
+// API uses. Concrete Go numeric/slice types are normalized by encoding/json.
+func cloneJSONMap(values map[string]any) (map[string]any, error) {
 	if values == nil {
-		return nil
+		return nil, nil
 	}
-	copy := make(map[string]any, len(values))
-	for key, value := range values {
-		copy[key] = cloneAny(value)
+	data, err := json.Marshal(values)
+	if err != nil {
+		return nil, fmt.Errorf("marshal JSON object: %w", err)
 	}
-	return copy
-}
-
-func cloneAny(value any) any {
-	cloned := cloneAnyValue(reflect.ValueOf(value))
-	if !cloned.IsValid() {
-		return nil
+	var copy map[string]any
+	if err := json.Unmarshal(data, &copy); err != nil {
+		return nil, fmt.Errorf("unmarshal JSON object: %w", err)
 	}
-	return cloned.Interface()
-}
-
-func cloneAnyValue(value reflect.Value) reflect.Value {
-	if !value.IsValid() {
-		return value
-	}
-	switch value.Kind() {
-	case reflect.Interface:
-		if value.IsNil() {
-			return reflect.Zero(value.Type())
-		}
-		copy := reflect.New(value.Type()).Elem()
-		copy.Set(cloneAnyValue(value.Elem()))
-		return copy
-	case reflect.Map:
-		if value.IsNil() {
-			return reflect.Zero(value.Type())
-		}
-		copy := reflect.MakeMapWithSize(value.Type(), value.Len())
-		iterator := value.MapRange()
-		for iterator.Next() {
-			copy.SetMapIndex(cloneAnyValue(iterator.Key()), cloneAnyValue(iterator.Value()))
-		}
-		return copy
-	case reflect.Slice:
-		if value.IsNil() {
-			return reflect.Zero(value.Type())
-		}
-		copy := reflect.MakeSlice(value.Type(), value.Len(), value.Len())
-		for i := 0; i < value.Len(); i++ {
-			copy.Index(i).Set(cloneAnyValue(value.Index(i)))
-		}
-		return copy
-	case reflect.Array:
-		copy := reflect.New(value.Type()).Elem()
-		for i := 0; i < value.Len(); i++ {
-			copy.Index(i).Set(cloneAnyValue(value.Index(i)))
-		}
-		return copy
-	case reflect.Pointer:
-		if value.IsNil() {
-			return reflect.Zero(value.Type())
-		}
-		copy := reflect.New(value.Type().Elem())
-		copy.Elem().Set(cloneAnyValue(value.Elem()))
-		return copy
-	case reflect.Struct:
-		copy := reflect.New(value.Type()).Elem()
-		copy.Set(value)
-		for i := 0; i < value.NumField(); i++ {
-			if copy.Field(i).CanSet() && value.Field(i).CanInterface() {
-				copy.Field(i).Set(cloneAnyValue(value.Field(i)))
-			}
-		}
-		return copy
-	default:
-		return value
-	}
+	return copy, nil
 }

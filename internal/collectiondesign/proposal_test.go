@@ -50,6 +50,40 @@ func TestValidateCollectionSharedRules(t *testing.T) {
 	}
 }
 
+func TestValidateCollectionDirectionConflictReportsExpectedValue(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name          string
+		defaultLower  bool
+		selectedLower bool
+		wantMessage   string
+	}{
+		{name: "provider expects true", defaultLower: true, selectedLower: false, wantMessage: "expected true"},
+		{name: "provider expects false", defaultLower: false, selectedLower: true, wantMessage: "expected false"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			candidate := proposalWithBenchmarks(testBenchmarkWithScore("p1", "b1", "accuracy", test.selectedLower))
+			source := &fakeCatalogSource{providers: []api.ProviderResource{
+				testProvider("p1", "b1", []string{"accuracy"}, &api.PrimaryScore{Metric: "accuracy", LowerIsBetter: test.defaultLower}, nil),
+			}}
+			issues, err := ValidateCollection(context.Background(), source, candidate)
+			if err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, issue := range issues {
+				if issue.Code == issueDirectionConflict && issue.Path == "benchmarks[0].primary_score.lower_is_better" {
+					found = strings.Contains(issue.Message, test.wantMessage)
+				}
+			}
+			if !found {
+				t.Fatalf("direction issue does not contain %q: %+v", test.wantMessage, issues)
+			}
+		})
+	}
+}
+
 func TestValidateCollectionDoesNotApplyGenerationOptions(t *testing.T) {
 	t.Parallel()
 	candidate := proposalWithBenchmarks(testBenchmark("p1", "b1"), testBenchmark("p2", "b2"))
@@ -134,8 +168,16 @@ func TestValidateProposalReturnsIndependentPostableCopy(t *testing.T) {
 	got.Tags[0] = "changed"
 	got.Agent.Hints[0] = "changed"
 	(*got.Custom)["nested"].(map[string]any)["values"].([]any)[0] = "changed"
-	(*got.Custom)["typed_slice"].([]int)[0] = 100
-	(*got.Custom)["typed_map"].(map[string][]int)["values"][0] = 101
+	clonedSlice, ok := (*got.Custom)["typed_slice"].([]any)
+	if !ok || clonedSlice[0] != float64(7) {
+		t.Fatalf("JSON copy did not normalize typed slice: %#v", (*got.Custom)["typed_slice"])
+	}
+	clonedSlice[0] = float64(100)
+	clonedMap, ok := (*got.Custom)["typed_map"].(map[string]any)
+	if !ok {
+		t.Fatalf("JSON copy did not normalize typed map: %#v", (*got.Custom)["typed_map"])
+	}
+	clonedMap["values"].([]any)[0] = float64(101)
 	got.Benchmarks[0].Parameters["nested"].(map[string]any)["values"].([]any)[0] = 99
 	*got.Benchmarks[0].PassCriteria.Threshold = 0.9
 	got.Benchmarks[0].TestDataRef.PVC.ClaimName = "changed"
@@ -209,7 +251,7 @@ func TestValidateProposalOptionsCatalogErrorsAndCancellation(t *testing.T) {
 
 	invalidOptions := Options{Goal: "goal", MaxBenchmarks: 0, Strictness: "invalid"}
 	_, issues, err := ValidateProposal(context.Background(), proposalTestSource(), invalidOptions, validProposal())
-	if err != nil || len(issues) != 1 || issues[0].Code != issueInvalidOptions || issues[0].Path != "max_benchmarks" {
+	if err != nil || !hasIssue(issues, issueInvalidOptions, "max_benchmarks") || !hasIssue(issues, issueInvalidOptions, "strictness") {
 		t.Fatalf("invalid options: issues=%+v err=%v", issues, err)
 	}
 	invalidGoal := Options{MaxBenchmarks: 2, Strictness: StrictnessModerate}
@@ -217,10 +259,12 @@ func TestValidateProposalOptionsCatalogErrorsAndCancellation(t *testing.T) {
 	if err != nil || len(issues) != 1 || issues[0].Path != "evaluation_goal" {
 		t.Fatalf("invalid goal: issues=%+v err=%v", issues, err)
 	}
-	invalidStrictness := Options{Goal: "goal", MaxBenchmarks: 2, Strictness: "extreme"}
-	_, issues, err = ValidateProposal(context.Background(), proposalTestSource(), invalidStrictness, validProposal())
-	if err != nil || len(issues) != 1 || issues[0].Path != "strictness" {
-		t.Fatalf("invalid strictness: issues=%+v err=%v", issues, err)
+	for _, strictness := range []string{"extreme", "max_benchmarks", "evaluation_goal"} {
+		invalidStrictness := Options{Goal: "goal", MaxBenchmarks: 2, Strictness: strictness}
+		_, issues, err = ValidateProposal(context.Background(), proposalTestSource(), invalidStrictness, validProposal())
+		if err != nil || !hasIssue(issues, issueInvalidOptions, "strictness") {
+			t.Fatalf("invalid strictness %q: issues=%+v err=%v", strictness, issues, err)
+		}
 	}
 
 	providerErr := errors.New("catalog unavailable")
@@ -240,6 +284,28 @@ func TestValidateProposalOptionsCatalogErrorsAndCancellation(t *testing.T) {
 	_, _, err = ValidateProposal(context.Background(), duplicateBenchmark, proposalTestOptions(t, "", 2, StrictnessModerate), validProposal())
 	if err == nil || !strings.Contains(err.Error(), "duplicate benchmark pair") {
 		t.Fatalf("duplicate benchmark catalog error = %v", err)
+	}
+}
+
+func TestValidateProposalRejectsNonJSONMetadata(t *testing.T) {
+	t.Parallel()
+	options := proposalTestOptions(t, "", 2, StrictnessModerate)
+
+	candidate := validProposal()
+	candidate.Benchmarks[0].Parameters = map[string]any{"not_json": math.NaN()}
+	source := proposalTestSource()
+	if _, _, err := ValidateProposal(context.Background(), source, options, candidate); err == nil || !strings.Contains(err.Error(), "benchmarks[0].parameters") {
+		t.Fatalf("non-JSON parameters error = %v", err)
+	}
+	if len(source.providerOffsets) != 0 {
+		t.Fatalf("catalog was read after parameter copy failed: offsets=%v", source.providerOffsets)
+	}
+
+	custom := map[string]any{"not_json": math.Inf(1)}
+	candidate = validProposal()
+	candidate.Custom = &custom
+	if _, _, err := CalibrateProposal(context.Background(), proposalTestSource(), options, candidate); err == nil || !strings.Contains(err.Error(), "custom") {
+		t.Fatalf("non-JSON custom metadata error = %v", err)
 	}
 }
 
@@ -365,6 +431,56 @@ func TestCalibrateProposalPreservesExplicitValuesAndUsesOnlyComparableSystemRefe
 		if !hasDecision(decisions, field, "preserved") {
 			t.Errorf("missing explicit-value decision for %s: %+v", field, decisions)
 		}
+	}
+}
+
+func TestCalibrateProposalRequiresMatchingParametersAndTestDataForThresholds(t *testing.T) {
+	t.Parallel()
+	provider := testProvider("p1", "b1", []string{"accuracy"}, &api.PrimaryScore{Metric: "accuracy"}, nil)
+	candidate := validProposal()
+	candidate.Benchmarks[0].Weight = 1
+	candidate.Benchmarks[0].Parameters = map[string]any{"task": "candidate"}
+	candidate.Benchmarks[0].TestDataRef = &api.TestDataRef{PVC: &api.PVCTestDataRef{ClaimName: "candidate-data", SubPath: "dataset"}, ResolvedSHA: "sha256:same-content"}
+
+	reference := func(id, task, claim, subPath string, threshold float32) api.CollectionResource {
+		benchmark := testBenchmarkWithWeightScoreAndThreshold("p1", "b1", 1, "accuracy", false, threshold)
+		benchmark.Parameters = map[string]any{"task": task}
+		benchmark.TestDataRef = &api.TestDataRef{PVC: &api.PVCTestDataRef{ClaimName: claim, SubPath: subPath}, ResolvedSHA: "sha256:same-content"}
+		return systemReference(id, benchmark)
+	}
+
+	source := &fakeCatalogSource{
+		providers: []api.ProviderResource{provider},
+		collections: []api.CollectionResource{
+			reference("compatible", "candidate", "candidate-data", "dataset", 0.7),
+			reference("different-parameters", "other-task", "candidate-data", "dataset", 0.99),
+			reference("different-test-data", "candidate", "other-data", "dataset", 0.1),
+			reference("different-subpath", "candidate", "candidate-data", "other-dataset", 0.2),
+			reference("unresolved-test-data", "candidate", "candidate-data", "dataset", 0.3),
+		},
+	}
+	source.collections[len(source.collections)-1].Benchmarks[0].TestDataRef.ResolvedSHA = ""
+	got, decisions, err := CalibrateProposal(context.Background(), source, proposalTestOptions(t, "", 2, StrictnessStrict), candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Benchmarks[0].PassCriteria == nil || got.Benchmarks[0].PassCriteria.Threshold == nil || *got.Benchmarks[0].PassCriteria.Threshold != 0.7 {
+		t.Fatalf("threshold=%+v, want 0.7 from the only comparable reference", got.Benchmarks[0].PassCriteria)
+	}
+	if !reflect.DeepEqual(decisionIDs(decisions, "benchmarks[0].pass_criteria.threshold"), []string{"compatible"}) {
+		t.Fatalf("threshold provenance included incomparable references: %+v", decisions)
+	}
+
+	source.collections = source.collections[1:]
+	got, decisions, err = CalibrateProposal(context.Background(), source, proposalTestOptions(t, "", 2, StrictnessModerate), candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Benchmarks[0].PassCriteria != nil {
+		t.Fatalf("threshold was inferred without comparable data: %+v", got.Benchmarks[0].PassCriteria)
+	}
+	if !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "no finite comparable") {
+		t.Fatalf("missing no-calibration reason for incompatible references: %+v", decisions)
 	}
 }
 
@@ -632,64 +748,28 @@ func TestCloneTestDataRefCopiesEverySourceAndHandlesNil(t *testing.T) {
 	}
 }
 
-func TestCloneAnyValueHandlesNestedKindsAndNilValues(t *testing.T) {
+func TestCloneJSONMapCopiesJSONShapeAndRejectsUnsupportedValues(t *testing.T) {
 	t.Parallel()
 
-	if cloneAnyValue(reflect.Value{}).IsValid() {
-		t.Fatal("invalid reflect.Value should remain invalid")
+	if cloned, err := cloneJSONMap(nil); err != nil || cloned != nil {
+		t.Fatalf("cloneJSONMap(nil) = (%v, %v), want (nil, nil)", cloned, err)
 	}
-	var nilInterface any
-	clonedInterface := cloneAnyValue(reflect.ValueOf(&nilInterface).Elem())
-	if clonedInterface.Kind() != reflect.Interface || !clonedInterface.IsNil() {
-		t.Fatalf("nil interface clone = %#v, want a nil interface", clonedInterface.Interface())
+	original := map[string]any{"nested": map[string]any{"values": []int{7, 8}}, "nil": nil}
+	cloned, err := cloneJSONMap(original)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	var nilMap map[string][]int
-	if cloned := cloneAnyValue(reflect.ValueOf(nilMap)); !cloned.IsNil() {
-		t.Fatalf("nil map clone = %#v, want nil", cloned.Interface())
+	values := cloned["nested"].(map[string]any)["values"].([]any)
+	if values[0] != float64(7) || cloned["nil"] != nil {
+		t.Fatalf("JSON copy shape = %#v", cloned)
 	}
-	var nilSlice []int
-	if cloned := cloneAnyValue(reflect.ValueOf(nilSlice)); !cloned.IsNil() {
-		t.Fatalf("nil slice clone = %#v, want nil", cloned.Interface())
-	}
-	var nilPointer *int
-	if cloned := cloneAnyValue(reflect.ValueOf(nilPointer)); !cloned.IsNil() {
-		t.Fatalf("nil pointer clone = %#v, want nil", cloned.Interface())
+	values[0] = float64(9)
+	if original["nested"].(map[string]any)["values"].([]int)[0] != 7 {
+		t.Fatal("JSON copy shares nested mutable data with original")
 	}
 
-	type nested struct {
-		Values []int
-	}
-	originalArray := [1]map[string][]int{{"values": {1}}}
-	clonedArray := cloneAnyValue(reflect.ValueOf(originalArray)).Interface().([1]map[string][]int)
-	clonedArray[0]["values"][0] = 2
-	if originalArray[0]["values"][0] != 1 {
-		t.Fatal("array clone shares nested map or slice data with the original")
-	}
-
-	originalPointer := &[]int{3}
-	clonedPointer := cloneAnyValue(reflect.ValueOf(originalPointer)).Interface().(*[]int)
-	(*clonedPointer)[0] = 4
-	if (*originalPointer)[0] != 3 {
-		t.Fatal("pointer clone shares nested slice data with the original")
-	}
-
-	originalStruct := nested{Values: []int{5}}
-	clonedStruct := cloneAnyValue(reflect.ValueOf(originalStruct)).Interface().(nested)
-	clonedStruct.Values[0] = 6
-	if originalStruct.Values[0] != 5 {
-		t.Fatal("struct clone shares nested slice data with the original")
-	}
-
-	interfaceValue := any(map[string][]int{"values": {7}})
-	clonedValue := cloneAnyValue(reflect.ValueOf(&interfaceValue).Elem()).Interface().(map[string][]int)
-	clonedValue["values"][0] = 8
-	if interfaceValue.(map[string][]int)["values"][0] != 7 {
-		t.Fatal("non-nil interface clone shares nested data with the original")
-	}
-
-	if got := cloneAnyValue(reflect.ValueOf("scalar")).Interface(); got != "scalar" {
-		t.Fatalf("scalar clone = %v, want scalar", got)
+	if _, err := cloneJSONMap(map[string]any{"not_json": math.NaN()}); err == nil {
+		t.Fatal("cloneJSONMap accepted a non-finite number")
 	}
 }
 
