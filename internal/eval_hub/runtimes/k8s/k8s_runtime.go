@@ -51,15 +51,13 @@ type K8sRuntime struct {
 // caller's context (HTTP DELETE or cancelled create) is already done.
 const orphanCleanupTimeout = 30 * time.Second
 
-// createAbortRetry* is the short fixed-interval probe before entering the
-// long wait. createAbortWait* is bounded exponential backoff while the create
-// goroutine stays paused until storage is definitive or shutdown cancels.
-// Tunable in tests.
+// createAbortBackoff* is the single capped exponential backoff used while the
+// create goroutine stays paused until evaluation state is known or shutdown
+// cancels. createAbortReadTimeout bounds each GetEvaluationJob. Tunable in tests.
 var (
-	createAbortRetryAttempts   = 5
-	createAbortRetryInterval   = 100 * time.Millisecond
-	createAbortWaitInterval    = 200 * time.Millisecond
-	createAbortWaitMaxInterval = 5 * time.Second
+	createAbortBackoffInitial = 100 * time.Millisecond
+	createAbortBackoffMax     = 5 * time.Second
+	createAbortReadTimeout    = 5 * time.Second
 )
 
 func orphanCleanupContext() (context.Context, context.CancelFunc) {
@@ -133,10 +131,8 @@ func (r *K8sRuntime) RunEvaluationJob(
 			defer r.afterCreateLoop()
 		}
 		for idx, bench := range benchmarks {
-			// Shared DB signal works across eval-hub replicas: hard_delete removes the
-			// row, soft cancel sets cancelled — either stops further Job creation.
-			// Transient storage errors pause this goroutine (bounded backoff) until
-			// storage is definitive or the runtime shuts down.
+			// Read evaluation state (retrying storage errors with capped backoff):
+			// deleted/cancelled → clean up and stop; active → create this benchmark.
 			if r.handleCreateAbortDecision(evaluation, storage, jobID, bench.ID, idx, nil, "pre-create") {
 				return
 			}
@@ -150,8 +146,8 @@ func (r *K8sRuntime) RunEvaluationJob(
 			if r.afterCreateBenchmarkResources != nil {
 				r.afterCreateBenchmarkResources(err)
 			}
-			// After any create outcome: if storage already signalled delete/cancel,
-			// sweep leftovers (success or uncertain/failed persist) and stop.
+			// Read evaluation state again: deleted/cancelled → clean up late Job and
+			// stop; active → continue (and record confirmed create failures below).
 			if r.handleCreateAbortDecision(evaluation, storage, jobID, bench.ID, idx, err, "post-create") {
 				return
 			}
@@ -180,10 +176,8 @@ func (r *K8sRuntime) RunEvaluationJob(
 	return nil
 }
 
-// handleCreateAbortDecision resolves storage abort status. The create goroutine
-// stays paused (bounded backoff) while status is unknown so an active evaluation
-// can resume at the same benchmark index, or delete/cancel can sweep leftovers.
-// Returns true when the create loop must stop (aborted, or shutdown while unknown).
+// handleCreateAbortDecision pauses the create goroutine until evaluation state is
+// known (or shutdown). Returns true when the loop must stop.
 func (r *K8sRuntime) handleCreateAbortDecision(
 	evaluation *api.EvaluationJobResource,
 	storage abstractions.RuntimeStorage,
@@ -192,18 +186,7 @@ func (r *K8sRuntime) handleCreateAbortDecision(
 	createErr error,
 	phase string,
 ) bool {
-	status, reason := resolveCreateAbort(storage, jobID, r.logger)
-	if status == createAbortUnknown {
-		r.logger.Warn(
-			"storage abort check still unknown after retries; pausing creates until known or shutdown",
-			"job_id", jobID,
-			"benchmark_id", benchmarkID,
-			"benchmark_index", benchmarkIndex,
-			"phase", phase,
-			"error", createErr,
-		)
-		status, reason = r.waitCreateAbortUntilKnown(storage, jobID, benchmarkID)
-	}
+	status, reason := r.awaitCreateAbortStatus(storage, jobID, benchmarkID)
 	switch status {
 	case createAbortActive:
 		return false
@@ -239,57 +222,107 @@ func (r *K8sRuntime) abortWaitContext() context.Context {
 	return context.Background()
 }
 
-// waitCreateAbortUntilKnown keeps the create goroutine paused and probes storage
-// with bounded exponential backoff until the abort status is definitive or the
-// runtime is shut down (Close).
-func (r *K8sRuntime) waitCreateAbortUntilKnown(
+// runtimeStorageWithContext is implemented by handlers.runtimeStorage so each
+// abort-check read can use a shutdown-linked timeout context.
+type runtimeStorageWithContext interface {
+	WithContext(ctx context.Context) abstractions.RuntimeStorage
+}
+
+// awaitCreateAbortStatus keeps creation paused and retries GetEvaluationJob with
+// capped exponential backoff until state is definitive or the runtime shuts down.
+func (r *K8sRuntime) awaitCreateAbortStatus(
 	storage abstractions.RuntimeStorage,
 	jobID, benchmarkID string,
 ) (createAbortStatus, string) {
 	ctx := r.abortWaitContext()
-	interval := createAbortWaitInterval
+	interval := createAbortBackoffInitial
 	for attempt := 1; ; attempt++ {
-		timer := time.NewTimer(interval)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return createAbortUnknown, ""
-		case <-timer.C:
-		}
-		status, reason := checkCreateAbort(storage, jobID)
+		status, reason := r.checkCreateAbort(ctx, storage, jobID)
 		switch status {
 		case createAbortAborted:
-			r.logger.Info(
-				"abort wait confirmed delete/cancel",
-				"job_id", jobID,
-				"benchmark_id", benchmarkID,
-				"reason", reason,
-				"attempt", attempt,
-			)
+			if attempt > 1 {
+				r.logger.Info(
+					"abort check confirmed delete/cancel after retries",
+					"job_id", jobID,
+					"benchmark_id", benchmarkID,
+					"reason", reason,
+					"attempt", attempt,
+				)
+			}
 			return status, reason
 		case createAbortActive:
-			r.logger.Info(
-				"abort wait confirmed evaluation still active; resuming creates",
-				"job_id", jobID,
-				"benchmark_id", benchmarkID,
-				"attempt", attempt,
-			)
+			if attempt > 1 {
+				r.logger.Info(
+					"abort check confirmed evaluation still active; resuming creates",
+					"job_id", jobID,
+					"benchmark_id", benchmarkID,
+					"attempt", attempt,
+				)
+			}
 			return status, reason
 		default:
 			r.logger.Warn(
-				"abort wait storage check still unknown; backing off",
+				"abort check storage state unknown; backing off",
 				"job_id", jobID,
 				"benchmark_id", benchmarkID,
 				"attempt", attempt,
-				"next_interval", interval.String(),
+				"backoff", interval.String(),
 			)
-			if next := interval * 2; next <= createAbortWaitMaxInterval {
+			timer := time.NewTimer(interval)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return createAbortUnknown, ""
+			case <-timer.C:
+			}
+			if next := interval * 2; next <= createAbortBackoffMax {
 				interval = next
 			} else {
-				interval = createAbortWaitMaxInterval
+				interval = createAbortBackoffMax
 			}
 		}
 	}
+}
+
+// checkCreateAbort performs one storage read. Transient errors and cancelled /
+// timed-out reads are unknown so the caller retries. Each read uses a timeout
+// derived from the runtime shutdown context when storage supports WithContext.
+func (r *K8sRuntime) checkCreateAbort(
+	parent context.Context,
+	storage abstractions.RuntimeStorage,
+	jobID string,
+) (createAbortStatus, string) {
+	if storage == nil {
+		return createAbortActive, ""
+	}
+	readCtx, cancel := context.WithTimeout(parent, createAbortReadTimeout)
+	defer cancel()
+
+	scoped := storage
+	if withCtx, ok := storage.(runtimeStorageWithContext); ok {
+		scoped = withCtx.WithContext(readCtx)
+	} else if err := readCtx.Err(); err != nil {
+		return createAbortUnknown, ""
+	}
+
+	job, err := scoped.GetEvaluationJob(jobID)
+	if err != nil {
+		var serviceErr *serviceerrors.ServiceError
+		if errors.As(err, &serviceErr) && serviceErr.MessageCode() == messages.ResourceNotFound {
+			return createAbortAborted, "evaluation job deleted"
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return createAbortUnknown, ""
+		}
+		return createAbortUnknown, ""
+	}
+	if job == nil {
+		return createAbortAborted, "evaluation job deleted"
+	}
+	if job.Status != nil && job.Status.State == api.OverallStateCancelled {
+		return createAbortAborted, "evaluation job cancelled"
+	}
+	return createAbortActive, ""
 }
 
 // sweepEvaluationResourcesAfterAbort is the create-loop counterpart to hard_delete
@@ -317,55 +350,6 @@ const (
 	createAbortAborted
 	createAbortUnknown
 )
-
-// checkCreateAbort reports whether create should stop because the evaluation
-// was hard-deleted or soft-cancelled in shared storage (visible to every replica).
-// Transient storage errors return createAbortUnknown so callers can retry.
-func checkCreateAbort(storage abstractions.RuntimeStorage, jobID string) (createAbortStatus, string) {
-	if storage == nil {
-		return createAbortActive, ""
-	}
-	job, err := storage.GetEvaluationJob(jobID)
-	if err != nil {
-		var serviceErr *serviceerrors.ServiceError
-		if errors.As(err, &serviceErr) && serviceErr.MessageCode() == messages.ResourceNotFound {
-			return createAbortAborted, "evaluation job deleted"
-		}
-		return createAbortUnknown, ""
-	}
-	if job == nil {
-		return createAbortAborted, "evaluation job deleted"
-	}
-	if job.Status != nil && job.Status.State == api.OverallStateCancelled {
-		return createAbortAborted, "evaluation job cancelled"
-	}
-	return createAbortActive, ""
-}
-
-// resolveCreateAbort retries transient storage failures until the abort check is
-// definitive or attempts are exhausted.
-func resolveCreateAbort(storage abstractions.RuntimeStorage, jobID string, logger *slog.Logger) (createAbortStatus, string) {
-	var status createAbortStatus
-	var reason string
-	for attempt := 1; attempt <= createAbortRetryAttempts; attempt++ {
-		status, reason = checkCreateAbort(storage, jobID)
-		if status != createAbortUnknown {
-			return status, reason
-		}
-		if attempt < createAbortRetryAttempts {
-			if logger != nil {
-				logger.Warn(
-					"transient storage error checking evaluation abort status; retrying",
-					"job_id", jobID,
-					"attempt", attempt,
-					"max_attempts", createAbortRetryAttempts,
-				)
-			}
-			time.Sleep(createAbortRetryInterval)
-		}
-	}
-	return createAbortUnknown, ""
-}
 
 // jobForegroundDeleteOptions deletes Job-owned Pods before removing the Job so stuck Init
 // pods cannot outlive a background Job delete during hard_delete or orphan cleanup.

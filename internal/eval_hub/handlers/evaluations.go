@@ -52,6 +52,13 @@ type runtimeStorage struct {
 	validate *validator.Validate
 }
 
+// WithContext implements [abstractions.RuntimeStorage].
+func (s *runtimeStorage) WithContext(ctx context.Context) abstractions.RuntimeStorage {
+	cp := *s
+	cp.ctx = ctx
+	return &cp
+}
+
 // scopedStorage matches getStorage scoping (tenant/owner/logger) with the runtime job context.
 func (s *runtimeStorage) scopedStorage() abstractions.Storage {
 	return s.handlers.storage.WithLogger(s.logger).WithContext(s.ctx).WithTenant(s.tenant).WithOwner(s.owner)

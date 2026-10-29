@@ -61,4 +61,11 @@ func TestRuntimeStorageGetEvaluationJob(t *testing.T) {
 	if _, err := rs.GetEvaluationJob("missing"); err == nil {
 		t.Fatal("expected not-found error")
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	scoped := rs.WithContext(ctx)
+	if scoped == rs {
+		t.Fatal("WithContext must return a distinct RuntimeStorage")
+	}
 }
