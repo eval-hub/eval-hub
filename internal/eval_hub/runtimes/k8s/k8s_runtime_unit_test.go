@@ -2046,24 +2046,29 @@ func TestResolveCreateAbortRetriesTransientThenDeleted(t *testing.T) {
 	}
 }
 
-// TestRunEvaluationJobPostCreateTransientThenDeletedSweeps covers Julian's P2:
-// a transient post-create storage error must not be treated as "still active"
-// (that left an orphan Job). Retries must eventually see delete and sweep.
-func TestRunEvaluationJobPostCreateTransientThenDeletedSweeps(t *testing.T) {
-	origAttempts := createAbortRetryAttempts
-	origInterval := createAbortRetryInterval
-	origDeferredAttempts := createAbortDeferredAttempts
-	origDeferredInterval := createAbortDeferredInterval
-	createAbortRetryAttempts = 5
-	createAbortRetryInterval = time.Millisecond
-	createAbortDeferredAttempts = 3
-	createAbortDeferredInterval = time.Millisecond
+func withCreateAbortWaitTuning(t *testing.T, retryAttempts int, retryInterval, waitInterval, waitMaxInterval time.Duration) {
+	t.Helper()
+	origRetryAttempts := createAbortRetryAttempts
+	origRetryInterval := createAbortRetryInterval
+	origWaitInterval := createAbortWaitInterval
+	origWaitMaxInterval := createAbortWaitMaxInterval
+	createAbortRetryAttempts = retryAttempts
+	createAbortRetryInterval = retryInterval
+	createAbortWaitInterval = waitInterval
+	createAbortWaitMaxInterval = waitMaxInterval
 	t.Cleanup(func() {
-		createAbortRetryAttempts = origAttempts
-		createAbortRetryInterval = origInterval
-		createAbortDeferredAttempts = origDeferredAttempts
-		createAbortDeferredInterval = origDeferredInterval
+		createAbortRetryAttempts = origRetryAttempts
+		createAbortRetryInterval = origRetryInterval
+		createAbortWaitInterval = origWaitInterval
+		createAbortWaitMaxInterval = origWaitMaxInterval
 	})
+}
+
+// TestRunEvaluationJobPostCreateTransientThenDeletedSweeps covers a transient
+// post-create storage error: the create goroutine must wait until delete is
+// visible and then sweep, not treat unknown as active.
+func TestRunEvaluationJobPostCreateTransientThenDeletedSweeps(t *testing.T) {
+	withCreateAbortWaitTuning(t, 5, time.Millisecond, time.Millisecond, time.Millisecond)
 
 	evaluation, jobID, clientset, storage := newSingleBenchmarkRaceFixture("provider-1")
 	enteredCreate := make(chan struct{})
@@ -2079,8 +2084,6 @@ func TestRunEvaluationJobPostCreateTransientThenDeletedSweeps(t *testing.T) {
 		serviceConfig:                  &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
 		beforeCreateBenchmarkResources: beforeCreate,
 		afterCreateBenchmarkResources: func(err error) {
-			// Simulate: Job created, then storage blips before the abort check
-			// can see the hard_delete that landed during create.
 			storage.setGetJobFn(func(id string) (*api.EvaluationJobResource, error) {
 				n := postCreateCalls.Add(1)
 				if n <= 2 {
@@ -2103,34 +2106,13 @@ func TestRunEvaluationJobPostCreateTransientThenDeletedSweeps(t *testing.T) {
 	}
 }
 
-func withCreateAbortRetryTuning(t *testing.T, retryAttempts, deferredAttempts int, retryInterval, deferredInterval, persistentInterval time.Duration) {
-	t.Helper()
-	origRetryAttempts := createAbortRetryAttempts
-	origRetryInterval := createAbortRetryInterval
-	origDeferredAttempts := createAbortDeferredAttempts
-	origDeferredInterval := createAbortDeferredInterval
-	origPersistentInterval := createAbortPersistentInterval
-	origStop := createAbortPersistentStop
-	createAbortRetryAttempts = retryAttempts
-	createAbortRetryInterval = retryInterval
-	createAbortDeferredAttempts = deferredAttempts
-	createAbortDeferredInterval = deferredInterval
-	createAbortPersistentInterval = persistentInterval
-	t.Cleanup(func() {
-		createAbortRetryAttempts = origRetryAttempts
-		createAbortRetryInterval = origRetryInterval
-		createAbortDeferredAttempts = origDeferredAttempts
-		createAbortDeferredInterval = origDeferredInterval
-		createAbortPersistentInterval = origPersistentInterval
-		createAbortPersistentStop = origStop
-	})
-}
-
-// TestRunEvaluationJobResumeCreatesAfterTransientThenActive covers P1: deferred
-// reconcile confirming active must resume the create loop so remaining benchmarks
-// still get Jobs.
-func TestRunEvaluationJobResumeCreatesAfterTransientThenActive(t *testing.T) {
-	withCreateAbortRetryTuning(t, 2, 3, time.Millisecond, time.Millisecond, time.Millisecond)
+// TestRunEvaluationJobResumeCreatesAfterLongOutageThenActive covers P1: the
+// creator stays paused through short retries and the long wait; when storage
+// later reports active, remaining benchmarks are still created at the same point.
+func TestRunEvaluationJobResumeCreatesAfterLongOutageThenActive(t *testing.T) {
+	// Short resolve phase (2), then wait probes — require more unknowns than the
+	// old sync budget so recovery is past resolveCreateAbort.
+	withCreateAbortWaitTuning(t, 2, time.Millisecond, time.Millisecond, time.Millisecond)
 
 	evaluation, jobID, clientset, storage := newSingleBenchmarkRaceFixture("provider-1")
 	evaluation.Benchmarks = []api.EvaluationBenchmarkConfig{
@@ -2146,6 +2128,7 @@ func TestRunEvaluationJobResumeCreatesAfterTransientThenActive(t *testing.T) {
 			EvaluationJobState: api.EvaluationJobState{State: api.OverallStateRunning},
 		},
 	}
+	const unknownProbesBeforeActive = 8 // > resolve attempts; recovery is in waitCreateAbortUntilKnown
 
 	runtime := &K8sRuntime{
 		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -2153,14 +2136,12 @@ func TestRunEvaluationJobResumeCreatesAfterTransientThenActive(t *testing.T) {
 		ctx:           context.Background(),
 		serviceConfig: &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
 		afterCreateBenchmarkResources: func(err error) {
-			// Only the first post-create check should hit unknown→active; arm once.
 			if !postCreateArmed.CompareAndSwap(false, true) {
 				return
 			}
 			storage.setGetJobFn(func(id string) (*api.EvaluationJobResource, error) {
 				n := probes.Add(1)
-				// Exhaust resolve (2) + early deferred probes, then confirm active.
-				if n <= 4 {
+				if n <= unknownProbesBeforeActive {
 					return nil, fmt.Errorf("transient storage blip %d", n)
 				}
 				return activeJob, nil
@@ -2175,8 +2156,8 @@ func TestRunEvaluationJobResumeCreatesAfterTransientThenActive(t *testing.T) {
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		if len(listJobsByJobID(t, clientset, jobID)) == 2 {
-			if probes.Load() < 5 {
-				t.Fatalf("expected deferred reconcile probes before resume, got %d", probes.Load())
+			if probes.Load() <= unknownProbesBeforeActive {
+				t.Fatalf("expected wait-phase probes before resume, got %d", probes.Load())
 			}
 			return
 		}
@@ -2185,47 +2166,80 @@ func TestRunEvaluationJobResumeCreatesAfterTransientThenActive(t *testing.T) {
 	t.Fatalf("expected 2 Jobs after resume, got %d (probes=%d)", len(listJobsByJobID(t, clientset, jobID)), probes.Load())
 }
 
-// TestRunEvaluationJobPersistentReconcileScheduledAfterRetryExhaustion covers P2:
-// when both sync retry phases stay unknown, create stops but a persistent
-// reconcile remains scheduled and still sweeps once delete is visible.
-func TestRunEvaluationJobPersistentReconcileScheduledAfterRetryExhaustion(t *testing.T) {
-	withCreateAbortRetryTuning(t, 2, 2, time.Millisecond, time.Millisecond, time.Millisecond)
-	stopPersistent := make(chan struct{})
-	createAbortPersistentStop = stopPersistent
-	t.Cleanup(func() { close(stopPersistent) })
+// TestRunEvaluationJobSweepsAfterLongOutageThenDeleted covers a long outage in
+// the paused create goroutine: when storage later reports deleted, leftovers are
+// swept without a separate reconcile worker.
+func TestRunEvaluationJobSweepsAfterLongOutageThenDeleted(t *testing.T) {
+	withCreateAbortWaitTuning(t, 2, time.Millisecond, time.Millisecond, time.Millisecond)
 
 	evaluation, jobID, clientset, storage := newSingleBenchmarkRaceFixture("provider-1")
-
-	scheduled := make(chan struct{})
-	reconcileDone := make(chan struct{})
 	createLoopDone := make(chan struct{})
+	var probes atomic.Int32
+	const unknownProbesBeforeDeleted = 8
+
 	runtime := &K8sRuntime{
 		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper:        &KubernetesHelper{clientset: clientset},
 		ctx:           context.Background(),
 		serviceConfig: &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
 		afterCreateBenchmarkResources: func(err error) {
-			// Keep storage unknown through both sync phases after the late Job exists.
 			storage.setGetJobFn(func(id string) (*api.EvaluationJobResource, error) {
-				return nil, fmt.Errorf("storage unavailable")
+				n := probes.Add(1)
+				if n <= unknownProbesBeforeDeleted {
+					return nil, fmt.Errorf("storage unavailable %d", n)
+				}
+				return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
 			})
 		},
-		afterPersistentAbortReconcileScheduled: func() { close(scheduled) },
-		afterPersistentAbortReconcileDone:      func() { close(reconcileDone) },
-		afterCreateLoop:                        func() { close(createLoopDone) },
+		afterCreateLoop: func() { close(createLoopDone) },
 	}
 	if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
 		t.Fatalf("RunEvaluationJob: %v", err)
 	}
 	waitClosed(t, createLoopDone, "timed out waiting for create loop")
-	waitClosed(t, scheduled, "expected persistent abort reconcile to remain scheduled")
-	if got := len(listJobsByJobID(t, clientset, jobID)); got != 1 {
-		t.Fatalf("expected late Job retained while storage unknown, got %d", got)
-	}
-
-	markEvaluationDeleted(storage, jobID)
 	waitLabeledJobsGone(t, clientset, jobID)
-	waitClosed(t, reconcileDone, "timed out waiting for persistent reconcile to finish after delete")
+	if probes.Load() <= unknownProbesBeforeDeleted {
+		t.Fatalf("expected wait-phase probes before sweep, got %d", probes.Load())
+	}
+}
+
+// TestRunEvaluationJobAbortWaitStopsOnShutdown covers tying the pause to
+// runtime Close: unknown status must not block forever after shutdown.
+func TestRunEvaluationJobAbortWaitStopsOnShutdown(t *testing.T) {
+	withCreateAbortWaitTuning(t, 2, time.Millisecond, 20*time.Millisecond, 20*time.Millisecond)
+
+	evaluation, jobID, clientset, storage := newSingleBenchmarkRaceFixture("provider-1")
+	shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
+	createLoopDone := make(chan struct{})
+	enteredWait := make(chan struct{})
+	var enteredWaitOnce sync.Once
+
+	runtime := &K8sRuntime{
+		logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper:         &KubernetesHelper{clientset: clientset},
+		ctx:            context.Background(),
+		shutdownCtx:    shutdownCtx,
+		shutdownCancel: shutdownCancel,
+		serviceConfig:  &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		afterCreateBenchmarkResources: func(err error) {
+			storage.setGetJobFn(func(id string) (*api.EvaluationJobResource, error) {
+				enteredWaitOnce.Do(func() { close(enteredWait) })
+				return nil, fmt.Errorf("storage unavailable")
+			})
+		},
+		afterCreateLoop: func() { close(createLoopDone) },
+	}
+	if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
+		t.Fatalf("RunEvaluationJob: %v", err)
+	}
+	waitClosed(t, enteredWait, "timed out waiting for abort wait probes")
+	if got := len(listJobsByJobID(t, clientset, jobID)); got != 1 {
+		t.Fatalf("expected late Job while paused on unknown, got %d", got)
+	}
+	if err := runtime.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	waitClosed(t, createLoopDone, "timed out waiting for create loop to exit on shutdown")
 }
 
 // TestRunEvaluationJobPreCheckAbortSweepsLeftovers covers the path where storage already

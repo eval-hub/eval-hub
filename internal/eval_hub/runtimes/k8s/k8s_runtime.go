@@ -30,6 +30,10 @@ type K8sRuntime struct {
 	serviceConfig *config.Config
 	helper        *KubernetesHelper
 	ctx           context.Context
+	// shutdownCtx is cancelled by Close so in-flight create loops stop waiting
+	// on unknown abort checks during service shutdown.
+	shutdownCtx    context.Context
+	shutdownCancel context.CancelFunc
 	// Test hooks (nil in production). Used to pause/observe create vs delete races
 	// without blocking inside fake-clientset reactors (those hold the clientset lock).
 	beforeCreateBenchmarkResources func()
@@ -41,34 +45,21 @@ type K8sRuntime struct {
 	// afterCreateLoop runs when the RunEvaluationJob background goroutine exits
 	// (all benchmarks processed, or aborted early).
 	afterCreateLoop func()
-	// afterPersistentAbortReconcileScheduled runs when a background abort
-	// reconcile is started after both sync retry phases stay unknown.
-	afterPersistentAbortReconcileScheduled func()
-	// afterPersistentAbortReconcileDone runs when that background reconcile
-	// exits with a definitive storage status (or is stopped in tests).
-	afterPersistentAbortReconcileDone func()
 }
 
 // orphanCleanupTimeout bounds K8s deletes that must succeed even when the
 // caller's context (HTTP DELETE or cancelled create) is already done.
 const orphanCleanupTimeout = 30 * time.Second
 
-// createAbortRetry* bounds how long the create loop waits for a definitive
-// storage answer (deleted/cancelled vs still active) before either resuming
-// creates (active) or stopping (aborted / still unknown). Tunable in tests.
+// createAbortRetry* is the short fixed-interval probe before entering the
+// long wait. createAbortWait* is bounded exponential backoff while the create
+// goroutine stays paused until storage is definitive or shutdown cancels.
+// Tunable in tests.
 var (
-	createAbortRetryAttempts = 5
-	createAbortRetryInterval = 100 * time.Millisecond
-	// createAbortDeferred* continues probing in the create goroutine so a brief
-	// storage outage does not abort an active evaluation or leave an orphan Job.
-	createAbortDeferredAttempts = 10
-	createAbortDeferredInterval = 200 * time.Millisecond
-	// createAbortPersistentInterval is used by the background reconcile that
-	// remains scheduled when both sync phases stay unknown.
-	createAbortPersistentInterval = 5 * time.Second
-	// createAbortPersistentStop, when non-nil, ends the background reconcile
-	// (tests only; production leaves it nil so probing continues until known).
-	createAbortPersistentStop <-chan struct{}
+	createAbortRetryAttempts   = 5
+	createAbortRetryInterval   = 100 * time.Millisecond
+	createAbortWaitInterval    = 200 * time.Millisecond
+	createAbortWaitMaxInterval = 5 * time.Second
 )
 
 func orphanCleanupContext() (context.Context, context.CancelFunc) {
@@ -81,35 +72,46 @@ func NewK8sRuntime(logger *slog.Logger, serviceConfig *config.Config) (abstracti
 	if err != nil {
 		return nil, err
 	}
+	shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
 	return &K8sRuntime{
-		logger:        logger,
-		serviceConfig: serviceConfig,
-		helper:        helper,
+		logger:         logger,
+		serviceConfig:  serviceConfig,
+		helper:         helper,
+		shutdownCtx:    shutdownCtx,
+		shutdownCancel: shutdownCancel,
 	}, nil
 }
 
 func (r *K8sRuntime) WithLogger(logger *slog.Logger) abstractions.Runtime {
 	return &K8sRuntime{
-		logger:        logger,
-		serviceConfig: r.serviceConfig,
-		helper:        r.helper,
-		ctx:           r.ctx,
+		logger:         logger,
+		serviceConfig:  r.serviceConfig,
+		helper:         r.helper,
+		ctx:            r.ctx,
+		shutdownCtx:    r.shutdownCtx,
+		shutdownCancel: r.shutdownCancel,
 	}
 }
 
 func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 	return &K8sRuntime{
-		logger:        r.logger,
-		serviceConfig: r.serviceConfig,
-		helper:        r.helper,
-		ctx:           ctx,
+		logger:         r.logger,
+		serviceConfig:  r.serviceConfig,
+		helper:         r.helper,
+		ctx:            ctx,
+		shutdownCtx:    r.shutdownCtx,
+		shutdownCancel: r.shutdownCancel,
 	}
 }
 
-// Close stops the Kubernetes EventBroadcaster background goroutines started by NewKubernetesHelper.
-// WithLogger/WithContext copies share the same helper pointer, so Close must be called exactly once
-// on the root runtime returned by NewK8sRuntime.
+// Close cancels in-flight abort waits and stops the Kubernetes EventBroadcaster
+// background goroutines started by NewKubernetesHelper.
+// WithLogger/WithContext copies share the same helper and shutdown cancel, so
+// Close must be called exactly once on the root runtime returned by NewK8sRuntime.
 func (r *K8sRuntime) Close() error {
+	if r.shutdownCancel != nil {
+		r.shutdownCancel()
+	}
 	if r.helper == nil {
 		return nil
 	}
@@ -133,8 +135,8 @@ func (r *K8sRuntime) RunEvaluationJob(
 		for idx, bench := range benchmarks {
 			// Shared DB signal works across eval-hub replicas: hard_delete removes the
 			// row, soft cancel sets cancelled — either stops further Job creation.
-			// Transient storage errors are retried; still-unknown stops creates and
-			// reconciles so a late Job is not left behind after delete/cancel.
+			// Transient storage errors pause this goroutine (bounded backoff) until
+			// storage is definitive or the runtime shuts down.
 			if r.handleCreateAbortDecision(evaluation, storage, jobID, bench.ID, idx, nil, "pre-create") {
 				return
 			}
@@ -178,11 +180,10 @@ func (r *K8sRuntime) RunEvaluationJob(
 	return nil
 }
 
-// handleCreateAbortDecision resolves storage abort status (with retries). Returns
-// true when the create loop must stop (aborted, or still unknown after sync
-// reconcile — in which case a persistent background reconcile is scheduled).
-// When deferred reconcile confirms the evaluation is still active, returns false
-// so remaining benchmark Jobs are created.
+// handleCreateAbortDecision resolves storage abort status. The create goroutine
+// stays paused (bounded backoff) while status is unknown so an active evaluation
+// can resume at the same benchmark index, or delete/cancel can sweep leftovers.
+// Returns true when the create loop must stop (aborted, or shutdown while unknown).
 func (r *K8sRuntime) handleCreateAbortDecision(
 	evaluation *api.EvaluationJobResource,
 	storage abstractions.RuntimeStorage,
@@ -194,14 +195,14 @@ func (r *K8sRuntime) handleCreateAbortDecision(
 	status, reason := resolveCreateAbort(storage, jobID, r.logger)
 	if status == createAbortUnknown {
 		r.logger.Warn(
-			"storage abort check still unknown after retries; reconciling before deciding",
+			"storage abort check still unknown after retries; pausing creates until known or shutdown",
 			"job_id", jobID,
 			"benchmark_id", benchmarkID,
 			"benchmark_index", benchmarkIndex,
 			"phase", phase,
 			"error", createErr,
 		)
-		status, reason = r.reconcileCreateAbortUntilKnown(storage, jobID, benchmarkID)
+		status, reason = r.waitCreateAbortUntilKnown(storage, jobID, benchmarkID)
 	}
 	switch status {
 	case createAbortActive:
@@ -220,32 +221,46 @@ func (r *K8sRuntime) handleCreateAbortDecision(
 		return true
 	default:
 		r.logger.Error(
-			"storage abort check still unknown after deferred reconcile; stopping creates and scheduling persistent reconcile",
+			"storage abort check interrupted by shutdown while still unknown; stopping creates",
 			"job_id", jobID,
 			"benchmark_id", benchmarkID,
 			"benchmark_index", benchmarkIndex,
 			"phase", phase,
 			"error", createErr,
 		)
-		r.schedulePersistentAbortReconcile(evaluation, storage, jobID, benchmarkID)
 		return true
 	}
 }
 
-// reconcileCreateAbortUntilKnown keeps probing storage in the create goroutine
-// after resolveCreateAbort stayed unknown. Returns the definitive status, or
-// createAbortUnknown if deferred attempts are exhausted.
-func (r *K8sRuntime) reconcileCreateAbortUntilKnown(
+func (r *K8sRuntime) abortWaitContext() context.Context {
+	if r.shutdownCtx != nil {
+		return r.shutdownCtx
+	}
+	return context.Background()
+}
+
+// waitCreateAbortUntilKnown keeps the create goroutine paused and probes storage
+// with bounded exponential backoff until the abort status is definitive or the
+// runtime is shut down (Close).
+func (r *K8sRuntime) waitCreateAbortUntilKnown(
 	storage abstractions.RuntimeStorage,
 	jobID, benchmarkID string,
 ) (createAbortStatus, string) {
-	for attempt := 1; attempt <= createAbortDeferredAttempts; attempt++ {
-		time.Sleep(createAbortDeferredInterval)
+	ctx := r.abortWaitContext()
+	interval := createAbortWaitInterval
+	for attempt := 1; ; attempt++ {
+		timer := time.NewTimer(interval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return createAbortUnknown, ""
+		case <-timer.C:
+		}
 		status, reason := checkCreateAbort(storage, jobID)
 		switch status {
 		case createAbortAborted:
 			r.logger.Info(
-				"deferred abort reconcile confirmed delete/cancel",
+				"abort wait confirmed delete/cancel",
 				"job_id", jobID,
 				"benchmark_id", benchmarkID,
 				"reason", reason,
@@ -254,7 +269,7 @@ func (r *K8sRuntime) reconcileCreateAbortUntilKnown(
 			return status, reason
 		case createAbortActive:
 			r.logger.Info(
-				"deferred abort reconcile confirmed evaluation still active; resuming creates",
+				"abort wait confirmed evaluation still active; resuming creates",
 				"job_id", jobID,
 				"benchmark_id", benchmarkID,
 				"attempt", attempt,
@@ -262,74 +277,19 @@ func (r *K8sRuntime) reconcileCreateAbortUntilKnown(
 			return status, reason
 		default:
 			r.logger.Warn(
-				"deferred abort reconcile storage check still unknown",
+				"abort wait storage check still unknown; backing off",
 				"job_id", jobID,
 				"benchmark_id", benchmarkID,
 				"attempt", attempt,
+				"next_interval", interval.String(),
 			)
-		}
-	}
-	return createAbortUnknown, ""
-}
-
-// schedulePersistentAbortReconcile keeps probing after both sync retry phases
-// stay unknown so a late Job is still swept when delete/cancel becomes visible.
-func (r *K8sRuntime) schedulePersistentAbortReconcile(
-	evaluation *api.EvaluationJobResource,
-	storage abstractions.RuntimeStorage,
-	jobID, benchmarkID string,
-) {
-	if r.afterPersistentAbortReconcileScheduled != nil {
-		r.afterPersistentAbortReconcileScheduled()
-	}
-	go func() {
-		if r.afterPersistentAbortReconcileDone != nil {
-			defer r.afterPersistentAbortReconcileDone()
-		}
-		for attempt := 1; ; attempt++ {
-			timer := time.NewTimer(createAbortPersistentInterval)
-			select {
-			case <-timer.C:
-			case <-createAbortPersistentStop:
-				timer.Stop()
-				r.logger.Info(
-					"persistent abort reconcile stopped",
-					"job_id", jobID,
-					"benchmark_id", benchmarkID,
-					"attempt", attempt,
-				)
-				return
-			}
-			status, reason := checkCreateAbort(storage, jobID)
-			switch status {
-			case createAbortAborted:
-				r.logger.Info(
-					"persistent abort reconcile confirmed delete/cancel; sweeping leftovers",
-					"job_id", jobID,
-					"benchmark_id", benchmarkID,
-					"reason", reason,
-					"attempt", attempt,
-				)
-				r.sweepEvaluationResourcesAfterAbort(evaluation, jobID, benchmarkID)
-				return
-			case createAbortActive:
-				r.logger.Info(
-					"persistent abort reconcile confirmed evaluation still active",
-					"job_id", jobID,
-					"benchmark_id", benchmarkID,
-					"attempt", attempt,
-				)
-				return
-			default:
-				r.logger.Warn(
-					"persistent abort reconcile storage check still unknown; will retry",
-					"job_id", jobID,
-					"benchmark_id", benchmarkID,
-					"attempt", attempt,
-				)
+			if next := interval * 2; next <= createAbortWaitMaxInterval {
+				interval = next
+			} else {
+				interval = createAbortWaitMaxInterval
 			}
 		}
-	}()
+	}
 }
 
 // sweepEvaluationResourcesAfterAbort is the create-loop counterpart to hard_delete
