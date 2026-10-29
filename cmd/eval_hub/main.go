@@ -236,6 +236,15 @@ func main() {
 		}
 	}
 
+	// Cancel in-flight create abort waits before closing storage so GetEvaluationJob
+	// sees cancellation rather than racing a closed pool.
+	if closer, ok := runtime.(io.Closer); ok {
+		logger.Info("Shutting down API runtime...")
+		if err := closer.Close(); err != nil {
+			logger.Error("Failed to close runtime", "error", err.Error())
+		}
+	}
+
 	// shutdown the storage
 	logger.Info("Shutting down API storage...")
 	if err := storage.Close(); err != nil {
@@ -258,12 +267,5 @@ func main() {
 	} else {
 		logger.Info("API Server shutdown gracefully")
 		_ = logShutdown() // ignore the error
-	}
-
-	// stop Kubernetes EventBroadcaster goroutines started by the runtime (cluster mode only)
-	if closer, ok := runtime.(io.Closer); ok {
-		if err := closer.Close(); err != nil {
-			logger.Error("Failed to close runtime", "error", err.Error())
-		}
 	}
 }
