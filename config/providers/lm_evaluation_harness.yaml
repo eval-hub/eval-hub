@@ -705,22 +705,21 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - mc1
-  - mc2
-  - bleu
-  - rouge
+  - acc
+  - acc_norm
+  - f1
   num_few_shot: 0
   dataset_size: 500
   tags:
   - knowledge
   - lm_eval
   primary_score:
-    metric: mc1
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Multiple-choice accuracy (mc1) on multiple-choice questions; higher is better.
+    result_interpretation: Accuracy (acc) on multiple-choice questions; higher is better.
     score_ranges:
     - range: 0.0-0.25
       meaning: Below random chance for 4-choice questions
@@ -806,20 +805,19 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - bleu
-  - chrf
+  - acc_norm
   num_few_shot: 0
   dataset_size: 2000
   tags:
   - multilingual
   - lm_eval
   primary_score:
-    metric: bleu
+    metric: acc_norm
     lower_is_better: false
   pass_criteria:
     threshold: 0.1
   agent:
-    result_interpretation: Bleu; higher is better.
+    result_interpretation: Length-normalized accuracy (acc_norm); higher is better.
     score_ranges:
     - range: 0.0-0.1
       meaning: Below default pass threshold
@@ -974,8 +972,9 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match
   - acc
+  - acc_norm
+  - f1
   num_few_shot: 0
   dataset_size: 14042
   tags:
@@ -995,8 +994,8 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match
   - acc
+  - acc_norm
   num_few_shot: 0
   dataset_size: 14042
   tags:
@@ -1016,8 +1015,8 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match
   - acc
+  - acc_norm
   num_few_shot: 0
   dataset_size: 14042
   tags:
@@ -1029,7 +1028,7 @@ benchmarks:
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Accuracy on multiple-choice questions; higher is better.
+    result_interpretation: Accuracy (acc) on multiple-choice questions; higher is better.
     score_ranges:
     - range: 0.0-0.25
       meaning: Below random chance for 4-choice questions
@@ -1088,7 +1087,6 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match
   - acc
   num_few_shot: 0
   dataset_size: 14042
@@ -1109,7 +1107,6 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match
   - acc
   num_few_shot: 0
   dataset_size: 14042
@@ -1130,7 +1127,6 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match
   - acc
   num_few_shot: 0
   dataset_size: 14042
@@ -1151,7 +1147,6 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match
   - acc
   num_few_shot: 0
   dataset_size: 14042
@@ -1172,7 +1167,6 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match
   - acc
   num_few_shot: 0
   dataset_size: 14042
@@ -1193,7 +1187,6 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match
   - acc
   num_few_shot: 0
   dataset_size: 14042
@@ -1214,7 +1207,6 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match
   - acc
   num_few_shot: 0
   dataset_size: 14042
@@ -1235,7 +1227,6 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match
   - acc
   num_few_shot: 0
   dataset_size: 14042
@@ -1256,7 +1247,6 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match
   - acc
   num_few_shot: 0
   dataset_size: 14042
@@ -1277,7 +1267,6 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - exact_match
   - acc
   num_few_shot: 0
   dataset_size: 14042
@@ -1298,22 +1287,21 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - mc1
-  - mc2
-  - bleu
-  - rouge
+  - acc
+  - acc_norm
+  - f1
   num_few_shot: 0
   dataset_size: 1838
   tags:
   - reasoning
   - lm_eval
   primary_score:
-    metric: mc1
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Multiple-choice accuracy (mc1) on multiple-choice questions; higher is better.
+    result_interpretation: Accuracy (acc) on multiple-choice questions; higher is better.
     score_ranges:
     - range: 0.0-0.25
       meaning: Below random chance for 4-choice questions
@@ -1441,22 +1429,20 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - mc1
-  - mc2
-  - bleu
-  - rouge
+  - acc
+  - acc_norm
   num_few_shot: 0
   dataset_size: 1838
   tags:
   - reasoning
   - lm_eval
   primary_score:
-    metric: mc1
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Multiple-choice accuracy (mc1); higher is better.
+    result_interpretation: Accuracy (acc) on multiple-choice questions; higher is better.
     score_ranges:
     - range: 0.0-0.25
       meaning: Below random chance for 4-choice questions
@@ -1473,22 +1459,20 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - mc1
-  - mc2
-  - bleu
-  - rouge
+  - acc
+  - acc_norm
   num_few_shot: 0
   dataset_size: 1838
   tags:
   - reasoning
   - lm_eval
   primary_score:
-    metric: mc1
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Multiple-choice accuracy (mc1); higher is better.
+    result_interpretation: Accuracy (acc) on multiple-choice questions; higher is better.
     score_ranges:
     - range: 0.0-0.25
       meaning: Below random chance for 4-choice questions
@@ -1535,22 +1519,20 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - mc1
-  - mc2
-  - bleu
-  - rouge
+  - acc
+  - acc_norm
   num_few_shot: 0
   dataset_size: 1838
   tags:
   - reasoning
   - lm_eval
   primary_score:
-    metric: mc1
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Multiple-choice accuracy (mc1) on multiple-choice questions; higher is better.
+    result_interpretation: Accuracy (acc) on multiple-choice questions; higher is better.
     score_ranges:
     - range: 0.0-0.25
       meaning: Below random chance for 4-choice questions
@@ -1727,14 +1709,13 @@ benchmarks:
   evaluation_targets: [model]
   metrics:
   - acc
-  - acc_norm
   num_few_shot: 0
   dataset_size: 3000
   tags:
   - reading_comprehension
   - lm_eval
   primary_score:
-    metric: acc_norm
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -1776,22 +1757,19 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - mc1
-  - mc2
-  - bleu
-  - rouge
+  - f1_abstractive
   num_few_shot: 0
   dataset_size: 3000
   tags:
   - reading_comprehension
   - lm_eval
   primary_score:
-    metric: rouge
+    metric: f1_abstractive
     lower_is_better: false
   pass_criteria:
     threshold: 0.1
   agent:
-    result_interpretation: Rouge; higher is better.
+    result_interpretation: Abstractive F1 (f1_abstractive) on free-form answers; higher is better.
     score_ranges:
     - range: 0.0-0.1
       meaning: Below default pass threshold
@@ -2160,12 +2138,12 @@ benchmarks:
   - logic_reasoning
   - lm_eval
   primary_score:
-    metric: acc_norm
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Length-normalized accuracy on multiple-choice questions; higher is better.
+    result_interpretation: Accuracy (acc) on multiple-choice questions; higher is better.
     score_ranges:
     - range: 0.0-0.25
       meaning: Below random chance for 4-choice questions
@@ -2626,14 +2604,13 @@ benchmarks:
   evaluation_targets: [model]
   metrics:
   - acc
-  - acc_norm
   num_few_shot: 0
   dataset_size: 14042
   tags:
   - medical
   - lm_eval
   primary_score:
-    metric: acc_norm
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2647,14 +2624,13 @@ benchmarks:
   evaluation_targets: [model]
   metrics:
   - acc
-  - acc_norm
   num_few_shot: 0
   dataset_size: 14042
   tags:
   - medical
   - lm_eval
   primary_score:
-    metric: acc_norm
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2668,14 +2644,13 @@ benchmarks:
   evaluation_targets: [model]
   metrics:
   - acc
-  - acc_norm
   num_few_shot: 0
   dataset_size: 14042
   tags:
   - medical
   - lm_eval
   primary_score:
-    metric: acc_norm
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2689,14 +2664,13 @@ benchmarks:
   evaluation_targets: [model]
   metrics:
   - acc
-  - acc_norm
   num_few_shot: 0
   dataset_size: 14042
   tags:
   - medical
   - lm_eval
   primary_score:
-    metric: acc_norm
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2710,14 +2684,13 @@ benchmarks:
   evaluation_targets: [model]
   metrics:
   - acc
-  - acc_norm
   num_few_shot: 0
   dataset_size: 14042
   tags:
   - medical
   - lm_eval
   primary_score:
-    metric: acc_norm
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2731,14 +2704,13 @@ benchmarks:
   evaluation_targets: [model]
   metrics:
   - acc
-  - acc_norm
   num_few_shot: 0
   dataset_size: 14042
   tags:
   - medical
   - lm_eval
   primary_score:
-    metric: acc_norm
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2752,14 +2724,13 @@ benchmarks:
   evaluation_targets: [model]
   metrics:
   - acc
-  - acc_norm
   num_few_shot: 0
   dataset_size: 14042
   tags:
   - medical
   - lm_eval
   primary_score:
-    metric: acc_norm
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2773,14 +2744,13 @@ benchmarks:
   evaluation_targets: [model]
   metrics:
   - acc
-  - acc_norm
   num_few_shot: 0
   dataset_size: 14042
   tags:
   - medical
   - lm_eval
   primary_score:
-    metric: acc_norm
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2794,14 +2764,13 @@ benchmarks:
   evaluation_targets: [model]
   metrics:
   - acc
-  - acc_norm
   num_few_shot: 0
   dataset_size: 14042
   tags:
   - medical
   - lm_eval
   primary_score:
-    metric: acc_norm
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -2814,8 +2783,8 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - ppl
   - acc
+  - perplexity
   num_few_shot: 0
   dataset_size: 5153
   tags:
@@ -2827,12 +2796,12 @@ benchmarks:
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Accuracy; lower is better.
+    result_interpretation: Last-word prediction accuracy (acc); higher is better. Perplexity is also reported for language-modeling quality.
     score_ranges:
     - range: 0.0-0.25
-      meaning: Meets default pass threshold (0.25 or below)
-    - range: 0.25+
-      meaning: Above default pass threshold
+      meaning: Below default pass threshold
+    - range: 0.25-1.0
+      meaning: Meets default pass threshold (0.25 or above)
 - id: lambada_openai_mt_en
   name: Final word prediction (English MT)
   description: Last-word prediction on machine-translated English passages.
@@ -2842,8 +2811,8 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - ppl
   - acc
+  - perplexity
   num_few_shot: 0
   dataset_size: 5153
   tags:
@@ -2855,12 +2824,12 @@ benchmarks:
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Accuracy; lower is better.
+    result_interpretation: Last-word prediction accuracy (acc); higher is better. Perplexity is also reported for language-modeling quality.
     score_ranges:
     - range: 0.0-0.25
-      meaning: Meets default pass threshold (0.25 or below)
-    - range: 0.25+
-      meaning: Above default pass threshold
+      meaning: Below default pass threshold
+    - range: 0.25-1.0
+      meaning: Meets default pass threshold (0.25 or above)
 - id: lambada_openai_mt_it
   name: Final word prediction (Italian)
   description: Last-word prediction in machine-translated Italian.
@@ -2870,8 +2839,8 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - ppl
   - acc
+  - perplexity
   num_few_shot: 0
   dataset_size: 5153
   tags:
@@ -2891,8 +2860,8 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - ppl
   - acc
+  - perplexity
   num_few_shot: 0
   dataset_size: 5153
   tags:
@@ -2912,8 +2881,8 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - ppl
   - acc
+  - perplexity
   num_few_shot: 0
   dataset_size: 5153
   tags:
@@ -2933,8 +2902,8 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - ppl
   - acc
+  - perplexity
   num_few_shot: 0
   dataset_size: 5153
   tags:
@@ -2946,12 +2915,12 @@ benchmarks:
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Accuracy; lower is better.
+    result_interpretation: Last-word prediction accuracy (acc); higher is better. Perplexity is also reported for language-modeling quality.
     score_ranges:
     - range: 0.0-0.25
-      meaning: Meets default pass threshold (0.25 or below)
-    - range: 0.25+
-      meaning: Above default pass threshold
+      meaning: Below default pass threshold
+    - range: 0.25-1.0
+      meaning: Meets default pass threshold (0.25 or above)
 - id: paloma_wikitext_103
   name: Wikipedia text modeling (Paloma)
   description: Measures how well the model predicts Wikipedia article text.
@@ -2961,17 +2930,26 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - acc
+  - word_perplexity
+  - byte_perplexity
+  - bits_per_byte
   num_few_shot: 0
   dataset_size: 4358
   tags:
   - language_modeling
   - lm_eval
   primary_score:
-    metric: acc
-    lower_is_better: false
+    metric: word_perplexity
+    lower_is_better: true
   pass_criteria:
-    threshold: 0.25
+    threshold: 100
+  agent:
+    result_interpretation: Word perplexity on held-out text; lower is better (pass if <= 100). Byte perplexity and bits_per_byte are also reported.
+    score_ranges:
+    - range: 0.0-100
+      meaning: Meets default pass threshold (100 or below; lower is better)
+    - range: 100+
+      meaning: Above default pass threshold
 - id: pile_arxiv
   name: Academic paper modeling
   description: Measures how well the model predicts scientific paper text from ArXiv.
@@ -3108,23 +3086,25 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - acc
+  - word_perplexity
+  - byte_perplexity
+  - bits_per_byte
   num_few_shot: 0
   dataset_size: 4358
   tags:
   - language_modeling
   - lm_eval
   primary_score:
-    metric: acc
-    lower_is_better: false
+    metric: word_perplexity
+    lower_is_better: true
   pass_criteria:
-    threshold: 0.25
+    threshold: 100
   agent:
-    result_interpretation: Accuracy; lower is better.
+    result_interpretation: Word perplexity on held-out text; lower is better (pass if <= 100). Byte perplexity and bits_per_byte are also reported.
     score_ranges:
-    - range: 0.0-0.25
-      meaning: Meets default pass threshold (0.25 or below)
-    - range: 0.25+
+    - range: 0.0-100
+      meaning: Meets default pass threshold (100 or below; lower is better)
+    - range: 100+
       meaning: Above default pass threshold
 - id: careqa_open_perplexity
   name: "Healthcare Q&A text modeling"
@@ -3195,22 +3175,19 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - mc1
-  - mc2
-  - bleu
-  - rouge
+  - acc
   num_few_shot: 0
   dataset_size: 817
   tags:
   - safety
   - lm_eval
   primary_score:
-    metric: mc1
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Multiple-choice accuracy (mc1); higher is better.
+    result_interpretation: Accuracy (acc) on multiple-choice questions; higher is better.
     score_ranges:
     - range: 0.0-0.25
       meaning: Below random chance for 4-choice questions
