@@ -18,7 +18,6 @@ export X_USER=my-user           # required when calling the service directly in 
 export MODEL_NAME=org/model
 export MODEL_URL=https://model.example/v1
 export MODEL_AUTH_SECRET_REF=model-credentials  # if the model requires authentication
-export EVALHUB_CA_CERT_PATH=/path/to/ca.pem      # optional private CA
 make test-benchmarks
 ```
 
@@ -40,7 +39,8 @@ independently of benchmark outcomes.
 
 The service's authentication proxy determines the forwarded identity when used.
 Model credentials belong in the referenced Kubernetes Secret, not in JSON fixtures.
-TLS verification remains enabled. Identity headers are not forwarded to redirects.
+TLS certificate verification is temporarily disabled in this test suite to allow
+cluster routes with untrusted certificates. Identity headers are not forwarded to redirects.
 
 Default concurrency is **2 evaluation jobs across all providers**. Each job uses
 its fixture deadline (initially five minutes), and the suite has a 30-minute
@@ -203,8 +203,8 @@ fallback for `EVALHUB_TOKEN`; an explicit nonempty `EVALHUB_TOKEN` takes precede
 `WAIT_DEADLINE`, `FVT_CONCURRENCY`, `FVT_TEST_FILTER`, and
 `FVT_BENCHMARK_TOKENIZER` are FVT settings, not smoke-runner settings. Configure
 `BENCHMARK_TIMEOUT`, `BENCHMARK_PARALLEL`, `BENCHMARK_RUN`, and fixture parameters
-when invoking the smoke suite. The smoke runner keeps TLS verification enabled;
-provide `EVALHUB_CA_CERT_PATH` for a private service CA.
+when invoking the smoke suite. The smoke runner temporarily disables TLS
+certificate verification for cluster routes with untrusted certificates.
 
 Judge fixtures require nonempty `${JUDGE_MODEL_NAME}` and, where the adapter
 supports an inline endpoint, `${JUDGE_BASE_URL}`. The runner accepts `JUDGE_MODEL`
