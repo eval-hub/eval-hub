@@ -23,7 +23,7 @@ Existing certificate sources are unchanged:
 | Listener | Certificate/key configuration |
 |---|---|
 | API | `service.tls_cert_file` / `service.tls_key_file`; stock `config/config.yaml` maps `TLS_CERT_FILE` / `TLS_KEY_FILE` to these fields. |
-| MCP HTTP or legacy HTTP+SSE | `tls_cert_file` / `tls_key_file` in MCP YAML, `EVALHUB_TLS_CERT_FILE` / `EVALHUB_TLS_KEY_FILE`, or `--tls-cert-file` / `--tls-key-file` (existing precedence applies). |
+| MCP HTTP or legacy HTTP+SSE | `tls_cert_file` / `tls_key_file` in MCP YAML, `EVALHUB_TLS_CERT_FILE` / `EVALHUB_TLS_KEY_FILE`, or `--tls-cert` / `--tls-key` (existing precedence applies). |
 
 Both binaries read these **process environment** controls independently of YAML/Viper:
 
@@ -66,7 +66,7 @@ Native MCP HTTP:
 ```sh
 TLS_REQUIRED=true TLS_MIN_VERSION=1.2 \
 TLS_CIPHERS=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 TLS_CURVES=P256,P384 \
-./bin/evalhub-mcp --transport http --tls-cert-file /certs/tls.crt --tls-key-file /certs/tls.key
+./bin/evalhub-mcp --transport http --tls-cert /certs/tls.crt --tls-key /certs/tls.key
 ```
 
 Choose suites compatible with the certificate key type (RSA in the second example).
