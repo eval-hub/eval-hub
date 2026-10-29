@@ -11,11 +11,18 @@ EVALHUB_REPO_PARENT="$(dirname "$EVALHUB_REPO")"
 KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-evalhub-dev}"
 IMAGE_TAG="${IMAGE_TAG:-kind-${KIND_CLUSTER_NAME}}"
 SKIP_BUILD="${SKIP_BUILD:-false}"
+AIRGAP="${AIRGAP:-false}"
+ADAPTERS="${ADAPTERS:-all}"
 EVALHUB_HOST_PORT="${EVALHUB_HOST_PORT:-18443}"
 EVALHUB_NODE_PORT="${EVALHUB_NODE_PORT:-30443}"
 EVALHUB_HOST_BIND_ADDRESS="${EVALHUB_HOST_BIND_ADDRESS:-127.0.0.1}"
-CONTRIB_REPO="${EVALHUB_CONTRIB_REPO:-${EVALHUB_REPO_PARENT}/eval-hub-contrib}"
-OPERATOR_REPO="${TRUSTYAI_OPERATOR_REPO:-${EVALHUB_REPO_PARENT}/trustyai-service-operator}"
+DEV_REPO_PARENT_PATHS="${DEV_REPO_PARENT_PATHS:-${HOME}/code}"
+CONTRIB_REPO=""
+OPERATOR_REPO=""
+LMES_REPO=""
+SELECTED_ADAPTERS=()
+SELECTED_ADAPTER_IMAGES=()
+CALICO_VERSION="v3.33.0"
 KUBECONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/evalhub/kubeconfigs"
 KUBECONFIG_FILE="${KUBECONFIG_DIR}/${KIND_CLUSTER_NAME}.yaml"
 WORK_DIR=""
@@ -40,23 +47,30 @@ usage() {
   cat <<'USAGE'
 Usage: make dev-deploy [VARIABLE=value ...]
 
-Builds and deploys EvalHub, the operator, Inspect and FollowBench adapters,
-and local mock target/judge services to a Docker-backed kind cluster.
+Builds and deploys EvalHub, the operator, the local adapter images, and mock
+target/judge services to a Docker-backed kind cluster.
 All system collections packaged by the operator are discovered automatically.
 The cluster and deployment are retained. No evaluation jobs are submitted.
 
 Inputs (also accepted as environment variables):
   KIND_CLUSTER_NAME       kind cluster to create or reuse (default: evalhub-dev)
   IMAGE_TAG               tag for all locally built images (default: kind-<cluster>)
-  SKIP_BUILD=true         reuse locally built images with IMAGE_TAG
+  SKIP_BUILD=true         reuse locally built images with IMAGE_TAG for EvalHub,
+                          the operator, and selected adapters
+  ADAPTERS=all             comma-separated adapter images to build and use
+                          (default: all): inspect, lm-evaluation-harness, followbench
+  AIRGAP=true              create/use a Calico kind cluster and deny external
+                          egress from system-namespace evaluation jobs (default: false)
   Repeated builds use Docker's layer cache; the EvalHub build date is stable
   for a source commit so a no-change deploy does not rebuild Go binaries.
   Temporary localhost:<port> registry tags are removed after each successful push.
   EVALHUB_HOST_PORT       localhost API port (default: 18443)
   EVALHUB_NODE_PORT       kind NodePort for the API (default: 30443)
   EVALHUB_HOST_BIND_ADDRESS host bind address (default: 127.0.0.1; loopback only)
-  EVALHUB_CONTRIB_REPO    contrib checkout (default: sibling ../eval-hub-contrib)
-  TRUSTYAI_OPERATOR_REPO  operator checkout (default: sibling ../trustyai-service-operator)
+  DEV_REPO_PARENT_PATHS   colon-separated parent directories to search after
+                          the sibling check (default: ~/code)
+                          Each repo is searched as a sibling of EvalHub first,
+                          then as <parent>/<repo> in the listed order.
 
 New clusters map the API NodePort to the host port using
 EVALHUB_HOST_BIND_ADDRESS. The default 127.0.0.1 binds only on loopback; use
@@ -68,6 +82,17 @@ mirror support, a reused cluster must use a kind node image from v0.27.0 or newe
 A narrowly scoped NetworkPolicy allows the kind Docker network gateway to reach
 the EvalHub API on port 8443. This is required because the operator's default
 ingress policy otherwise blocks host requests forwarded through the NodePort.
+
+Air-gap mode is an evaluation-pod egress simulation, not a host or whole-cluster
+firewall. New clusters disable kindnet and install the pinned Calico v3.33.0 so
+network policies are enforced. Existing clusters must already have Calico and
+must not have kindnet; the CNI cannot be changed in place by this script.
+The policy selects evaluation-job pods in namespace system; use X-Tenant: system
+for test requests. It permits DNS and traffic to pods in system, including EvalHub
+and the local target/judge mocks. Stage benchmark assets on a PVC before
+submitting jobs. Only selected adapter images are built and wired to the local
+registry. Unselected providers retain their operator-packaged image references;
+in air-gap mode, those images are not guaranteed to be available for jobs.
 
 The private kubeconfig is written under XDG_CONFIG_HOME (default ~/.config),
 at evalhub/kubeconfigs/<cluster>.yaml.
@@ -114,6 +139,31 @@ cleanup() {
   exit "$status"
 }
 
+find_repo_checkout() {
+  local repo_name="$1" required_file="$2" candidate parent searched
+  local -a search_parents=()
+  local sibling="${EVALHUB_REPO_PARENT}/${repo_name}"
+  searched="$sibling"
+  if [[ -f "$sibling/$required_file" ]]; then
+    printf '%s\n' "$sibling"
+    return 0
+  fi
+
+  IFS=: read -r -a search_parents <<<"$DEV_REPO_PARENT_PATHS"
+  for parent in "${search_parents[@]}"; do
+    [[ -n "$parent" ]] || continue
+    parent="${parent%/}"
+    candidate="${parent}/${repo_name}"
+    searched+=", $candidate"
+    if [[ -f "$candidate/$required_file" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  fail "Could not find repository '$repo_name' (requires $required_file). Searched: $searched. Set DEV_REPO_PARENT_PATHS to a colon-separated list of parent directories."
+}
+
 need_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
 }
@@ -122,8 +172,54 @@ kind_cmd() {
   env -u KIND_EXPERIMENTAL_PROVIDER kind "$@"
 }
 
+trim_whitespace() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+adapter_selected() {
+  local requested
+  for requested in "${SELECTED_ADAPTERS[@]}"; do
+    [[ "$requested" == "$1" ]] && return 0
+  done
+  return 1
+}
+
+parse_adapters() {
+  local requested adapter image
+  local -a requested_adapters=()
+
+  ADAPTERS="$(trim_whitespace "$ADAPTERS")"
+  if [[ "$ADAPTERS" == all ]]; then
+    requested_adapters=(inspect followbench lm-evaluation-harness)
+  else
+    [[ -n "$ADAPTERS" ]] || fail "ADAPTERS must be 'all' or a comma-separated list of supported adapters."
+    IFS=, read -r -a requested_adapters <<<"$ADAPTERS"
+  fi
+
+  SELECTED_ADAPTERS=()
+  SELECTED_ADAPTER_IMAGES=()
+  for requested in "${requested_adapters[@]}"; do
+    adapter="$(trim_whitespace "$requested")"
+    case "$adapter" in
+      inspect) image=community-inspect ;;
+      followbench) image=community-followbench ;;
+      lm-evaluation-harness) image=community-lmes ;;
+      "") fail "ADAPTERS contains an empty entry. Use inspect, followbench, or lm-evaluation-harness." ;;
+      *) fail "Unsupported adapter '$adapter' in ADAPTERS. Supported values: inspect, followbench, lm-evaluation-harness." ;;
+    esac
+    adapter_selected "$adapter" && fail "ADAPTERS contains duplicate entry '$adapter'."
+    SELECTED_ADAPTERS+=("$adapter")
+    SELECTED_ADAPTER_IMAGES+=("$image")
+  done
+}
+
 validate_inputs() {
   case "$SKIP_BUILD" in true|false) ;; *) fail "SKIP_BUILD must be true or false." ;; esac
+  case "$AIRGAP" in true|false) ;; *) fail "AIRGAP must be true or false." ;; esac
+  parse_adapters
   [[ "$KIND_CLUSTER_NAME" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
     fail "Invalid kind cluster name: $KIND_CLUSTER_NAME"
   ((${#KIND_CLUSTER_NAME} <= 63)) || fail "KIND_CLUSTER_NAME must be at most 63 characters."
@@ -167,8 +263,50 @@ check_repository() {
   fi
 }
 
+preflight_existing_airgap_cluster() {
+  local preflight_kubeconfig
+  [[ "$AIRGAP" == true ]] || return 0
+  if ! kind_cmd get clusters 2>/dev/null | grep -Fqx -- "$KIND_CLUSTER_NAME"; then
+    return 0
+  fi
+
+  preflight_kubeconfig="$WORK_DIR/airgap-preflight.kubeconfig"
+  kind_cmd export kubeconfig --name "$KIND_CLUSTER_NAME" --kubeconfig "$preflight_kubeconfig" >/dev/null
+  if kubectl --kubeconfig "$preflight_kubeconfig" -n kube-system get daemonset kindnet >/dev/null 2>&1; then
+    fail "Existing kind cluster '$KIND_CLUSTER_NAME' uses kindnet, which does not enforce NetworkPolicy. Use a new cluster name or delete and recreate it with AIRGAP=true."
+  fi
+  kubectl --kubeconfig "$preflight_kubeconfig" -n kube-system get daemonset calico-node >/dev/null 2>&1 ||
+    fail "Existing kind cluster '$KIND_CLUSTER_NAME' has no Calico CNI. Use a new cluster name or delete and recreate it with AIRGAP=true."
+  log PASS "Existing cluster has Calico and can enforce the air-gap egress policy."
+}
+
+ensure_calico_cni() {
+  local manifest_url
+  if kubectl --kubeconfig "$KUBECONFIG_FILE" -n kube-system get daemonset calico-node >/dev/null 2>&1; then
+    if kubectl --kubeconfig "$KUBECONFIG_FILE" -n kube-system get daemonset kindnet >/dev/null 2>&1; then
+      fail "Cluster '$KIND_CLUSTER_NAME' has both Calico and kindnet. Recreate it with AIRGAP=true so Calico is the only CNI."
+    fi
+    log INFO "Using the existing Calico CNI in kind cluster '$KIND_CLUSTER_NAME'."
+  else
+    [[ "$KIND_CLUSTER_CREATED" == true ]] ||
+      fail "Existing cluster '$KIND_CLUSTER_NAME' has no Calico CNI. Use a new cluster name or delete and recreate it with AIRGAP=true."
+    manifest_url="https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/calico.yaml"
+    log INFO "Installing Calico ${CALICO_VERSION} into the new kind cluster."
+    curl --fail --location --silent --show-error "$manifest_url" -o "$WORK_DIR/calico.yaml" ||
+      fail "Could not download the pinned Calico manifest from $manifest_url."
+    kubectl --kubeconfig "$KUBECONFIG_FILE" create -f "$WORK_DIR/calico.yaml" ||
+      fail "Could not install Calico into kind cluster '$KIND_CLUSTER_NAME'."
+  fi
+
+  kubectl --kubeconfig "$KUBECONFIG_FILE" -n kube-system rollout status \
+    daemonset/calico-node --timeout=300s || fail "Calico node agents did not become Ready."
+  kubectl --kubeconfig "$KUBECONFIG_FILE" -n kube-system rollout status \
+    deployment/calico-kube-controllers --timeout=300s || fail "Calico controllers did not become Ready."
+  log PASS "Calico is Ready and kind NetworkPolicy enforcement is available."
+}
+
 ensure_cluster() {
-  local node mapping kind_config
+  local node mapping kind_config networking_config
   mkdir -p -- "$KUBECONFIG_DIR"
   [[ ! -L "$KUBECONFIG_FILE" ]] || fail "Refusing to overwrite kubeconfig symlink: $KUBECONFIG_FILE"
   if [[ -e "$KUBECONFIG_FILE" ]]; then
@@ -183,9 +321,14 @@ ensure_cluster() {
   else
     log INFO "Creating Docker-backed kind cluster: $KIND_CLUSTER_NAME"
     kind_config="$WORK_DIR/kind-cluster.yaml"
+    networking_config=""
+    if [[ "$AIRGAP" == true ]]; then
+      networking_config=$'networking:\n  disableDefaultCNI: true\n  podSubnet: "192.168.0.0/16"\n'
+    fi
     cat >"$kind_config" <<YAML
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
+${networking_config}
 containerdConfigPatches:
   - |-
     [plugins."io.containerd.grpc.v1.cri".registry]
@@ -203,6 +346,9 @@ YAML
     KIND_CLUSTER_CREATED=true
   fi
   chmod 600 "$KUBECONFIG_FILE"
+  if [[ "$AIRGAP" == true ]]; then
+    ensure_calico_cni
+  fi
   kubectl --kubeconfig "$KUBECONFIG_FILE" wait --for=condition=Ready nodes --all --timeout=180s
   kubectl --kubeconfig "$KUBECONFIG_FILE" get nodes
   local found_mapping="" existing_mappings=""
@@ -256,6 +402,11 @@ build_image() {
         --build-arg CI_CONTAINER_VERSION=kind-local \
         --tag "$image" --file "$dockerfile" "$context"
       ;;
+    community-lmes)
+      docker build --platform "linux/${target_arch}" \
+        --build-arg TARGETOS=linux --build-arg "TARGETARCH=${target_arch}" \
+        --tag "$image" --file "$dockerfile" "$context"
+      ;;
     *)
       docker build --platform "linux/${target_arch}" --tag "$image" --file "$dockerfile" "$context"
       ;;
@@ -264,16 +415,17 @@ build_image() {
 }
 
 build_images() {
-  local target_arch
+  local target_arch name image adapter
+  local -a image_names=(eval-hub trustyai-service-operator)
+  image_names+=("${SELECTED_ADAPTER_IMAGES[@]}")
   case "$(uname -m)" in
     x86_64) target_arch=amd64 ;;
     aarch64|arm64) target_arch=arm64 ;;
     *) fail "Unsupported build architecture: $(uname -m)" ;;
   esac
   if [[ "$SKIP_BUILD" == true ]]; then
-    log INFO "SKIP_BUILD=true; verifying the required image tags exist locally."
-    local name image
-    for name in eval-hub community-inspect community-followbench trustyai-service-operator; do
+    log INFO "SKIP_BUILD=true; verifying core and selected adapter image tags exist locally."
+    for name in "${image_names[@]}"; do
       image="$(image_ref "$name")"
       docker image inspect "$image" >/dev/null 2>&1 || fail "Required local image is missing: $image"
       log PASS "Found $image"
@@ -282,12 +434,24 @@ build_images() {
   fi
 
   build_image eval-hub "$EVALHUB_REPO" "$EVALHUB_REPO/Containerfile" "$target_arch"
-  build_image community-inspect "$CONTRIB_REPO/adapters/inspect" \
-    "$CONTRIB_REPO/adapters/inspect/Containerfile" "$target_arch"
-  build_image community-followbench "$CONTRIB_REPO/adapters/followbench" \
-    "$CONTRIB_REPO/adapters/followbench/Containerfile" "$target_arch"
   build_image trustyai-service-operator "$OPERATOR_REPO" \
     "$OPERATOR_REPO/Dockerfile" "$target_arch"
+  for adapter in "${SELECTED_ADAPTERS[@]}"; do
+    case "$adapter" in
+      inspect)
+        build_image community-inspect "$CONTRIB_REPO/adapters/inspect" \
+          "$CONTRIB_REPO/adapters/inspect/Containerfile" "$target_arch"
+        ;;
+      followbench)
+        build_image community-followbench "$CONTRIB_REPO/adapters/followbench" \
+          "$CONTRIB_REPO/adapters/followbench/Containerfile" "$target_arch"
+        ;;
+      lm-evaluation-harness)
+        build_image community-lmes "$LMES_REPO" \
+          "$LMES_REPO/Dockerfile.lmes-job" "$target_arch"
+        ;;
+    esac
+  done
 }
 
 docker_registry_image() {
@@ -348,7 +512,9 @@ ensure_registry() {
 
 publish_images() {
   local name source destination
-  for name in eval-hub community-inspect community-followbench trustyai-service-operator; do
+  local -a image_names=(eval-hub trustyai-service-operator)
+  image_names+=("${SELECTED_ADAPTER_IMAGES[@]}")
+  for name in "${image_names[@]}"; do
     source="$(image_ref "$name")"
     destination="$(docker_registry_image "$name")"
     log INFO "Publishing $name to the cluster-local registry."
@@ -383,6 +549,22 @@ replace_env_value() {
     { print }
     END { if (!found) exit 1 }
   ' "$file" >"$output" || fail "Image parameter $key was not found in $file."
+  mv -- "$output" "$file"
+}
+
+set_lmes_provider_image_pull_policy() {
+  local file="$1" output="$WORK_DIR/provider-lmes.yaml.tmp"
+  awk '
+    index($0, "image: $(lmes-pod-image)") > 0 {
+      print
+      match($0, /[^ ]/)
+      print substr($0, 1, RSTART - 1) "image_pull_policy: always"
+      found = 1
+      next
+    }
+    { print }
+    END { if (!found) exit 1 }
+  ' "$file" >"$output" || fail "Could not set LMES provider image_pull_policy in $file."
   mv -- "$output" "$file"
 }
 
@@ -487,8 +669,17 @@ render_operator_overlay() {
   params="$config_root/base/params.env"
   replace_env_value "$params" trustyaiOperatorImage "$(docker_registry_image trustyai-service-operator)"
   replace_env_value "$params" evalHubImage "$(docker_registry_image eval-hub)"
-  replace_env_value "$params" evalhub-provider-inspect-image "$(docker_registry_image community-inspect)"
-  replace_env_value "$params" evalhub-provider-followbench-image "$(docker_registry_image community-followbench)"
+  if adapter_selected inspect; then
+    replace_env_value "$params" evalhub-provider-inspect-image "$(docker_registry_image community-inspect)"
+  fi
+  if adapter_selected followbench; then
+    replace_env_value "$params" evalhub-provider-followbench-image "$(docker_registry_image community-followbench)"
+  fi
+  if adapter_selected lm-evaluation-harness; then
+    replace_env_value "$params" lmes-pod-image "$(docker_registry_image community-lmes)"
+    set_lmes_provider_image_pull_policy \
+      "$config_root/configmaps/evalhub/provider-lm-evaluation-harness.yaml"
+  fi
   replace_env_value "$params" kube-rbac-proxy "localhost:${REGISTRY_PORT}/opendatahub/odh-kube-rbac-proxy:odh-stable"
 
   overlay="$config_root/overlays/evalhub-kind"
@@ -552,10 +743,20 @@ YAML
     fail "Rendered operator deployment does not use the local operator image."
   grep -Fq "evalHubImage: $(docker_registry_image eval-hub)" "$manifest" ||
     fail "Rendered operator config does not use the local EvalHub image."
-  grep -Fq "image: $(docker_registry_image community-inspect)" "$manifest" ||
-    fail "Rendered provider config does not use the local Inspect image."
-  grep -Fq "image: $(docker_registry_image community-followbench)" "$manifest" ||
-    fail "Rendered provider config does not use the local FollowBench image."
+  if adapter_selected inspect; then
+    grep -Fq "image: $(docker_registry_image community-inspect)" "$manifest" ||
+      fail "Rendered provider config does not use the local Inspect image."
+  fi
+  if adapter_selected followbench; then
+    grep -Fq "image: $(docker_registry_image community-followbench)" "$manifest" ||
+      fail "Rendered provider config does not use the local FollowBench image."
+  fi
+  if adapter_selected lm-evaluation-harness; then
+    grep -Fq "image: $(docker_registry_image community-lmes)" "$manifest" ||
+      fail "Rendered LMES provider config does not use the locally built image."
+    grep -Fq 'image_pull_policy: always' "$manifest" ||
+      fail "Rendered LMES provider config does not pull the current local image."
+  fi
   grep -Fq "kube-rbac-proxy: localhost:${REGISTRY_PORT}/opendatahub/odh-kube-rbac-proxy:odh-stable" "$manifest" ||
     fail "Rendered operator config does not use the local kube-rbac-proxy image."
   grep -Fq 'name: trustyai-service-operator-controller-manager' "$manifest" ||
@@ -803,6 +1004,42 @@ data:
 
             raw = self.rfile.read(int(self.headers.get("Content-Length", "0")))
             request = json.loads(raw or b"{}")
+            endpoint = self.path.split("?", 1)[0]
+            if ROLE == "target" and endpoint.endswith("/v1/completions"):
+                prompts = request.get("prompt", "")
+                if not isinstance(prompts, list):
+                    prompts = [prompts]
+                choices = []
+                prompt_tokens = 0
+                for index, prompt_value in enumerate(prompts):
+                    prompt = prompt_value if isinstance(prompt_value, str) else str(prompt_value)
+                    # local-completions uses echo/logprobs for multiple-choice
+                    # likelihood scoring. Return enough deterministic mock token
+                    # scores for the client tokenizer; test scores are not meaningful.
+                    token_count = max(2, len(prompt.encode("utf-8")) + 1)
+                    prompt_tokens += token_count
+                    choices.append({
+                        "index": index,
+                        "text": prompt + " ",
+                        "logprobs": {
+                            "tokens": ["mock"] * token_count,
+                            "token_logprobs": [-0.1] * token_count,
+                            "top_logprobs": [{"mock": -0.1}] * token_count,
+                            "text_offset": list(range(token_count)),
+                        },
+                        "finish_reason": "stop",
+                    })
+                self.reply(200, {
+                    "id": "cmpl-kind-mock",
+                    "object": "text_completion",
+                    "created": 0,
+                    "model": request.get("model", MODEL),
+                    "choices": choices,
+                    "usage": {"prompt_tokens": prompt_tokens, "completion_tokens": 1, "total_tokens": prompt_tokens + 1},
+                })
+                print(json.dumps({"role": ROLE, "endpoint": "completions", "auth": "accepted"}), flush=True)
+                return
+
             if ROLE == "judge":
                 prompt = " ".join(str(message.get("content", "")) for message in request.get("messages", []))
                 match = re.search(r"with\s+(\d+)\s+values", prompt, re.IGNORECASE)
@@ -981,6 +1218,10 @@ spec:
       targetPort: http
 YAML
 
+  # The mock source is mounted from a ConfigMap, but Python has already loaded
+  # the old module in a running process. Restart the target so completions
+  # support is active after every dev-deploy.
+  kubectl --kubeconfig "$KUBECONFIG_FILE" -n system rollout restart deployment/evalhub-kind-mock-target
   kubectl --kubeconfig "$KUBECONFIG_FILE" -n system rollout status deployment/evalhub-kind-mock-target --timeout=180s
   kubectl --kubeconfig "$KUBECONFIG_FILE" -n system rollout status deployment/evalhub-kind-mock-judge --timeout=180s
   log PASS "Mock target and judge deployments are Ready."
@@ -1054,6 +1295,58 @@ check_evalhub_health() {
   fail "EvalHub health endpoint through NodePort at https://127.0.0.1:${API_HOST_ACCESS_PORT} returned HTTP ${http_code:-no response}."
 }
 
+configure_airgap_job_egress() {
+  local policy_name=evalhub-dev-airgap-egress owner
+  if [[ "$AIRGAP" != true ]]; then
+    if kubectl --kubeconfig "$KUBECONFIG_FILE" -n system get networkpolicy "$policy_name" >/dev/null 2>&1; then
+      owner="$(kubectl --kubeconfig "$KUBECONFIG_FILE" -n system get networkpolicy "$policy_name" \
+        -o 'go-template={{if .metadata.annotations}}{{index .metadata.annotations "io.evalhub.kind-smoke.cluster"}}{{end}}')"
+      [[ "$owner" == "$KIND_CLUSTER_NAME" ]] ||
+        fail "NetworkPolicy/$policy_name exists and is not owned by this dev-deploy cluster; refusing to delete it."
+      kubectl --kubeconfig "$KUBECONFIG_FILE" -n system delete networkpolicy "$policy_name"
+      log INFO "Removed the script-managed air-gap policy because AIRGAP=false."
+    fi
+    return 0
+  fi
+
+  check_resource_ownership networkpolicy "$policy_name" system
+  log INFO "Restricting evaluation-job egress in namespace system to cluster DNS and namespace system."
+  kubectl --kubeconfig "$KUBECONFIG_FILE" apply -f - <<YAML
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: $policy_name
+  namespace: system
+  annotations:
+    io.evalhub.kind-smoke.cluster: $KIND_CLUSTER_NAME
+spec:
+  podSelector:
+    matchLabels:
+      app: evalhub
+      component: evaluation-job
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: system
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+YAML
+  log PASS "External egress is denied for evaluation jobs; system services and DNS remain reachable."
+}
+
 verify_deployment() {
   log INFO "Checking the operator, EvalHub service, and mock service readiness."
   kubectl --kubeconfig "$KUBECONFIG_FILE" -n system rollout status \
@@ -1079,13 +1372,31 @@ main() {
   validate_inputs
   trap cleanup EXIT
   log INFO "Deploying EvalHub development environment to kind cluster '$KIND_CLUSTER_NAME'."
+  log INFO "Selected adapter frameworks: ${SELECTED_ADAPTERS[*]}"
   log INFO "This applies a CRD and cluster-scoped RBAC to this kind cluster, plus resources in namespace system."
   check_prerequisites
   check_repository eval-hub "$EVALHUB_REPO" Containerfile
-  check_repository eval-hub-contrib "$CONTRIB_REPO" adapters/inspect/Containerfile EVALHUB_CONTRIB_REPO
-  check_repository trustyai-service-operator "$OPERATOR_REPO" Dockerfile TRUSTYAI_OPERATOR_REPO
+  OPERATOR_REPO="$(find_repo_checkout trustyai-service-operator Dockerfile)"
+  check_repository trustyai-service-operator "$OPERATOR_REPO" Dockerfile
+  if adapter_selected inspect || adapter_selected followbench; then
+    if adapter_selected inspect; then
+      CONTRIB_REPO="$(find_repo_checkout eval-hub-contrib adapters/inspect/Containerfile)"
+      check_repository eval-hub-contrib "$CONTRIB_REPO" adapters/inspect/Containerfile
+    else
+      CONTRIB_REPO="$(find_repo_checkout eval-hub-contrib adapters/followbench/Containerfile)"
+      check_repository eval-hub-contrib "$CONTRIB_REPO" adapters/followbench/Containerfile
+    fi
+    if adapter_selected inspect && adapter_selected followbench; then
+      check_repository eval-hub-contrib "$CONTRIB_REPO" adapters/followbench/Containerfile
+    fi
+  fi
+  if adapter_selected lm-evaluation-harness; then
+    LMES_REPO="$(find_repo_checkout lm-evaluation-harness Dockerfile.lmes-job)"
+    check_repository lm-evaluation-harness "$LMES_REPO" Dockerfile.lmes-job
+  fi
 
   WORK_DIR="$(mktemp -d /tmp/evalhub-dev-deploy.XXXXXX)"
+  preflight_existing_airgap_cluster
   build_images
   ensure_cluster
   ensure_registry
@@ -1098,6 +1409,7 @@ main() {
   install_host_api_service
   install_nodeport_ingress_policy
   install_mock_services
+  configure_airgap_job_egress
   verify_deployment
 
   kubectl --kubeconfig "$KUBECONFIG_FILE" -n system get pods,services,evalhub
