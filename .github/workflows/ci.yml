@@ -66,6 +66,12 @@ jobs:
     - name: Run vet
       run: make vet
 
+    - name: Run govulncheck
+      run: make govulncheck
+
+    - name: Check benchmark provider fixture counts
+      run: go test ./tests/features -run '^TestBenchmarkProviderFixtureCounts$'
+
     - name: Run all tests (unit and integration) with coverage
       run: |
         make clean build test-all-coverage
