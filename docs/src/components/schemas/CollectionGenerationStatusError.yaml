@@ -1,0 +1,30 @@
+type: object
+title: CollectionGenerationStatusError
+description: |
+  Safe terminal error. The message contains no raw guardrail output, prompt,
+  model response, tool output, Secret, or credential.
+required:
+  - code
+  - message
+properties:
+  code:
+    type: string
+    enum:
+      - guardrails_rejected
+      - guardrails_unavailable
+      - model_failed
+      - tool_failed
+      - validation_failed
+      - timeout
+      - launch_failed
+      - workload_failed
+    description: Stable machine-readable terminal error code.
+  message:
+    type: string
+    minLength: 1
+    description: Short, sanitized explanation suitable for the requesting tenant.
+  category:
+    type: string
+    enum: [prompt_injection, exfiltration, topic_relevance, unsupported_capability]
+    description: Required when code is guardrails_rejected; absent for other error codes.
+additionalProperties: false

@@ -1,0 +1,21 @@
+type: object
+title: CollectionGenerationStatus
+description: Durable generation lifecycle state from the backing evaluation job.
+required:
+  - state
+properties:
+  state:
+    type: string
+    enum: [pending, running, completed, failed, cancelled]
+  started_at:
+    type: string
+    format: date-time
+    description: Set once the workload starts.
+  completed_at:
+    type: string
+    format: date-time
+    description: Set when the workload reaches a terminal state.
+  error:
+    $ref: ./CollectionGenerationStatusError.yaml
+    description: Required for failed generations; absent in every other state.
+additionalProperties: false

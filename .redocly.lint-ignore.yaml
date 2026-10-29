@@ -1,10 +1,6 @@
-# This file instructs Redocly's linter to ignore the rules contained for specific parts of your API.
-# See https://redocly.com/docs/cli/ for more information.
-#docs/openapi.yaml:
-#  no-server-example.com:
-#    - '#/servers/0/url'
-#    - '#/servers/1/url'
-#  no-unused-components:
-#    - '#/components/schemas/Benchmark'
-#    - '#/components/schemas/EvaluationResult'
-#    - '#/components/schemas/ProviderType'
+# The static generation route has GET/DELETE only, whereas the collection clone
+# route has POST only. The handlers must register /collections/generation before
+# /collections/{id}, and reserve generation as a collection ID path segment.
+docs/src/openapi.yaml:
+  no-ambiguous-paths:
+    - '#/paths/~1api~1v1~1evaluations~1collections~1{id}~1clones'

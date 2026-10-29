@@ -1,0 +1,52 @@
+type: object
+title: CollectionGenerationResult
+description: |
+  Completed dry-run proposal. Generation does not create this collection; the
+  caller reviews and separately submits collection to POST /api/v1/evaluations/collections.
+  The YAML and JSON describe the same postable CollectionConfig. A later catalog
+  change may make the proposal invalid at collection-create time.
+required:
+  - collection
+  - yaml
+  - rationale
+  - explanation
+  - actions
+properties:
+  collection:
+    description: |
+      Validated collection-create payload. No server-managed fields or positive
+      curation_order are generated.
+    allOf:
+      - $ref: ./CollectionConfig.yaml
+      - type: object
+        properties:
+          benchmarks:
+            minItems: 1
+          curation_order:
+            maximum: 0
+        anyOf:
+          - required: [category]
+          - required: [domains]
+            properties:
+              domains:
+                minItems: 1
+  yaml:
+    type: string
+    minLength: 1
+    description: YAML serialization of exactly the collection object above.
+  rationale:
+    type: string
+    minLength: 1
+    description: Short overall model-generated rationale for this proposal.
+  explanation:
+    $ref: ./CollectionGenerationExplanation.yaml
+  actions:
+    type: array
+    maxItems: 50
+    description: At most 50 redacted action summaries in execution order.
+    items:
+      $ref: ./CollectionGenerationAction.yaml
+  actions_truncated:
+    type: boolean
+    description: True when more than 50 actions occurred and later summaries were omitted.
+additionalProperties: false
