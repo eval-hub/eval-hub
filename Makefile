@@ -1,4 +1,5 @@
 .PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint validate-configs test test-e2e test-fuzz test-fvt-server test-fvt-server-local test-fvt-server-local-mlflow test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint govulncheck validate-configs test test-fuzz test-fvt-server test-fvt-server-local test-fvt-server-local-mlflow test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build
 
 GOPATH := $(shell go env GOPATH)
 GOBIN := $(shell go env GOPATH)/bin
@@ -210,6 +211,20 @@ $(GOLANGCI_LINT_STAMP): | $(BIN_DIR)
 	@rm -f $(BIN_DIR)/.golangci-lint-*
 	@touch $@
 
+GOVULNCHECK_VERSION ?= v1.1.4
+GOVULNCHECK_STAMP   := $(BIN_DIR)/.govulncheck-$(GOVULNCHECK_VERSION)
+
+govulncheck: $(GOVULNCHECK_STAMP) ## Run govulncheck in verbose mode (uses .go.mod)
+	@echo "Running govulncheck (verbose)..."
+	@$(GOBIN)/govulncheck -show verbose ./...
+	@echo "govulncheck complete"
+
+$(GOVULNCHECK_STAMP): | $(BIN_DIR)
+	@echo "Installing govulncheck $(GOVULNCHECK_VERSION)..."
+	@go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
+	@rm -f $(BIN_DIR)/.govulncheck-*
+	@touch $@
+
 validate-configs: ## Validate bundled provider and collection YAML (standalone CLI, not part of build)
 	@go run ./cmd/validate_configs
 
@@ -285,11 +300,19 @@ FVT_CONCURRENCY ?= 1
 BENCHMARK_PARALLEL ?= 2
 BENCHMARK_TIMEOUT ?= 30m
 BENCHMARK_RUN ?= TestBenchmarkSmoke
+BENCHMARK_JUNIT ?= $(BIN_DIR)/junit-benchmarks-report.xml
+GOTESTSUM_VERSION ?= v1.13.0
+GOTESTSUM := $(abspath $(BIN_DIR)/tools/gotestsum-$(GOTESTSUM_VERSION))/gotestsum
+
+$(GOTESTSUM):
+	@mkdir -p '$(dir $(GOTESTSUM))'
+	GOBIN='$(dir $(GOTESTSUM))' go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 
 # Ignore ambient experiments; an explicit command-line assignment still wins.
 test-benchmarks: export MLFLOW_EXPERIMENT_NAME =
-test-benchmarks: ## Run live benchmark smoke tests (requires SERVER_URL, MODEL_NAME, MODEL_URL)
-	BENCHMARK_SMOKE=1 go test ./tests/benchmarks -run='$(BENCHMARK_RUN)' -count=1 -parallel=$(BENCHMARK_PARALLEL) -timeout=$(BENCHMARK_TIMEOUT) -v
+test-benchmarks: $(GOTESTSUM) ## Run live benchmark smoke tests (requires SERVER_URL, MODEL_NAME, MODEL_URL)
+	@mkdir -p '$(dir $(BENCHMARK_JUNIT))'
+	BENCHMARK_SMOKE=1 '$(GOTESTSUM)' --format standard-verbose --junitfile '$(BENCHMARK_JUNIT)' -- ./tests/benchmarks -run='$(BENCHMARK_RUN)' -count=1 -parallel=$(BENCHMARK_PARALLEL) -timeout=$(BENCHMARK_TIMEOUT) -v
 
 generate-benchmark-configs: ## Create missing per-benchmark smoke fixtures from config/providers
 	go run ./tests/benchmarks/generate

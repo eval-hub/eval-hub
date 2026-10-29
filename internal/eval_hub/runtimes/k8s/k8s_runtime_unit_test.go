@@ -6,14 +6,18 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	batchv1 "k8s.io/api/batch/v1"
@@ -38,6 +42,15 @@ type fakeStorage struct {
 	owner             api.User
 	providerConfigs   map[string]api.ProviderResource
 	collectionConfigs map[string]api.CollectionResource
+	// evaluationJob, when set, is returned by GetEvaluationJob (RuntimeStorage).
+	// getJobErr overrides that return. Default is a non-cancelled pending job so
+	// create loops are not aborted unless a test opts in.
+	// getJobFn, when set, takes precedence over evaluationJob/getJobErr (for
+	// sequenced transient→deleted abort checks).
+	evaluationJob *api.EvaluationJobResource
+	getJobErr     error
+	getJobFn      func(id string) (*api.EvaluationJobResource, error)
+	getJobMu      sync.Mutex
 }
 
 // UpdateEvaluationJob implements [abstractions.Storage].
@@ -60,8 +73,39 @@ func (f *fakeStorage) CreateEvaluationJob(_ *api.EvaluationJobResource) error {
 func (f *fakeStorage) CreateEvaluationJobAndUpdateCollection(_ *api.EvaluationJobResource) error {
 	return nil
 }
-func (f *fakeStorage) GetEvaluationJob(_ string) (*api.EvaluationJobResource, error) {
-	return nil, nil
+func (f *fakeStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, error) {
+	f.getJobMu.Lock()
+	fn := f.getJobFn
+	err := f.getJobErr
+	job := f.evaluationJob
+	f.getJobMu.Unlock()
+	if fn != nil {
+		return fn(id)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if job != nil {
+		return job, nil
+	}
+	return &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: id}},
+		Status:   &api.EvaluationJobStatus{EvaluationJobState: api.EvaluationJobState{State: api.OverallStatePending}},
+	}, nil
+}
+
+func (f *fakeStorage) setEvaluationJob(job *api.EvaluationJobResource, err error) {
+	f.getJobMu.Lock()
+	defer f.getJobMu.Unlock()
+	f.evaluationJob = job
+	f.getJobErr = err
+	f.getJobFn = nil
+}
+
+func (f *fakeStorage) setGetJobFn(fn func(id string) (*api.EvaluationJobResource, error)) {
+	f.getJobMu.Lock()
+	defer f.getJobMu.Unlock()
+	f.getJobFn = fn
 }
 func (f *fakeStorage) GetEvaluationJobs(_ *abstractions.QueryFilter) (*abstractions.QueryResults[api.EvaluationJobResource], error) {
 	return nil, nil
@@ -1505,6 +1549,110 @@ func TestDeleteEvaluationJobResourcesDeletesRefSecrets(t *testing.T) {
 	if len(secrets.Items) != 0 {
 		t.Fatalf("expected ref secret to be deleted, got %d secret(s)", len(secrets.Items))
 	}
+	// DELETE must not sweep ConfigMaps: an empty/gone Job list cannot prove another
+	// replica has stopped creating against a ConfigMap-owned NetworkPolicy.
+	if got := listConfigMapsByJobID(t, clientset, jobID); len(got) != 1 {
+		t.Fatalf("expected ConfigMap left for Job GC / creator rollback, got %d", len(got))
+	}
+}
+
+// TestDeleteEvaluationJobResourcesLeavesOrphanConfigMapsWithoutJob covers partial-create
+// leftovers: DELETE must not remove ConfigMaps that have no Job owner yet. Empty Job
+// lists are insufficient to prove creation has stopped on another replica.
+func TestDeleteEvaluationJobResourcesLeavesOrphanConfigMapsWithoutJob(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	jobID := evaluation.Resource.ID
+	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
+	labels := map[string]string{labelJobIDKey: sanitizeLabelValue(jobID)}
+
+	clientset := fake.NewClientset(&corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: "pre-job-cm", Namespace: namespace, Labels: labels},
+	})
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
+	}
+
+	if err := runtime.DeleteEvaluationJobResources(evaluation); err != nil {
+		t.Fatalf("DeleteEvaluationJobResources: %v", err)
+	}
+	if got := listConfigMapsByJobID(t, clientset, jobID); len(got) != 1 {
+		t.Fatalf("expected orphan ConfigMap without Job to be retained, got %d", len(got))
+	}
+}
+
+// TestDeleteEvaluationJobResourcesRetainsConfigMapWhileJobRemains ensures we do not
+// delete ConfigMaps (and ConfigMap-owned NetworkPolicies) while a labeled Job still
+// exists after a failed Job delete.
+func TestDeleteEvaluationJobResourcesRetainsConfigMapWhileJobRemains(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	jobID := evaluation.Resource.ID
+	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
+	labels := map[string]string{labelJobIDKey: sanitizeLabelValue(jobID)}
+
+	clientset := fake.NewClientset(
+		&batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{Name: "stuck-job", Namespace: namespace, Labels: labels},
+		},
+		&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: "job-cm", Namespace: namespace, Labels: labels},
+		},
+	)
+	clientset.PrependReactor("delete", "jobs", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		return true, nil, fmt.Errorf("job delete denied")
+	})
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
+	}
+
+	if err := runtime.DeleteEvaluationJobResources(evaluation); err == nil {
+		t.Fatal("expected Job delete error")
+	}
+	if got := listConfigMapsByJobID(t, clientset, jobID); len(got) != 1 {
+		t.Fatalf("expected ConfigMap retained while Job remains, got %d", len(got))
+	}
+	if got := listJobsByJobID(t, clientset, jobID); len(got) != 1 {
+		t.Fatalf("expected Job to remain after failed delete, got %d", len(got))
+	}
+}
+
+// TestDeleteEvaluationJobResourcesSkipsJobOwnedConfigMapWhenNoJobsRemain covers the
+// case where a ConfigMap still carries a Job owner ref after Jobs are gone: leave it
+// to Kubernetes GC rather than racing owner cleanup.
+func TestDeleteEvaluationJobResourcesSkipsJobOwnedConfigMapWhenNoJobsRemain(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	jobID := evaluation.Resource.ID
+	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
+	labels := map[string]string{labelJobIDKey: sanitizeLabelValue(jobID)}
+
+	clientset := fake.NewClientset(&corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "job-owned-cm",
+			Namespace: namespace,
+			Labels:    labels,
+			OwnerReferences: []metav1.OwnerReference{{
+				APIVersion: "batch/v1",
+				Kind:       "Job",
+				Name:       "already-gone",
+				UID:        "00000000-0000-0000-0000-000000000001",
+			}},
+		},
+	})
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
+	}
+
+	if err := runtime.DeleteEvaluationJobResources(evaluation); err != nil {
+		t.Fatalf("DeleteEvaluationJobResources: %v", err)
+	}
+	if got := listConfigMapsByJobID(t, clientset, jobID); len(got) != 1 {
+		t.Fatalf("expected Job-owned ConfigMap left to GC, got %d", len(got))
+	}
 }
 
 func TestDeleteEvaluationJobResourcesIgnoresMissingRefSecret(t *testing.T) {
@@ -1521,6 +1669,710 @@ func TestDeleteEvaluationJobResourcesIgnoresMissingRefSecret(t *testing.T) {
 	err := runtime.DeleteEvaluationJobResources(evaluation)
 	if err != nil {
 		t.Fatalf("expected no error when resources already gone, got %v", err)
+	}
+}
+
+// TestRunEvaluationJobStopsCreateLoopWhenJobDeleted verifies RHAI-16217: when shared
+// storage reports the evaluation gone (hard_delete on any replica), the create loop stops
+// and does not record the abort as a benchmark failure.
+func TestRunEvaluationJobStopsCreateLoopWhenJobDeleted(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Benchmarks = []api.EvaluationBenchmarkConfig{
+		{Ref: api.Ref{ID: "bench-1"}, ProviderID: providerID, Parameters: map[string]any{"num_examples": 1}},
+		{Ref: api.Ref{ID: "bench-2"}, ProviderID: providerID, Parameters: map[string]any{"num_examples": 1}},
+		{Ref: api.Ref{ID: "bench-3"}, ProviderID: providerID, Parameters: map[string]any{"num_examples": 1}},
+		{Ref: api.Ref{ID: "bench-4"}, ProviderID: providerID, Parameters: map[string]any{"num_examples": 1}},
+		{Ref: api.Ref{ID: "bench-5"}, ProviderID: providerID, Parameters: map[string]any{"num_examples": 1}},
+		{Ref: api.Ref{ID: "bench-6"}, ProviderID: providerID, Parameters: map[string]any{"num_examples": 1}},
+	}
+
+	clientset := fake.NewClientset()
+	var jobCreates atomic.Int32
+	firstCreateSeen := make(chan struct{})
+	createLoopDone := make(chan struct{})
+	var firstOnce sync.Once
+	clientset.PrependReactor("create", "jobs", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		n := jobCreates.Add(1)
+		if n == 1 {
+			firstOnce.Do(func() { close(firstCreateSeen) })
+		}
+		time.Sleep(80 * time.Millisecond)
+		return false, nil, nil
+	})
+
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+		},
+		afterCreateLoop: func() { close(createLoopDone) },
+	}
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+
+	if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
+		t.Fatalf("RunEvaluationJob: %v", err)
+	}
+
+	select {
+	case <-firstCreateSeen:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for first Kubernetes Job create")
+	}
+
+	// Simulate hard_delete on this or another replica: row gone from shared storage.
+	storage.setEvaluationJob(nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", evaluation.Resource.ID))
+
+	if err := runtime.DeleteEvaluationJobResources(evaluation); err != nil {
+		t.Fatalf("DeleteEvaluationJobResources: %v", err)
+	}
+
+	// Wait for the create-loop goroutine to exit before asserting create count.
+	// Breaking on the first "creates < N" observation can race the background loop.
+	waitClosed(t, createLoopDone, "timed out waiting for create loop to exit after delete")
+	if got := int(jobCreates.Load()); got >= len(evaluation.Benchmarks) {
+		t.Fatalf("expected create loop to stop before all benchmarks, job creates=%d want <%d", got, len(evaluation.Benchmarks))
+	}
+	if storage.called {
+		t.Fatalf("expected no failed status write when create was aborted by delete, got %#v", storage.runStatus)
+	}
+
+	jobs := listJobsByJobID(t, clientset, evaluation.Resource.ID)
+	if len(jobs) != 0 {
+		t.Fatalf("expected no leftover Jobs after delete+sweep, got %d", len(jobs))
+	}
+}
+
+func waitClosed(t *testing.T, ch <-chan struct{}, msg string) {
+	t.Helper()
+	select {
+	case <-ch:
+	case <-time.After(5 * time.Second):
+		t.Fatal(msg)
+	}
+}
+
+func markEvaluationDeleted(storage *fakeStorage, jobID string) {
+	storage.setEvaluationJob(nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", jobID))
+}
+
+func waitLabeledJobsGone(t *testing.T, clientset *fake.Clientset, jobID string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(listJobsByJobID(t, clientset, jobID)) == 0 {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("expected Jobs swept, got %d", len(listJobsByJobID(t, clientset, jobID)))
+}
+
+func newSingleBenchmarkRaceFixture(providerID string) (*api.EvaluationJobResource, string, *fake.Clientset, *fakeStorage) {
+	evaluation := sampleEvaluation(providerID)
+	evaluation.Benchmarks = []api.EvaluationBenchmarkConfig{
+		{Ref: api.Ref{ID: "bench-1"}, ProviderID: providerID, Parameters: map[string]any{"num_examples": 1}},
+	}
+	return evaluation, evaluation.Resource.ID, fake.NewClientset(), &fakeStorage{providerConfigs: sampleProviders(providerID)}
+}
+
+func gateBeforeCreate(entered, release chan struct{}) (func(), func()) {
+	var once sync.Once
+	return func() {
+			once.Do(func() { close(entered) })
+			<-release
+		}, func() {
+			close(release)
+		}
+}
+
+// TestDeleteEvaluationJobResourcesRetainsConfigMapWhileCreatePausedBeforeJob proves
+// DELETE does not remove a ConfigMap (and its ConfigMap-owned NetworkPolicy) while
+// another replica is paused after creating supporting resources and before CreateJob.
+func TestDeleteEvaluationJobResourcesRetainsConfigMapWhileCreatePausedBeforeJob(t *testing.T) {
+	evaluation, jobID, clientset, storage := newSingleBenchmarkRaceFixture("provider-1")
+	enteredBeforeJob := make(chan struct{})
+	releaseCreateJob := make(chan struct{})
+	createErrCh := make(chan error, 1)
+	allowAbortSweep := make(chan struct{})
+	var allowSweepOnce sync.Once
+	releaseAbortSweep := func() { allowSweepOnce.Do(func() { close(allowAbortSweep) }) }
+	var beforeJobOnce sync.Once
+	beforeCreateJob := func() {
+		beforeJobOnce.Do(func() { close(enteredBeforeJob) })
+		<-releaseCreateJob
+	}
+	defer func() {
+		select {
+		case <-releaseCreateJob:
+		default:
+			close(releaseCreateJob)
+		}
+		releaseAbortSweep()
+	}()
+
+	runtime := &K8sRuntime{
+		logger:                        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper:                        &KubernetesHelper{clientset: clientset},
+		ctx:                           context.Background(),
+		serviceConfig:                 &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		beforeCreateJob:               beforeCreateJob,
+		afterCreateBenchmarkResources: func(err error) { createErrCh <- err },
+		beforeSweepAfterAbort:         func() { <-allowAbortSweep },
+	}
+	if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
+		t.Fatalf("RunEvaluationJob: %v", err)
+	}
+	waitClosed(t, enteredBeforeJob, "timed out waiting for create to pause before CreateJob")
+
+	if got := listConfigMapsByJobID(t, clientset, jobID); len(got) != 1 {
+		t.Fatalf("expected ConfigMap before CreateJob, got %d", len(got))
+	}
+	if got := listJobsByJobID(t, clientset, jobID); len(got) != 0 {
+		t.Fatalf("expected no Job yet while paused before CreateJob, got %d", len(got))
+	}
+
+	markEvaluationDeleted(storage, jobID)
+	if err := runtime.DeleteEvaluationJobResources(evaluation); err != nil {
+		t.Fatalf("DeleteEvaluationJobResources: %v", err)
+	}
+	if got := listConfigMapsByJobID(t, clientset, jobID); len(got) != 1 {
+		t.Fatalf("expected DELETE to retain ConfigMap while create is paused before Job, got %d", len(got))
+	}
+
+	close(releaseCreateJob)
+	select {
+	case err := <-createErrCh:
+		if err != nil {
+			t.Fatalf("expected late CreateJob to succeed so abort sweep runs, got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for late CreateJob to finish")
+	}
+	releaseAbortSweep()
+	waitLabeledJobsGone(t, clientset, jobID)
+}
+
+// TestRunEvaluationJobSweepsSuccessfulCreateAfterDeleteRace covers the multi-replica
+// window where delete finishes both sweeps before any benchmark resources are created:
+// the subsequent successful create must be swept by the success-path abort check.
+func TestRunEvaluationJobSweepsSuccessfulCreateAfterDeleteRace(t *testing.T) {
+	evaluation, jobID, clientset, storage := newSingleBenchmarkRaceFixture("provider-1")
+	enteredCreate := make(chan struct{})
+	releaseCreate := make(chan struct{})
+	createErrCh := make(chan error, 1)
+	allowAbortSweep := make(chan struct{})
+	var allowSweepOnce sync.Once
+	releaseAbortSweep := func() { allowSweepOnce.Do(func() { close(allowAbortSweep) }) }
+	beforeCreate, release := gateBeforeCreate(enteredCreate, releaseCreate)
+	defer releaseAbortSweep()
+
+	runtime := &K8sRuntime{
+		logger:                         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper:                         &KubernetesHelper{clientset: clientset},
+		ctx:                            context.Background(),
+		serviceConfig:                  &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		beforeCreateBenchmarkResources: beforeCreate,
+		afterCreateBenchmarkResources:  func(err error) { createErrCh <- err },
+		beforeSweepAfterAbort:          func() { <-allowAbortSweep },
+	}
+	if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
+		t.Fatalf("RunEvaluationJob: %v", err)
+	}
+	waitClosed(t, enteredCreate, "timed out waiting for create to block before resources")
+
+	markEvaluationDeleted(storage, jobID)
+	if err := runtime.DeleteEvaluationJobResources(evaluation); err != nil {
+		t.Fatalf("DeleteEvaluationJobResources: %v", err)
+	}
+	if got := listJobsByJobID(t, clientset, jobID); len(got) != 0 {
+		t.Fatalf("expected no Jobs before late create is released, got %d", len(got))
+	}
+	if got := listConfigMapsByJobID(t, clientset, jobID); len(got) != 0 {
+		t.Fatalf("expected no ConfigMaps before late create is released, got %d", len(got))
+	}
+
+	release()
+	select {
+	case err := <-createErrCh:
+		if err != nil {
+			t.Fatalf("expected late create to succeed so the success-path abort runs, got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for late create to finish")
+	}
+	if got := listJobsByJobID(t, clientset, jobID); len(got) == 0 {
+		t.Fatal("expected Job to exist after successful late create, before abort sweep")
+	}
+	if got := listConfigMapsByJobID(t, clientset, jobID); len(got) == 0 {
+		t.Fatal("expected ConfigMap to exist after successful late create, before abort sweep")
+	}
+	if storage.called {
+		t.Fatalf("expected no failed status write on successful late create, got %#v", storage.runStatus)
+	}
+
+	releaseAbortSweep()
+	waitLabeledJobsGone(t, clientset, jobID)
+}
+
+// TestRunEvaluationJobSweepsFailedCreateAfterDeleteRace covers a late create that
+// returns an error while a Job was still persisted (uncertain confirm): the abort
+// path must delete that late Job, not return immediately.
+func TestRunEvaluationJobSweepsFailedCreateAfterDeleteRace(t *testing.T) {
+	evaluation, jobID, clientset, storage := newSingleBenchmarkRaceFixture("provider-1")
+	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
+	enteredCreate := make(chan struct{})
+	releaseCreate := make(chan struct{})
+	lateJobPersisted := make(chan struct{})
+	sweepStarted := make(chan struct{})
+	var persistOnce, sweepOnce sync.Once
+	beforeCreate, release := gateBeforeCreate(enteredCreate, releaseCreate)
+
+	clientset.PrependReactor("create", "jobs", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		createAction, ok := action.(k8stesting.CreateAction)
+		if !ok {
+			return true, nil, fmt.Errorf("unexpected create action %T", action)
+		}
+		job, ok := createAction.GetObject().(*batchv1.Job)
+		if !ok {
+			return true, nil, fmt.Errorf("unexpected create object %T", createAction.GetObject())
+		}
+		persisted := job.DeepCopy()
+		if persisted.Namespace == "" {
+			persisted.Namespace = namespace
+		}
+		if err := clientset.Tracker().Create(batchv1.SchemeGroupVersion.WithResource("jobs"), persisted, persisted.Namespace); err != nil {
+			return true, nil, err
+		}
+		persistOnce.Do(func() { close(lateJobPersisted) })
+		return true, persisted, fmt.Errorf("create response lost")
+	})
+	clientset.PrependReactor("get", "jobs", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		return true, nil, fmt.Errorf("confirm get unavailable")
+	})
+	clientset.PrependReactor("delete", "jobs", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		sweepOnce.Do(func() { close(sweepStarted) })
+		return false, nil, nil
+	})
+
+	runtime := &K8sRuntime{
+		logger:                         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper:                         &KubernetesHelper{clientset: clientset},
+		ctx:                            context.Background(),
+		serviceConfig:                  &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		beforeCreateBenchmarkResources: beforeCreate,
+	}
+	if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
+		t.Fatalf("RunEvaluationJob: %v", err)
+	}
+	waitClosed(t, enteredCreate, "timed out waiting for blocked create")
+
+	markEvaluationDeleted(storage, jobID)
+	if err := runtime.DeleteEvaluationJobResources(evaluation); err != nil {
+		t.Fatalf("DeleteEvaluationJobResources: %v", err)
+	}
+	release()
+	waitClosed(t, lateJobPersisted, "timed out waiting for uncertain late Job persist")
+	waitClosed(t, sweepStarted, "timed out waiting for abort sweep after failed/uncertain create")
+	waitLabeledJobsGone(t, clientset, jobID)
+	if storage.called {
+		t.Fatalf("expected no failed status write when create was aborted by delete, got %#v", storage.runStatus)
+	}
+}
+
+func TestCheckCreateAbort(t *testing.T) {
+	t.Parallel()
+	runtime := &K8sRuntime{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	jobID := "job-abort"
+	if status, _ := runtime.checkCreateAbort(context.Background(), nil, jobID); status != createAbortActive {
+		t.Fatalf("nil storage must be active, got %v", status)
+	}
+	storage := &fakeStorage{}
+	storage.setEvaluationJob(&api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{State: api.OverallStateRunning},
+		},
+	}, nil)
+	if status, _ := runtime.checkCreateAbort(context.Background(), storage, jobID); status != createAbortActive {
+		t.Fatalf("running job must be active, got %v", status)
+	}
+	storage.setEvaluationJob(&api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{State: api.OverallStateCancelled},
+		},
+	}, nil)
+	if status, reason := runtime.checkCreateAbort(context.Background(), storage, jobID); status != createAbortAborted || reason != "evaluation job cancelled" {
+		t.Fatalf("cancelled job status=%v reason=%q", status, reason)
+	}
+	markEvaluationDeleted(storage, jobID)
+	if status, reason := runtime.checkCreateAbort(context.Background(), storage, jobID); status != createAbortAborted || reason != "evaluation job deleted" {
+		t.Fatalf("deleted job status=%v reason=%q", status, reason)
+	}
+	storage.setEvaluationJob(nil, fmt.Errorf("transient storage blip"))
+	if status, _ := runtime.checkCreateAbort(context.Background(), storage, jobID); status != createAbortUnknown {
+		t.Fatalf("transient storage errors must be unknown, got %v", status)
+	}
+}
+
+func TestAwaitCreateAbortStatusRetriesTransientThenDeleted(t *testing.T) {
+	withCreateAbortBackoffTuning(t, time.Millisecond, time.Millisecond)
+
+	jobID := "job-await-abort"
+	storage := &fakeStorage{}
+	var calls atomic.Int32
+	storage.setGetJobFn(func(id string) (*api.EvaluationJobResource, error) {
+		n := calls.Add(1)
+		if n < 3 {
+			return nil, fmt.Errorf("transient storage blip %d", n)
+		}
+		return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
+	})
+	runtime := &K8sRuntime{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	status, reason := runtime.awaitCreateAbortStatus(storage, jobID, "bench-1")
+	if status != createAbortAborted || reason != "evaluation job deleted" {
+		t.Fatalf("expected aborted/deleted after retries, got status=%v reason=%q calls=%d", status, reason, calls.Load())
+	}
+	if calls.Load() < 3 {
+		t.Fatalf("expected at least 3 storage probes, got %d", calls.Load())
+	}
+}
+
+func withCreateAbortBackoffTuning(t *testing.T, initial, max time.Duration) {
+	t.Helper()
+	origInitial := createAbortBackoffInitial
+	origMax := createAbortBackoffMax
+	origReadTimeout := createAbortReadTimeout
+	createAbortBackoffInitial = initial
+	createAbortBackoffMax = max
+	createAbortReadTimeout = time.Second
+	t.Cleanup(func() {
+		createAbortBackoffInitial = origInitial
+		createAbortBackoffMax = origMax
+		createAbortReadTimeout = origReadTimeout
+	})
+}
+
+// TestRunEvaluationJobPostCreateTransientThenDeletedSweeps covers a transient
+// post-create storage error: the create goroutine must wait until delete is
+// visible and then sweep, not treat unknown as active.
+func TestRunEvaluationJobPostCreateTransientThenDeletedSweeps(t *testing.T) {
+	withCreateAbortBackoffTuning(t, time.Millisecond, time.Millisecond)
+
+	evaluation, jobID, clientset, storage := newSingleBenchmarkRaceFixture("provider-1")
+	enteredCreate := make(chan struct{})
+	releaseCreate := make(chan struct{})
+	createLoopDone := make(chan struct{})
+	beforeCreate, release := gateBeforeCreate(enteredCreate, releaseCreate)
+
+	var postCreateCalls atomic.Int32
+	runtime := &K8sRuntime{
+		logger:                         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper:                         &KubernetesHelper{clientset: clientset},
+		ctx:                            context.Background(),
+		serviceConfig:                  &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		beforeCreateBenchmarkResources: beforeCreate,
+		afterCreateBenchmarkResources: func(err error) {
+			storage.setGetJobFn(func(id string) (*api.EvaluationJobResource, error) {
+				n := postCreateCalls.Add(1)
+				if n <= 2 {
+					return nil, fmt.Errorf("transient storage blip %d", n)
+				}
+				return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
+			})
+		},
+		afterCreateLoop: func() { close(createLoopDone) },
+	}
+	if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
+		t.Fatalf("RunEvaluationJob: %v", err)
+	}
+	waitClosed(t, enteredCreate, "timed out waiting to enter create")
+	release()
+	waitClosed(t, createLoopDone, "timed out waiting for create loop")
+	waitLabeledJobsGone(t, clientset, jobID)
+	if postCreateCalls.Load() < 3 {
+		t.Fatalf("expected post-create abort retries against storage, got %d calls", postCreateCalls.Load())
+	}
+}
+
+// TestRunEvaluationJobResumeCreatesAfterLongOutageThenActive covers P1: the
+// creator stays paused across storage outage retries; when storage later reports
+// active, remaining benchmarks are still created at the same point.
+func TestRunEvaluationJobResumeCreatesAfterLongOutageThenActive(t *testing.T) {
+	withCreateAbortBackoffTuning(t, time.Millisecond, time.Millisecond)
+
+	evaluation, jobID, clientset, storage := newSingleBenchmarkRaceFixture("provider-1")
+	evaluation.Benchmarks = []api.EvaluationBenchmarkConfig{
+		{Ref: api.Ref{ID: "bench-1"}, ProviderID: "provider-1", Parameters: map[string]any{"num_examples": 1}},
+		{Ref: api.Ref{ID: "bench-2"}, ProviderID: "provider-1", Parameters: map[string]any{"num_examples": 1}},
+	}
+	createLoopDone := make(chan struct{})
+	var postCreateArmed atomic.Bool
+	var probes atomic.Int32
+	activeJob := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{State: api.OverallStateRunning},
+		},
+	}
+	const unknownProbesBeforeActive = 8
+
+	runtime := &K8sRuntime{
+		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper:        &KubernetesHelper{clientset: clientset},
+		ctx:           context.Background(),
+		serviceConfig: &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		afterCreateBenchmarkResources: func(err error) {
+			if !postCreateArmed.CompareAndSwap(false, true) {
+				return
+			}
+			storage.setGetJobFn(func(id string) (*api.EvaluationJobResource, error) {
+				n := probes.Add(1)
+				if n <= unknownProbesBeforeActive {
+					return nil, fmt.Errorf("transient storage blip %d", n)
+				}
+				return activeJob, nil
+			})
+		},
+		afterCreateLoop: func() { close(createLoopDone) },
+	}
+	if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
+		t.Fatalf("RunEvaluationJob: %v", err)
+	}
+	waitClosed(t, createLoopDone, "timed out waiting for create loop")
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(listJobsByJobID(t, clientset, jobID)) == 2 {
+			if probes.Load() <= unknownProbesBeforeActive {
+				t.Fatalf("expected backoff probes before resume, got %d", probes.Load())
+			}
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("expected 2 Jobs after resume, got %d (probes=%d)", len(listJobsByJobID(t, clientset, jobID)), probes.Load())
+}
+
+// TestRunEvaluationJobSweepsAfterLongOutageThenDeleted covers a long outage in
+// the paused create goroutine: when storage later reports deleted, leftovers are
+// swept without a separate reconcile worker.
+func TestRunEvaluationJobSweepsAfterLongOutageThenDeleted(t *testing.T) {
+	withCreateAbortBackoffTuning(t, time.Millisecond, time.Millisecond)
+
+	evaluation, jobID, clientset, storage := newSingleBenchmarkRaceFixture("provider-1")
+	createLoopDone := make(chan struct{})
+	var probes atomic.Int32
+	const unknownProbesBeforeDeleted = 8
+
+	runtime := &K8sRuntime{
+		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper:        &KubernetesHelper{clientset: clientset},
+		ctx:           context.Background(),
+		serviceConfig: &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		afterCreateBenchmarkResources: func(err error) {
+			storage.setGetJobFn(func(id string) (*api.EvaluationJobResource, error) {
+				n := probes.Add(1)
+				if n <= unknownProbesBeforeDeleted {
+					return nil, fmt.Errorf("storage unavailable %d", n)
+				}
+				return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
+			})
+		},
+		afterCreateLoop: func() { close(createLoopDone) },
+	}
+	if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
+		t.Fatalf("RunEvaluationJob: %v", err)
+	}
+	waitClosed(t, createLoopDone, "timed out waiting for create loop")
+	waitLabeledJobsGone(t, clientset, jobID)
+	if probes.Load() <= unknownProbesBeforeDeleted {
+		t.Fatalf("expected backoff probes before sweep, got %d", probes.Load())
+	}
+}
+
+// TestRunEvaluationJobAbortWaitStopsOnShutdown covers tying the pause to
+// runtime Close: unknown status must not block forever after shutdown.
+func TestRunEvaluationJobAbortWaitStopsOnShutdown(t *testing.T) {
+	withCreateAbortBackoffTuning(t, 20*time.Millisecond, 20*time.Millisecond)
+
+	evaluation, jobID, clientset, storage := newSingleBenchmarkRaceFixture("provider-1")
+	shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
+	createLoopDone := make(chan struct{})
+	enteredWait := make(chan struct{})
+	var enteredWaitOnce sync.Once
+
+	runtime := &K8sRuntime{
+		logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper:         &KubernetesHelper{clientset: clientset},
+		ctx:            context.Background(),
+		shutdownCtx:    shutdownCtx,
+		shutdownCancel: shutdownCancel,
+		serviceConfig:  &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		afterCreateBenchmarkResources: func(err error) {
+			storage.setGetJobFn(func(id string) (*api.EvaluationJobResource, error) {
+				enteredWaitOnce.Do(func() { close(enteredWait) })
+				return nil, fmt.Errorf("storage unavailable")
+			})
+		},
+		afterCreateLoop: func() { close(createLoopDone) },
+	}
+	if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
+		t.Fatalf("RunEvaluationJob: %v", err)
+	}
+	waitClosed(t, enteredWait, "timed out waiting for abort wait probes")
+	if got := len(listJobsByJobID(t, clientset, jobID)); got != 1 {
+		t.Fatalf("expected late Job while paused on unknown, got %d", got)
+	}
+	if err := runtime.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	waitClosed(t, createLoopDone, "timed out waiting for create loop to exit on shutdown")
+}
+
+// TestRunEvaluationJobPreCheckAbortSweepsLeftovers covers the path where storage already
+// signals delete/cancel before the next benchmark create starts: skip create and still sweep
+// in case a prior handler cleanup failed.
+func TestRunEvaluationJobPreCheckAbortSweepsLeftovers(t *testing.T) {
+	evaluation, jobID, clientset, storage := newSingleBenchmarkRaceFixture("provider-1")
+	namespace := resolveNamespace(string(evaluation.Resource.Tenant))
+	labels := map[string]string{labelJobIDKey: sanitizeLabelValue(jobID)}
+	if err := clientset.Tracker().Add(&batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{Name: "leftover-job", Namespace: namespace, Labels: labels},
+	}); err != nil {
+		t.Fatalf("seed leftover job: %v", err)
+	}
+	markEvaluationDeleted(storage, jobID)
+
+	runtime := &K8sRuntime{
+		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper:        &KubernetesHelper{clientset: clientset},
+		ctx:           context.Background(),
+		serviceConfig: &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+	}
+	if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
+		t.Fatalf("RunEvaluationJob: %v", err)
+	}
+	waitLabeledJobsGone(t, clientset, jobID)
+}
+
+// TestRunEvaluationJobStopsCreateLoopWhenJobCancelled covers soft-cancel: cancelled status
+// in shared storage stops further creates and sweeps leftovers.
+func TestRunEvaluationJobStopsCreateLoopWhenJobCancelled(t *testing.T) {
+	evaluation, jobID, clientset, storage := newSingleBenchmarkRaceFixture("provider-1")
+	enteredCreate := make(chan struct{})
+	releaseCreate := make(chan struct{})
+	createErrCh := make(chan error, 1)
+	createLoopDone := make(chan struct{})
+	beforeCreate, release := gateBeforeCreate(enteredCreate, releaseCreate)
+
+	runtime := &K8sRuntime{
+		logger:                         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper:                         &KubernetesHelper{clientset: clientset},
+		ctx:                            context.Background(),
+		serviceConfig:                  &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		beforeCreateBenchmarkResources: beforeCreate,
+		afterCreateBenchmarkResources:  func(err error) { createErrCh <- err },
+		afterCreateLoop:                func() { close(createLoopDone) },
+	}
+	if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
+		t.Fatalf("RunEvaluationJob: %v", err)
+	}
+	waitClosed(t, enteredCreate, "timed out waiting for create gate")
+
+	storage.setEvaluationJob(&api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: jobID}},
+		Status: &api.EvaluationJobStatus{
+			EvaluationJobState: api.EvaluationJobState{State: api.OverallStateCancelled},
+		},
+	}, nil)
+	release()
+	select {
+	case err := <-createErrCh:
+		if err != nil {
+			t.Fatalf("expected late create to succeed so the abort sweep runs, got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for late create to finish")
+	}
+	waitClosed(t, createLoopDone, "timed out waiting for create loop to exit after cancel")
+	if got := listJobsByJobID(t, clientset, jobID); len(got) != 0 {
+		t.Fatalf("expected cancelled create to be swept, got %d Jobs", len(got))
+	}
+	if storage.called {
+		t.Fatalf("expected no failed status write when create was aborted by cancel, got %#v", storage.runStatus)
+	}
+}
+
+func TestDeleteEvaluationJobResourcesListJobsError(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	clientset := fake.NewClientset()
+	clientset.PrependReactor("list", "jobs", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		return true, nil, fmt.Errorf("list jobs denied")
+	})
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
+	}
+	if err := runtime.DeleteEvaluationJobResources(evaluation); err == nil {
+		t.Fatal("expected list jobs error")
+	}
+}
+
+func TestSweepEvaluationResourcesAfterAbortLogsDeleteFailure(t *testing.T) {
+	evaluation := sampleEvaluation("provider-1")
+	clientset := fake.NewClientset()
+	clientset.PrependReactor("list", "jobs", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		return true, nil, fmt.Errorf("sweep list failed")
+	})
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
+	}
+	// Must not panic; failure is logged only.
+	runtime.sweepEvaluationResourcesAfterAbort(evaluation, evaluation.Resource.ID, "bench-1")
+}
+
+// TestCreateBenchmarkResourcesCleansUpWhenCreateContextCancelled covers RHAI-16217 P2:
+// hard_delete cancels the create context after ConfigMap/NetworkPolicy exist but before
+// the Job. Rollback must use an independent context so those unowned resources are removed.
+func TestCreateBenchmarkResourcesCleansUpWhenCreateContextCancelled(t *testing.T) {
+	providerID := "provider-1"
+	evaluation := sampleEvaluation(providerID)
+
+	createCtx, cancelCreate := context.WithCancel(context.Background())
+	defer cancelCreate()
+
+	clientset := fake.NewClientset()
+	clientset.PrependReactor("create", "jobs", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		// Cancel mid-create (after ConfigMap/NetworkPolicy) the way hard_delete does.
+		cancelCreate()
+		return true, nil, context.Canceled
+	})
+
+	runtime := &K8sRuntime{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper: &KubernetesHelper{clientset: clientset},
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+		},
+	}
+	storage := &fakeStorage{providerConfigs: sampleProviders(providerID)}
+
+	err := runtime.createBenchmarkResources(createCtx, runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage)
+	if err == nil {
+		t.Fatal("expected create to fail when context is cancelled")
+	}
+
+	if got := listConfigMapsByJobID(t, clientset, evaluation.Resource.ID); len(got) != 0 {
+		t.Fatalf("expected ConfigMap cleanup despite cancelled create ctx, got %d", len(got))
+	}
+	if got := listJobsByJobID(t, clientset, evaluation.Resource.ID); len(got) != 0 {
+		t.Fatalf("expected no Jobs after cancelled create, got %d", len(got))
 	}
 }
 

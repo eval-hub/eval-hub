@@ -32,13 +32,13 @@ jobs:
         cache: true
 
     - name: Install uv
-      uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       with:
         # uv tool/package cache only (keys derived from uv lockfiles); Go uses setup-go above.
         enable-cache: true
 
     - name: Set up Python
-      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
       with:
         python-version: '3.12'
 
@@ -65,6 +65,12 @@ jobs:
 
     - name: Run vet
       run: make vet
+
+    - name: Run govulncheck
+      run: make govulncheck
+
+    - name: Check benchmark provider fixture counts
+      run: go test ./tests/features -run '^TestBenchmarkProviderFixtureCounts$'
 
     - name: Run all tests (unit and integration) with coverage
       run: |
@@ -129,7 +135,7 @@ jobs:
         # make sure that we use the golang version required by the project
         GOSECGOVERSION: go1.26.10
         GOTOOLCHAIN: go1.26.10
-      uses: securego/gosec@deb54465fea23d19a77f037e11e6589021f8501d # v2.29.0
+      uses: securego/gosec@5eb1d104ef85ff2c905c877eb600e8c1dee33a22 # v2.30.0
       with:
         args: >-
           -fmt sarif -out gosec-results.sarif -stdout -verbose=text
@@ -138,7 +144,7 @@ jobs:
           ./...
 
     - name: Upload SARIF file to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+      uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
       if: always()
       with:
         sarif_file: gosec-results.sarif
@@ -207,7 +213,7 @@ jobs:
       uses: docker/setup-buildx-action@594f3bf4285d9ea8dc53c9a0c9c4092420091003 # v4.4.0
 
     - name: Log in to Quay.io
-      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
       with:
         registry: ${{ env.IMAGE_REGISTRY }}
         username: ${{ secrets.QUAY_USERNAME }}

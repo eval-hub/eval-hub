@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -173,6 +174,7 @@ func requiredEnv(t *testing.T, key string) string {
 
 type fixture struct {
 	Parameters     map[string]any               `json:"parameters"`
+	MaxLengthEnv   string                       `json:"max_length_env,omitempty"`
 	Timeout        string                       `json:"timeout"`
 	TestDataRef    *api.TestDataRef             `json:"test_data_ref,omitempty"`
 	TestDataRefEnv string                       `json:"test_data_ref_env,omitempty"`
@@ -274,6 +276,26 @@ func loadFixture(path string, lookup func(string) (string, bool)) (fixture, erro
 	}
 	if f.Parameters == nil {
 		return f, errors.New("parameters must be a JSON object")
+	}
+	if f.MaxLengthEnv != "" {
+		if value, ok := lookup(f.MaxLengthEnv); ok && strings.TrimSpace(value) != "" {
+			maxLength, err := strconv.Atoi(strings.TrimSpace(value))
+			if err != nil || maxLength < 2 {
+				return f, fmt.Errorf("%s must be an integer greater than one", f.MaxLengthEnv)
+			}
+			f.Parameters["max_length"] = maxLength
+		}
+		// JSON numbers decode as float64. Validate the fixture's fallback too.
+		valid := false
+		switch value := f.Parameters["max_length"].(type) {
+		case int:
+			valid = value >= 2
+		case float64:
+			valid = value >= 2 && value == float64(int(value))
+		}
+		if !valid {
+			return f, errors.New("max_length_env requires an integer parameters.max_length greater than one")
+		}
 	}
 	if f.ExperimentName != "" && strings.TrimSpace(f.ExperimentName) == "" {
 		return f, errors.New("experiment_name must not be blank")
@@ -440,6 +462,11 @@ func newHTTPClient() (*http.Client, error) {
 		return nil, errors.New("SERVER_URL must be an HTTP(S) base URL without credentials, query, or fragment")
 	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		// Temporarily allow cluster routes with untrusted certificates in smoke tests.
+		InsecureSkipVerify: true,
+	}
 	if path := os.Getenv("EVALHUB_CA_CERT_PATH"); path != "" {
 		pem, err := os.ReadFile(path)
 		if err != nil {
@@ -452,7 +479,7 @@ func newHTTPClient() (*http.Client, error) {
 		if !pool.AppendCertsFromPEM(pem) {
 			return nil, errors.New("EVALHUB_CA_CERT_PATH contains no PEM certificates")
 		}
-		transport.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
+		transport.TLSClientConfig.RootCAs = pool
 	}
 	token, _ := smokeEnv("EVALHUB_TOKEN")
 	return &http.Client{
