@@ -258,6 +258,48 @@ func TestBenchmarkTokenizerConfiguration(t *testing.T) {
 	}
 }
 
+func TestGarakBenchmarkScanLimits(t *testing.T) {
+	for _, environment := range []string{"connected", "disconnected"} {
+		t.Run(environment, func(t *testing.T) {
+			sc := &scenarioConfig{
+				values:            map[string]string{"collection_id": ""},
+				jsonnetHarnessEnv: map[string]string{"ENVIRONMENT_ID": environment},
+			}
+			out, err := sc.getFile("evaluation_job_garak.json")
+			if err != nil {
+				t.Fatalf("render Garak fixture: %v", err)
+			}
+			var job struct {
+				Benchmarks []jsonnetBenchmarkPayload `json:"benchmarks"`
+			}
+			if err := json.Unmarshal([]byte(out), &job); err != nil {
+				t.Fatalf("unmarshal Garak fixture: %v", err)
+			}
+			wantIDs := []string{"quick", "avid_ethics", "avid_performance"}
+			var ids []string
+			wantConfig := map[string]any{
+				"run":     map[string]any{"generations": float64(1), "soft_probe_prompt_cap": float64(1)},
+				"plugins": map[string]any{"extended_detectors": false},
+			}
+			for _, benchmark := range job.Benchmarks {
+				ids = append(ids, benchmark.ID)
+				if benchmark.ProviderID != "garak" {
+					t.Errorf("%s provider = %q, want garak", benchmark.ID, benchmark.ProviderID)
+				}
+				if got := benchmark.Parameters["timeout_seconds"]; got != float64(600) {
+					t.Errorf("%s timeout_seconds = %v, want 600", benchmark.ID, got)
+				}
+				if got := benchmark.Parameters["garak_config"]; !reflect.DeepEqual(got, wantConfig) {
+					t.Errorf("%s garak_config = %#v, want %#v", benchmark.ID, got, wantConfig)
+				}
+			}
+			if !reflect.DeepEqual(ids, wantIDs) {
+				t.Errorf("benchmarks = %v, want %v", ids, wantIDs)
+			}
+		})
+	}
+}
+
 func TestJsonnetModelAuth(t *testing.T) {
 	tc := &scenarioConfig{
 		values:                map[string]string{},
