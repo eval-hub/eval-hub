@@ -25,7 +25,8 @@ Existing certificate sources are unchanged:
 | API | `service.tls_cert_file` / `service.tls_key_file`; stock `config/config.yaml` maps `TLS_CERT_FILE` / `TLS_KEY_FILE` to these fields. |
 | MCP HTTP or legacy HTTP+SSE | `tls_cert_file` / `tls_key_file` in MCP YAML, `EVALHUB_TLS_CERT_FILE` / `EVALHUB_TLS_KEY_FILE`, or `--tls-cert` / `--tls-key` (existing precedence applies). |
 
-Both binaries read these **process environment** controls independently of YAML/Viper:
+The API and MCP HTTP transports read these **process environment** controls
+independently of YAML/Viper:
 
 | Variable | Meaning | Default |
 |---|---|---|
@@ -71,7 +72,8 @@ TLS_CIPHERS=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 TLS_CURVES=P256,P384 \
 
 Choose suites compatible with the certificate key type (RSA in the second example).
 A valid configuration is not evidence that an arbitrary peer supports those algorithms.
-MCP stdio has no TLS listener; these serving controls apply only to HTTP transports.
+These serving controls apply only to the API and MCP HTTP transports. MCP stdio
+does not read or validate `TLS_*` serving controls or load serving certificate/key files.
 
 ## Platform integration and representability
 
@@ -83,6 +85,9 @@ explicit decision, not a guessed process-wide cluster policy. Operator propagati
 is separate work (planned operator work package 7); current managed HTTP remains valid.
 
 Go does not expose TLS 1.3 cipher-suite selection through `tls.Config.CipherSuites`.
+Custom TLS 1.2 cipher lists must include `TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256`
+or `TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256` for HTTP/2 support; lists missing
+both are rejected before opening a listener.
 TLS 1.3 suite names are rejected in `TLS_CIPHERS`; specifying TLS 1.2 suites together
 with a TLS-1.3-only minimum is also rejected as ineffective. Do not claim arbitrary
 TLS 1.3 suite filtering or group preference ordering. Profiles requiring settings

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -67,6 +68,7 @@ func TestOptionalHTTPAndValidation(t *testing.T) {
 		{"TLS13 suite", "TLS_CIPHERS", "TLS_AES_128_GCM_SHA256", cert, key},
 		{"empty suites", "TLS_CIPHERS", "", cert, key},
 		{"duplicate suite", "TLS_CIPHERS", "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", cert, key},
+		{"missing HTTP2 required suite", "TLS_CIPHERS", "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384", cert, key},
 		{"unknown group", "TLS_CURVES", "4588", cert, key},
 		{"empty groups", "TLS_CURVES", "", cert, key},
 		{"duplicate groups", "TLS_CURVES", "P256,P256", cert, key},
@@ -99,6 +101,31 @@ func TestOptionalHTTPAndValidation(t *testing.T) {
 			t.Fatal("invalid certificate accepted")
 		}
 	})
+}
+
+func TestHTTP2CompatibleCipherLists(t *testing.T) {
+	unsetControls(t)
+	cert, key, _ := servingFiles(t)
+	for _, tt := range []struct {
+		name    string
+		ciphers string
+		want    []uint16
+	}{
+		{"RSA", "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", []uint16{tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256}},
+		{"ECDSA", "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256", []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256}},
+		{"mixed", "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", []uint16{tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384, tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("TLS_CIPHERS", tt.ciphers)
+			cfg, err := FromEnv(cert, key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(cfg.CipherSuites, tt.want) {
+				t.Fatalf("cipher suites = %v, want %v", cfg.CipherSuites, tt.want)
+			}
+		})
+	}
 }
 
 func TestNegotiatedVersionsCiphersAndGroups(t *testing.T) {

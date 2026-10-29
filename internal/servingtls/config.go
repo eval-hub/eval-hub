@@ -54,6 +54,10 @@ func FromEnv(certFile, keyFile string) (*tls.Config, error) {
 			cfg.CipherSuites = append(cfg.CipherSuites, id)
 			seen[id] = true
 		}
+		// net/http requires one of these suites when configuring HTTP/2 with TLS 1.2.
+		if !seen[tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256] && !seen[tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256] {
+			return nil, fmt.Errorf("TLS_CIPHERS must include TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 or TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 for HTTP/2")
+		}
 	}
 	curves, hasCurves := os.LookupEnv("TLS_CURVES")
 	if hasCurves {
