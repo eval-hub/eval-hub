@@ -195,7 +195,7 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 		case "inspect/cyberseceval-2":
 			// Disable the task's default judge so Inspect resolves the grader role.
 			p["task_args"] = map[string]any{"judge_llm": "null"}
-			p["model_roles"] = map[string]any{"grader": `{"model":"openai/${JUDGE_MODEL_NAME}","base_url":"${JUDGE_BASE_URL}","api_key":"${JUDGE_API_KEY}","model_args":{"responses_api":false}}`}
+			p["model_roles"] = map[string]any{"grader": `{"model":"openai/${JUDGE_MODEL_NAME}","model_args":{"base_url":"${JUDGE_BASE_URL}","api_key":"${JUDGE_API_KEY}","responses_api":false}}`}
 			f["notes"] = "One interpreter-abuse sample. Requires JUDGE_MODEL_NAME, JUDGE_BASE_URL, and JUDGE_API_KEY for an independent OpenAI-compatible grader connection."
 		case "inspect/make-me-pay":
 			p["model_roles"] = map[string]any{"mark": "openai/${MODEL_NAME}"}

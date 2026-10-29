@@ -4,7 +4,7 @@
     "epochs": 1,
     "max_tasks": 1,
     "model_roles": {
-      "grader": "{\"model\":\"openai/${JUDGE_MODEL_NAME}\",\"base_url\":\"${JUDGE_BASE_URL}\",\"api_key\":\"${JUDGE_API_KEY}\",\"model_args\":{\"responses_api\":false}}"
+      "grader": "{\"model\":\"openai/${JUDGE_MODEL_NAME}\",\"model_args\":{\"base_url\":\"${JUDGE_BASE_URL}\",\"api_key\":\"${JUDGE_API_KEY}\",\"responses_api\":false}}"
     },
     "num_examples": 1,
     "task": "inspect_evals/cyse2_interpreter_abuse",

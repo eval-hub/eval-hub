@@ -108,12 +108,19 @@ func TestInspectSmokeRoles(t *testing.T) {
 				if err := json.Unmarshal([]byte(roles["grader"].(string)), &role); err != nil {
 					t.Fatal(err)
 				}
-				for key, want := range map[string]string{"model": "openai/${JUDGE_MODEL_NAME}", "base_url": "${JUDGE_BASE_URL}", "api_key": "${JUDGE_API_KEY}"} {
-					if role[key] != want {
-						t.Errorf("%s = %v; want %s", key, role[key], want)
+				if role["model"] != "openai/${JUDGE_MODEL_NAME}" {
+					t.Errorf("unexpected grader model: %v", role["model"])
+				}
+				modelArgs := role["model_args"].(map[string]any)
+				for key, want := range map[string]string{"base_url": "${JUDGE_BASE_URL}", "api_key": "${JUDGE_API_KEY}"} {
+					if _, exists := role[key]; exists {
+						t.Errorf("%s must be nested in model_args", key)
+					}
+					if modelArgs[key] != want {
+						t.Errorf("model_args.%s = %v; want %s", key, modelArgs[key], want)
 					}
 				}
-				if role["model_args"].(map[string]any)["responses_api"] != false {
+				if modelArgs["responses_api"] != false {
 					t.Fatal("OpenAI-compatible judge must use chat completions")
 				}
 			}
