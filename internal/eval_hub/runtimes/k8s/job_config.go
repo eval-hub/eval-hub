@@ -83,6 +83,7 @@ type jobConfig struct {
 	testDataS3                 s3TestDataConfig
 	testDataPVC                pvcTestDataConfig
 	postProcessorPVCs          []postProcessorPVCConfig
+	postProcessorSecrets       []string
 	testDataGit                gitTestDataConfig
 	testDataHF                 hfTestDataConfig
 	testDataInitImage          string
@@ -136,13 +137,20 @@ func postProcessorPVCConfigs(evaluation *api.EvaluationJobResource) ([]postProce
 	}
 	seenClaims := make(map[string]struct{})
 	var configs []postProcessorPVCConfig
+	var refs []*api.PVCTestDataRef
+	if result := operations.ConfidenceInterval.ResultsDataRef; result != nil && result.PVC != nil {
+		refs = append(refs, result.PVC)
+	}
 	for _, ref := range operations.ConfidenceInterval.CalibrationDataRef {
-		if ref.PVC == nil {
+		refs = append(refs, ref.PVC)
+	}
+	for _, ref := range refs {
+		if ref == nil {
 			continue
 		}
-		claimName := strings.TrimSpace(ref.PVC.ClaimName)
+		claimName := strings.TrimSpace(ref.ClaimName)
 		if claimName == "" {
-			return nil, fmt.Errorf("post-processing calibration PVC claim_name is required")
+			return nil, fmt.Errorf("post-processing PVC claim_name is required")
 		}
 		if _, exists := seenClaims[claimName]; exists {
 			continue
@@ -284,6 +292,10 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	if err != nil {
 		return nil, err
 	}
+	postProcessorSecrets, err := postProcessorSecretNames(evaluation)
+	if err != nil {
+		return nil, err
+	}
 
 	// GPU resource requests/limits are always propagated to the pod spec so that Kueue can
 	// account for GPU quota. Provider nodeSelector is the default; a HardwareProfile with
@@ -347,7 +359,8 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 			claimName: testDataPVCClaimName,
 			subPath:   testDataPVCSubPath,
 		},
-		postProcessorPVCs: postProcessorPVCs,
+		postProcessorPVCs:    postProcessorPVCs,
+		postProcessorSecrets: postProcessorSecrets,
 		testDataGit: gitTestDataConfig{
 			url:       testDataGitURL,
 			ref:       testDataGitRef,

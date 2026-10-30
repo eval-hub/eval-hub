@@ -201,7 +201,20 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		})
 	}
 
-	// Post-processing calibration PVCs are independent of benchmark test data.
+	for i, name := range cfg.postProcessorSecrets {
+		volumeName := fmt.Sprintf("%s%d", postProcessorSecretVolumePrefix, i)
+		volumes = append(volumes, corev1.Volume{
+			Name:         volumeName,
+			VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: name}},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      volumeName,
+			MountPath: postProcessorSecretMountPath + "/" + name,
+			ReadOnly:  true,
+		})
+	}
+
+	// Post-processing results and calibration PVCs are independent of benchmark test data.
 	// They are mounted read-only in the adapter container, which receives a
 	// claim-name-to-path map through EVALHUB_POST_PROCESSOR_PVC_MOUNTS.
 	// Mount the claim root: the adapter applies each reference's sub_path.
