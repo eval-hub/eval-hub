@@ -1,0 +1,53 @@
+type: object
+title: CollectionGenerationResource
+description: |
+  Tenant-scoped, pollable dry-run generation resource. resource.id is the ID of
+  its backing evaluation job. Generation results remain readable after the pod
+  exits until the configured retention period expires or the resource is deleted.
+required:
+  - resource
+  - request
+  - status
+properties:
+  resource:
+    allOf:
+      - $ref: ./Resource.yaml
+      - type: object
+        required: [id, tenant, owner, created_at, updated_at]
+        properties:
+          id:
+            type: string
+            minLength: 1
+          tenant:
+            type: string
+            minLength: 1
+          owner:
+            type: string
+            minLength: 1
+          created_at:
+            type: string
+            format: date-time
+          updated_at:
+            type: string
+            format: date-time
+  request:
+    $ref: ./CollectionGenerationRequestSummary.yaml
+  status:
+    $ref: ./CollectionGenerationStatus.yaml
+  result:
+    $ref: ./CollectionGenerationResult.yaml
+    description: Required when status.state is completed; absent in every other state.
+if:
+  properties:
+    status:
+      properties:
+        state:
+          const: completed
+      required: [state]
+  required: [status]
+then:
+  required: [result]
+else:
+  not:
+    required: [result]
+additionalProperties: false
