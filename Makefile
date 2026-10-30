@@ -1,3 +1,4 @@
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint validate-configs test test-e2e test-fuzz test-fvt-server test-fvt-server-local test-fvt-server-local-mlflow test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build
 .PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint govulncheck validate-configs test test-fuzz test-fvt-server test-fvt-server-local test-fvt-server-local-mlflow test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build
 
 GOPATH := $(shell go env GOPATH)
@@ -29,6 +30,51 @@ GIT_HASH ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 help: ## Display this help message
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+
+KIND_CLUSTER_NAME ?= evalhub-dev
+IMAGE_TAG ?= kind-$(KIND_CLUSTER_NAME)
+SKIP_BUILD ?= false
+AIRGAP ?= false
+ADAPTERS ?= all
+EVALHUB_HOST_PORT ?= 18443
+EVALHUB_NODE_PORT ?= 30443
+EVALHUB_HOST_BIND_ADDRESS ?= 127.0.0.1
+DEMO_SOURCE_COLLECTION_ID ?= instruction-output-v1
+DEMO_JOB_TIMEOUT_SECONDS ?= 900
+EVALHUB_API_BASE_URL ?=
+EVALHUB_KUBECONFIG_FILE ?=
+DEV_REPO_PARENT_PATHS ?= $(HOME)/code
+
+.PHONY: dev-deploy dev-deploy-help dev-clean dev-clean-help dev-demo dev-demo-help
+dev-deploy: ## Build and deploy the local EvalHub stack to Docker-backed kind (optional air-gap mode)
+	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" IMAGE_TAG="$(IMAGE_TAG)" \
+		SKIP_BUILD="$(SKIP_BUILD)" AIRGAP="$(AIRGAP)" ADAPTERS="$(ADAPTERS)" \
+		EVALHUB_HOST_PORT="$(EVALHUB_HOST_PORT)" EVALHUB_NODE_PORT="$(EVALHUB_NODE_PORT)" \
+		EVALHUB_HOST_BIND_ADDRESS="$(EVALHUB_HOST_BIND_ADDRESS)" \
+		DEV_REPO_PARENT_PATHS="$(DEV_REPO_PARENT_PATHS)" bash scripts/dev-deploy.sh
+
+dev-deploy-help: ## Show dev-deploy inputs and usage
+	@bash scripts/dev-deploy.sh --help
+
+DELETE_CLUSTER ?= false
+
+dev-clean: ## Remove the local EvalHub deployment; optionally delete its kind cluster
+	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" IMAGE_TAG="$(IMAGE_TAG)" DELETE_CLUSTER="$(DELETE_CLUSTER)" \
+		bash scripts/dev-clean.sh
+
+dev-clean-help: ## Show dev-clean inputs and usage
+	@bash scripts/dev-clean.sh --help
+
+dev-demo: ## List collections, clone one, and run a mock-backed evaluation on kind
+	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" EVALHUB_HOST_PORT="$(EVALHUB_HOST_PORT)" \
+		DEMO_SOURCE_COLLECTION_ID="$(DEMO_SOURCE_COLLECTION_ID)" \
+		DEMO_JOB_TIMEOUT_SECONDS="$(DEMO_JOB_TIMEOUT_SECONDS)" \
+		EVALHUB_API_BASE_URL="$(EVALHUB_API_BASE_URL)" \
+		EVALHUB_KUBECONFIG_FILE="$(EVALHUB_KUBECONFIG_FILE)" \
+		bash scripts/dev-demo.sh
+
+dev-demo-help: ## Show dev-demo inputs and usage
+	@bash scripts/dev-demo.sh --help
 
 PRE_COMMIT ?= .git/hooks/pre-commit
 
@@ -204,6 +250,9 @@ test: ## Run unit tests (including fuzz seed corpora and a short fuzzing pass)
 	@bash -c 'set -o pipefail; go test -timeout=$(GO_TEST_TIMEOUT) -v ./internal/... ./cmd/... ./pkg/... | ${PWD}/scripts/grcat ${PWD}/.conf.go-test'
 	@$(MAKE) test-fuzz
 	@echo "Unit tests complete"
+
+test-e2e: ## Auto-discover and run applicable end-to-end tests against the current Kubernetes context
+	@go test -v -count=1 -timeout=75m ./tests/e2e/...
 
 test-fuzz: ## Run mutational fuzzing briefly for each Fuzz* test
 	@echo "Running fuzz tests (fuzztime=$(FUZZTIME))..."
