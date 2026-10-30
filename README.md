@@ -239,11 +239,14 @@ make fmt                    # go fmt
 
 ### Local kind debugging
 
-The local deployment and demo scripts require **Docker**, kind, kubectl, Make,
-Git, curl, OpenSSL, and Python 3. Install `jq` as well to use the API demo and
-curl examples. Docker must be running. These scripts use Docker to build images,
-run the kind nodes, and manage the local image registry; they do not currently
-support Podman.
+The local deployment and demo scripts require a container runtime (**podman**
+or **Docker**), kind, kubectl, Make, Git, curl, OpenSSL, and Python 3. Install
+`jq` as well to use the API demo and curl examples. The runtime must be running
+(for podman on macOS, start the podman machine first). These scripts use the
+container runtime to build images, run the kind nodes, and manage the local
+image registry. Podman is used in preference to Docker when it is installed and
+reachable; set `CONTAINER_RUNTIME=docker` (or
+`make dev-deploy CONTAINER_RUNTIME=docker`) to force Docker instead.
 
 Deploy the local EvalHub service, operator, adapters, and mock target/judge
 services:
@@ -277,7 +280,8 @@ Delete the deployment and the selected cluster as well:
 make dev-clean DELETE_CLUSTER=true
 ```
 
-Both cleanup modes retain the local build image tags and Docker's build cache.
+Both cleanup modes retain the local build image tags and the container runtime's
+build cache.
 They remove temporary localhost:<port> tags used only to push images into the
 kind registry. Repeated deploys of unchanged EvalHub source reuse the Go build
 layers. `make dev-deploy-help` and `make dev-clean-help` list the settings.

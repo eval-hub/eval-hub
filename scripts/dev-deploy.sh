@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Build local EvalHub/operator/provider images and deploy a development stack
-# to Docker-backed kind. Job/API behavior checks live in tests/e2e.
+# to a kind cluster backed by podman or Docker. Job/API behavior checks live in tests/e2e.
 set -Eeuo pipefail
 umask 077
 
@@ -13,6 +13,7 @@ IMAGE_TAG="${IMAGE_TAG:-kind-${KIND_CLUSTER_NAME}}"
 SKIP_BUILD="${SKIP_BUILD:-false}"
 AIRGAP="${AIRGAP:-false}"
 ADAPTERS="${ADAPTERS:-all}"
+CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-}"
 EVALHUB_HOST_PORT="${EVALHUB_HOST_PORT:-18443}"
 EVALHUB_NODE_PORT="${EVALHUB_NODE_PORT:-30443}"
 EVALHUB_HOST_BIND_ADDRESS="${EVALHUB_HOST_BIND_ADDRESS:-127.0.0.1}"
@@ -48,7 +49,7 @@ usage() {
 Usage: make dev-deploy [VARIABLE=value ...]
 
 Builds and deploys EvalHub, the operator, the local adapter images, and mock
-target/judge services to a Docker-backed kind cluster.
+target/judge services to a kind cluster backed by podman or Docker.
 All system collections packaged by the operator are discovered automatically.
 The cluster and deployment are retained. No evaluation jobs are submitted.
 
@@ -61,7 +62,10 @@ Inputs (also accepted as environment variables):
                           (default: all): inspect, lm-evaluation-harness, followbench
   AIRGAP=true              create/use a Calico kind cluster and deny external
                           egress from system-namespace evaluation jobs (default: false)
-  Repeated builds use Docker's layer cache; the EvalHub build date is stable
+  CONTAINER_RUNTIME        container engine for image builds, the local registry,
+                           and the kind nodes (podman or docker; default: podman
+                           when reachable, otherwise docker)
+  Repeated builds use the container runtime's layer cache; the EvalHub build date is stable
   for a source commit so a no-change deploy does not rebuild Go binaries.
   Temporary localhost:<port> registry tags are removed after each successful push.
   EVALHUB_HOST_PORT       localhost API port (default: 18443)
@@ -79,7 +83,7 @@ are reused only when their mapping matches the requested bind address and host
 port; mappings cannot be changed without recreating the cluster. For registry
 mirror support, a reused cluster must use a kind node image from v0.27.0 or newer.
 
-A narrowly scoped NetworkPolicy allows the kind Docker network gateway to reach
+A narrowly scoped NetworkPolicy allows the kind container network gateway to reach
 the EvalHub API on port 8443. This is required because the operator's default
 ingress policy otherwise blocks host requests forwarded through the NodePort.
 
@@ -103,7 +107,7 @@ USAGE
 remove_temporary_registry_tag() {
   local image_ref="$1" pending
   local -a remaining=()
-  if ! docker image rm "$image_ref" >/dev/null 2>&1; then
+  if ! "$CONTAINER_RUNTIME" image rm "$image_ref" >/dev/null 2>&1; then
     log WARN "Could not remove temporary local registry tag $image_ref."
     return 0
   fi
@@ -117,7 +121,7 @@ remove_temporary_registry_tag() {
 remove_pending_registry_tags() {
   local image_ref
   for image_ref in "${TEMP_REGISTRY_TAGS[@]}"; do
-    docker image rm "$image_ref" >/dev/null 2>&1 || true
+    "$CONTAINER_RUNTIME" image rm "$image_ref" >/dev/null 2>&1 || true
   done
   TEMP_REGISTRY_TAGS=()
 }
@@ -133,7 +137,7 @@ cleanup() {
   if [[ -n "$WORK_DIR" && -d "$WORK_DIR" ]]; then
     rm -rf -- "$WORK_DIR"
   fi
-  if [[ -n "$REGISTRY_NAME" ]] && docker container inspect "$REGISTRY_NAME" >/dev/null 2>&1; then
+  if [[ -n "$REGISTRY_NAME" ]] && "$CONTAINER_RUNTIME" container inspect "$REGISTRY_NAME" >/dev/null 2>&1; then
     log INFO "Local registry remains running for future job pods: $REGISTRY_NAME"
   fi
   exit "$status"
@@ -168,8 +172,38 @@ need_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
 }
 
+# Select the container runtime used for image builds, the local registry, and
+# the kind nodes. Podman is preferred whenever it is installed and reachable;
+# Docker is the fallback. Set CONTAINER_RUNTIME to force a specific runtime.
+detect_container_runtime() {
+  case "$CONTAINER_RUNTIME" in
+    podman|docker)
+      need_command "$CONTAINER_RUNTIME"
+      "$CONTAINER_RUNTIME" info >/dev/null 2>&1 ||
+        fail "$CONTAINER_RUNTIME is installed but not reachable. Start the $CONTAINER_RUNTIME daemon (or podman machine) and retry."
+      ;;
+    "")
+      if command -v podman >/dev/null 2>&1 && podman info >/dev/null 2>&1; then
+        CONTAINER_RUNTIME=podman
+      elif command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+        CONTAINER_RUNTIME=docker
+      else
+        fail "Neither podman nor docker is reachable. Install podman (preferred) or docker and make sure it is running."
+      fi
+      ;;
+    *)
+      fail "CONTAINER_RUNTIME must be 'podman' or 'docker'."
+      ;;
+  esac
+  log INFO "Using $CONTAINER_RUNTIME as the container runtime for builds, the local registry, and kind."
+}
+
 kind_cmd() {
-  env -u KIND_EXPERIMENTAL_PROVIDER kind "$@"
+  if [[ "${CONTAINER_RUNTIME:-}" == podman ]]; then
+    KIND_EXPERIMENTAL_PROVIDER=podman kind "$@"
+  else
+    env -u KIND_EXPERIMENTAL_PROVIDER kind "$@"
+  fi
 }
 
 trim_whitespace() {
@@ -239,11 +273,11 @@ validate_inputs() {
 
 check_prerequisites() {
   local tool
-  for tool in docker kind kubectl git curl openssl python3 awk sed grep base64 cp mktemp tr env cksum sort; do
+  for tool in kind kubectl git curl openssl python3 awk sed grep base64 cp mktemp tr env cksum sort; do
     need_command "$tool"
   done
-  docker info >/dev/null 2>&1 || fail "Docker daemon is not reachable. Run this from the terminal where Docker works."
-  log PASS "Docker daemon is reachable; Docker will build images and back kind."
+  detect_container_runtime
+  log PASS "$CONTAINER_RUNTIME is reachable; it will build images and back kind."
   log INFO "$(kind version 2>&1 | head -n 1)"
   log INFO "$(kubectl version --client 2>&1 | head -n 1)"
 }
@@ -319,7 +353,7 @@ ensure_cluster() {
     log INFO "Reusing existing kind cluster: $KIND_CLUSTER_NAME"
     kind_cmd export kubeconfig --name "$KIND_CLUSTER_NAME" --kubeconfig "$KUBECONFIG_FILE"
   else
-    log INFO "Creating Docker-backed kind cluster: $KIND_CLUSTER_NAME"
+    log INFO "Creating ${CONTAINER_RUNTIME}-backed kind cluster: $KIND_CLUSTER_NAME"
     kind_config="$WORK_DIR/kind-cluster.yaml"
     networking_config=""
     if [[ "$AIRGAP" == true ]]; then
@@ -354,7 +388,7 @@ YAML
   local found_mapping="" existing_mappings=""
   while IFS= read -r node; do
     [[ -n "$node" ]] || continue
-    mapping="$(docker port "$node" "${EVALHUB_NODE_PORT}/tcp" 2>/dev/null || true)"
+    mapping="$("$CONTAINER_RUNTIME" port "$node" "${EVALHUB_NODE_PORT}/tcp" 2>/dev/null || true)"
     [[ -n "$existing_mappings" || -z "$mapping" ]] || existing_mappings="$mapping"
     mapping="$(printf '%s\n' "$mapping" | awk -v bind_address="${EVALHUB_HOST_BIND_ADDRESS}:" 'index($0, bind_address) == 1 {print; exit}')"
     if [[ -n "$mapping" ]]; then
@@ -389,7 +423,7 @@ build_image() {
       # A stable source timestamp keeps repeated local deployments from
       # invalidating the Go build layers solely because the wall clock changed.
       build_date="$(git -C "$EVALHUB_REPO" show -s --format=%cI HEAD)"
-      docker build --platform "linux/${target_arch}" \
+      "$CONTAINER_RUNTIME" build --platform "linux/${target_arch}" \
         --build-arg "TARGETARCH=${target_arch}" \
         --build-arg BUILD_NUMBER=kind-local \
         --build-arg "BUILD_DATE=${build_date}" \
@@ -397,18 +431,18 @@ build_image() {
         --tag "$image" --file "$dockerfile" "$context"
       ;;
     trustyai-service-operator)
-      docker build --platform "linux/${target_arch}" \
+      "$CONTAINER_RUNTIME" build --platform "linux/${target_arch}" \
         --build-arg TARGETOS=linux --build-arg "TARGETARCH=${target_arch}" \
         --build-arg CI_CONTAINER_VERSION=kind-local \
         --tag "$image" --file "$dockerfile" "$context"
       ;;
     community-lmes)
-      docker build --platform "linux/${target_arch}" \
+      "$CONTAINER_RUNTIME" build --platform "linux/${target_arch}" \
         --build-arg TARGETOS=linux --build-arg "TARGETARCH=${target_arch}" \
         --tag "$image" --file "$dockerfile" "$context"
       ;;
     *)
-      docker build --platform "linux/${target_arch}" --tag "$image" --file "$dockerfile" "$context"
+      "$CONTAINER_RUNTIME" build --platform "linux/${target_arch}" --tag "$image" --file "$dockerfile" "$context"
       ;;
   esac
   log PASS "Built $image"
@@ -427,7 +461,7 @@ build_images() {
     log INFO "SKIP_BUILD=true; verifying core and selected adapter image tags exist locally."
     for name in "${image_names[@]}"; do
       image="$(image_ref "$name")"
-      docker image inspect "$image" >/dev/null 2>&1 || fail "Required local image is missing: $image"
+      "$CONTAINER_RUNTIME" image inspect "$image" >/dev/null 2>&1 || fail "Required local image is missing: $image"
       log PASS "Found $image"
     done
     return
@@ -454,16 +488,16 @@ build_images() {
   done
 }
 
-docker_registry_image() {
+registry_image() {
   printf 'localhost:%s/evalhub/%s:%s' "$REGISTRY_PORT" "$1" "$IMAGE_TAG"
 }
 
 tag_and_push() {
   local source="$1" destination="$2"
-  docker image inspect "$source" >/dev/null 2>&1 || fail "Image missing before registry push: $source"
-  docker image tag "$source" "$destination"
+  "$CONTAINER_RUNTIME" image inspect "$source" >/dev/null 2>&1 || fail "Image missing before registry push: $source"
+  "$CONTAINER_RUNTIME" image tag "$source" "$destination"
   TEMP_REGISTRY_TAGS+=("$destination")
-  docker image push "$destination"
+  "$CONTAINER_RUNTIME" image push "$destination"
   remove_temporary_registry_tag "$destination"
 }
 
@@ -472,32 +506,32 @@ ensure_registry() {
   REGISTRY_NAME="evalhub-registry-${KIND_CLUSTER_NAME}"
   alias="evalhub-reg-$(printf '%s' "$KIND_CLUSTER_NAME" | cksum | awk '{print $1}')"
   REGISTRY_ALIAS="$alias"
-  docker network inspect kind >/dev/null 2>&1 || fail "Docker network 'kind' does not exist. Confirm the named cluster was created by Docker-backed kind."
+  "$CONTAINER_RUNTIME" network inspect kind >/dev/null 2>&1 || fail "Container network 'kind' does not exist in $CONTAINER_RUNTIME. Confirm the named cluster was created by $CONTAINER_RUNTIME-backed kind."
 
-  if docker container inspect "$REGISTRY_NAME" >/dev/null 2>&1; then
+  if "$CONTAINER_RUNTIME" container inspect "$REGISTRY_NAME" >/dev/null 2>&1; then
     local owner
-    owner="$(docker container inspect --format '{{ index .Config.Labels "io.evalhub.dev.cluster" }}' "$REGISTRY_NAME" 2>/dev/null || true)"
+    owner="$("$CONTAINER_RUNTIME" container inspect --format '{{ index .Config.Labels "io.evalhub.dev.cluster" }}' "$REGISTRY_NAME" 2>/dev/null || true)"
     if [[ -z "$owner" ]]; then
-      owner="$(docker container inspect --format '{{ index .Config.Labels "io.evalhub.kind-cluster" }}' "$REGISTRY_NAME" 2>/dev/null || true)"
+      owner="$("$CONTAINER_RUNTIME" container inspect --format '{{ index .Config.Labels "io.evalhub.kind-cluster" }}' "$REGISTRY_NAME" 2>/dev/null || true)"
     fi
     [[ "$owner" == "$KIND_CLUSTER_NAME" ]] || fail "Container $REGISTRY_NAME exists but is not marked as this script's registry."
-    [[ "$(docker container inspect --format '{{.State.Status}}' "$REGISTRY_NAME")" == running ]] ||
-      docker container start "$REGISTRY_NAME" >/dev/null
+    [[ "$("$CONTAINER_RUNTIME" container inspect --format '{{.State.Status}}' "$REGISTRY_NAME")" == running ]] ||
+      "$CONTAINER_RUNTIME" container start "$REGISTRY_NAME" >/dev/null
   else
-    docker image inspect registry:2 >/dev/null 2>&1 || docker image pull registry:2
-    docker run --detach --name "$REGISTRY_NAME" \
+    "$CONTAINER_RUNTIME" image inspect docker.io/library/registry:2 >/dev/null 2>&1 || "$CONTAINER_RUNTIME" image pull docker.io/library/registry:2
+    "$CONTAINER_RUNTIME" run --detach --name "$REGISTRY_NAME" \
       --label "io.evalhub.dev.cluster=${KIND_CLUSTER_NAME}" \
-      --restart unless-stopped --publish 127.0.0.1::5000 registry:2
+      --restart unless-stopped --publish 127.0.0.1::5000 docker.io/library/registry:2
   fi
 
-  network_json="$(docker container inspect --format '{{json .NetworkSettings.Networks}}' "$REGISTRY_NAME")"
+  network_json="$("$CONTAINER_RUNTIME" container inspect --format '{{json .NetworkSettings.Networks}}' "$REGISTRY_NAME")"
   if [[ "$network_json" != *'"kind":'* ]]; then
-    docker network connect --alias "$REGISTRY_ALIAS" kind "$REGISTRY_NAME"
+    "$CONTAINER_RUNTIME" network connect --alias "$REGISTRY_ALIAS" kind "$REGISTRY_NAME"
   elif [[ "$network_json" != *"$REGISTRY_ALIAS"* ]]; then
-    docker network disconnect kind "$REGISTRY_NAME"
-    docker network connect --alias "$REGISTRY_ALIAS" kind "$REGISTRY_NAME"
+    "$CONTAINER_RUNTIME" network disconnect kind "$REGISTRY_NAME"
+    "$CONTAINER_RUNTIME" network connect --alias "$REGISTRY_ALIAS" kind "$REGISTRY_NAME"
   fi
-  port_mapping="$(docker port "$REGISTRY_NAME" 5000/tcp | awk '/^127\.0\.0\.1:/ {print; exit}')"
+  port_mapping="$("$CONTAINER_RUNTIME" port "$REGISTRY_NAME" 5000/tcp | awk '/^127\.0\.0\.1:/ {print; exit}')"
   [[ "$port_mapping" == 127.0.0.1:* ]] || fail "Could not determine localhost port for registry container $REGISTRY_NAME."
   REGISTRY_PORT="${port_mapping##*:}"
   [[ "$REGISTRY_PORT" =~ ^[0-9]+$ ]] || fail "Invalid registry port: $REGISTRY_PORT"
@@ -516,14 +550,14 @@ publish_images() {
   image_names+=("${SELECTED_ADAPTER_IMAGES[@]}")
   for name in "${image_names[@]}"; do
     source="$(image_ref "$name")"
-    destination="$(docker_registry_image "$name")"
+    destination="$(registry_image "$name")"
     log INFO "Publishing $name to the cluster-local registry."
     tag_and_push "$source" "$destination"
   done
-  local mock_source=python:3.12-slim proxy_source=quay.io/opendatahub/odh-kube-rbac-proxy:odh-stable
-  docker image inspect "$mock_source" >/dev/null 2>&1 || docker image pull "$mock_source"
-  tag_and_push "$mock_source" "$(docker_registry_image kind-openai-mock)"
-  docker image inspect "$proxy_source" >/dev/null 2>&1 || docker image pull "$proxy_source"
+  local mock_source=docker.io/library/python:3.12-slim proxy_source=quay.io/opendatahub/odh-kube-rbac-proxy:odh-stable
+  "$CONTAINER_RUNTIME" image inspect "$mock_source" >/dev/null 2>&1 || "$CONTAINER_RUNTIME" image pull "$mock_source"
+  tag_and_push "$mock_source" "$(registry_image kind-openai-mock)"
+  "$CONTAINER_RUNTIME" image inspect "$proxy_source" >/dev/null 2>&1 || "$CONTAINER_RUNTIME" image pull "$proxy_source"
   tag_and_push "$proxy_source" "localhost:${REGISTRY_PORT}/opendatahub/odh-kube-rbac-proxy:odh-stable"
 }
 
@@ -535,8 +569,8 @@ configure_registry_mirrors() {
   while IFS= read -r node; do
     [[ -n "$node" ]] || continue
     log INFO "Configuring the local registry mirror on kind node $node."
-    docker exec "$node" mkdir -p "/etc/containerd/certs.d/localhost:${REGISTRY_PORT}"
-    docker cp "$hosts_file" "$node:/etc/containerd/certs.d/localhost:${REGISTRY_PORT}/hosts.toml" >/dev/null
+    "$CONTAINER_RUNTIME" exec "$node" mkdir -p "/etc/containerd/certs.d/localhost:${REGISTRY_PORT}"
+    "$CONTAINER_RUNTIME" cp "$hosts_file" "$node:/etc/containerd/certs.d/localhost:${REGISTRY_PORT}/hosts.toml" >/dev/null
   done < <(kind_cmd get nodes --name "$KIND_CLUSTER_NAME")
   log PASS "Configured containerd to resolve localhost:${REGISTRY_PORT} through the local registry."
 }
@@ -667,16 +701,16 @@ render_operator_overlay() {
   mkdir -p -- "$config_root"
   cp -a "$OPERATOR_REPO/config/." "$config_root/"
   params="$config_root/base/params.env"
-  replace_env_value "$params" trustyaiOperatorImage "$(docker_registry_image trustyai-service-operator)"
-  replace_env_value "$params" evalHubImage "$(docker_registry_image eval-hub)"
+  replace_env_value "$params" trustyaiOperatorImage "$(registry_image trustyai-service-operator)"
+  replace_env_value "$params" evalHubImage "$(registry_image eval-hub)"
   if adapter_selected inspect; then
-    replace_env_value "$params" evalhub-provider-inspect-image "$(docker_registry_image community-inspect)"
+    replace_env_value "$params" evalhub-provider-inspect-image "$(registry_image community-inspect)"
   fi
   if adapter_selected followbench; then
-    replace_env_value "$params" evalhub-provider-followbench-image "$(docker_registry_image community-followbench)"
+    replace_env_value "$params" evalhub-provider-followbench-image "$(registry_image community-followbench)"
   fi
   if adapter_selected lm-evaluation-harness; then
-    replace_env_value "$params" lmes-pod-image "$(docker_registry_image community-lmes)"
+    replace_env_value "$params" lmes-pod-image "$(registry_image community-lmes)"
     set_lmes_provider_image_pull_policy \
       "$config_root/configmaps/evalhub/provider-lm-evaluation-harness.yaml"
   fi
@@ -739,20 +773,20 @@ YAML
   manifest="$WORK_DIR/operator-manifests.yaml"
   log INFO "Rendering an EvalHub-only operator overlay in a temporary copy of the operator config."
   kubectl kustomize "$overlay" >"$manifest"
-  grep -Fq "image: $(docker_registry_image trustyai-service-operator)" "$manifest" ||
+  grep -Fq "image: $(registry_image trustyai-service-operator)" "$manifest" ||
     fail "Rendered operator deployment does not use the local operator image."
-  grep -Fq "evalHubImage: $(docker_registry_image eval-hub)" "$manifest" ||
+  grep -Fq "evalHubImage: $(registry_image eval-hub)" "$manifest" ||
     fail "Rendered operator config does not use the local EvalHub image."
   if adapter_selected inspect; then
-    grep -Fq "image: $(docker_registry_image community-inspect)" "$manifest" ||
+    grep -Fq "image: $(registry_image community-inspect)" "$manifest" ||
       fail "Rendered provider config does not use the local Inspect image."
   fi
   if adapter_selected followbench; then
-    grep -Fq "image: $(docker_registry_image community-followbench)" "$manifest" ||
+    grep -Fq "image: $(registry_image community-followbench)" "$manifest" ||
       fail "Rendered provider config does not use the local FollowBench image."
   fi
   if adapter_selected lm-evaluation-harness; then
-    grep -Fq "image: $(docker_registry_image community-lmes)" "$manifest" ||
+    grep -Fq "image: $(registry_image community-lmes)" "$manifest" ||
       fail "Rendered LMES provider config does not use the locally built image."
     grep -Fq 'image_pull_policy: always' "$manifest" ||
       fail "Rendered LMES provider config does not pull the current local image."
@@ -921,7 +955,7 @@ install_nodeport_ingress_policy() {
   local node gateway
   node="$(kind_cmd get nodes --name "$KIND_CLUSTER_NAME" | sed -n '1p')"
   [[ -n "$node" ]] || fail "Could not identify the kind node for the NodePort ingress policy."
-  gateway="$(docker inspect --format '{{range .NetworkSettings.Networks}}{{if .Gateway}}{{.Gateway}}{{"\n"}}{{end}}{{end}}' "$node" 2>/dev/null | sed -n '1p')"
+  gateway="$("$CONTAINER_RUNTIME" inspect --format '{{range .NetworkSettings.Networks}}{{if .Gateway}}{{.Gateway}}{{"\n"}}{{end}}{{end}}' "$node" 2>/dev/null | sed -n '1p')"
   [[ "$gateway" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] ||
     fail "Could not determine the IPv4 gateway for kind node $node; cannot safely scope NodePort ingress."
 
@@ -956,7 +990,7 @@ YAML
 
 install_mock_services() {
   local mock_image
-  mock_image="$(docker_registry_image kind-openai-mock)"
+  mock_image="$(registry_image kind-openai-mock)"
   log INFO "Deploying mock OpenAI-compatible target and judge endpoints."
   kubectl --kubeconfig "$KUBECONFIG_FILE" apply -f - <<YAML
 apiVersion: v1
