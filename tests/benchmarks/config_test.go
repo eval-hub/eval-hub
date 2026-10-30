@@ -263,8 +263,11 @@ func TestExperimentName(t *testing.T) {
 }
 
 func TestFixturePaths(t *testing.T) {
+	if got, want := fixturePath("testdata", "provider:name", "arc:challenge"), filepath.Join("testdata", "provider%3Aname", "arc%3Achallenge.json"); got != want {
+		t.Fatalf("fixture path = %q; want %q", got, want)
+	}
 	seen := make(map[string]bool)
-	for _, id := range []string{"../escape", "..", ".", "a/b", "a%2Fb", "a:b", "a.b", "a%2Eb"} {
+	for _, id := range []string{"../escape", "..", ".", "a/b", "a%2Fb", "a:b", "a%3Ab", "a.b", "a%2Eb"} {
 		path := fixturePath("testdata", id, id)
 		rel, err := filepath.Rel("testdata", path)
 		if err != nil || strings.HasPrefix(rel, "..") || len(strings.Split(rel, string(filepath.Separator))) != 2 {
