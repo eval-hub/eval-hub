@@ -4,6 +4,7 @@ package postprocessing
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"strings"
 
@@ -89,8 +90,23 @@ func ToEvaluationJob(request *api.StandalonePostProcessingRequest) *api.Evaluati
 		// does not imply an order when none was requested.
 		parameters["operation_order"] = request.OperationOrder
 	}
+	var exports *api.EvaluationExports
+	if ci := request.Operations.ConfidenceInterval; ci != nil && ci.ResultsDataRef != nil && ci.ResultsDataRef.OCI != nil {
+		// The adapter downloads through the sidecar, whose registry target and
+		// credentials use the same exports configuration as evaluation jobs.
+		source := ci.ResultsDataRef.OCI
+		coordinates := source.Coordinates
+		coordinates.Annotations = maps.Clone(source.Coordinates.Annotations)
+		oci := &api.EvaluationExportsOCI{Coordinates: coordinates}
+		if source.K8s != nil {
+			connection := *source.K8s
+			oci.K8s = &connection
+		}
+		exports = &api.EvaluationExports{OCI: oci}
+	}
 	return &api.EvaluationJobConfig{
 		Name:           name,
+		Exports:        exports,
 		Model:          &api.ModelRef{Name: BenchmarkID},
 		HardwareConfig: request.HardwareConfig,
 		Benchmarks: []api.EvaluationBenchmarkConfig{{

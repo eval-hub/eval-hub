@@ -28,10 +28,10 @@ var validateGitCloneURL = api.ValidateGitCloneURLResolved
 
 // runGit clones a git repository into destDir using go-git (pure Go, no git binary required)
 // and writes the resolved commit SHA to .git-metadata for the sidecar to report back.
-func runGit() error {
-	repoURL := strings.TrimSpace(os.Getenv(envGitURL))
-	ref := strings.TrimSpace(os.Getenv(envGitRef))
-	subPath := strings.TrimSpace(os.Getenv(envGitSubPath))
+func (d downloader) runGit() error {
+	repoURL := strings.TrimSpace(d.source.Git.URL)
+	ref := strings.TrimSpace(d.source.Git.Ref)
+	subPath := strings.TrimSpace(d.source.Git.SubPath)
 
 	if repoURL == "" {
 		return fmt.Errorf("%s is required", envGitURL)
@@ -61,7 +61,7 @@ func runGit() error {
 	}
 	defer func() { _ = os.RemoveAll(cloneDir) }()
 
-	auth, err := resolveGitAuth()
+	auth, err := d.resolveGitAuth()
 	if err != nil {
 		return err
 	}
@@ -124,23 +124,23 @@ func runGit() error {
 		defer func() { _ = srcRoot.Close() }()
 	}
 
-	if err := copyDirFromRoot(srcRoot, destDir); err != nil {
+	if err := copyDirFromRoot(srcRoot, d.destDir); err != nil {
 		return fmt.Errorf("copy to dest: %w", err)
 	}
 
 	// 0600: init and sidecar share the same pod UID (OpenShift SCC / runAsNonRoot).
-	if err := writeGitMetadata(commitSHA); err != nil {
+	if err := d.writeGitMetadata(commitSHA); err != nil {
 		return fmt.Errorf("write git metadata: %w", err)
 	}
 
-	slog.Info("git source ready", "dest", destDir, "commit_sha", commitSHA)
+	slog.Info("git source ready", "dest", d.destDir, "commit_sha", commitSHA)
 	return nil
 }
 
 // writeGitMetadata writes the resolved commit SHA under InitMetadataDir via os.Root
 // so the path cannot escape the metadata directory.
-func writeGitMetadata(commitSHA string) error {
-	return writeGitMetadataTo(gitMetadataDir, commitSHA)
+func (d downloader) writeGitMetadata(commitSHA string) error {
+	return writeGitMetadataTo(d.gitMetadataDir, commitSHA)
 }
 
 func writeGitMetadataTo(dir, commitSHA string) error {
@@ -197,17 +197,17 @@ func gitHTTPCheckRedirect(withCredentials bool) func(req *http.Request, via []*h
 // If the secret dir does not exist (no secretRef was configured), nil is returned
 // for public-repo access. If the dir exists but "username" or "password" are missing
 // or empty, an error is returned — a mounted secret without these keys is a misconfiguration.
-func resolveGitAuth() (*githttp.BasicAuth, error) {
+func (d downloader) resolveGitAuth() (*githttp.BasicAuth, error) {
 	// No secret dir → public repo; auth not required.
-	if _, err := os.Stat(scrtDir); os.IsNotExist(err) {
+	if _, err := os.Stat(d.scrtDir); os.IsNotExist(err) {
 		return nil, nil
 	}
 
-	username, err := readSecret("username")
+	username, err := d.readSecret("username")
 	if err != nil {
 		return nil, fmt.Errorf("git auth: %w", err)
 	}
-	password, err := readSecret("password")
+	password, err := d.readSecret("password")
 	if err != nil {
 		return nil, fmt.Errorf("git auth: %w", err)
 	}
