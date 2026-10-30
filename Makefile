@@ -56,8 +56,9 @@ EVALHUB_KUBECONFIG_FILE ?=
 # With the default ADAPTERS=all all three checkouts must be accessible; narrow
 # ADAPTERS (comma-separated) to skip repositories you do not need. Nothing is
 # cloned automatically; the lm-evaluation-harness checkout is the fork at
-# https://github.com/opendatahub-io/lm-evaluation-harness.git (it provides
-# Dockerfile.lmes-job).
+# https://github.com/opendatahub-io/lm-evaluation-harness.git, checked out on
+# its incubation (or stable) branch — the default main branch does not contain
+# the required Dockerfile.lmes-job.
 DEV_REPO_PARENT_PATHS ?= $(HOME)/code
 CONTAINER_RUNTIME ?=
 
