@@ -7,6 +7,7 @@ import (
 	"regexp"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/internal/runtimeenv"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -30,7 +31,6 @@ const (
 	adapterTerminationSharedMountPath           = "/shared"
 	testDataVolumeName                          = "test-data"
 	postProcessorCalibrationPVCVolumeNamePrefix = "ppi-calibration-pvc-"
-	postProcessorCalibrationPVCMountPathPrefix  = "/mnt/evalhub/post-processing/calibration-pvc"
 	serviceCAVolumeName                         = "evalhub-service-ca"
 	jobSpecFileName                             = "job.json"
 	jobSpecMountPath                            = "/meta/job.json"
@@ -80,7 +80,6 @@ const (
 	envTestDataHFRepoIDName          = "TEST_DATA_HF_REPO_ID"
 	envTestDataHFRevisionName        = "TEST_DATA_HF_REVISION"
 	envTestDataHFSubPathName         = "TEST_DATA_HF_SUBPATH"
-	envPostProcessorPVCMountsName    = "EVALHUB_POST_PROCESSOR_PVC_MOUNTS"
 	envOTELExporterEndpointName      = "OTEL_EXPORTER_OTLP_ENDPOINT"
 	envOTELServiceNameName           = "OTEL_SERVICE_NAME"
 	testDataGitAuthVolumeName        = "test-data-git-auth"
@@ -140,6 +139,14 @@ func buildConfigMap(cfg *jobConfig) (*corev1.ConfigMap, error) {
 		sidecarJSON = string(bytes)
 	}
 
+	data := map[string]string{jobSpecFileName: string(specJSON), sidecarConfigFileName: sidecarJSON}
+	if cfg.postProcessorStaging != nil {
+		plan, err := json.Marshal(cfg.postProcessorStaging)
+		if err != nil {
+			return nil, fmt.Errorf("marshal data staging plan: %w", err)
+		}
+		data[shared.DataStagingPlanFile] = string(plan)
+	}
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
@@ -147,10 +154,7 @@ func buildConfigMap(cfg *jobConfig) (*corev1.ConfigMap, error) {
 			Labels:      labels,
 			Annotations: annotations,
 		},
-		Data: map[string]string{
-			jobSpecFileName:       string(specJSON),
-			sidecarConfigFileName: sidecarJSON,
-		},
+		Data: data,
 	}, nil
 }
 
