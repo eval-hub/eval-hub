@@ -260,8 +260,9 @@ images from the EvalHub repository plus sibling `../trustyai-service-operator`,
 `../eval-hub-contrib`, and `../lm-evaluation-harness` checkouts. The
 lm-evaluation-harness checkout is the fork at
 <https://github.com/opendatahub-io/lm-evaluation-harness.git> — clone it
-alongside EvalHub, since it provides the `Dockerfile.lmes-job` used for the
-LMES adapter image. The operator
+alongside EvalHub on its `incubation` (or `stable`) branch, since only those
+branches provide the `Dockerfile.lmes-job` used for the LMES adapter image,
+not the default `main` branch. The operator
 checkout is always required; the contrib and lm-evaluation-harness checkouts
 are needed for the adapter images selected by the default `ADAPTERS=all` —
 narrow `ADAPTERS` to skip either. Each repository is searched as a sibling of
