@@ -65,7 +65,7 @@ Inputs (also accepted as environment variables):
                           egress from system-namespace evaluation jobs (default: false)
   CONTAINER_RUNTIME        container engine for image builds, the local registry,
                            and the kind nodes (podman or docker; default: podman
-                           when reachable, otherwise docker)
+                           when reachable, docker under WSL, otherwise docker)
   Repeated builds use the container runtime's layer cache; the EvalHub build date is stable
   for a source commit so a no-change deploy does not rebuild Go binaries.
   Temporary localhost:<port> registry tags are removed after each successful push.
@@ -174,9 +174,13 @@ need_command() {
 }
 
 # Select the container runtime used for image builds, the local registry, and
-# the kind nodes. Podman is preferred whenever it is installed and reachable;
-# Docker is the fallback. Set CONTAINER_RUNTIME to force a specific runtime.
+# the kind nodes. Set CONTAINER_RUNTIME to force a specific runtime. Otherwise
+# Podman is preferred whenever it is installed and reachable, except under WSL
+# where Docker is preferred instead: WSL2 podman answers 'podman info' but kind
+# node startup fails during systemd/cgroup setup. The non-preferred runtime is
+# the fallback when the preferred one is not reachable.
 detect_container_runtime() {
+  local -a preferred_runtimes=()
   case "$CONTAINER_RUNTIME" in
     podman|docker)
       need_command "$CONTAINER_RUNTIME"
@@ -184,13 +188,20 @@ detect_container_runtime() {
         fail "$CONTAINER_RUNTIME is installed but not reachable. Start the $CONTAINER_RUNTIME daemon (or podman machine) and retry."
       ;;
     "")
-      if command -v podman >/dev/null 2>&1 && podman info >/dev/null 2>&1; then
-        CONTAINER_RUNTIME=podman
-      elif command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-        CONTAINER_RUNTIME=docker
+      if uname -r | grep -qiE 'microsoft|wsl'; then
+        preferred_runtimes=(docker podman)
       else
-        fail "Neither podman nor docker is reachable. Install podman (preferred) or docker and make sure it is running."
+        preferred_runtimes=(podman docker)
       fi
+      local runtime
+      for runtime in "${preferred_runtimes[@]}"; do
+        if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
+          CONTAINER_RUNTIME="$runtime"
+          break
+        fi
+      done
+      [[ -n "$CONTAINER_RUNTIME" ]] ||
+        fail "Neither podman nor docker is reachable. Install podman (preferred; docker under WSL) and make sure it is running."
       ;;
     *)
       fail "CONTAINER_RUNTIME must be 'podman' or 'docker'."
@@ -274,7 +285,7 @@ validate_inputs() {
 
 check_prerequisites() {
   local tool
-  for tool in kind kubectl git curl openssl python3 awk sed grep base64 cp mktemp tr env cksum sort; do
+  for tool in kind kubectl git curl openssl python3 awk sed grep base64 cp mktemp tr env cksum sort uname; do
     need_command "$tool"
   done
   detect_container_runtime
