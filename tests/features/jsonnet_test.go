@@ -258,6 +258,48 @@ func TestBenchmarkTokenizerConfiguration(t *testing.T) {
 	}
 }
 
+func TestGarakBenchmarkScanLimits(t *testing.T) {
+	for _, environment := range []string{"connected", "disconnected"} {
+		t.Run(environment, func(t *testing.T) {
+			sc := &scenarioConfig{
+				values:            map[string]string{"collection_id": ""},
+				jsonnetHarnessEnv: map[string]string{"ENVIRONMENT_ID": environment},
+			}
+			out, err := sc.getFile("evaluation_job_garak.json")
+			if err != nil {
+				t.Fatalf("render Garak fixture: %v", err)
+			}
+			var job struct {
+				Benchmarks []jsonnetBenchmarkPayload `json:"benchmarks"`
+			}
+			if err := json.Unmarshal([]byte(out), &job); err != nil {
+				t.Fatalf("unmarshal Garak fixture: %v", err)
+			}
+			wantIDs := []string{"quick", "avid_ethics", "avid_performance"}
+			var ids []string
+			wantConfig := map[string]any{
+				"run":     map[string]any{"generations": float64(1), "soft_probe_prompt_cap": float64(1)},
+				"plugins": map[string]any{"extended_detectors": false},
+			}
+			for _, benchmark := range job.Benchmarks {
+				ids = append(ids, benchmark.ID)
+				if benchmark.ProviderID != "garak" {
+					t.Errorf("%s provider = %q, want garak", benchmark.ID, benchmark.ProviderID)
+				}
+				if got := benchmark.Parameters["timeout_seconds"]; got != float64(600) {
+					t.Errorf("%s timeout_seconds = %v, want 600", benchmark.ID, got)
+				}
+				if got := benchmark.Parameters["garak_config"]; !reflect.DeepEqual(got, wantConfig) {
+					t.Errorf("%s garak_config = %#v, want %#v", benchmark.ID, got, wantConfig)
+				}
+			}
+			if !reflect.DeepEqual(ids, wantIDs) {
+				t.Errorf("benchmarks = %v, want %v", ids, wantIDs)
+			}
+		})
+	}
+}
+
 func TestJsonnetModelAuth(t *testing.T) {
 	tc := &scenarioConfig{
 		values:                map[string]string{},
@@ -1432,6 +1474,7 @@ type jsonnetBenchmarkPayload struct {
 
 type jsonnetPayloadDocument struct {
 	Name         string                    `json:"name"`
+	Model        *api.ModelRef             `json:"model"`
 	Benchmarks   []jsonnetBenchmarkPayload `json:"benchmarks"`
 	PassCriteria *struct {
 		Threshold float64 `json:"threshold"`
@@ -1459,6 +1502,73 @@ func evaluateJsonnetPayloadDocument(t *testing.T, tc *scenarioConfig, file strin
 		t.Fatalf("unmarshal %s: %v\noutput: %s", file, err, out)
 	}
 	return doc
+}
+
+func TestJsonnetRagasEmbeddingEndpoint(t *testing.T) {
+	for _, disconnected := range []bool{false, true} {
+		t.Run(fmt.Sprintf("disconnected=%v", disconnected), func(t *testing.T) {
+			environment := "connected"
+			if disconnected {
+				environment = "disconnected"
+			}
+			tc := &scenarioConfig{jsonnetHarnessEnv: map[string]string{
+				"ENVIRONMENT_ID":        environment,
+				"MODEL_NAME":            "Qwen/Qwen3-VL-30B-A3B-Instruct",
+				"MODEL_URL":             "https://chat.example/v1",
+				"MODEL_AUTH_SECRET_REF": "ragas-model-connections",
+				"RAGAS_EMBEDDING_MODEL": "granite-embedding",
+				"RAGAS_EMBEDDING_URL":   "https://ignored-legacy-value.example/v1",
+			}}
+			doc := evaluateJsonnetPayloadDocument(t, tc, "evaluation_job_ragas.jsonnet")
+			if doc.Model == nil || doc.Model.Auth == nil || doc.Model.Auth.SecretRef != "ragas-model-connections" {
+				t.Fatal("Ragas job must retain the model-auth Secret reference")
+			}
+			if len(doc.Benchmarks) != 2 {
+				t.Fatalf("got %d benchmarks, want 2", len(doc.Benchmarks))
+			}
+			for i, id := range []string{"ragas_rag_default", "ragas_rag_full"} {
+				benchmark := doc.Benchmarks[i]
+				if benchmark.ID != id || benchmark.ProviderID != "ragas" {
+					t.Fatalf("unexpected benchmark: %+v", benchmark)
+				}
+				for key, want := range map[string]any{
+					"embedding_model": "granite-embedding",
+					"num_examples":    float64(1),
+				} {
+					if got := benchmark.Parameters[key]; got != want {
+						t.Errorf("%s parameters.%s = %v, want %v", id, key, got, want)
+					}
+				}
+				for _, key := range []string{"embedding_url", "judge_url", "judge_api_key"} {
+					if _, exists := benchmark.Parameters[key]; exists {
+						t.Errorf("%s parameters.%s must use the model-auth Secret", id, key)
+					}
+				}
+				if benchmark.TestDataRef == nil || benchmark.TestDataRef.S3.Key != "datasets/ragas/dataset.jsonl" {
+					t.Errorf("%s lost its RAG dataset reference", id)
+				}
+			}
+		})
+	}
+}
+
+func TestJsonnetRagasRequiresEmbeddingModel(t *testing.T) {
+	const key = "RAGAS_EMBEDDING_MODEL"
+	for _, value := range []string{"unset", "", " \t "} {
+		t.Run(value, func(t *testing.T) {
+			env := map[string]string{}
+			tc := &scenarioConfig{jsonnetHarnessEnv: env}
+			if value == "unset" {
+				tc.jsonnetHarnessEnvOmit = []string{key}
+			} else {
+				env[key] = value
+			}
+			_, err := tc.evaluateJsonnetFile(jsonnetPayloadFilePath(t, "evaluation_job_ragas.jsonnet"))
+			if err == nil || !strings.Contains(err.Error(), key) {
+				t.Fatalf("expected actionable error naming %s, got %v", key, err)
+			}
+		})
+	}
 }
 
 func assertJsonnetBenchmarksDisconnectedAware(t *testing.T, file string, benchmarks []jsonnetBenchmarkPayload, disconnected bool) {

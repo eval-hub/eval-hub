@@ -16,6 +16,14 @@
 
 A lightweight REST API service for orchestrating LLM evaluations across multiple backends. Written in Go, it routes evaluation requests to frameworks like lm-evaluation-harness, RAGAS, Garak, and GuideLLM orchestrated via a [complementary SDK](https://github.com/eval-hub/eval-hub-sdk), tracks experiments via MLflow, and runs natively on OpenShift.
 
+## Native TLS
+
+API and MCP HTTP listeners share generic `TLS_REQUIRED`, `TLS_MIN_VERSION`,
+`TLS_CIPHERS` and `TLS_CURVES` controls. See the [native TLS contract](docs/native-tls.md)
+for certificate configuration, supported settings, proxy-terminated deployments,
+client verification and capability limits. This does not change plaintext metrics
+or private sidecar backends into HTTPS.
+
 ## Architecture
 
 ### OpenShift architecture

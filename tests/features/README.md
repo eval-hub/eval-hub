@@ -51,6 +51,32 @@ Run all feature tests:
 go test ./tests/features/...
 ```
 
+### Ragas model connections (required for the Ragas provider scenario)
+
+Both Ragas suites call `/v1/embeddings`. Set the embedding model ID and use the
+existing model-auth Secret for the connection. A chat-only MaaS endpoint cannot
+serve embedding calls. For example:
+
+```bash
+export RAGAS_EMBEDDING_MODEL="granite-embedding"
+export MODEL_AUTH_SECRET_REF="ragas-model-connections"
+```
+
+Use your deployment's actual model ID. In the Secret named by
+`MODEL_AUTH_SECRET_REF`, retain the evaluated model's `api-key` and add
+`embedding_api-key` and `embedding_url` (for example,
+`http://granite-embedding:8080/v1`). For an unauthenticated embedding service
+that ignores Authorization, the embedding key can be a nonempty dummy value.
+The adapter receives `embedding_api-key:ref` and a projected sidecar URL; the
+sidecar selects the embedding upstream and injects its real key. No embedding
+URL environment variable or `OPENAI_API_KEY` injection is required.
+
+Both suites receive `RAGAS_EMBEDDING_MODEL`; the payload reports a configuration
+error before submission if that setting is missing or blank. Use an adapter
+image that reads the role-specific projected Secret entries. Optional
+`judge_api-key` and `judge_url` entries select a separate judge connection;
+without them Ragas uses the evaluated model's endpoint and credential.
+
 ### Local Server Mode (Default)
 
 If `SERVER_URL` is not set, the tests will automatically start the server in a separate goroutine before running the test suite. The server will be started on:
@@ -72,6 +98,35 @@ When running in local server mode, the tests will:
 1. Start the server in a background goroutine during test suite initialization
 2. Wait for the server to be ready by checking the health endpoint
 3. Automatically shut down the server after all tests complete
+
+## Benchmark provider selection
+
+The `@benchmark_providers` scenarios use a curated subset of the provider
+catalogs for runs against a model endpoint:
+
+- Garak uses `quick`, `avid_ethics`, and `avid_performance` to keep the provider
+  smoke run bounded.
+- GuideLLM uses `throughput` and `quick_perf_test`; the broader scheduling and
+  performance profiles are excluded from this baseline run.
+- LightEval uses two groups of generative tasks. The LiteLLM endpoint backend
+  does not implement loglikelihood, and the affected TruthfulQA generation
+  formatter requires fields absent from its dataset. The baseline also omits
+  the AIME and LiveCodeBench cases.
+- LM Evaluation Harness omits ACLUE, CMMLU, SCROLLS, and Pile tasks that fail
+  dataset loading because remote-code trust is not enabled. It also omits
+  `careqa_open_perplexity` and `tinyTruthfulQA`, which require additional
+  packages, and the affected HumanEval/MBPP tasks that require code execution
+  opt-in or are unavailable in the adapter.
+
+These selections do not change the provider catalogs. Individual catalog
+benchmarks can still be run through the opt-in [benchmark smoke suite](../benchmarks/README.md).
+Keep each scenario's expected `results.benchmarks` length aligned with its
+Jsonnet payload. CI checks this automatically; run the same check locally
+without a server or cluster:
+
+```bash
+go test ./tests/features -run '^TestBenchmarkProviderFixtureCounts$'
+```
 
 ## Test Structure
 
