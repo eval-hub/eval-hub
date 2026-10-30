@@ -26,7 +26,9 @@ func main() {
 	}
 }
 
-func fileID(id string) string { return strings.ReplaceAll(url.PathEscape(id), ".", "%2E") }
+func fileID(id string) string {
+	return strings.NewReplacer(".", "%2E", ":", "%3A").Replace(url.PathEscape(id))
+}
 
 func generate(providersDir, outputDir string) error {
 	files, err := filepath.Glob(filepath.Join(providersDir, "*.yaml"))
