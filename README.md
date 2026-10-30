@@ -245,8 +245,10 @@ or **Docker**), kind, kubectl, Make, Git, curl, OpenSSL, and Python 3. Install
 (for podman on macOS, start the podman machine first). These scripts use the
 container runtime to build images, run the kind nodes, and manage the local
 image registry. Podman is used in preference to Docker when it is installed and
-reachable; set `CONTAINER_RUNTIME=docker` (or
-`make dev-deploy CONTAINER_RUNTIME=docker`) to force Docker instead.
+reachable, except under WSL where Docker is preferred (WSL2 podman can pass
+`podman info` but fail during kind node startup); set `CONTAINER_RUNTIME`
+(for example `make dev-deploy CONTAINER_RUNTIME=docker`) to force a specific
+runtime.
 
 Deploy the local EvalHub service, operator, adapters, and mock target/judge
 services:

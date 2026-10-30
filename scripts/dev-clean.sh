@@ -51,7 +51,7 @@ Inputs (also accepted as environment variables):
   DELETE_CLUSTER     true to delete that cluster too (default: false)
   CONTAINER_RUNTIME  container engine that owns the registry container and the
                      temporary image tags (podman or docker; default: podman
-                     when reachable, otherwise docker)
+                     when reachable, docker under WSL, otherwise docker)
 
 The system namespace is retained to avoid deleting unrelated resources that may
 have been added there. Deployment resources are removed only when their ownership
@@ -114,9 +114,12 @@ validate_inputs() {
 }
 
 # Select the container runtime that owns the registry container and the
-# temporary image tags. Podman is preferred whenever it is installed and
-# reachable; Docker is the fallback. Set CONTAINER_RUNTIME to force a runtime.
+# temporary image tags. Set CONTAINER_RUNTIME to force a specific runtime.
+# Otherwise Podman is preferred whenever it is installed and reachable, except
+# under WSL where Docker is preferred instead (see detect_container_runtime in
+# dev-deploy.sh). The non-preferred runtime is the fallback.
 detect_container_runtime() {
+  local -a preferred_runtimes=()
   case "$CONTAINER_RUNTIME" in
     podman|docker)
       command -v "$CONTAINER_RUNTIME" >/dev/null 2>&1 ||
@@ -125,13 +128,20 @@ detect_container_runtime() {
         fail "$CONTAINER_RUNTIME is installed but not reachable. Start the $CONTAINER_RUNTIME daemon (or podman machine) and retry."
       ;;
     "")
-      if command -v podman >/dev/null 2>&1 && podman info >/dev/null 2>&1; then
-        CONTAINER_RUNTIME=podman
-      elif command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-        CONTAINER_RUNTIME=docker
+      if uname -r | grep -qiE 'microsoft|wsl'; then
+        preferred_runtimes=(docker podman)
       else
-        fail "Neither podman nor docker is reachable. Install podman (preferred) or docker and make sure it is running."
+        preferred_runtimes=(podman docker)
       fi
+      local runtime
+      for runtime in "${preferred_runtimes[@]}"; do
+        if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
+          CONTAINER_RUNTIME="$runtime"
+          break
+        fi
+      done
+      [[ -n "$CONTAINER_RUNTIME" ]] ||
+        fail "Neither podman nor docker is reachable. Install podman (preferred; docker under WSL) and make sure it is running."
       ;;
     *)
       fail "CONTAINER_RUNTIME must be 'podman' or 'docker'."
@@ -142,7 +152,7 @@ detect_container_runtime() {
 
 check_prerequisites() {
   local tool
-  for tool in kind kubectl env grep awk cksum date mktemp chmod rm rmdir; do
+  for tool in kind kubectl env grep awk cksum date mktemp chmod rm rmdir uname; do
     command -v "$tool" >/dev/null 2>&1 || fail "Required command not found: $tool"
   done
   detect_container_runtime
