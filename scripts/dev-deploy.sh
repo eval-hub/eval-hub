@@ -30,6 +30,7 @@ WORK_DIR=""
 REGISTRY_NAME=""
 REGISTRY_ALIAS=""
 REGISTRY_PORT=""
+PROXY_SOURCE=""
 TEMP_REGISTRY_TAGS=()
 PORT_FORWARD_PID=""
 KIND_CLUSTER_CREATED=false
@@ -497,7 +498,13 @@ tag_and_push() {
   "$CONTAINER_RUNTIME" image inspect "$source" >/dev/null 2>&1 || fail "Image missing before registry push: $source"
   "$CONTAINER_RUNTIME" image tag "$source" "$destination"
   TEMP_REGISTRY_TAGS+=("$destination")
-  "$CONTAINER_RUNTIME" image push "$destination"
+  # The local registry serves plain HTTP. Docker's daemon implicitly trusts
+  # localhost registries; podman requires an explicit TLS opt-out for them.
+  if [[ "$CONTAINER_RUNTIME" == "podman" ]]; then
+    "$CONTAINER_RUNTIME" image push --tls-verify=false "$destination"
+  else
+    "$CONTAINER_RUNTIME" image push "$destination"
+  fi
   remove_temporary_registry_tag "$destination"
 }
 
@@ -544,8 +551,27 @@ ensure_registry() {
   log PASS "Local registry is ready on port $REGISTRY_PORT and joined to the kind network."
 }
 
+# quay.io/opendatahub/odh-kube-rbac-proxy publishes linux/amd64 only, and the
+# operator passes ODH-fork-only flags (for example --tls-curve-preferences),
+# so the upstream brancz image is not a drop-in replacement: build the ODH
+# fork from source for arm64 dev machines. Sets PROXY_SOURCE to the local
+# image reference; the local registry tag keeps the odh name so rendered
+# manifests and cleanup keep matching.
+build_kube_rbac_proxy_arm64() {
+  local src
+  src="${WORK_DIR}/kube-rbac-proxy"
+  PROXY_SOURCE="$(image_ref odh-kube-rbac-proxy)"
+  log INFO "Building $PROXY_SOURCE from opendatahub-io/kube-rbac-proxy (the published image is linux/amd64 only)."
+  git clone --quiet --depth 1 https://github.com/opendatahub-io/kube-rbac-proxy "$src" ||
+    fail "Could not clone https://github.com/opendatahub-io/kube-rbac-proxy."
+  "$CONTAINER_RUNTIME" build --platform linux/arm64 --build-arg TARGETARCH=arm64 \
+    --tag "$PROXY_SOURCE" --file "$src/Dockerfile.redhat" "$src" ||
+    fail "Could not build the arm64 kube-rbac-proxy image."
+  log PASS "Built $PROXY_SOURCE"
+}
+
 publish_images() {
-  local name source destination
+  local name source destination proxy_source
   local -a image_names=(eval-hub trustyai-service-operator)
   image_names+=("${SELECTED_ADAPTER_IMAGES[@]}")
   for name in "${image_names[@]}"; do
@@ -554,7 +580,14 @@ publish_images() {
     log INFO "Publishing $name to the cluster-local registry."
     tag_and_push "$source" "$destination"
   done
-  local mock_source=docker.io/library/python:3.12-slim proxy_source=quay.io/opendatahub/odh-kube-rbac-proxy:odh-stable
+  local mock_source=docker.io/library/python:3.12-slim
+  case "$(uname -m)" in
+    aarch64 | arm64)
+      build_kube_rbac_proxy_arm64
+      proxy_source="$PROXY_SOURCE"
+      ;;
+    *) proxy_source=quay.io/opendatahub/odh-kube-rbac-proxy:odh-stable ;;
+  esac
   "$CONTAINER_RUNTIME" image inspect "$mock_source" >/dev/null 2>&1 || "$CONTAINER_RUNTIME" image pull "$mock_source"
   tag_and_push "$mock_source" "$(registry_image kind-openai-mock)"
   "$CONTAINER_RUNTIME" image inspect "$proxy_source" >/dev/null 2>&1 || "$CONTAINER_RUNTIME" image pull "$proxy_source"
