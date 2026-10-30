@@ -70,14 +70,15 @@ benchmarks:
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - acc
+      - all.em
+      - piqa.em
     tags:
       - reasoning
       - physical
       - lighteval
       - suite
     primary_score:
-      metric: acc
+      metric: all.em
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
@@ -132,14 +133,14 @@ benchmarks:
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - acc
-      - acc_norm
+      - all.em
+      - mmlu:_average.em
     tags:
       - knowledge
       - lighteval
       - suite
     primary_score:
-      metric: acc_norm
+      metric: mmlu:_average.em
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
@@ -175,8 +176,7 @@ benchmarks:
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - acc
-      - acc_norm
+      - hellaswag.em
     num_few_shot: 0
     dataset_size: 10042
     tags:
@@ -184,7 +184,7 @@ benchmarks:
       - commonsense
       - lighteval
     primary_score:
-      metric: acc_norm
+      metric: hellaswag.em
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
@@ -219,8 +219,7 @@ benchmarks:
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - acc
-      - acc_norm
+      - openbookqa.em
     num_few_shot: 0
     dataset_size: 500
     tags:
@@ -228,7 +227,7 @@ benchmarks:
       - qa
       - lighteval
     primary_score:
-      metric: acc_norm
+      metric: openbookqa.em
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
@@ -285,7 +284,7 @@ benchmarks:
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - acc
+      - piqa.em
     num_few_shot: 0
     dataset_size: 1838
     tags:
@@ -293,7 +292,7 @@ benchmarks:
       - physical
       - lighteval
     primary_score:
-      metric: acc
+      metric: piqa.em
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
@@ -350,7 +349,7 @@ benchmarks:
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - extractive_match
+      - gsm8k.extractive_match
     num_few_shot: 8
     dataset_size: 1319
     tags:
@@ -358,7 +357,7 @@ benchmarks:
       - reasoning
       - lighteval
     primary_score:
-      metric: extractive_match
+      metric: gsm8k.extractive_match
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
@@ -478,15 +477,14 @@ benchmarks:
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - acc
-      - exact_match
+      - triviaqa.em
     num_few_shot: 0
     tags:
       - knowledge
       - qa
       - lighteval
     primary_score:
-      metric: acc
+      metric: triviaqa.em
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
