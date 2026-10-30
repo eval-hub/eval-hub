@@ -43,12 +43,30 @@ DEMO_SOURCE_COLLECTION_ID ?= instruction-output-v1
 DEMO_JOB_TIMEOUT_SECONDS ?= 900
 EVALHUB_API_BASE_URL ?=
 EVALHUB_KUBECONFIG_FILE ?=
+# The dev targets (dev-deploy, and test-benchmarks-kind which depends on it)
+# build images from sibling source checkouts. Each repository is located as a
+# sibling of this eval-hub checkout first, then as <parent>/<repo> under each
+# colon-separated DEV_REPO_PARENT_PATHS entry (default: ~/code):
+#
+#   trustyai-service-operator  requires Dockerfile                         always required
+#   eval-hub-contrib           requires adapters/inspect/Containerfile     ADAPTERS includes inspect
+#                              requires adapters/followbench/Containerfile ADAPTERS includes followbench
+#   lm-evaluation-harness      requires Dockerfile.lmes-job                ADAPTERS includes lm-evaluation-harness
+#
+# With the default ADAPTERS=all all three checkouts must be accessible; narrow
+# ADAPTERS (comma-separated) to skip repositories you do not need. Nothing is
+# cloned automatically; the lm-evaluation-harness checkout is the fork at
+# https://github.com/opendatahub-io/lm-evaluation-harness.git, checked out on
+# its incubation (or stable) branch — the default main branch does not contain
+# the required Dockerfile.lmes-job.
 DEV_REPO_PARENT_PATHS ?= $(HOME)/code
+CONTAINER_RUNTIME ?=
 
 .PHONY: dev-deploy dev-deploy-help dev-clean dev-clean-help dev-demo dev-demo-help
-dev-deploy: ## Build and deploy the local EvalHub stack to Docker-backed kind (optional air-gap mode)
+dev-deploy: ## Build and deploy the local EvalHub stack to podman/Docker-backed kind (optional air-gap mode)
 	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" IMAGE_TAG="$(IMAGE_TAG)" \
 		SKIP_BUILD="$(SKIP_BUILD)" AIRGAP="$(AIRGAP)" ADAPTERS="$(ADAPTERS)" \
+		CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" \
 		EVALHUB_HOST_PORT="$(EVALHUB_HOST_PORT)" EVALHUB_NODE_PORT="$(EVALHUB_NODE_PORT)" \
 		EVALHUB_HOST_BIND_ADDRESS="$(EVALHUB_HOST_BIND_ADDRESS)" \
 		DEV_REPO_PARENT_PATHS="$(DEV_REPO_PARENT_PATHS)" bash scripts/dev-deploy.sh
@@ -60,7 +78,7 @@ DELETE_CLUSTER ?= false
 
 dev-clean: ## Remove the local EvalHub deployment; optionally delete its kind cluster
 	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" IMAGE_TAG="$(IMAGE_TAG)" DELETE_CLUSTER="$(DELETE_CLUSTER)" \
-		bash scripts/dev-clean.sh
+		CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" bash scripts/dev-clean.sh
 
 dev-clean-help: ## Show dev-clean inputs and usage
 	@bash scripts/dev-clean.sh --help
@@ -296,7 +314,7 @@ FVT_OUTPUT ?= --godog.format=junit:${PWD}/$(BIN_DIR)/junit-fvt-report.xml,pretty
 FVT_TAGS ?= --godog.tags=~@ignore && ~@mlflow && ~@cluster && ~@local_runtime && ~@benchmark_providers
 FVT_CONCURRENCY ?= 1
 
-.PHONY: test-benchmarks generate-benchmark-configs
+.PHONY: test-benchmarks test-benchmarks-kind generate-benchmark-configs
 BENCHMARK_PARALLEL ?= 2
 BENCHMARK_TIMEOUT ?= 30m
 BENCHMARK_RUN ?= TestBenchmarkSmoke
@@ -313,6 +331,48 @@ test-benchmarks: export MLFLOW_EXPERIMENT_NAME =
 test-benchmarks: $(GOTESTSUM) ## Run live benchmark smoke tests (requires SERVER_URL, MODEL_NAME, MODEL_URL)
 	@mkdir -p '$(dir $(BENCHMARK_JUNIT))'
 	BENCHMARK_SMOKE=1 '$(GOTESTSUM)' --format standard-verbose --junitfile '$(BENCHMARK_JUNIT)' -- ./tests/benchmarks -run='$(BENCHMARK_RUN)' -count=1 -parallel=$(BENCHMARK_PARALLEL) -timeout=$(BENCHMARK_TIMEOUT) -v
+
+# Benchmark smoke tests against the local dev-deploy kind cluster. The cluster
+# API is reached through the loopback NodePort using a short-lived token minted
+# for the local EvalHub service account, and evaluation jobs use the in-cluster
+# mock target model. By default only the providers whose adapter images
+# dev-deploy builds are selected; override BENCHMARK_RUN to widen or narrow it.
+KIND_KUBECONFIG ?= $(if $(XDG_CONFIG_HOME),$(XDG_CONFIG_HOME),$(HOME)/.config)/evalhub/kubeconfigs/$(KIND_CLUSTER_NAME).yaml
+KIND_BENCHMARK_RUN ?= TestBenchmarkSmoke/(inspect|followbench|lm_evaluation_harness)/
+KIND_BENCHMARK_SERVER_URL ?= https://127.0.0.1:$(EVALHUB_HOST_PORT)
+KIND_BENCHMARK_TENANT ?= system
+KIND_BENCHMARK_MODEL_NAME ?= kind-target-model
+KIND_BENCHMARK_MODEL_URL ?= http://evalhub-kind-mock-target.system.svc.cluster.local:8000/v1
+KIND_BENCHMARK_MODEL_SECRET ?= evalhub-kind-demo-auth
+KIND_BENCHMARK_TOKEN_DURATION ?= 1h
+
+test-benchmarks-kind: dev-deploy ## Run benchmark smoke tests against the local kind cluster (deploys it first; SKIP_BUILD=true reuses built images)
+	@set -eu; \
+	if [ ! -f "$(KIND_KUBECONFIG)" ]; then \
+		echo "FAIL: private dev-deploy kubeconfig not found: $(KIND_KUBECONFIG). Run make dev-deploy first."; exit 1; \
+	fi; \
+	if [ -z "$$(kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" get secret "$(KIND_BENCHMARK_MODEL_SECRET)" --ignore-not-found -o name)" ]; then \
+		printf '%s\n' \
+			'apiVersion: v1' 'kind: Secret' \
+			'metadata:' '  name: $(KIND_BENCHMARK_MODEL_SECRET)' '  namespace: $(KIND_BENCHMARK_TENANT)' \
+			'  annotations:' '    io.evalhub.kind-smoke.cluster: $(KIND_CLUSTER_NAME)' \
+			'type: Opaque' 'stringData:' \
+			'  api-key: target-test-token' \
+			'  judge_api-key: judge-test-token' \
+			'  judge_url: http://evalhub-kind-mock-judge.system.svc.cluster.local:8000/v1' \
+			| kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" apply -f - >/dev/null; \
+		echo "Created mock-auth Secret $(KIND_BENCHMARK_MODEL_SECRET) for the mock target and judge models."; \
+	fi; \
+	token="$$(kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" create token evalhub-local-service --duration=$(KIND_BENCHMARK_TOKEN_DURATION))"; \
+	echo "Running benchmark smoke tests against $(KIND_BENCHMARK_SERVER_URL) with model $(KIND_BENCHMARK_MODEL_NAME)."; \
+	SERVER_URL="$(KIND_BENCHMARK_SERVER_URL)" \
+	EVALHUB_TOKEN="$$token" \
+	X_TENANT="$(KIND_BENCHMARK_TENANT)" \
+	MODEL_NAME="$(KIND_BENCHMARK_MODEL_NAME)" \
+	MODEL_URL="$(KIND_BENCHMARK_MODEL_URL)" \
+	MODEL_AUTH_SECRET_REF="$(KIND_BENCHMARK_MODEL_SECRET)" \
+	BENCHMARK_RUN="$(KIND_BENCHMARK_RUN)" \
+	$(MAKE) test-benchmarks
 
 generate-benchmark-configs: ## Create missing per-benchmark smoke fixtures from config/providers
 	go run ./tests/benchmarks/generate

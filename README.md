@@ -239,11 +239,16 @@ make fmt                    # go fmt
 
 ### Local kind debugging
 
-The local deployment and demo scripts require **Docker**, kind, kubectl, Make,
-Git, curl, OpenSSL, and Python 3. Install `jq` as well to use the API demo and
-curl examples. Docker must be running. These scripts use Docker to build images,
-run the kind nodes, and manage the local image registry; they do not currently
-support Podman.
+The local deployment and demo scripts require a container runtime (**podman**
+or **Docker**), kind, kubectl, Make, Git, curl, OpenSSL, and Python 3. Install
+`jq` as well to use the API demo and curl examples. The runtime must be running
+(for podman on macOS, start the podman machine first). These scripts use the
+container runtime to build images, run the kind nodes, and manage the local
+image registry. Podman is used in preference to Docker when it is installed and
+reachable, except under WSL where Docker is preferred (WSL2 podman can pass
+`podman info` but fail during kind node startup); set `CONTAINER_RUNTIME`
+(for example `make dev-deploy CONTAINER_RUNTIME=docker`) to force a specific
+runtime.
 
 Deploy the local EvalHub service, operator, adapters, and mock target/judge
 services:
@@ -253,9 +258,19 @@ make dev-deploy
 ```
 
 By default this creates or reuses the `evalhub-dev` kind cluster and builds the
-images from the EvalHub repository plus sibling `../eval-hub-contrib` and
-`../trustyai-service-operator` checkouts. Set `EVALHUB_CONTRIB_REPO` or
-`TRUSTYAI_OPERATOR_REPO` when those repositories are elsewhere. The command
+images from the EvalHub repository plus sibling `../trustyai-service-operator`,
+`../eval-hub-contrib`, and `../lm-evaluation-harness` checkouts. The
+lm-evaluation-harness checkout is the fork at
+<https://github.com/opendatahub-io/lm-evaluation-harness.git> — clone it
+alongside EvalHub on its `incubation` (or `stable`) branch, since only those
+branches provide the `Dockerfile.lmes-job` used for the LMES adapter image,
+not the default `main` branch. The operator
+checkout is always required; the contrib and lm-evaluation-harness checkouts
+are needed for the adapter images selected by the default `ADAPTERS=all` —
+narrow `ADAPTERS` to skip either. Each repository is searched as a sibling of
+the EvalHub checkout first and then as `<parent>/<repo>` under each
+colon-separated `DEV_REPO_PARENT_PATHS` entry (default `~/code`); set that
+variable when the repositories live elsewhere. The command
 prints the private kubeconfig path and API URL. It does not change the current
 kubectl context; use the private kubeconfig explicitly:
 
@@ -277,7 +292,8 @@ Delete the deployment and the selected cluster as well:
 make dev-clean DELETE_CLUSTER=true
 ```
 
-Both cleanup modes retain the local build image tags and Docker's build cache.
+Both cleanup modes retain the local build image tags and the container runtime's
+build cache.
 They remove temporary localhost:<port> tags used only to push images into the
 kind registry. Repeated deploys of unchanged EvalHub source reuse the Go build
 layers. `make dev-deploy-help` and `make dev-clean-help` list the settings.
@@ -303,6 +319,28 @@ timeout:
 make dev-demo DEMO_SOURCE_COLLECTION_ID=instruction-output-v1 DEMO_JOB_TIMEOUT_SECONDS=900
 make dev-demo-help
 ```
+
+Run the benchmark smoke tests from `tests/benchmarks` against the deployed
+cluster:
+
+```bash
+make test-benchmarks-kind
+```
+
+This deploys (or reuses) the kind cluster via `make dev-deploy` — pass
+`SKIP_BUILD=true` to reuse previously built images — mints a short-lived token
+for the local EvalHub service account, and points the suite at the loopback API
+URL with the in-cluster mock target as the model. By default it runs only the
+providers whose adapter images the deployment builds (Inspect, FollowBench, and
+LM Evaluation Harness); the remaining benchmark-test inputs are unchanged:
+
+```bash
+make test-benchmarks-kind BENCHMARK_RUN='TestBenchmarkSmoke/inspect/'
+make test-benchmarks-kind SKIP_BUILD=true BENCHMARK_TIMEOUT=1h
+```
+
+The mock-auth Secret it creates is the same one `make dev-demo` uses, and
+`make dev-clean` removes it.
 
 #### Calling the API with curl
 

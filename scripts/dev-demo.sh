@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Exercise the EvalHub API on an already deployed Docker-backed kind cluster.
+# Exercise the EvalHub API on an already deployed kind cluster.
 # This creates a demo collection, a completed evaluation job, and a mock-auth Secret.
 set -Eeuo pipefail
 umask 077
