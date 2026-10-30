@@ -277,11 +277,22 @@ func TestGarakBenchmarkScanLimits(t *testing.T) {
 			}
 			wantIDs := []string{"quick", "avid_ethics", "avid_performance"}
 			var ids []string
-			wantConfig := map[string]any{
-				"run":     map[string]any{"generations": float64(1), "soft_probe_prompt_cap": float64(1)},
-				"plugins": map[string]any{"extended_detectors": false},
-			}
 			for _, benchmark := range job.Benchmarks {
+				plugins := map[string]any{"extended_detectors": false}
+				if benchmark.ID == "avid_ethics" {
+					plugins["probes"] = map[string]any{
+						"atkgen": map[string]any{
+							"Tox": map[string]any{
+								"convs_per_generation": float64(1),
+								"max_calls_per_conv":   float64(1),
+							},
+						},
+					}
+				}
+				wantConfig := map[string]any{
+					"run":     map[string]any{"generations": float64(1), "soft_probe_prompt_cap": float64(1)},
+					"plugins": plugins,
+				}
 				ids = append(ids, benchmark.ID)
 				if benchmark.ProviderID != "garak" {
 					t.Errorf("%s provider = %q, want garak", benchmark.ID, benchmark.ProviderID)
