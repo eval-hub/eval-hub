@@ -308,6 +308,28 @@ make dev-demo DEMO_SOURCE_COLLECTION_ID=instruction-output-v1 DEMO_JOB_TIMEOUT_S
 make dev-demo-help
 ```
 
+Run the benchmark smoke tests from `tests/benchmarks` against the deployed
+cluster:
+
+```bash
+make test-benchmarks-kind
+```
+
+This deploys (or reuses) the kind cluster via `make dev-deploy` — pass
+`SKIP_BUILD=true` to reuse previously built images — mints a short-lived token
+for the local EvalHub service account, and points the suite at the loopback API
+URL with the in-cluster mock target as the model. By default it runs only the
+providers whose adapter images the deployment builds (Inspect, FollowBench, and
+LM Evaluation Harness); the remaining benchmark-test inputs are unchanged:
+
+```bash
+make test-benchmarks-kind BENCHMARK_RUN='TestBenchmarkSmoke/inspect/'
+make test-benchmarks-kind SKIP_BUILD=true BENCHMARK_TIMEOUT=1h
+```
+
+The mock-auth Secret it creates is the same one `make dev-demo` uses, and
+`make dev-clean` removes it.
+
 #### Calling the API with curl
 
 These commands use the local self-signed TLS certificate. Create a short-lived
