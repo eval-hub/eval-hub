@@ -44,11 +44,13 @@ DEMO_JOB_TIMEOUT_SECONDS ?= 900
 EVALHUB_API_BASE_URL ?=
 EVALHUB_KUBECONFIG_FILE ?=
 DEV_REPO_PARENT_PATHS ?= $(HOME)/code
+CONTAINER_RUNTIME ?=
 
 .PHONY: dev-deploy dev-deploy-help dev-clean dev-clean-help dev-demo dev-demo-help
-dev-deploy: ## Build and deploy the local EvalHub stack to Docker-backed kind (optional air-gap mode)
+dev-deploy: ## Build and deploy the local EvalHub stack to podman/Docker-backed kind (optional air-gap mode)
 	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" IMAGE_TAG="$(IMAGE_TAG)" \
 		SKIP_BUILD="$(SKIP_BUILD)" AIRGAP="$(AIRGAP)" ADAPTERS="$(ADAPTERS)" \
+		CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" \
 		EVALHUB_HOST_PORT="$(EVALHUB_HOST_PORT)" EVALHUB_NODE_PORT="$(EVALHUB_NODE_PORT)" \
 		EVALHUB_HOST_BIND_ADDRESS="$(EVALHUB_HOST_BIND_ADDRESS)" \
 		DEV_REPO_PARENT_PATHS="$(DEV_REPO_PARENT_PATHS)" bash scripts/dev-deploy.sh
@@ -60,7 +62,7 @@ DELETE_CLUSTER ?= false
 
 dev-clean: ## Remove the local EvalHub deployment; optionally delete its kind cluster
 	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" IMAGE_TAG="$(IMAGE_TAG)" DELETE_CLUSTER="$(DELETE_CLUSTER)" \
-		bash scripts/dev-clean.sh
+		CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" bash scripts/dev-clean.sh
 
 dev-clean-help: ## Show dev-clean inputs and usage
 	@bash scripts/dev-clean.sh --help

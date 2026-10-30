@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Remove the EvalHub development deployment from its Docker-backed kind cluster.
+# Remove the EvalHub development deployment from its kind cluster (podman or Docker backed).
 # By default the kind cluster is retained; --delete-cluster removes it entirely.
 set -Eeuo pipefail
 umask 077
@@ -8,6 +8,7 @@ umask 077
 KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-evalhub-dev}"
 IMAGE_TAG="${IMAGE_TAG:-kind-${KIND_CLUSTER_NAME}}"
 DELETE_CLUSTER="${DELETE_CLUSTER:-false}"
+CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-}"
 KUBECONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/evalhub/kubeconfigs"
 PRIVATE_KUBECONFIG="${KUBECONFIG_DIR}/${KIND_CLUSTER_NAME}.yaml"
 KUBECONFIG_FILE=""
@@ -40,25 +41,32 @@ owned by this script, plus evaluation workloads labeled for evalhub-local, while
 keeping the kind cluster and its private kubeconfig.
 Pass DELETE_CLUSTER=true (or --delete-cluster) to remove the named kind cluster
 as well. Keeping the cluster still deletes active and completed evaluation-job
-workloads belonging to the evalhub-local service. Host images and Docker build
-cache are retained. Temporary localhost:<port> tags used for registry pushes
+workloads belonging to the evalhub-local service. Host images and container
+build cache are retained. Temporary localhost:<port> tags used for registry pushes
 are removed; pass the same IMAGE_TAG used by dev-deploy when overriding it.
 
 Inputs (also accepted as environment variables):
   KIND_CLUSTER_NAME  kind cluster to clean (default: evalhub-dev)
   IMAGE_TAG          matching dev-deploy image tag (default: kind-<cluster>)
   DELETE_CLUSTER     true to delete that cluster too (default: false)
+  CONTAINER_RUNTIME  container engine that owns the registry container and the
+                     temporary image tags (podman or docker; default: podman
+                     when reachable, otherwise docker)
 
 The system namespace is retained to avoid deleting unrelated resources that may
 have been added there. Deployment resources are removed only when their ownership
 annotation matches this cluster; evaluation workloads are selected by the
 evalhub-local instance labels. A local registry container is removed only if its
-Docker label identifies it as belonging to the selected cluster.
+runtime label identifies it as belonging to the selected cluster.
 USAGE
 }
 
 kind_cmd() {
-  env -u KIND_EXPERIMENTAL_PROVIDER kind "$@"
+  if [[ "${CONTAINER_RUNTIME:-}" == podman ]]; then
+    KIND_EXPERIMENTAL_PROVIDER=podman kind "$@"
+  else
+    env -u KIND_EXPERIMENTAL_PROVIDER kind "$@"
+  fi
 }
 
 cluster_exists() {
@@ -87,10 +95,10 @@ resource_owner() {
 
 registry_owner() {
   local owner
-  owner="$(docker container inspect --format '{{ index .Config.Labels "io.evalhub.dev.cluster" }}' "$REGISTRY_NAME")" ||
+  owner="$("$CONTAINER_RUNTIME" container inspect --format '{{ index .Config.Labels "io.evalhub.dev.cluster" }}' "$REGISTRY_NAME")" ||
     fail "Could not inspect local registry container $REGISTRY_NAME."
   if [[ -z "$owner" || "$owner" == '<no value>' ]]; then
-    owner="$(docker container inspect --format '{{ index .Config.Labels "io.evalhub.kind-cluster" }}' "$REGISTRY_NAME")" ||
+    owner="$("$CONTAINER_RUNTIME" container inspect --format '{{ index .Config.Labels "io.evalhub.kind-cluster" }}' "$REGISTRY_NAME")" ||
       fail "Could not inspect local registry container $REGISTRY_NAME."
   fi
   printf '%s' "$owner"
@@ -105,17 +113,44 @@ validate_inputs() {
   case "$DELETE_CLUSTER" in true|false) ;; *) fail "DELETE_CLUSTER must be true or false." ;; esac
 }
 
+# Select the container runtime that owns the registry container and the
+# temporary image tags. Podman is preferred whenever it is installed and
+# reachable; Docker is the fallback. Set CONTAINER_RUNTIME to force a runtime.
+detect_container_runtime() {
+  case "$CONTAINER_RUNTIME" in
+    podman|docker)
+      command -v "$CONTAINER_RUNTIME" >/dev/null 2>&1 ||
+        fail "Required command not found: $CONTAINER_RUNTIME"
+      "$CONTAINER_RUNTIME" info >/dev/null 2>&1 ||
+        fail "$CONTAINER_RUNTIME is installed but not reachable. Start the $CONTAINER_RUNTIME daemon (or podman machine) and retry."
+      ;;
+    "")
+      if command -v podman >/dev/null 2>&1 && podman info >/dev/null 2>&1; then
+        CONTAINER_RUNTIME=podman
+      elif command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+        CONTAINER_RUNTIME=docker
+      else
+        fail "Neither podman nor docker is reachable. Install podman (preferred) or docker and make sure it is running."
+      fi
+      ;;
+    *)
+      fail "CONTAINER_RUNTIME must be 'podman' or 'docker'."
+      ;;
+  esac
+  log INFO "Using $CONTAINER_RUNTIME as the container runtime."
+}
+
 check_prerequisites() {
   local tool
-  for tool in docker kind kubectl env grep awk cksum date mktemp chmod rm rmdir; do
+  for tool in kind kubectl env grep awk cksum date mktemp chmod rm rmdir; do
     command -v "$tool" >/dev/null 2>&1 || fail "Required command not found: $tool"
   done
-  docker info >/dev/null 2>&1 || fail "Docker daemon is not reachable. Run this from the terminal where Docker works."
+  detect_container_runtime
 }
 
 check_registry_ownership() {
   local owner containers
-  containers="$(docker container ls --all --format '{{.Names}}')" || fail "Could not list Docker containers."
+  containers="$("$CONTAINER_RUNTIME" container ls --all --format '{{.Names}}')" || fail "Could not list $CONTAINER_RUNTIME containers."
   if ! printf '%s\n' "$containers" | grep -Fqx -- "$REGISTRY_NAME"; then
     return 0
   fi
@@ -126,8 +161,8 @@ check_registry_ownership() {
 
 remove_temporary_registry_tags() {
   local images repository tag suffix port image_ref
-  images="$(docker image ls --format '{{.Repository}}|{{.Tag}}')" ||
-    fail "Could not list local Docker image tags."
+  images="$("$CONTAINER_RUNTIME" image ls --format '{{.Repository}}|{{.Tag}}')" ||
+    fail "Could not list local $CONTAINER_RUNTIME image tags."
   while IFS='|' read -r repository tag; do
     [[ "$repository" == localhost:* ]] || continue
     suffix="${repository#localhost:}"
@@ -147,7 +182,7 @@ remove_temporary_registry_tags() {
     esac
     image_ref="${repository}:${tag}"
     log INFO "Removing temporary local registry tag $image_ref."
-    if ! docker image rm "$image_ref" >/dev/null; then
+    if ! "$CONTAINER_RUNTIME" image rm "$image_ref" >/dev/null; then
       log WARN "Could not remove temporary local registry tag $image_ref; it may be in use."
     fi
   done <<<"$images"
@@ -155,11 +190,11 @@ remove_temporary_registry_tags() {
 
 remove_registry() {
   local containers
-  containers="$(docker container ls --all --format '{{.Names}}')" || fail "Could not list Docker containers."
+  containers="$("$CONTAINER_RUNTIME" container ls --all --format '{{.Names}}')" || fail "Could not list $CONTAINER_RUNTIME containers."
   if printf '%s\n' "$containers" | grep -Fqx -- "$REGISTRY_NAME"; then
     log INFO "Removing script-managed local image registry $REGISTRY_NAME."
-    docker container rm --force "$REGISTRY_NAME" >/dev/null
-    log PASS "Removed the local registry container. Locally built images remain available in Docker."
+    "$CONTAINER_RUNTIME" container rm --force "$REGISTRY_NAME" >/dev/null
+    log PASS "Removed the local registry container. Locally built images remain available in $CONTAINER_RUNTIME."
   else
     log INFO "No local registry container exists for cluster $KIND_CLUSTER_NAME."
   fi
@@ -301,7 +336,7 @@ remove_registry_mirror_config() {
   while IFS= read -r node; do
     [[ -n "$node" ]] || continue
     log INFO "Removing this deployment's registry mirror configuration from kind node $node."
-    docker exec "$node" sh -c '
+    "$CONTAINER_RUNTIME" exec "$node" sh -c '
       alias="$1"
       for hosts_file in /etc/containerd/certs.d/localhost:*/hosts.toml; do
         [ -f "$hosts_file" ] || continue
@@ -379,7 +414,7 @@ clean_deployment_keep_cluster() {
   remove_registry
   log PASS "Removed the EvalHub development deployment. Kind cluster '$KIND_CLUSTER_NAME' and its kubeconfig are retained."
   log INFO "Namespace '$NAMESPACE' is retained to avoid deleting resources not owned by this deployment."
-  log INFO "Host images and Docker build cache are retained for faster redeployment."
+  log INFO "Host images and the container runtime build cache are retained for faster redeployment."
 }
 
 delete_cluster() {
@@ -410,7 +445,7 @@ delete_cluster() {
     log INFO "Removed this cluster's private kubeconfig."
   fi
   remove_registry
-  log PASS "Cluster deletion is complete. Host images and Docker build cache are retained."
+  log PASS "Cluster deletion is complete. Host images and the container runtime build cache are retained."
 }
 
 main() {
