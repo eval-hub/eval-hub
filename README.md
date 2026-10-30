@@ -256,9 +256,14 @@ make dev-deploy
 ```
 
 By default this creates or reuses the `evalhub-dev` kind cluster and builds the
-images from the EvalHub repository plus sibling `../eval-hub-contrib` and
-`../trustyai-service-operator` checkouts. Set `EVALHUB_CONTRIB_REPO` or
-`TRUSTYAI_OPERATOR_REPO` when those repositories are elsewhere. The command
+images from the EvalHub repository plus sibling `../trustyai-service-operator`,
+`../eval-hub-contrib`, and `../lm-evaluation-harness` checkouts. The operator
+checkout is always required; the contrib and lm-evaluation-harness checkouts
+are needed for the adapter images selected by the default `ADAPTERS=all` —
+narrow `ADAPTERS` to skip either. Each repository is searched as a sibling of
+the EvalHub checkout first and then as `<parent>/<repo>` under each
+colon-separated `DEV_REPO_PARENT_PATHS` entry (default `~/code`); set that
+variable when the repositories live elsewhere. The command
 prints the private kubeconfig path and API URL. It does not change the current
 kubectl context; use the private kubeconfig explicitly:
 

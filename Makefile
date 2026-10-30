@@ -43,6 +43,18 @@ DEMO_SOURCE_COLLECTION_ID ?= instruction-output-v1
 DEMO_JOB_TIMEOUT_SECONDS ?= 900
 EVALHUB_API_BASE_URL ?=
 EVALHUB_KUBECONFIG_FILE ?=
+# The dev targets (dev-deploy, and test-benchmarks-kind which depends on it)
+# build images from sibling source checkouts. Each repository is located as a
+# sibling of this eval-hub checkout first, then as <parent>/<repo> under each
+# colon-separated DEV_REPO_PARENT_PATHS entry (default: ~/code):
+#
+#   trustyai-service-operator  requires Dockerfile                         always required
+#   eval-hub-contrib           requires adapters/inspect/Containerfile     ADAPTERS includes inspect
+#                              requires adapters/followbench/Containerfile ADAPTERS includes followbench
+#   lm-evaluation-harness      requires Dockerfile.lmes-job                ADAPTERS includes lm-evaluation-harness
+#
+# With the default ADAPTERS=all all three checkouts must be accessible; narrow
+# ADAPTERS (comma-separated) to skip repositories you do not need.
 DEV_REPO_PARENT_PATHS ?= $(HOME)/code
 CONTAINER_RUNTIME ?=
 
