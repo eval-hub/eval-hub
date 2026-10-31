@@ -3237,14 +3237,13 @@ benchmarks:
   evaluation_targets: [model]
   metrics:
   - acc
-  - acc_norm
   num_few_shot: 0
   dataset_size: 1000
   tags:
   - code
   - lm_eval
   primary_score:
-    metric: acc_norm
+    metric: acc
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -3277,14 +3276,14 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - acc
+  - smoothed_bleu_4
   num_few_shot: 0
   dataset_size: 1000
   tags:
   - code
   - lm_eval
   primary_score:
-    metric: acc
+    metric: smoothed_bleu_4
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -3297,14 +3296,14 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - acc
+  - smoothed_bleu_4
   num_few_shot: 0
   dataset_size: 1000
   tags:
   - code
   - lm_eval
   primary_score:
-    metric: acc
+    metric: smoothed_bleu_4
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
@@ -3528,7 +3527,7 @@ benchmarks:
   modalities: [text]
   evaluation_targets: [model]
   metrics:
-  - accuracy_disamb
+  - acc
   - accuracy_amb
   num_few_shot: 0
   dataset_size: 58492
@@ -3537,12 +3536,12 @@ benchmarks:
   - fairness
   - lm_eval
   primary_score:
-    metric: accuracy_disamb
+    metric: accuracy_amb
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
   agent:
-    result_interpretation: Disambiguation accuracy; higher is better.
+    result_interpretation: Ambiguous-context accuracy (accuracy_amb); higher is better.
     score_ranges:
     - range: 0.0-0.25
       meaning: Below default pass threshold
