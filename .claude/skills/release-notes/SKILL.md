@@ -250,11 +250,12 @@ chore(skills): add release-notes skill for OpenSSF-compliant GitHub releases
 
 Append **one** approved AI attribution trailer at the end of the commit message
 body (after the subject and any description), naming the full model identifier
-and the harness that ran it:
+and the harness that ran it. Generate it instead of guessing:
 
-```text
-Assisted-by: <full model name> (<harness>)
+```bash
+make -s assisted-by-trailer
 ```
 
-for example `Assisted-by: Claude Opus 4.5 (Claude Code)`. Do not stack multiple
-attribution trailers.
+which prints e.g. `Assisted-by: DeepSeek-V4.1-Flash-1017 (Cline)`; see
+`AGENTS.md` for the detection order and the `AI_MODEL` / `AI_HARNESS`
+overrides. Do not stack multiple attribution trailers.

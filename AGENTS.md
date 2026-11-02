@@ -122,13 +122,13 @@ When a change is assisted by AI, add an `Assisted-by` trailer at the **end** of 
 Assisted-by: <full model name> (<harness>)
 ```
 
-For example:
+Generate the trailer instead of working it out by hand. An agent cannot read its own deployment name, and must not guess it or ask the author for it:
 
-```text
-Assisted-by: Claude Opus 4.5 (Cursor)
-Assisted-by: GPT-5.1-Codex-Max (Codex CLI)
-Assisted-by: Claude Opus 4.5 (Claude Code)
+```bash
+make -s assisted-by-trailer        # e.g. Assisted-by: DeepSeek-V4.1-Flash-1017 (Cline)
 ```
+
+`scripts/assisted-by-trailer.sh` reads the model from the harness that runs the change: `AI_MODEL`, else the harness environment (`CLINE_MODEL`, `ANTHROPIC_MODEL`, `OPENAI_MODEL`, `GEMINI_MODEL`, `CURSOR_MODEL`), else the harness session metadata (Cline `~/.cline/data`, Codex CLI `~/.codex/config.toml`, Claude Code `~/.claude/settings.json`); the harness name comes from `AI_HARNESS` or the harness environment. It prints the last path segment of the model id by default (pass `--keep-prefix` to the script for the full routing id) and exits non-zero when either value cannot be determined — only then set `AI_MODEL='<full model name>'` (and `AI_HARNESS='<harness>'`) or ask the author. Add the printed line verbatim.
 
 Add exactly one attribution trailer per commit and do not stack several.
 

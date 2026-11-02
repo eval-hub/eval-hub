@@ -4,7 +4,7 @@
 
 Closes #
 
-Assisted-by: <!-- <full model name> (<harness>), e.g. Claude Opus 4.5 (Cursor) -->
+Assisted-by: <!-- make -s assisted-by-trailer -->
 
 ## Type
 
