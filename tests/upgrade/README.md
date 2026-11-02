@@ -27,6 +27,12 @@ Creates an evaluation job, waits for completion, then collects all jobs on the c
 
 ## Optional environment variables
 
+Set `FVT_CA_CERT_PATH=/absolute/path/to/cluster-ca.pem` when the EvalHub API uses
+a private CA. The PEM bundle is added to system trust with certificate and
+hostname validation enabled. An unreadable or invalid bundle fails suite setup.
+When unset, system trust is used. This setting applies to the test runner's API
+requests; it does not configure trust inside evaluation job containers.
+
 | Variable                | Description                          |
 |-------------------------|--------------------------------------|
 | `MODEL_AUTH_SECRET_REF` | Secret reference for model auth (omits `model.auth` from the job payload if unset) |

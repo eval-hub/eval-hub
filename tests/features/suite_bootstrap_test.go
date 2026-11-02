@@ -2,7 +2,6 @@ package features
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -48,8 +47,10 @@ func createApiFeature() (*apiFeature, error) {
 		}
 	}
 	// Avoid reusing idle connections that the ingress router may have closed.
-	// Clone to preserve the suite's TLS settings without changing other clients.
-	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport, err := testhelpers.NewFVTTransport()
+	if err != nil {
+		return nil, err
+	}
 	transport.DisableKeepAlives = true
 	client := &http.Client{
 		Timeout:   timeout,
@@ -296,7 +297,7 @@ func (a *apiFeature) setupMCPServer(logger *slog.Logger) error {
 
 	logger.Info("Setting up MCP server", "base_url", a.baseURL.String(), "tenant", tenant, "has_token", token != "")
 
-	evalhubClient := evalhubclient.NewClient(a.baseURL.String())
+	evalhubClient := evalhubclient.NewClient(a.baseURL.String()).WithHTTPClient(a.client)
 	if tenant != "" {
 		evalhubClient = evalhubClient.WithTenant(tenant)
 	}
@@ -417,14 +418,13 @@ func checkModelEndpoint() {
 
 	fmt.Printf("Checking model endpoint connectivity: %s\n", modelURL)
 
+	transport, err := testhelpers.NewFVTTransport()
+	if err != nil {
+		panic(logError(err))
+	}
 	client := &http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				MinVersion:         tls.VersionTLS12,
-				InsecureSkipVerify: true, //nolint:gosec
-			},
-		},
+		Timeout:   10 * time.Second,
+		Transport: transport,
 	}
 
 	maxRetries := 3
@@ -564,13 +564,6 @@ func checkRegexes() {
 }
 
 func InitializeTestSuite(ctx *godog.TestSuiteContext) {
-	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		MaxVersion: tls.VersionTLS13,
-		//nolint:gosec
-		InsecureSkipVerify: true,
-	}
-
 	if authToken := os.Getenv("AUTH_TOKEN"); authToken != "" {
 		logDebug("Using Authorization header with token\n")
 	}
