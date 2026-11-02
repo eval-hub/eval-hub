@@ -122,13 +122,15 @@ When a change is assisted by AI, add an `Assisted-by` trailer at the **end** of 
 Assisted-by: <full model name> (<harness>)
 ```
 
-Generate the trailer instead of working it out by hand. An agent cannot read its own deployment name, and must not guess it or ask the author for it:
+This file guides every agent harness used on the repository (Cline, Codex CLI, Claude Code, Cursor, …), so the trailer is generated in the harness that is running the change rather than hard-coded per tool. No harness lets an agent read its own deployment name, and an agent must not guess it or ask the author for it:
 
 ```bash
-make -s assisted-by-trailer        # e.g. Assisted-by: DeepSeek-V4.1-Flash-1017 (Cline)
+make -s assisted-by-trailer        # prints the trailer for the harness running the command
 ```
 
-`scripts/assisted-by-trailer.sh` reads the model from the harness that runs the change: `AI_MODEL`, else the harness environment (`CLINE_MODEL`, `ANTHROPIC_MODEL`, `OPENAI_MODEL`, `GEMINI_MODEL`, `CURSOR_MODEL`), else the harness session metadata (Cline `~/.cline/data`, Codex CLI `~/.codex/config.toml`, Claude Code `~/.claude/settings.json`); the harness name comes from `AI_HARNESS` or the harness environment. It prints the last path segment of the model id by default (pass `--keep-prefix` to the script for the full routing id) and exits non-zero when either value cannot be determined — only then set `AI_MODEL='<full model name>'` (and `AI_HARNESS='<harness>'`) or ask the author. Add the printed line verbatim.
+For example `Assisted-by: DeepSeek-V4.1-Flash-1017 (Cline)` from Cline, or `Assisted-by: gpt-6.1-sol (Codex CLI)` from Codex CLI.
+
+`scripts/assisted-by-trailer.sh` resolves the harness first, then reads that harness's model: `AI_MODEL` (any harness), else the harness environment (`CLINE_MODEL`, `CODEX_MODEL`, `CLAUDE_MODEL`, `ANTHROPIC_MODEL`, `OPENAI_MODEL`, `GEMINI_MODEL`, `CURSOR_MODEL`), else that harness's metadata (Cline `~/.cline/data`, Codex CLI `~/.codex/config.toml`, Claude Code `~/.claude/settings.json`). The harness name comes from `AI_HARNESS` or the harness environment (`CLINE_ACTIVE`, `CODEX_HOME`, `CLAUDECODE`, `CURSOR_*`, `COPILOT_AGENT`); when several harnesses are installed and none is hinted, it refuses to guess and asks for `AI_HARNESS`. It prints the last path segment of the model id by default (pass `--keep-prefix` to the script for the full routing id) and exits non-zero when either value cannot be determined — only then set `AI_MODEL='<full model name>'` (and `AI_HARNESS='<harness>'`) or ask the author. Add the printed line verbatim.
 
 Add exactly one attribution trailer per commit and do not stack several.
 

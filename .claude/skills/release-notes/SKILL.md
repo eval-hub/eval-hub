@@ -256,6 +256,7 @@ and the harness that ran it. Generate it instead of guessing:
 make -s assisted-by-trailer
 ```
 
-which prints e.g. `Assisted-by: DeepSeek-V4.1-Flash-1017 (Cline)`; see
-`AGENTS.md` for the detection order and the `AI_MODEL` / `AI_HARNESS`
-overrides. Do not stack multiple attribution trailers.
+which prints the trailer for the harness running the command, e.g.
+`Assisted-by: claude-opus-4-5 (Claude Code)`; see `AGENTS.md` for the detection
+order and the `AI_MODEL` / `AI_HARNESS` overrides. Do not stack multiple
+attribution trailers.

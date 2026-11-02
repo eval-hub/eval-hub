@@ -5,20 +5,23 @@
 #   Assisted-by: <full model name> (<harness>)
 #
 # The model is read from the harness that runs the change, so an agent does not
-# have to guess it (agents cannot introspect their own deployment name) or ask
-# the author. Resolution order, first match wins:
+# have to guess it (no harness lets an agent read its own deployment name) or ask
+# the author. This is harness-agnostic: it covers Cline, Codex CLI, Claude Code,
+# Cursor and any harness that exports a model variable. The harness is resolved
+# first, so one harness's on-disk state is never reported for a change made in
+# another. Resolution order, first match wins:
 #
 #   1. --model / AI_MODEL
-#   2. harness environment: CLINE_MODEL, ANTHROPIC_MODEL, OPENAI_MODEL,
-#      GEMINI_MODEL, CURSOR_MODEL
-#   3. harness session metadata: Cline ($CLINE_DATA_DIR or ~/.cline/data),
-#      Codex CLI ($CODEX_HOME/config.toml), Claude Code
+#   2. harness environment, harness-specific variables first: CLINE_MODEL,
+#      CODEX_MODEL / OPENAI_MODEL, CLAUDE_MODEL / ANTHROPIC_MODEL, CURSOR_MODEL
+#   3. the detected harness's metadata: Cline ($CLINE_DATA_DIR or ~/.cline/data),
+#      Codex CLI ($CODEX_HOME or ~/.codex/config.toml), Claude Code
 #      (${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json)
 #
 # The harness name comes from --harness / AI_HARNESS, else from the harness
 # environment (CLINE_ACTIVE, CLAUDECODE, CURSOR_TRACE_ID/CURSOR_AGENT,
 # CODEX_HOME/CODEX_SANDBOX, COPILOT_AGENT), else from the metadata source that
-# supplied the model.
+# supplied the model when exactly one harness reports one.
 #
 # Only the trailer is written to stdout, so it can be piped into a commit
 # message.
@@ -45,22 +48,27 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/assisted-by-trailer.sh [options]
 
-Print the Assisted-by trailer for the current commit, for example:
+Print the Assisted-by trailer for the current commit, in the harness that runs
+the command, for example:
 
   Assisted-by: DeepSeek-V4.1-Flash-1017 (Cline)
+  Assisted-by: gpt-6.1-sol (Codex CLI)
 
 Options:
   --model <id>     full model identifier to use instead of auto-detection
   --harness <name> harness name to use instead of auto-detection
   --keep-prefix    keep the routing prefix of the model id
-                   (rits/deepseek-ai/DeepSeek-V4.1-Flash-1017) instead of
-                   printing its last path segment (DeepSeek-V4.1-Flash-1017)
+                   (vendor/path/Model-Id) instead of printing its last path
+                   segment (Model-Id)
   --explain        report where the model and harness came from (stderr)
   -h, --help       show this help
 
 Environment:
   AI_MODEL           full model identifier (any harness, highest priority)
   AI_HARNESS         harness name (overrides harness detection)
+  CLINE_MODEL        model variable exported by the Cline harness
+  CODEX_MODEL        model variable exported by the Codex CLI harness
+  CLAUDE_MODEL       model variable exported by the Claude Code harness
   CLINE_DATA_DIR     Cline data directory (default ~/.cline/data)
   CODEX_HOME         Codex CLI configuration directory (default ~/.codex)
   CLAUDE_CONFIG_DIR  Claude Code configuration directory (default ~/.claude)
@@ -89,15 +97,28 @@ json_field() {
   printf '%s' "$value"
 }
 
+model_env_candidates() {
+  case "${1:-}" in
+    Cline) printf '%s\n' CLINE_MODEL ANTHROPIC_MODEL OPENAI_MODEL ;;
+    "Codex CLI") printf '%s\n' CODEX_MODEL OPENAI_MODEL ANTHROPIC_MODEL ;;
+    "Claude Code") printf '%s\n' CLAUDE_MODEL ANTHROPIC_MODEL OPENAI_MODEL ;;
+    Cursor) printf '%s\n' CURSOR_MODEL ANTHROPIC_MODEL OPENAI_MODEL ;;
+    *) printf '%s\n' CLINE_MODEL CODEX_MODEL ANTHROPIC_MODEL CLAUDE_MODEL \
+      OPENAI_MODEL GEMINI_MODEL CURSOR_MODEL ;;
+  esac
+}
+
+# Environment variables are checked harness-first, so a model another agent on the
+# same machine exported cannot be reported for this change.
 model_from_env() {
   local name
-  for name in CLINE_MODEL ANTHROPIC_MODEL OPENAI_MODEL GEMINI_MODEL CURSOR_MODEL; do
+  while IFS= read -r name; do
     if [[ -n "${!name:-}" ]]; then
       MODEL="${!name}"
       MODEL_SOURCE="$name environment variable"
       return 0
     fi
-  done
+  done < <(model_env_candidates "${1:-}")
   return 1
 }
 
@@ -142,6 +163,35 @@ model_from_claude() {
   [[ -n "$MODEL" ]] || return 1
   MODEL_SOURCE="Claude Code settings ($settings)"
   METADATA_HARNESS="Claude Code"
+}
+
+# Read the model from the metadata of the harness that is running this change.
+# Cursor keeps no documented on-disk model record, so it relies on the
+# environment (or --model).
+model_from_harness_metadata() {
+  case "${1:-}" in
+    Cline) model_from_cline ;;
+    "Codex CLI") model_from_codex ;;
+    "Claude Code") model_from_claude ;;
+    *) return 1 ;;
+  esac
+}
+
+# Print "<harness>\t<model>\t<source>" for each metadata source that reports a
+# model on this machine, so an unknown harness can be resolved only when exactly
+# one harness has state to report.
+metadata_candidates() {
+  local reader
+  for reader in cline codex claude; do
+    (
+      MODEL=""
+      METADATA_HARNESS=""
+      MODEL_SOURCE=""
+      "model_from_$reader" >/dev/null 2>&1 || exit 0
+      [[ -n "$MODEL" ]] || exit 0
+      printf '%s\t%s\t%s\n' "$METADATA_HARNESS" "$MODEL" "$MODEL_SOURCE"
+    )
+  done
 }
 
 detect_harness() {
@@ -203,16 +253,36 @@ while (($#)); do
   esac
 done
 
+# Resolve the harness first: the harness that runs this change decides which
+# environment variables and which metadata may be read, so state left behind by
+# another agent on the same machine is never attributed to this change.
+if [[ -z "$HARNESS" ]]; then
+  detect_harness || true
+fi
+
 if [[ -z "$MODEL" ]]; then
   MODEL_SOURCE="auto-detection"
-  model_from_env || model_from_cline || model_from_codex || model_from_claude || true
+  if [[ -n "$HARNESS" ]]; then
+    model_from_env "$HARNESS" || model_from_harness_metadata "$HARNESS" || true
+  else
+    model_from_env "" || true
+    if [[ -z "$MODEL" ]]; then
+      candidate_count=0
+      while IFS=$'\t' read -r candidate_harness candidate_model candidate_source; do
+        [[ -n "$candidate_model" ]] || continue
+        candidate_count=$((candidate_count + 1))
+        MODEL="$candidate_model"
+        MODEL_SOURCE="$candidate_source"
+        METADATA_HARNESS="$candidate_harness"
+      done < <(metadata_candidates)
+      ((candidate_count <= 1)) ||
+        fail "several harnesses report a model on this machine; pick one with AI_HARNESS='<harness>' or --harness <harness>."
+    fi
+  fi
 fi
 [[ -n "$MODEL" ]] ||
   fail "could not determine the model name. Name it explicitly with AI_MODEL='<full model name>' or --model <full model name>; do not guess."
 
-if [[ -z "$HARNESS" ]]; then
-  detect_harness || true
-fi
 if [[ -z "$HARNESS" && -n "$METADATA_HARNESS" ]]; then
   HARNESS="$METADATA_HARNESS"
   HARNESS_SOURCE="metadata source that supplied the model"
