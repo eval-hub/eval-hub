@@ -85,11 +85,16 @@ both `judge_api-key`/`judge_url` and `grader_api-key`/`grader_url`. The judge an
 grader pairs share `KIND_BENCHMARK_JUDGE_API_KEY` and `KIND_BENCHMARK_JUDGE_URL`,
 so both roles use the mock judge endpoint. The key is provisioned in the Secret;
 fixtures do not need a `JUDGE_API_KEY` environment variable.
-The default `KIND_BENCHMARK_RUN` is a
-representative set for each adapter image dev-deploy builds; widen it with
-`BENCHMARK_RUN` (see the `Makefile` comment) to run a provider's full catalog,
-which also selects benchmarks whose fixtures require a sandbox, external
-services, or a capable judge model.
+
+The default `KIND_BENCHMARK_RUN` selects the
+whole catalog the deployed EvalHub discovers, so every configured provider's
+benchmarks run; narrow it with `BENCHMARK_RUN` (see the `Makefile` comment) to a
+provider or benchmark subset when iterating. Benchmarks whose fixtures require a
+sandbox, external services, or a capable judge model report failures or
+prerequisite skips in a full run rather than being excluded from it.
+`KIND_BENCHMARK_PARALLEL` (evaluation jobs in flight, default 8) and
+`KIND_BENCHMARK_TIMEOUT` (suite deadline, default 4h) size a full run to the
+kind cluster.
 
 ## Fixtures
 
