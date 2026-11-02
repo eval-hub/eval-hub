@@ -59,14 +59,25 @@ func TestPostProcessingDataSourcesRejectsInvalidRoles(t *testing.T) {
 		role        string
 	}{
 		{"ambiguous results", &api.PostProcessingResultsDataRef{S3: &api.S3TestDataRef{}, PVC: &api.PVCTestDataRef{}}, nil, "results"},
+		{"empty results", &api.PostProcessingResultsDataRef{}, nil, "results"},
+		{"results configuration without source", &api.PostProcessingResultsDataRef{DataConfig: &api.ResultsDataConfig{}}, nil, "results"},
+		{"s3 and oci results", &api.PostProcessingResultsDataRef{S3: &api.S3TestDataRef{}, OCI: &api.OCIDataRef{}}, nil, "results"},
+		{"pvc and eval_job results", &api.PostProcessingResultsDataRef{PVC: &api.PVCTestDataRef{}, EvalJob: &api.EvaluationJobDataRef{}}, nil, "results"},
+		{"git and mlflow results", &api.PostProcessingResultsDataRef{Git: &api.GitTestDataRef{}, MLFlow: &api.MLflowDataRef{}}, nil, "results"},
+		{"hf and oci results", &api.PostProcessingResultsDataRef{HF: &api.HFTestDataRef{}, OCI: &api.OCIDataRef{}}, nil, "results"},
+		{"mlflow and oci results", &api.PostProcessingResultsDataRef{MLFlow: &api.MLflowDataRef{}, OCI: &api.OCIDataRef{}}, nil, "results"},
+		{"eval_job and mlflow results", &api.PostProcessingResultsDataRef{EvalJob: &api.EvaluationJobDataRef{}, MLFlow: &api.MLflowDataRef{}}, nil, "results"},
 		{"missing calibration source", nil, []api.CalibrationDataRef{{}}, "calibration-0"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := PostProcessingDataSources(map[string]any{"operations": api.StandalonePostProcessingOperations{ConfidenceInterval: &api.StandaloneConfidenceIntervalConfig{
+			refs, err := PostProcessingDataSources(map[string]any{"operations": api.StandalonePostProcessingOperations{ConfidenceInterval: &api.StandaloneConfidenceIntervalConfig{
 				ResultsDataRef: test.results, ConfidenceIntervalConfigCommon: api.ConfidenceIntervalConfigCommon{CalibrationDataRef: test.calibration},
 			}}})
 			if err == nil || !strings.Contains(err.Error(), test.role+": exactly one") {
 				t.Fatalf("expected role-specific validation error, got %v", err)
+			}
+			if len(refs) != 0 {
+				t.Fatalf("invalid inputs produced staging references: %+v", refs)
 			}
 		})
 	}
