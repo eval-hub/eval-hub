@@ -437,7 +437,7 @@ When creating a pull request, include:
 
 Closes #
 
-Assisted-by: Cursor, Claude etc
+Assisted-by: <full model name> (<harness>)
 
 **Type**
 

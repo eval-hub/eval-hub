@@ -116,14 +116,21 @@ make grant-permissions
 Use [Conventional Commits](https://www.conventionalcommits.org/) with an optional scope (e.g. `feat(http): …`).
 Accepted type prefixes: `build`, `bump`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`.
 
-When a change is assisted by AI, add one of these lines, as appropriate, to the **end** of the commit message body (after the subject and any description), as Git trailers:
+When a change is assisted by AI, add an `Assisted-by` trailer at the **end** of the commit message body (after the subject and any description). Name both the model that produced the change and the harness that ran it, using the full model identifier rather than a generic product name:
 
 ```text
-Assisted-by: Cursor
-Made-with: Cursor
-Generated with: Claude Code
-Assisted-by: Codex
+Assisted-by: <full model name> (<harness>)
 ```
+
+For example:
+
+```text
+Assisted-by: Claude Opus 4.5 (Cursor)
+Assisted-by: GPT-5.1-Codex-Max (Codex CLI)
+Assisted-by: Claude Opus 4.5 (Claude Code)
+```
+
+Add exactly one attribution trailer per commit and do not stack several.
 
 For DCO sign-off, use `git commit -s` (or `git commit --signoff`). Do **not** include a `Signed-off-by` line in the commit message body; `-s` appends it from the author's configured `user.name` and `user.email`.
 
