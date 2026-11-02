@@ -305,6 +305,28 @@ They remove temporary localhost:<port> tags used only to push images into the
 kind registry. Repeated deploys of unchanged EvalHub source reuse the Go build
 layers. `make dev-deploy-help` and `make dev-clean-help` list the settings.
 
+Repeated deploys accumulate dangling images, build containers, and unused
+volumes in the container runtime, and an image build eventually fails with
+`no space left on device`. Reclaim that storage for podman or Docker:
+
+```bash
+make clean-container-storage                        # stopped containers, build containers, dangling images
+make clean-container-storage ALL=true               # also unused images (cached base images, old dev tags)
+make clean-container-storage ALL=true VOLUMES=true  # also unused volumes
+make clean-container-storage DRY_RUN=true           # print the commands only
+```
+
+Images and volumes used by running containers — the kind node and the local
+registry — are never removed, so the cluster keeps working. Their space is
+released only by `make dev-clean DELETE_CLUSTER=true`. The target reports
+`system df` and free space before and after cleanup and warns when less than
+`MIN_FREE_GB` (default 15) remains. On macOS, podman storage
+lives in the podman machine's disk: grow it with `podman machine stop`,
+`podman machine set --disk-size 200`, and `podman machine start`, then grow the
+guest filesystem (`growpart`/`xfs_growfs` inside the machine). Docker Desktop
+storage is sized in its own settings. `make clean-container-storage-help` lists
+the settings.
+
 Run the API demo against the deployed cluster:
 
 ```bash
