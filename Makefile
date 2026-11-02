@@ -335,16 +335,34 @@ test-benchmarks: $(GOTESTSUM) ## Run live benchmark smoke tests (requires SERVER
 # Benchmark smoke tests against the local dev-deploy kind cluster. The cluster
 # API is reached through the loopback NodePort using a short-lived token minted
 # for the local EvalHub service account, and evaluation jobs use the in-cluster
-# mock target model. By default only the providers whose adapter images
-# dev-deploy builds are selected; override BENCHMARK_RUN to widen or narrow it.
+# mock target model.
+#
+# The default selection is one representative benchmark set per adapter that
+# dev-deploy builds: every provider here runs against mock OpenAI-compatible
+# endpoints, so benchmarks whose fixtures require a sandbox, external services,
+# or a capable judge/auditor model are excluded. Set BENCHMARK_RUN (or
+# KIND_BENCHMARK_RUN) to widen or narrow it, for example
+#   KIND_BENCHMARK_RUN='TestBenchmarkSmoke/(inspect|followbench|lm_evaluation_harness)/'
+# to run a provider's full catalog.
+#
+# The kind cluster also runs mock judge and target OpenAI-compatible endpoints.
+# Judge-based benchmarks need JUDGE_MODEL_NAME/JUDGE_BASE_URL/JUDGE_API_KEY, and
+# lm-evaluation-harness resolves its tokenizer from HuggingFace separately from
+# the model endpoint, so the target supplies LM_EVAL_TOKENIZER for fixtures that
+# do not pin one.
 KIND_KUBECONFIG ?= $(if $(XDG_CONFIG_HOME),$(XDG_CONFIG_HOME),$(HOME)/.config)/evalhub/kubeconfigs/$(KIND_CLUSTER_NAME).yaml
-KIND_BENCHMARK_RUN ?= TestBenchmarkSmoke/(inspect|followbench|lm_evaluation_harness)/
+KIND_BENCHMARK_RUN ?= TestBenchmarkSmoke/(followbench|lm_evaluation_harness|inspect)\z/(followbench|arc_easy|lambada_openai|leaderboard_mmlu_pro|inspect)\z/(gsm8k|arc|mmlu|hellaswag|winogrande|truthfulqa)\z
 KIND_BENCHMARK_SERVER_URL ?= https://127.0.0.1:$(EVALHUB_HOST_PORT)
 KIND_BENCHMARK_TENANT ?= system
 KIND_BENCHMARK_MODEL_NAME ?= kind-target-model
 KIND_BENCHMARK_MODEL_URL ?= http://evalhub-kind-mock-target.system.svc.cluster.local:8000/v1
 KIND_BENCHMARK_MODEL_SECRET ?= evalhub-kind-demo-auth
 KIND_BENCHMARK_TOKEN_DURATION ?= 1h
+KIND_BENCHMARK_TIMEOUT ?= 2h
+KIND_BENCHMARK_JUDGE_MODEL_NAME ?= kind-judge-model
+KIND_BENCHMARK_JUDGE_URL ?= http://evalhub-kind-mock-judge.system.svc.cluster.local:8000/v1
+KIND_BENCHMARK_JUDGE_API_KEY ?= judge-test-token
+KIND_BENCHMARK_LM_EVAL_TOKENIZER ?= hf-internal-testing/llama-tokenizer
 
 test-benchmarks-kind: dev-deploy ## Run benchmark smoke tests against the local kind cluster (deploys it first; SKIP_BUILD=true reuses built images)
 	@set -eu; \
@@ -371,6 +389,11 @@ test-benchmarks-kind: dev-deploy ## Run benchmark smoke tests against the local 
 	MODEL_NAME="$(KIND_BENCHMARK_MODEL_NAME)" \
 	MODEL_URL="$(KIND_BENCHMARK_MODEL_URL)" \
 	MODEL_AUTH_SECRET_REF="$(KIND_BENCHMARK_MODEL_SECRET)" \
+	JUDGE_MODEL_NAME="$(KIND_BENCHMARK_JUDGE_MODEL_NAME)" \
+	JUDGE_BASE_URL="$(KIND_BENCHMARK_JUDGE_URL)" \
+	JUDGE_API_KEY="$(KIND_BENCHMARK_JUDGE_API_KEY)" \
+	LM_EVAL_TOKENIZER="$(KIND_BENCHMARK_LM_EVAL_TOKENIZER)" \
+	BENCHMARK_TIMEOUT="$(KIND_BENCHMARK_TIMEOUT)" \
 	BENCHMARK_RUN="$(KIND_BENCHMARK_RUN)" \
 	$(MAKE) test-benchmarks
 
