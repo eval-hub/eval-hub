@@ -351,6 +351,44 @@ ensure_calico_cni() {
   log PASS "Calico is Ready and kind NetworkPolicy enforcement is available."
 }
 
+# Restart kind node containers that were stopped (for example after a podman
+# machine or host reboot) so that kind exec/export operations against the reused
+# cluster do not fail with "can only create exec sessions on running containers".
+ensure_kind_nodes_running() {
+  local node state control_plane host_port deadline
+  local started="false"
+  while IFS= read -r node; do
+    [[ -n "$node" ]] || continue
+    state="$("$CONTAINER_RUNTIME" container inspect --format '{{.State.Status}}' "$node" 2>/dev/null || true)"
+    [[ -n "$state" ]] || fail "Could not inspect kind node container $node."
+    if [[ "$state" != running ]]; then
+      log INFO "Starting stopped kind node container: $node"
+      "$CONTAINER_RUNTIME" container start "$node" >/dev/null ||
+        fail "Could not start kind node container $node."
+      started="true"
+    fi
+  done < <("$CONTAINER_RUNTIME" ps -a \
+    --filter "label=io.x-k8s.kind.cluster=$KIND_CLUSTER_NAME" --format '{{.Names}}')
+  [[ "$started" == true ]] || return 0
+  control_plane="$("$CONTAINER_RUNTIME" ps -a \
+    --filter "label=io.x-k8s.kind.cluster=$KIND_CLUSTER_NAME" \
+    --filter "label=io.x-k8s.kind.role=control-plane" --format '{{.Names}}' | head -n 1)"
+  [[ -n "$control_plane" ]] || fail "No control-plane container found for kind cluster $KIND_CLUSTER_NAME."
+  host_port="$("$CONTAINER_RUNTIME" port "$control_plane" 6443/tcp 2>/dev/null |
+    sed -n 's/^127\.0\.0\.1:\([0-9][0-9]*\)$/\1/p' | head -n 1)"
+  [[ "$host_port" =~ ^[0-9]+$ ]] ||
+    fail "Could not find the published 6443 port for control-plane container $control_plane."
+  log INFO "Waiting for the restarted control-plane API server on 127.0.0.1:${host_port}."
+  deadline=$((SECONDS + 180))
+  until curl --fail --silent --show-error --max-time 5 --insecure \
+      "https://127.0.0.1:${host_port}/readyz" >/dev/null 2>&1; do
+    ((SECONDS < deadline)) ||
+      fail "The restarted control-plane API server did not become ready within 180 seconds."
+    sleep 5
+  done
+  log PASS "Restarted kind node containers are running and the API server is ready."
+}
+
 ensure_cluster() {
   local node mapping kind_config networking_config
   mkdir -p -- "$KUBECONFIG_DIR"
@@ -363,6 +401,7 @@ ensure_cluster() {
   fi
   if kind_cmd get clusters 2>/dev/null | grep -Fqx -- "$KIND_CLUSTER_NAME"; then
     log INFO "Reusing existing kind cluster: $KIND_CLUSTER_NAME"
+    ensure_kind_nodes_running
     kind_cmd export kubeconfig --name "$KIND_CLUSTER_NAME" --kubeconfig "$KUBECONFIG_FILE"
   else
     log INFO "Creating ${CONTAINER_RUNTIME}-backed kind cluster: $KIND_CLUSTER_NAME"
