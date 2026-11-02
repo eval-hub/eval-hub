@@ -71,6 +71,38 @@ func TestResultsDataConfigPathValidation(t *testing.T) {
 	}
 }
 
+func TestResultsRecordsPathValidation(t *testing.T) {
+	validate := newTestValidator(t)
+	for _, test := range []struct {
+		jsonpath string
+		format   string
+		invalid  bool
+	}{
+		{"$.benchmarks[0].requests.successful", "json", false},
+		{"$['a/b']['~']['']", "auto", false},
+		{"$", "", false},
+		{"$.records", "", false},
+		{"benchmarks[0].requests", "json", true},
+		{"records", "json", true},
+		{"", "json", true},
+		{"$.records", "jsonl", true},
+		{"$.records", "csv", true},
+		{"$.records", "parquet", true},
+	} {
+		t.Run(test.jsonpath+test.format, func(t *testing.T) {
+			entry := api.ResultsDataConfigEntry{RecordsPath: &test.jsonpath, Format: test.format}
+			// Exercise both object and per-benchmark configurations, as used by requests.
+			for _, config := range []api.ResultsDataConfig{
+				{Single: &entry}, {PerBenchmark: []api.ResultsDataConfigEntry{entry}},
+			} {
+				if err := validate.Struct(config); (err != nil) != test.invalid {
+					t.Fatalf("unexpected validation result: %v", err)
+				}
+			}
+		})
+	}
+}
+
 func TestCollectionConfigClassification(t *testing.T) {
 	validate := newTestValidator(t)
 	cases := []struct {

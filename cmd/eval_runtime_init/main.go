@@ -19,6 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/internal/runtimeenv"
 )
 
@@ -60,19 +61,23 @@ func main() {
 }
 
 func run() error {
-	if strings.TrimSpace(os.Getenv(envHFRepoID)) != "" {
-		return runHF()
+	if path := os.Getenv(shared.InitJobSpecPathEnv); path != "" {
+		return runJobSources(path, shared.PostProcessorStagingRoot, shared.PostProcessorSecretRoot)
 	}
-	if strings.TrimSpace(os.Getenv(envGitURL)) != "" {
-		return runGit()
+	d := downloaderFromEnv()
+	if strings.TrimSpace(d.source.HF.RepoID) != "" {
+		return d.runHF()
 	}
-	return runS3()
+	if strings.TrimSpace(d.source.Git.URL) != "" {
+		return d.runGit()
+	}
+	return d.runS3()
 }
 
 // runS3 downloads test data from S3 into destDir.
-func runS3() error {
-	bucket := strings.TrimSpace(os.Getenv(envBucket))
-	keyPrefix := strings.TrimSpace(os.Getenv(envKey))
+func (d downloader) runS3() error {
+	bucket := strings.TrimSpace(d.source.S3.Bucket)
+	keyPrefix := strings.TrimSpace(d.source.S3.Key)
 	if bucket == "" || keyPrefix == "" {
 		return fmt.Errorf("%s and %s are required", envBucket, envKey)
 	}
@@ -92,19 +97,19 @@ func runS3() error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	accessKey, err := readSecret(accessKeyIDKey)
+	accessKey, err := d.readSecret(accessKeyIDKey)
 	if err != nil {
 		return fmt.Errorf("missing required secret %s: %w", accessKeyIDKey, err)
 	}
-	secretKey, err := readSecret(awsAccessKeyEnvName)
+	secretKey, err := d.readSecret(awsAccessKeyEnvName)
 	if err != nil {
 		return fmt.Errorf("missing required secret %s: %w", awsAccessKeyEnvName, err)
 	}
-	region, err := readSecret(regionOptionalKey)
+	region, err := d.readSecret(regionOptionalKey)
 	if err != nil {
 		return fmt.Errorf("missing required secret %s: %w", regionOptionalKey, err)
 	}
-	endpoint, err := readSecret(endpointKey)
+	endpoint, err := d.readSecret(endpointKey)
 	if err != nil {
 		return fmt.Errorf("missing required secret %s: %w", endpointKey, err)
 	}
@@ -122,11 +127,11 @@ func runS3() error {
 	})
 	tm := transfermanager.New(client)
 
-	if err := os.MkdirAll(destDir, 0o750); err != nil {
+	if err := os.MkdirAll(d.destDir, 0o750); err != nil {
 		return fmt.Errorf("create dest dir: %w", err)
 	}
 
-	destRoot, err := os.OpenRoot(destDir)
+	destRoot, err := os.OpenRoot(d.destDir)
 	if err != nil {
 		return fmt.Errorf("open dest root: %w", err)
 	}
@@ -292,11 +297,11 @@ func relativeDestPath(prefix, key string) (string, error) {
 // readSecret reads a key from the mounted secret dir. Keys must be a single path
 // segment; reads go through os.Root so they cannot escape scrtDir. Returns an
 // error if the key is invalid, missing, or empty after trimming.
-func readSecret(key string) (string, error) {
+func (d downloader) readSecret(key string) (string, error) {
 	if key == "" || key == "." || key == "/" || !filepath.IsLocal(key) || filepath.Base(key) != key {
 		return "", fmt.Errorf("secret key %q contains path separators and is not allowed", key)
 	}
-	root, err := os.OpenRoot(scrtDir)
+	root, err := os.OpenRoot(d.scrtDir)
 	if err != nil {
 		return "", fmt.Errorf("secret key %q not found in mounted secret: %w", key, err)
 	}
@@ -314,16 +319,16 @@ func readSecret(key string) (string, error) {
 
 // readOptionalSecret reads a key from the mounted secret dir when present.
 // Missing secret dir or key returns ("", nil) for optional credentials (e.g. HF token).
-func readOptionalSecret(key string) (string, error) {
+func (d downloader) readOptionalSecret(key string) (string, error) {
 	if key == "" || key == "." || key == "/" || !filepath.IsLocal(key) || filepath.Base(key) != key {
 		return "", fmt.Errorf("secret key %q contains path separators and is not allowed", key)
 	}
-	root, err := os.OpenRoot(scrtDir)
+	root, err := os.OpenRoot(d.scrtDir)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return "", nil
 		}
-		return "", fmt.Errorf("open secret dir %q: %w", scrtDir, err)
+		return "", fmt.Errorf("open secret dir %q: %w", d.scrtDir, err)
 	}
 	defer func() { _ = root.Close() }()
 

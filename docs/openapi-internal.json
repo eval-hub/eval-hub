@@ -5443,6 +5443,12 @@
             "minLength": 1,
             "description": "Relative file or directory inside the downloaded artifact."
           },
+          "records_path": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^\\$",
+            "description": "JSONPath starting with $ selecting the per-example record array within each\nJSON results file, for example $.benchmarks[0].requests.successful. The expression must\nselect exactly one array of record objects; $ selects the document root. Only supported with json or auto format\n(including omitted format). Column mappings apply within each selected\nrecord. Metadata-only manifest.json files are still read for metadata.\nUse path to select the data file if the artifact contains other JSON files.\n"
+          },
           "columns": {
             "type": "object",
             "description": "Logical fields mapped to literal column names or dotted paths into nested JSON.",

@@ -66,6 +66,7 @@ func registerCustomValidators(instance *validator.Validate) error {
 	instance.RegisterStructValidation(evaluationJobConfig, api.EvaluationJobConfig{})
 	instance.RegisterStructValidation(validateStandalonePostProcessingRequest, api.StandalonePostProcessingRequest{})
 	instance.RegisterStructValidation(validateJobPostProcessingRequest, api.ConfidenceIntervalPostProcessingRequest{})
+	instance.RegisterStructValidation(validateResultsDataConfigEntry, api.ResultsDataConfigEntry{})
 	instance.RegisterStructValidation(validateBenchmarkStatusEventMetricsSchema, api.BenchmarkStatusEvent{})
 	instance.RegisterStructValidation(validateGitTestDataRefAuth, api.GitTestDataRef{})
 	instance.RegisterStructValidation(validateCollectionClassification, api.CollectionConfig{})

@@ -36,14 +36,14 @@ const (
 
 // runHF downloads a Hugging Face Hub dataset repository into destDir and writes the
 // resolved commit SHA to init metadata for the sidecar (same contract as git init).
-func runHF() error {
-	repoID := strings.TrimSpace(os.Getenv(envHFRepoID))
+func (d downloader) runHF() error {
+	repoID := strings.TrimSpace(d.source.HF.RepoID)
 	if repoID == "" {
 		return failHF(fmt.Errorf("%s is required", envHFRepoID))
 	}
 
-	revision := strings.TrimSpace(os.Getenv(envHFRevision))
-	subPath := strings.TrimSpace(os.Getenv(envHFSubPath))
+	revision := strings.TrimSpace(d.source.HF.Revision)
+	subPath := strings.TrimSpace(d.source.HF.SubPath)
 	if subPath != "" {
 		if err := validateHFSubPath(subPath); err != nil {
 			return failHF(err)
@@ -62,7 +62,7 @@ func runHF() error {
 		timeout = parsed
 	}
 
-	token, err := resolveHFToken()
+	token, err := d.resolveHFToken()
 	if err != nil {
 		return failHF(err)
 	}
@@ -70,42 +70,42 @@ func runHF() error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	commitSHA, err := downloadHFRepo(ctx, repoID, revision, subPath, token)
+	commitSHA, err := d.downloadHFRepo(ctx, repoID, revision, subPath, token)
 	if err != nil {
 		return failHF(err)
 	}
 
-	if err := writeGitMetadata(commitSHA); err != nil {
+	if err := d.writeGitMetadata(commitSHA); err != nil {
 		return failHF(fmt.Errorf("write git metadata: %w", err))
 	}
 
-	slog.Info("hf source ready", "dest", destDir, "commit_sha", commitSHA)
+	slog.Info("hf source ready", "dest", d.destDir, "commit_sha", commitSHA)
 	return nil
 }
 
 // resolveHFToken reads the Hugging Face token when secret_ref mounted the credentials
 // volume. No secret dir means public access is allowed. A mounted dir without a valid
 // token key is a misconfiguration (same contract as git auth).
-func resolveHFToken() (string, error) {
-	if _, err := os.Stat(scrtDir); os.IsNotExist(err) {
+func (d downloader) resolveHFToken() (string, error) {
+	if _, err := os.Stat(d.scrtDir); os.IsNotExist(err) {
 		return "", nil
 	}
-	token, err := readSecret(hfTokenKey)
+	token, err := d.readSecret(hfTokenKey)
 	if err != nil {
 		return "", fmt.Errorf("hugging face auth: %w", err)
 	}
 	return token, nil
 }
 
-func effectiveHFCacheDir() string {
-	if strings.TrimSpace(hfCacheDir) != "" {
-		return hfCacheDir
+func (d downloader) effectiveHFCacheDir() string {
+	if strings.TrimSpace(d.hfCacheDir) != "" {
+		return d.hfCacheDir
 	}
-	return filepath.Join(destDir, hfCacheDirName)
+	return filepath.Join(d.destDir, hfCacheDirName)
 }
 
-func downloadHFRepo(ctx context.Context, repoID, revision, subPath, token string) (string, error) {
-	cachePath := effectiveHFCacheDir()
+func (d downloader) downloadHFRepo(ctx context.Context, repoID, revision, subPath, token string) (string, error) {
+	cachePath := d.effectiveHFCacheDir()
 	if err := os.MkdirAll(cachePath, 0o750); err != nil {
 		return "", fmt.Errorf("create hf cache dir: %w", err)
 	}
@@ -190,16 +190,16 @@ func downloadHFRepo(ctx context.Context, repoID, revision, subPath, token string
 		return "", fmt.Errorf("snapshot path %q is not a directory", snapshotRel)
 	}
 
-	if err := stageHFFiles(cacheDir, commitSHA, repoFiles, subPath, destDir); err != nil {
+	if err := stageHFFiles(cacheDir, commitSHA, repoFiles, subPath, d.destDir); err != nil {
 		return "", fmt.Errorf("stage repository: %w", err)
 	}
 
-	if err := cleanupHFCache(); err != nil {
+	if err := d.cleanupHFCache(); err != nil {
 		slog.Warn("failed to remove hf cache after staging", "error", err)
 	}
 
-	if !destHasData(destDir) {
-		return "", fmt.Errorf("no files were staged under %s", destDir)
+	if !destHasData(d.destDir) {
+		return "", fmt.Errorf("no files were staged under %s", d.destDir)
 	}
 
 	return commitSHA, nil
@@ -434,9 +434,9 @@ func isHFGatedRepoError(lower string) bool {
 		(strings.Contains(lower, "gated") && !strings.Contains(lower, "repository not found"))
 }
 
-func cleanupHFCache() error {
-	cache := effectiveHFCacheDir()
-	if !pathWithinBase(destDir, cache) {
+func (d downloader) cleanupHFCache() error {
+	cache := d.effectiveHFCacheDir()
+	if !pathWithinBase(d.destDir, cache) {
 		return nil
 	}
 	return os.RemoveAll(cache)

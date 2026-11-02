@@ -4,10 +4,10 @@ package k8s
 import (
 	"fmt"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/google/uuid"
@@ -83,6 +83,8 @@ type jobConfig struct {
 	testDataS3                 s3TestDataConfig
 	testDataPVC                pvcTestDataConfig
 	postProcessorPVCs          []postProcessorPVCConfig
+	postProcessorSecrets       []string
+	postProcessorDownloads     []shared.NamedDataSource
 	testDataGit                gitTestDataConfig
 	testDataHF                 hfTestDataConfig
 	testDataInitImage          string
@@ -106,6 +108,8 @@ type pvcTestDataConfig struct {
 }
 
 type postProcessorPVCConfig struct {
+	sourceName string
+	subPath    string
 	claimName  string
 	volumeName string
 	mountPath  string
@@ -126,33 +130,47 @@ type hfTestDataConfig struct {
 }
 
 func postProcessorPVCConfigs(evaluation *api.EvaluationJobResource) ([]postProcessorPVCConfig, error) {
-	if evaluation == nil || !postprocessing.IsPostProcessingJob(&evaluation.EvaluationJobConfig) {
-		return nil, nil
-	}
-
-	operations, err := postprocessing.OperationsFromJob(&evaluation.EvaluationJobConfig)
+	refs, err := postProcessorReferences(evaluation)
 	if err != nil {
-		return nil, fmt.Errorf("read post-processing calibration data refs: %w", err)
+		return nil, err
 	}
-	seenClaims := make(map[string]struct{})
+	seenClaims := make(map[string]string)
 	var configs []postProcessorPVCConfig
-	for _, ref := range operations.ConfidenceInterval.CalibrationDataRef {
-		if ref.PVC == nil {
+	for _, ref := range refs {
+		if ref.Source.PVC == nil {
 			continue
 		}
-		claimName := strings.TrimSpace(ref.PVC.ClaimName)
+		claimName := strings.TrimSpace(ref.Source.PVC.ClaimName)
 		if claimName == "" {
-			return nil, fmt.Errorf("post-processing calibration PVC claim_name is required")
+			return nil, fmt.Errorf("post-processing PVC claim_name is required")
 		}
-		if _, exists := seenClaims[claimName]; exists {
-			continue
+		volumeName, exists := seenClaims[claimName]
+		if !exists {
+			volumeName = fmt.Sprintf("%s%d", postProcessorCalibrationPVCVolumeNamePrefix, len(seenClaims))
+			seenClaims[claimName] = volumeName
 		}
-		seenClaims[claimName] = struct{}{}
-
+		if subPath := ref.Source.PVC.SubPath; subPath != "" {
+			if path.IsAbs(subPath) {
+				return nil, fmt.Errorf("post-processing PVC sub_path must be relative")
+			}
+			for _, segment := range strings.Split(subPath, "/") {
+				if segment == ".." {
+					return nil, fmt.Errorf("post-processing PVC sub_path must not traverse parent directories")
+				}
+			}
+		}
+		mountPath := shared.PostProcessorPVCRoot + "/" + ref.Name
+		// Preserve a selected file's basename for results data_config.path.
+		// Directory subpaths work identically; Kubernetes still selects the source.
+		if ref.Source.PVC.SubPath != "" {
+			mountPath += "/" + path.Base(ref.Source.PVC.SubPath)
+		}
 		configs = append(configs, postProcessorPVCConfig{
+			sourceName: ref.Name,
+			subPath:    ref.Source.PVC.SubPath,
 			claimName:  claimName,
-			volumeName: fmt.Sprintf("%s%d", postProcessorCalibrationPVCVolumeNamePrefix, len(configs)),
-			mountPath:  fmt.Sprintf("%s/%s", postProcessorCalibrationPVCMountPathPrefix, claimName),
+			volumeName: volumeName,
+			mountPath:  mountPath,
 		})
 	}
 	return configs, nil
@@ -284,6 +302,14 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 	if err != nil {
 		return nil, err
 	}
+	postProcessorSecrets, err := postProcessorSecretNames(evaluation)
+	if err != nil {
+		return nil, err
+	}
+	downloads, err := postProcessorDownloadSources(evaluation)
+	if err != nil {
+		return nil, err
+	}
 
 	// GPU resource requests/limits are always propagated to the pod spec so that Kueue can
 	// account for GPU quota. Provider nodeSelector is the default; a HardwareProfile with
@@ -347,7 +373,9 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 			claimName: testDataPVCClaimName,
 			subPath:   testDataPVCSubPath,
 		},
-		postProcessorPVCs: postProcessorPVCs,
+		postProcessorPVCs:      postProcessorPVCs,
+		postProcessorSecrets:   postProcessorSecrets,
+		postProcessorDownloads: downloads,
 		testDataGit: gitTestDataConfig{
 			url:       testDataGitURL,
 			ref:       testDataGitRef,

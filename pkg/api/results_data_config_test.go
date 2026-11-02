@@ -8,6 +8,7 @@ import (
 )
 
 func TestResultsDataConfigUnmarshalJSON(t *testing.T) {
+	jsonpath := "$.benchmarks[0].requests.successful"
 	zero, half, negative := 0.0, 0.5, -1.0
 	tests := []struct {
 		name       string
@@ -16,6 +17,11 @@ func TestResultsDataConfigUnmarshalJSON(t *testing.T) {
 		wantList   []ResultsDataConfigEntry
 		wantErr    string
 	}{
+		{
+			name:       "nested records jsonpath survives decoding",
+			input:      `{"format":"json","records_path":"$.benchmarks[0].requests.successful"}`,
+			wantSingle: &ResultsDataConfigEntry{Format: "json", RecordsPath: &jsonpath},
+		},
 		{
 			name:  "object selects one config for all artifacts",
 			input: ` {"format":"jsonl","columns":{"prediction":"scores.value"}} `,
@@ -145,5 +151,31 @@ func TestResultsDataConfigMarshalJSON(t *testing.T) {
 				t.Fatalf("MarshalJSON() = %s, want %s", got, test.want)
 			}
 		})
+	}
+}
+
+func TestResultsRecordsPathRoundTrip(t *testing.T) {
+	for _, input := range []string{
+		`{"format":"json","records_path":"$.benchmarks[0].requests.successful"}`,
+		`[{"records_path":"$['records']","selection":{"provider_id":"guidellm"}}]`,
+	} {
+		var config ResultsDataConfig
+		if err := json.Unmarshal([]byte(input), &config); err != nil {
+			t.Fatal(err)
+		}
+		output, err := json.Marshal(config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var before, after any
+		if err := json.Unmarshal([]byte(input), &before); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(output, &after); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(before, after) {
+			t.Fatalf("results descriptor changed during round trip: got %s, want %s", output, input)
+		}
 	}
 }

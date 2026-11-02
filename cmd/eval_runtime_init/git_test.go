@@ -343,7 +343,7 @@ func TestCloneRefAnnotatedTag_ReturnsCommitSHA(t *testing.T) {
 
 func TestReadSecret_MissingKey(t *testing.T) {
 	// scrtDir defaults to the real mount path which does not exist in unit tests.
-	_, err := readSecret("no-such-key")
+	_, err := downloaderFromEnv().readSecret("no-such-key")
 	if err == nil {
 		t.Fatal("expected error for missing secret key file")
 	}
@@ -355,7 +355,7 @@ func TestReadSecret_MissingKey(t *testing.T) {
 func TestReadSecret_PathTraversalRejected(t *testing.T) {
 	t.Parallel()
 	for _, key := range []string{"../escape", "a/b", ".", "/"} {
-		_, err := readSecret(key)
+		_, err := downloaderFromEnv().readSecret(key)
 		if err == nil {
 			t.Errorf("readSecret(%q) = nil, want error for path traversal", key)
 		}
@@ -374,7 +374,7 @@ func TestReadSecret_EmptyValueRejected(t *testing.T) {
 	scrtDir = dir
 	t.Cleanup(func() { scrtDir = orig })
 
-	_, err := readSecret("username")
+	_, err := downloaderFromEnv().readSecret("username")
 	if err == nil {
 		t.Fatal("expected error for empty secret value")
 	}
@@ -460,7 +460,7 @@ func TestRunGit_HappyPathAndSubPath(t *testing.T) {
 
 	t.Setenv(envGitURL, "file://"+repoDir)
 	t.Setenv(envGitRef, "master")
-	if err := runGit(); err != nil {
+	if err := downloaderFromEnv().runGit(); err != nil {
 		t.Fatalf("runGit: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dest, "README.md")); err != nil {
@@ -481,7 +481,7 @@ func TestRunGit_HappyPathAndSubPath(t *testing.T) {
 	t.Setenv(envGitURL, "file://"+repoDir)
 	t.Setenv(envGitRef, "master")
 	t.Setenv(envGitSubPath, "datasets/lm-eval")
-	if err := runGit(); err != nil {
+	if err := downloaderFromEnv().runGit(); err != nil {
 		t.Fatalf("runGit with sub_path: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dest2, "data.txt")); err != nil {
@@ -501,14 +501,14 @@ func TestRunGit_ValidationErrors(t *testing.T) {
 	t.Run("missing url", func(t *testing.T) {
 		_ = os.Unsetenv(envGitURL)
 		t.Setenv(envGitRef, "master")
-		if err := runGit(); err == nil {
+		if err := downloaderFromEnv().runGit(); err == nil {
 			t.Fatal("expected error for missing URL")
 		}
 	})
 	t.Run("missing ref", func(t *testing.T) {
 		t.Setenv(envGitURL, "https://example.com/repo.git")
 		_ = os.Unsetenv(envGitRef)
-		if err := runGit(); err == nil {
+		if err := downloaderFromEnv().runGit(); err == nil {
 			t.Fatal("expected error for missing ref")
 		}
 	})
@@ -516,7 +516,7 @@ func TestRunGit_ValidationErrors(t *testing.T) {
 		t.Setenv(envGitURL, "https://example.com/repo.git")
 		t.Setenv(envGitRef, "master")
 		t.Setenv(envGitTimeout, "not-a-duration")
-		if err := runGit(); err == nil {
+		if err := downloaderFromEnv().runGit(); err == nil {
 			t.Fatal("expected error for invalid timeout")
 		}
 	})
@@ -528,7 +528,7 @@ func TestRunGit_ValidationErrors(t *testing.T) {
 		t.Setenv(envGitURL, "https://localhost/repo.git")
 		t.Setenv(envGitRef, "master")
 		_ = os.Unsetenv(envGitTimeout)
-		if err := runGit(); err == nil {
+		if err := downloaderFromEnv().runGit(); err == nil {
 			t.Fatal("expected SSRF validation error")
 		}
 	})
@@ -537,7 +537,7 @@ func TestRunGit_ValidationErrors(t *testing.T) {
 		t.Setenv(envGitURL, "file://"+repoDir)
 		t.Setenv(envGitRef, "master")
 		t.Setenv(envGitSubPath, "../escape")
-		if err := runGit(); err == nil {
+		if err := downloaderFromEnv().runGit(); err == nil {
 			t.Fatal("expected sub_path escape error")
 		}
 	})
@@ -546,7 +546,7 @@ func TestRunGit_ValidationErrors(t *testing.T) {
 		t.Setenv(envGitURL, "file://"+repoDir)
 		t.Setenv(envGitRef, "master")
 		t.Setenv(envGitSubPath, "does-not-exist")
-		if err := runGit(); err == nil {
+		if err := downloaderFromEnv().runGit(); err == nil {
 			t.Fatal("expected missing sub_path error")
 		}
 	})
@@ -579,7 +579,7 @@ func TestRunGit_ValidationErrors(t *testing.T) {
 		t.Setenv(envGitURL, "file://"+repoDir)
 		t.Setenv(envGitRef, "master")
 		_ = os.Unsetenv(envGitSubPath)
-		if err := runGit(); err == nil || !strings.Contains(err.Error(), "submodules") {
+		if err := downloaderFromEnv().runGit(); err == nil || !strings.Contains(err.Error(), "submodules") {
 			t.Fatalf("expected submodules error, got %v", err)
 		}
 	})
@@ -597,7 +597,7 @@ func TestResolveGitAuth_WithSecretDir(t *testing.T) {
 	scrtDir = secret
 	t.Cleanup(func() { scrtDir = orig })
 
-	auth, err := resolveGitAuth()
+	auth, err := downloaderFromEnv().resolveGitAuth()
 	if err != nil {
 		t.Fatalf("resolveGitAuth: %v", err)
 	}
@@ -615,7 +615,7 @@ func TestResolveGitAuth_MissingPassword(t *testing.T) {
 	scrtDir = secret
 	t.Cleanup(func() { scrtDir = orig })
 
-	if _, err := resolveGitAuth(); err == nil {
+	if _, err := downloaderFromEnv().resolveGitAuth(); err == nil {
 		t.Fatal("expected error when password key missing")
 	}
 }
@@ -625,7 +625,7 @@ func TestWriteGitMetadata_UsesPackageDir(t *testing.T) {
 	orig := gitMetadataDir
 	gitMetadataDir = dir
 	t.Cleanup(func() { gitMetadataDir = orig })
-	if err := writeGitMetadata("abc123"); err != nil {
+	if err := downloaderFromEnv().writeGitMetadata("abc123"); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(filepath.Join(dir, ".git-metadata"))
@@ -645,14 +645,14 @@ func TestReadSecret_ViaOpenRoot(t *testing.T) {
 	orig := scrtDir
 	scrtDir = secret
 	t.Cleanup(func() { scrtDir = orig })
-	got, err := readSecret("AWS_ACCESS_KEY_ID")
+	got, err := downloaderFromEnv().readSecret("AWS_ACCESS_KEY_ID")
 	if err != nil {
 		t.Fatalf("readSecret: %v", err)
 	}
 	if got != "key" {
 		t.Errorf("readSecret = %q, want key", got)
 	}
-	if _, err := readSecret("../escape"); err == nil {
+	if _, err := downloaderFromEnv().readSecret("../escape"); err == nil {
 		t.Error("traversal should return error")
 	}
 }
