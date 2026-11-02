@@ -252,7 +252,10 @@ runtime. When a kind cluster named `KIND_CLUSTER_NAME` already exists, its
 runtime is selected automatically by `make dev-deploy`, `make dev-clean`, and
 `make dev-demo`, so later commands keep using the engine that backed the
 existing cluster (passing `CONTAINER_RUNTIME` explicitly remains supported and
-must match that engine).
+must match that engine). If a forced `CONTAINER_RUNTIME` does not own an
+existing `KIND_CLUSTER_NAME` while the other engine does, `make dev-deploy` and
+`make dev-clean` fail instead of creating a duplicate cluster or cleaning up
+and deleting the kubeconfig of the cluster that is still running.
 
 Deploy the local EvalHub service, operator, adapters, and mock target/judge
 services:

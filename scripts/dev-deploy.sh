@@ -66,7 +66,10 @@ Inputs (also accepted as environment variables):
   CONTAINER_RUNTIME        container engine for image builds, the local registry,
                            and the kind nodes (podman or docker; default: the
                            engine that already owns KIND_CLUSTER_NAME, otherwise
-                           podman when reachable, or docker under WSL)
+                           podman when reachable, or docker under WSL). A forced
+                           engine must own an existing KIND_CLUSTER_NAME;
+                           otherwise the script fails instead of creating a
+                           duplicate cluster and replacing its kubeconfig.
   Repeated builds use the container runtime's layer cache; the EvalHub build date is stable
   for a source commit so a no-change deploy does not rebuild Go binaries.
   Temporary localhost:<port> registry tags are removed after each successful push.
@@ -195,6 +198,23 @@ kind_cluster_in_runtime() {
   grep -Fqx -- "$KIND_CLUSTER_NAME" <<<"$clusters"
 }
 
+# Fail when a forced CONTAINER_RUNTIME does not own KIND_CLUSTER_NAME while the
+# other container engine does. kind only lists the clusters of the engine it is
+# pointed at, so continuing would create a second cluster with the same name
+# under the selected engine and overwrite the private kubeconfig of the cluster
+# that is already running. Auto-detection already selects the owning engine, so
+# this guard only applies when CONTAINER_RUNTIME is set explicitly.
+ensure_forced_runtime_matches_owner() {
+  local other
+  case "$CONTAINER_RUNTIME" in
+    podman) other=docker ;;
+    docker) other=podman ;;
+    *) return 0 ;;
+  esac
+  kind_cluster_in_runtime "$other" || return 0
+  fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $other, not $CONTAINER_RUNTIME. Unset CONTAINER_RUNTIME to reuse the engine that owns the cluster, or set CONTAINER_RUNTIME=$other."
+}
+
 # Select the container runtime used for image builds, the local registry, and
 # the kind nodes. Set CONTAINER_RUNTIME to force a specific runtime. Otherwise an
 # existing KIND_CLUSTER_NAME decides the runtime: kind only lists the clusters
@@ -204,7 +224,8 @@ kind_cluster_in_runtime() {
 # preferred whenever it is installed and reachable, except under WSL where Docker
 # is preferred instead: WSL2 podman answers 'podman info' but kind node startup
 # fails during systemd/cgroup setup. The non-preferred runtime is the fallback
-# when the preferred one is not reachable.
+# when the preferred one is not reachable. A forced runtime must own an existing
+# KIND_CLUSTER_NAME (see ensure_forced_runtime_matches_owner).
 detect_container_runtime() {
   local runtime
   local -a preferred_runtimes=()
@@ -218,6 +239,7 @@ detect_container_runtime() {
       need_command "$CONTAINER_RUNTIME"
       "$CONTAINER_RUNTIME" info >/dev/null 2>&1 ||
         fail "$CONTAINER_RUNTIME is installed but not reachable. Start the $CONTAINER_RUNTIME daemon (or podman machine) and retry."
+      ensure_forced_runtime_matches_owner
       ;;
     "")
       for runtime in "${preferred_runtimes[@]}"; do
