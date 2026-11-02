@@ -16,6 +16,14 @@
 
 A lightweight REST API service for orchestrating LLM evaluations across multiple backends. Written in Go, it routes evaluation requests to frameworks like lm-evaluation-harness, RAGAS, Garak, and GuideLLM orchestrated via a [complementary SDK](https://github.com/eval-hub/eval-hub-sdk), tracks experiments via MLflow, and runs natively on OpenShift.
 
+## Native TLS
+
+API and MCP HTTP listeners share generic `TLS_REQUIRED`, `TLS_MIN_VERSION`,
+`TLS_CIPHERS` and `TLS_CURVES` controls. See the [native TLS contract](docs/native-tls.md)
+for certificate configuration, supported settings, proxy-terminated deployments,
+client verification and capability limits. This does not change plaintext metrics
+or private sidecar backends into HTTPS.
+
 ## Architecture
 
 ### OpenShift architecture
@@ -201,6 +209,18 @@ Apply the CR to your cluster:
 oc apply -f evalhub-cr.yaml
 oc get evalhub -n my-namespace    # check status
 ```
+
+## Post-processing
+
+Submit post-processing jobs with `POST /api/v1/evaluations/post-processing`.
+Retrieve or delete them with `GET` or `DELETE` on
+`/api/v1/evaluations/post-processing/{post_processing_job_id}`. To use a completed
+evaluation as input, put its ID in
+`operations.confidence_interval.results_data_ref.eval_job.id` in the request body.
+The submission returns a separate post-processing resource ID.
+
+See the [standalone post-processing example](examples/post-processing/README.md)
+for a request payload and create, get, and delete commands.
 
 ## Local development
 

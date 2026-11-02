@@ -8,14 +8,10 @@ test.mergeOptional(
       name: 'test-evaluation-job-for-lm_evaluation_harness-benchmark',
     } + if collectionId == '' then {
       benchmarks: [
-        test.benchmark('tinyTruthfulQA', 'lm_evaluation_harness', { num_examples: 1 }),
         test.benchmark('bigbench_code_line_description_multiple_choice', 'lm_evaluation_harness', { num_examples: 1 }),
         test.benchmark('ceval-valid_college_programming', 'lm_evaluation_harness', { num_examples: 1 }),
         test.benchmark('code2text_javascript', 'lm_evaluation_harness', { num_examples: 1 }),
         test.benchmark('code2text_ruby', 'lm_evaluation_harness', { num_examples: 1 }),
-        test.benchmark('humaneval', 'lm_evaluation_harness', { num_examples: 1 }),
-        test.benchmark('humaneval_instruct', 'lm_evaluation_harness', { num_examples: 1 }),
-        test.benchmark('mbpp', 'lm_evaluation_harness', { num_examples: 1 }),
         test.benchmark('leaderboard_ifeval', 'lm_evaluation_harness', { num_examples: 1 }),
         test.benchmark('leaderboard_bbh', 'lm_evaluation_harness', { num_examples: 1 }),
         test.benchmark('leaderboard_gpqa', 'lm_evaluation_harness', { num_examples: 1 }),

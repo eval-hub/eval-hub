@@ -1,0 +1,11 @@
+{
+  "max_length_env": "MODEL_MAX_LENGTH",
+  "notes": "One LongBench example with a 4096-token smoke context budget. Set MODEL_MAX_LENGTH to the served model's context limit (integer >= 2); the budget must not exceed that limit. This short default does not validate full long-context accuracy.",
+  "parameters": {
+    "loglikelihood_context_overflow": "truncate",
+    "max_length": 4096,
+    "num_examples": 1,
+    "num_fewshot": 0
+  },
+  "timeout": "5m"
+}

@@ -201,6 +201,29 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		})
 	}
 
+	// Post-processing calibration PVCs are independent of benchmark test data.
+	// They are mounted read-only in the adapter container, which receives a
+	// claim-name-to-path map through EVALHUB_POST_PROCESSOR_PVC_MOUNTS.
+	// Mount the claim root: the adapter applies each reference's sub_path.
+	// Setting SubPath here would apply it twice and prevent references to
+	// different subpaths of the same claim from sharing a mount.
+	for _, pvc := range cfg.postProcessorPVCs {
+		volumes = append(volumes, corev1.Volume{
+			Name: pvc.volumeName,
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: pvc.claimName,
+					ReadOnly:  true,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      pvc.volumeName,
+			MountPath: pvc.mountPath,
+			ReadOnly:  true,
+		})
+	}
+
 	return volumes, volumeMounts
 }
 

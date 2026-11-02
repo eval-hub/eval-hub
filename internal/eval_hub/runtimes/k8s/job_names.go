@@ -28,32 +28,70 @@ func sanitizeLabelValue(value string) string {
 	return safe
 }
 
-// buildK8sName returns a DNS-1123-safe name for Jobs and ConfigMaps:
-// base = "<jobID>-<guid>", plus optional suffix (e.g. "-spec" for ConfigMaps),
-// all kept within 63 chars.
+// buildK8sName returns a DNS-1123-safe name:
+// base = "<jobID>-<guid>", plus optional suffix, all kept within 63 chars.
+// Truncation reserves room for suffix so the suffix is never chopped off.
 func buildK8sName(jobID, resourceGUID, suffix string) string {
+	return buildK8sNameWithReserve(jobID, resourceGUID, suffix, len(suffix))
+}
+
+// buildK8sNameWithReserve truncates the "<jobID>-<guid>" base so that
+// base+reserveBytes fits in maxK8sNameLength, then appends suffix.
+// Job and ConfigMap both reserve len(specSuffix) so they share one base:
+// configMapName == jobName + "-spec".
+func buildK8sNameWithReserve(jobID, resourceGUID, suffix string, reserveBytes int) string {
+	if reserveBytes < len(suffix) {
+		reserveBytes = len(suffix)
+	}
 	safeJobID := sanitizeDNS1123Label(jobID)
 	safeGUID := sanitizeDNS1123Label(resourceGUID)
-	maxJobID := maxK8sNameLength - len(suffix) - len(safeGUID) - 1
+	maxJobID := maxK8sNameLength - reserveBytes - len(safeGUID) - 1
 	if maxJobID < 1 {
 		maxJobID = 1
 	}
 	if len(safeJobID) > maxJobID {
 		safeJobID = strings.Trim(safeJobID[:maxJobID], "-")
+		if safeJobID == "" {
+			safeJobID = "x"
+		}
 	}
-	name := safeJobID + "-" + safeGUID + suffix
+	base := safeJobID + "-" + safeGUID
+	maxBase := maxK8sNameLength - reserveBytes
+	if maxBase < 1 {
+		maxBase = 1
+	}
+	if len(base) > maxBase {
+		base = strings.Trim(base[:maxBase], "-")
+		if base == "" {
+			base = "x"
+		}
+	}
+	name := base + suffix
 	if len(name) > maxK8sNameLength {
-		name = strings.Trim(name[:maxK8sNameLength], "-")
+		// Last resort: keep suffix, shrink base further.
+		keep := maxK8sNameLength - len(suffix)
+		if keep < 1 {
+			keep = 1
+		}
+		base = strings.Trim(base[:min(len(base), keep)], "-")
+		if base == "" {
+			base = "x"
+		}
+		name = base + suffix
+		if len(name) > maxK8sNameLength {
+			name = strings.Trim(name[:maxK8sNameLength], "-")
+		}
 	}
 	return name
 }
 
 func jobName(jobID, resourceGUID string) string {
-	return buildK8sName(jobID, resourceGUID, "")
+	// Reserve space for "-spec" so Job and job-spec ConfigMap share one truncated base.
+	return buildK8sNameWithReserve(jobID, resourceGUID, "", len(specSuffix))
 }
 
 func configMapName(jobID, resourceGUID string) string {
-	return buildK8sName(jobID, resourceGUID, specSuffix)
+	return buildK8sNameWithReserve(jobID, resourceGUID, specSuffix, len(specSuffix))
 }
 
 func jobLabels(cfg *jobConfig) map[string]string {

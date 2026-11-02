@@ -32,6 +32,45 @@ func TestNewValidator(t *testing.T) {
 	}
 }
 
+func TestResultsDataConfigPathValidation(t *testing.T) {
+	validate := newTestValidator(t)
+	tests := []struct {
+		name    string
+		path    string
+		wantTag string
+	}{
+		{name: "omitted path"},
+		{name: "relative file", path: "scores.json"},
+		{name: "nested file", path: "results/scores.json"},
+		{name: "dot relative file", path: "./results/scores.json"},
+		{name: "relative directory", path: "results/"},
+		{name: "artifact root", path: "."},
+		{name: "absolute file", path: "/tmp/scores.json", wantTag: "startsnotwith"},
+		{name: "absolute root", path: "/", wantTag: "startsnotwith"},
+		{name: "double slash prefix", path: "//results/scores.json", wantTag: "startsnotwith"},
+		{name: "blank path", path: "   ", wantTag: "notblank"},
+		{name: "tab path", path: "\t", wantTag: "notblank"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := validate.Struct(api.ResultsDataConfigEntry{Path: test.path})
+			if test.wantTag == "" {
+				if err != nil {
+					t.Fatalf("valid relative path %q rejected: %v", test.path, err)
+				}
+				return
+			}
+			var validationErrors validator.ValidationErrors
+			if !errors.As(err, &validationErrors) || len(validationErrors) != 1 {
+				t.Fatalf("path %q: expected one validation error, got %v", test.path, err)
+			}
+			if validationErrors[0].Field() != "path" || validationErrors[0].Tag() != test.wantTag {
+				t.Fatalf("path %q: got field %q tag %q, want path with tag %q", test.path, validationErrors[0].Field(), validationErrors[0].Tag(), test.wantTag)
+			}
+		})
+	}
+}
+
 func TestCollectionConfigClassification(t *testing.T) {
 	validate := newTestValidator(t)
 	cases := []struct {
@@ -745,6 +784,50 @@ func TestValidateCollectionOverrides_EmptyOverrides(t *testing.T) {
 	}
 	if err := ValidateCollectionOverrides(nil, collectionBenchmarks); err != nil {
 		t.Fatalf("expected no error for empty overrides, got: %v", err)
+	}
+}
+
+func TestValidateCollectionOverrides_RepeatedBenchmarkCounts(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		rows      int
+		overrides int
+		wantError bool
+	}{
+		{name: "defaults", rows: 3, overrides: 0},
+		{name: "shared override", rows: 3, overrides: 1},
+		{name: "one override per occurrence", rows: 3, overrides: 3},
+		{name: "too few overrides", rows: 3, overrides: 2, wantError: true},
+		{name: "too many overrides", rows: 2, overrides: 3, wantError: true},
+		{name: "unique pair keeps existing behavior", rows: 1, overrides: 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var collection []api.CollectionBenchmarkConfig
+			for range tc.rows {
+				collection = append(collection, api.CollectionBenchmarkConfig{Ref: api.Ref{ID: "bfcl"}, ProviderID: "inspect"})
+			}
+			collection = append(collection, api.CollectionBenchmarkConfig{Ref: api.Ref{ID: "bfcl"}, ProviderID: "other"})
+			overrides := []api.EvaluationBenchmarkConfig{
+				{ProviderID: "inspect", HardwareConfig: &api.BenchmarkHardwareConfig{HardwareProfileName: "shared"}},
+				{Ref: api.Ref{ID: "bfcl"}, ProviderID: "other"},
+			}
+			for range tc.overrides {
+				overrides = append(overrides, api.EvaluationBenchmarkConfig{Ref: api.Ref{ID: "bfcl"}, ProviderID: "inspect"})
+			}
+			err := ValidateCollectionOverrides(overrides, collection)
+			if !tc.wantError {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			var se *serviceerrors.ServiceError
+			if !errors.As(err, &se) || se.MessageCode() != messages.RequestValidationFailed || !strings.Contains(err.Error(), "collection occurrence order") {
+				t.Fatalf("expected count validation error, got %v", err)
+			}
+		})
 	}
 }
 

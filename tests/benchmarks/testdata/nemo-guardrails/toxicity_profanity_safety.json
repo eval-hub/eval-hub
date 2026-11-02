@@ -1,0 +1,8 @@
+{
+  "notes": "Adapter ignores num_examples and uses packaged dataset eval_limit values; requires BENCHMARK_ALLOW_UNBOUNDED=1. Install the benchmark's NeMo config and required guardrail models. A short smoke run cannot be guaranteed without upstream sample-limit support.",
+  "parameters": {
+    "workers": 1
+  },
+  "timeout": "5m",
+  "unbounded": true
+}

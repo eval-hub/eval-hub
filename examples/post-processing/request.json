@@ -1,0 +1,31 @@
+{
+  "name": "accuracy-confidence-interval",
+  "operations": {
+    "confidence_interval": {
+      "results_data_ref": {
+        "eval_job": {
+          "id": "8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7",
+          "num_parallel_threads": 2
+        }
+      },
+      "calibration_data_ref": [
+        {
+          "s3": {
+            "bucket": "evaluation-data",
+            "key": "calibration/accuracy",
+            "secret_ref": "s3-secret"
+          },
+          "data_config": {
+            "format": "jsonl",
+            "columns": {
+              "sample_id": "example_id",
+              "label": "human_score",
+              "prediction": "judge_score"
+            }
+          }
+        }
+      ],
+      "significance_level": 0.05
+    }
+  }
+}

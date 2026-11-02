@@ -16,8 +16,13 @@ import (
 // and query providers. This is required because we might need these operations to be
 // in a transaction and we don't want to give direct access to the storage layer because
 // this will shortcut certain checks that are needed for the operation to be successful.
+//
+// Optional: implementations may also provide
+// WithContext(ctx context.Context) RuntimeStorage so abort checks can bind a
+// per-read timeout / shutdown context into GetEvaluationJob (see handlers.runtimeStorage).
 type RuntimeStorage interface {
 	GetProvider(id string) (*api.ProviderResource, error)
+	GetEvaluationJob(id string) (*api.EvaluationJobResource, error)
 	UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error
 }
 

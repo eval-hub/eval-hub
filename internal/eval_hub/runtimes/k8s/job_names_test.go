@@ -33,6 +33,41 @@ func TestBuildK8sNameRespectsMaxLengthWithSpecSuffix(t *testing.T) {
 	}
 }
 
+func TestJobAndConfigMapShareTruncatedBase(t *testing.T) {
+	// UUID jobID + UUID execution GUID always exceed the 63-char DNS-1123 limit.
+	jobID := "58755fb1-05d2-4410-87c6-2c47100258c8"
+	guid := "8cdd1d84-3297-4aca-ad25-a4ea9e382723"
+
+	job := jobName(jobID, guid)
+	cm := configMapName(jobID, guid)
+
+	if len(job) > maxK8sNameLength {
+		t.Fatalf("job name length <= %d, got %d (%q)", maxK8sNameLength, len(job), job)
+	}
+	if len(cm) > maxK8sNameLength {
+		t.Fatalf("configmap name length <= %d, got %d (%q)", maxK8sNameLength, len(cm), cm)
+	}
+	if !strings.HasSuffix(cm, specSuffix) {
+		t.Fatalf("expected configmap suffix %q, got %q", specSuffix, cm)
+	}
+	if got, want := cm, job+specSuffix; got != want {
+		t.Fatalf("configmap must be job name + %q;\n job=%q\n  cm=%q\nwant=%q", specSuffix, job, got, want)
+	}
+}
+
+func TestJobAndConfigMapShareBaseWithLongIDs(t *testing.T) {
+	jobID := strings.Repeat("a", 80)
+	guid := strings.Repeat("b", 40)
+	job := jobName(jobID, guid)
+	cm := configMapName(jobID, guid)
+	if got, want := cm, job+specSuffix; got != want {
+		t.Fatalf("configmap must be job name + %q;\n job=%q (%d)\n  cm=%q (%d)", specSuffix, job, len(job), cm, len(cm))
+	}
+	if len(cm) > maxK8sNameLength {
+		t.Fatalf("configmap name length <= %d, got %d", maxK8sNameLength, len(cm))
+	}
+}
+
 func TestJobLabelsNilConfig(t *testing.T) {
 	labels := jobLabels(nil)
 	if len(labels) != 0 {

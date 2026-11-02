@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/evalhub_mcp/config"
+	"github.com/eval-hub/eval-hub/internal/servingtls"
 	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -232,6 +233,10 @@ func runLegacyHTTPSSE(ctx context.Context, srv *mcp.Server, cfg *config.Config, 
 }
 
 func serveHTTP(ctx context.Context, mcpHandler http.Handler, cfg *config.Config, logger *slog.Logger) error {
+	serverTLS, err := servingtls.FromEnv(cfg.TLSCertFile, cfg.TLSKeyFile)
+	if err != nil {
+		return err
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -242,6 +247,7 @@ func serveHTTP(ctx context.Context, mcpHandler http.Handler, cfg *config.Config,
 
 	addr := net.JoinHostPort(cfg.Host, fmt.Sprintf("%d", cfg.Port))
 	httpServer := &http.Server{
+		TLSConfig:         serverTLS,
 		Addr:              addr,
 		Handler:           mux,
 		ReadHeaderTimeout: 15 * time.Second,
@@ -252,9 +258,9 @@ func serveHTTP(ctx context.Context, mcpHandler http.Handler, cfg *config.Config,
 
 	errCh := make(chan error, 1)
 	go func() {
-		logger.Info("MCP HTTP Server listening", "addr", addr, "tls", cfg.TLSEnabled())
-		if cfg.TLSEnabled() {
-			errCh <- httpServer.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile)
+		logger.Info("MCP HTTP Server listening", "addr", addr, "tls", serverTLS != nil)
+		if serverTLS != nil {
+			errCh <- httpServer.ListenAndServeTLS("", "")
 		} else {
 			errCh <- httpServer.ListenAndServe()
 		}

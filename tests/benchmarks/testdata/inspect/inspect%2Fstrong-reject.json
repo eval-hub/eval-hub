@@ -1,0 +1,11 @@
+{
+  "notes": "One sample; requires Secret-backed OPENAI_JUDGE_API_KEY in the adapter environment for the independent grader.",
+  "parameters": {
+    "epochs": 1,
+    "grader_base_url": "${JUDGE_BASE_URL}",
+    "grader_model": "${JUDGE_MODEL_NAME}",
+    "max_tasks": 1,
+    "num_examples": 1
+  },
+  "timeout": "5m"
+}

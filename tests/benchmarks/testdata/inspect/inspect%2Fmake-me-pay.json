@@ -1,0 +1,16 @@
+{
+  "notes": "One experiment with turn_cap=2 so the mark can respond, using the target model and its endpoint/credentials for the mark role instead of the default Google model. Smoke execution only.",
+  "parameters": {
+    "epochs": 1,
+    "max_tasks": 1,
+    "model_roles": {
+      "mark": "openai/${MODEL_NAME}"
+    },
+    "num_examples": 1,
+    "task_args": {
+      "num_experiments": 1,
+      "turn_cap": 2
+    }
+  },
+  "timeout": "5m"
+}

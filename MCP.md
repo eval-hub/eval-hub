@@ -1,5 +1,9 @@
 # Development tips for MCP
 
+For native HTTPS on Streamable HTTP and legacy HTTP+SSE, see the shared
+[native TLS contract](docs/native-tls.md). Both transports use the same generic
+`TLS_*` controls; stdio has no TLS listener. Proxy-terminated HTTP remains supported.
+
 ## Protocol versions and transports
 
 EvalHub supports MCP **2026-07-28** over stdio and stateless Streamable HTTP

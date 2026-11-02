@@ -16,9 +16,11 @@ local harness = std.parseJson(std.extVar('harness'));
   mlflow(name)::
     if harness.mlflow_enabled then name else '',
 
-  // Tokenizer path for connected vs disconnected cluster FVT.
+  // Connected runs may select the serving model's tokenizer; offline runs use staged data.
   defaultTokenizer()::
-    if harness.disconnected then '/test_data/tokenizer' else 'google/flan-t5-small',
+    if harness.disconnected then '/test_data/tokenizer'
+    else if $.env('FVT_BENCHMARK_TOKENIZER') != '' then $.env('FVT_BENCHMARK_TOKENIZER')
+    else 'google/flan-t5-small',
 
   // Offline test data reference for disconnected runs.
   testDataRef()::

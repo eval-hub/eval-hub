@@ -6,6 +6,11 @@ post:
     Create an asynchronous post-processing computation. Set `operation_order`
     to control execution order. If it is omitted, no operation order is
     guaranteed.
+
+    To use results from a completed evaluation, set
+    `operations.confidence_interval.results_data_ref.eval_job.id` to its ID.
+    The response's `resource.id` identifies the standalone post-processing job
+    for subsequent GET and DELETE requests.
   operationId: create_evaluations_post_processing
   requestBody:
     required: true
@@ -33,6 +38,15 @@ post:
                     eval_job:
                       id: 8e9d1d6b-5ca1-4a52-91b4-6f0f00c2f8d7
                       num_parallel_threads: 2
+                    data_config:
+                      format: json
+                      columns:
+                        sample_id: id
+                        prediction: scores.telemath_scorer.value
+                      value_mappings:
+                        prediction:
+                          C: 1
+                          I: 0
                   calibration_data_ref:
                     - s3:
                         bucket: evaluation-data

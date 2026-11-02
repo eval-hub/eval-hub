@@ -188,6 +188,37 @@ func TestCreateBenchmarkResourcesKeepsPolicyWhenJobCreateResponseIsAmbiguous(t *
 	}
 }
 
+func TestCreateBenchmarkResourcesPreservesResourcesWhenJobConfirmGetFails(t *testing.T) {
+	clientset := fake.NewClientset()
+	clientset.PrependReactor("create", "jobs", func(ktesting.Action) (bool, kruntime.Object, error) {
+		return true, nil, fmt.Errorf("create response lost")
+	})
+	clientset.PrependReactor("get", "jobs", func(action ktesting.Action) (bool, kruntime.Object, error) {
+		return true, nil, fmt.Errorf("confirm get unavailable")
+	})
+	evaluation := sampleEvaluation("provider-1")
+	runtime := newNetworkPolicyTestRuntime(clientset)
+	storage := &fakeStorage{providerConfigs: sampleProviders("provider-1")}
+
+	if err := runtime.createBenchmarkResources(context.Background(), runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage); err == nil {
+		t.Fatal("expected create/confirm failure")
+	}
+	configMaps, err := clientset.CoreV1().ConfigMaps("default").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("list ConfigMaps: %v", err)
+	}
+	if len(configMaps.Items) != 1 {
+		t.Fatalf("expected ConfigMap preserved when Job presence is unconfirmed, got %d", len(configMaps.Items))
+	}
+	policies, err := clientset.NetworkingV1().NetworkPolicies("default").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("list NetworkPolicies: %v", err)
+	}
+	if len(policies.Items) != 1 {
+		t.Fatalf("expected NetworkPolicy preserved with ConfigMap, got %d", len(policies.Items))
+	}
+}
+
 func TestCreateBenchmarkResourcesDoesNotCreateJobWhenNetworkPolicyCreationFails(t *testing.T) {
 	clientset := fake.NewClientset()
 	clientset.PrependReactor("create", "networkpolicies", func(ktesting.Action) (bool, kruntime.Object, error) {

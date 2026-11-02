@@ -16,11 +16,6 @@ properties:
     type: string
     format: date-time
     description: RFC3339 completion time.
-  benchmarks:
-    type: array
-    items:
-      $ref: ./BenchmarkStatus.yaml
-    description: Per-benchmark status when benchmark metadata is available.
 required:
   - state
 additionalProperties: false
