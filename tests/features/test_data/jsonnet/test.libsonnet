@@ -22,15 +22,23 @@ local harness = std.parseJson(std.extVar('harness'));
     else if $.env('FVT_BENCHMARK_TOKENIZER') != '' then $.env('FVT_BENCHMARK_TOKENIZER')
     else 'google/flan-t5-small',
 
-  // Offline test data reference for disconnected runs.
-  testDataRef()::
+  // Offline test data reference for disconnected runs. An explicit key is a
+  // benchmark bundle prefix; omitting it preserves the single-prefix behavior
+  // for fixtures that specifically exercise the generic S3 source.
+  testDataRef(keyPrefix=null)::
     {
       s3: {
         bucket: $.env('TEST_DATA_S3_BUCKET', 'mlpipeline'),
-        key: $.env('TEST_DATA_S3_KEY', 'offline'),
+        key: if keyPrefix == null then $.env('TEST_DATA_S3_KEY', 'offline') else keyPrefix,
         secret_ref: $.env('TEST_DATA_S3_SECRET_REF', 'minio-test'),
       },
     },
+
+  // The CI mirror stores each disconnected benchmark's required files under
+  // its own prefix. Keep the trailing slash so sibling benchmark IDs cannot
+  // accidentally match the same S3 prefix.
+  benchmarkTestDataKey(providerId, benchmarkId)::
+    'offline/fvt/benchmarks/' + providerId + '/' + benchmarkId + '/',
 
   // PVC test data reference (mounts claim read-only at /test_data).
   pvcTestDataRef()::
@@ -52,7 +60,9 @@ local harness = std.parseJson(std.extVar('harness'));
       } + overrides,
     },
 
-  // Evaluation/collection benchmark with disconnected-aware tokenizer and optional test_data_ref.
+  // Evaluation/collection benchmark with a benchmark-scoped test_data_ref in
+  // disconnected runs, so each init container stages only this benchmark's
+  // dataset/cache and tokenizer bundle.
   // When harness.queue_enabled is true, attaches hardware_config.queue for Kueue scheduling.
   benchmark(id, providerId, parameters)::
     local base = {
@@ -62,7 +72,9 @@ local harness = std.parseJson(std.extVar('harness'));
         tokenizer: $.defaultTokenizer(),
       } + parameters,
     } + $.hardwareConfigQueue();
-    if harness.disconnected then base + { test_data_ref: $.testDataRef() } else base,
+    if harness.disconnected then base + {
+      test_data_ref: $.testDataRef($.benchmarkTestDataKey(providerId, id)),
+    } else base,
 
   // Benchmark that always mounts offline data from a PVC (tokenizer under /test_data).
   pvcBenchmark(id, providerId, parameters)::
