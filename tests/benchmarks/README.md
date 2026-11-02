@@ -84,7 +84,9 @@ Each checked-in provider benchmark has one file under
 `testdata/<provider-id>/<benchmark-id>.json`. Runtime discovery uses the live API
 catalog, so a newly discovered benchmark without a file fails with the expected
 path and instructions to generate or add the fixture. Filenames
-use Go's `url.PathEscape`, additionally encoding dots as `%2E`. For example,
+use Go's `url.PathEscape`, additionally encoding dots as `%2E` and colons as
+`%3A` for Windows compatibility. For example, `arc:challenge` becomes
+`arc%3Achallenge.json` under the `lighteval` provider directory, and
 `inspect/petri-sycophancy` becomes `inspect%2Fpetri-sycophancy.json` under the
 `inspect` provider directory. Encoding `%` prevents collisions with escaped IDs.
 

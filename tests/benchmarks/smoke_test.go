@@ -188,8 +188,9 @@ type fixture struct {
 
 // PathEscape encodes '/' and '%' so IDs cannot create directory traversals.
 // Dot-only IDs need special handling because PathEscape leaves dots unchanged.
+// Colons must also be encoded for Windows-compatible filenames.
 func fileID(id string) string {
-	return strings.ReplaceAll(url.PathEscape(id), ".", "%2E")
+	return strings.NewReplacer(".", "%2E", ":", "%3A").Replace(url.PathEscape(id))
 }
 
 func fixturePath(root, provider, benchmark string) string {
