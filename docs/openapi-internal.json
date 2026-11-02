@@ -2882,6 +2882,353 @@
         }
       }
     },
+    "/api/v1/evaluations/collections/generation": {
+      "post": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Start Collection Generation",
+        "description": "Start an asynchronous, dry-run collection proposal from an evaluation goal.\nThe service validates the request and required feature, image, model, and\nguardrail configuration before admission, persists a tenant-scoped backing\nevaluation job, and returns promptly. It does not wait for model work and\ndoes not create a collection. The literal generation segment is reserved\nfor this resource and cannot address a collection by ID. If a guardrail or\nrunner failure occurs after admission, poll for its safe terminal error.\n\nIn cluster mode, the caller must be authenticated and authorized through\nkube-rbac-proxy and supply the tenant context via X-Tenant. X-User is set by\nthe trusted proxy from the authenticated caller; clients cannot use it to\nimpersonate another user. The model endpoint and credentials are configured\nserver-side and cannot be supplied in this request.\n",
+        "operationId": "create_collection_generation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionGenerationRequest"
+              },
+              "examples": {
+                "goal": {
+                  "summary": "Generate a collection for agent safety",
+                  "value": {
+                    "evaluation_goal": "Assess agent safety and tool-use risks",
+                    "provider_filter": "inspect",
+                    "max_benchmarks": 12,
+                    "strictness": "moderate"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Generation admitted; poll the Location URL for state and result.",
+            "headers": {
+              "Location": {
+                "description": "Relative URL of the tenant-scoped generation resource.",
+                "schema": {
+                  "type": "string"
+                },
+                "example": "/api/v1/evaluations/collections/generation/550e8400-e29b-41d4-a716-446655440000"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionGenerationResource"
+                },
+                "examples": {
+                  "pending": {
+                    "summary": "Persisted generation awaiting the runner",
+                    "value": {
+                      "resource": {
+                        "id": "550e8400-e29b-41d4-a716-446655440000",
+                        "tenant": "team-a",
+                        "owner": "user-a",
+                        "created_at": "2026-10-29T12:00:00Z",
+                        "updated_at": "2026-10-29T12:00:00Z"
+                      },
+                      "request": {
+                        "evaluation_goal": "Assess agent safety and tool-use risks",
+                        "provider_filter": "inspect",
+                        "max_benchmarks": 12,
+                        "strictness": "moderate"
+                      },
+                      "status": {
+                        "state": "pending"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/evaluations/collections/generation/{id}": {
+      "get": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Get Collection Generation",
+        "description": "Poll a dry-run generation. An authorized user in the same tenant may read\nthe resource; a user in another tenant cannot. The request summary is\ntenant-visible and contains normalized search options, never credentials.\nOnly completed resources contain result. Its collection is a postable\nCollectionConfig, and result.yaml describes that same config. Catalog\nchanges between generation and the later collection-create POST may make\nthe proposal invalid. Generation results remain readable after the pod\nexits until configured retention expires or the resource is deleted.\n\nUnknown IDs, backing jobs of a different workload type, expired resources,\nand jobs outside the caller's tenant return 404. In cluster mode, requests\nrequire authenticated/authorized access and X-Tenant; kube-rbac-proxy sets\nX-User from the authenticated caller, not from a client assertion.\n",
+        "operationId": "get_collection_generation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID of the backing collection-generation evaluation job.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current generation state and, when completed, the proposal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionGenerationResource"
+                },
+                "examples": {
+                  "pending": {
+                    "summary": "Accepted but not started",
+                    "value": {
+                      "resource": {
+                        "id": "550e8400-e29b-41d4-a716-446655440000",
+                        "tenant": "team-a",
+                        "owner": "user-a",
+                        "created_at": "2026-10-29T12:00:00Z",
+                        "updated_at": "2026-10-29T12:00:00Z"
+                      },
+                      "request": {
+                        "evaluation_goal": "Assess agent safety and tool-use risks",
+                        "provider_filter": "inspect",
+                        "max_benchmarks": 12,
+                        "strictness": "moderate"
+                      },
+                      "status": {
+                        "state": "pending"
+                      }
+                    }
+                  },
+                  "running": {
+                    "summary": "Runner is working",
+                    "value": {
+                      "resource": {
+                        "id": "550e8400-e29b-41d4-a716-446655440000",
+                        "tenant": "team-a",
+                        "owner": "user-a",
+                        "created_at": "2026-10-29T12:00:00Z",
+                        "updated_at": "2026-10-29T12:00:01Z"
+                      },
+                      "request": {
+                        "evaluation_goal": "Assess agent safety and tool-use risks",
+                        "provider_filter": "inspect",
+                        "max_benchmarks": 12,
+                        "strictness": "moderate"
+                      },
+                      "status": {
+                        "state": "running",
+                        "started_at": "2026-10-29T12:00:01Z"
+                      }
+                    }
+                  },
+                  "completed": {
+                    "summary": "Validated collection proposal with explanations",
+                    "value": {
+                      "resource": {
+                        "id": "550e8400-e29b-41d4-a716-446655440000",
+                        "tenant": "team-a",
+                        "owner": "user-a",
+                        "created_at": "2026-10-29T12:00:00Z",
+                        "updated_at": "2026-10-29T12:00:30Z"
+                      },
+                      "request": {
+                        "evaluation_goal": "Assess agent safety and tool-use risks",
+                        "provider_filter": "inspect",
+                        "max_benchmarks": 12,
+                        "strictness": "moderate"
+                      },
+                      "status": {
+                        "state": "completed",
+                        "started_at": "2026-10-29T12:00:01Z",
+                        "completed_at": "2026-10-29T12:00:30Z"
+                      },
+                      "result": {
+                        "collection": {
+                          "name": "Agent safety checks",
+                          "domains": [
+                            "trustworthiness"
+                          ],
+                          "benchmarks": [
+                            {
+                              "provider_id": "inspect",
+                              "id": "inspect/agentharm"
+                            }
+                          ]
+                        },
+                        "yaml": "name: Agent safety checks\ndomains:\n  - trustworthiness\nbenchmarks:\n  - provider_id: inspect\n    id: inspect/agentharm\n",
+                        "rationale": "The chosen benchmark addresses the requested agent safety goal.",
+                        "explanation": {
+                          "selected_benchmarks": [
+                            {
+                              "provider_id": "inspect",
+                              "id": "inspect/agentharm",
+                              "reason": "Exercises agent behavior under harmful tool-use requests."
+                            }
+                          ],
+                          "rejected_benchmarks": [
+                            {
+                              "provider_id": "inspect",
+                              "id": "inspect/cyberseceval-2-pi",
+                              "reason": "Focuses on prompt injection rather than broad agent harm."
+                            }
+                          ]
+                        },
+                        "actions": [
+                          {
+                            "name": "search_benchmarks",
+                            "outcome": "success",
+                            "summary": "Searched the visible catalog for agent safety benchmarks."
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "failed_guardrail_rejected": {
+                    "summary": "Input rejected by the guardrail gate after admission",
+                    "value": {
+                      "resource": {
+                        "id": "550e8400-e29b-41d4-a716-446655440000",
+                        "tenant": "team-a",
+                        "owner": "user-a",
+                        "created_at": "2026-10-29T12:00:00Z",
+                        "updated_at": "2026-10-29T12:00:02Z"
+                      },
+                      "request": {
+                        "evaluation_goal": "Assess agent safety and tool-use risks",
+                        "provider_filter": "inspect",
+                        "max_benchmarks": 12,
+                        "strictness": "moderate"
+                      },
+                      "status": {
+                        "state": "failed",
+                        "started_at": "2026-10-29T12:00:01Z",
+                        "completed_at": "2026-10-29T12:00:02Z",
+                        "error": {
+                          "code": "guardrails_rejected",
+                          "category": "topic_relevance",
+                          "message": "The evaluation goal could not be accepted."
+                        }
+                      }
+                    }
+                  },
+                  "failed_guardrail_unavailable": {
+                    "summary": "Guardrail service unavailable after admission",
+                    "value": {
+                      "resource": {
+                        "id": "550e8400-e29b-41d4-a716-446655440000",
+                        "tenant": "team-a",
+                        "owner": "user-a",
+                        "created_at": "2026-10-29T12:00:00Z",
+                        "updated_at": "2026-10-29T12:00:02Z"
+                      },
+                      "request": {
+                        "evaluation_goal": "Assess agent safety and tool-use risks",
+                        "provider_filter": "inspect",
+                        "max_benchmarks": 12,
+                        "strictness": "moderate"
+                      },
+                      "status": {
+                        "state": "failed",
+                        "started_at": "2026-10-29T12:00:01Z",
+                        "completed_at": "2026-10-29T12:00:02Z",
+                        "error": {
+                          "code": "guardrails_unavailable",
+                          "message": "The evaluation goal could not be checked."
+                        }
+                      }
+                    }
+                  },
+                  "cancelled": {
+                    "summary": "Generation cancelled before completion",
+                    "value": {
+                      "resource": {
+                        "id": "550e8400-e29b-41d4-a716-446655440000",
+                        "tenant": "team-a",
+                        "owner": "user-a",
+                        "created_at": "2026-10-29T12:00:00Z",
+                        "updated_at": "2026-10-29T12:00:03Z"
+                      },
+                      "request": {
+                        "evaluation_goal": "Assess agent safety and tool-use risks",
+                        "provider_filter": "inspect",
+                        "max_benchmarks": 12,
+                        "strictness": "moderate"
+                      },
+                      "status": {
+                        "state": "cancelled",
+                        "started_at": "2026-10-29T12:00:01Z",
+                        "completed_at": "2026-10-29T12:00:03Z"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Delete Collection Generation",
+        "description": "Cancel an active generation and remove its retained resource. A delayed\ncallback cannot recreate a deleted or cancelled result. A second DELETE\nor an unknown, wrong-type, expired, or cross-tenant ID returns 404.\nAny authorized user in the same tenant may delete the resource. Cluster\nrequests require the existing authenticated/authorized X-Tenant context.\nKubernetes Job TTL and API-result retention are separate.\n",
+        "operationId": "delete_collection_generation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID of the backing collection-generation evaluation job.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Generation cancelled, if active, and retained state removed. No response body."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
     "/api/v1/evaluations/collections/{id}": {
       "get": {
         "tags": [
@@ -6710,6 +7057,439 @@
           }
         ]
       },
+      "CollectionGenerationRequest": {
+        "type": "object",
+        "title": "CollectionGenerationRequest",
+        "description": "Goal and search options for a dry-run collection proposal. The service trims\nthe goal and normalizes the options before persisting the generation job.\nThe model connection and credentials are configured server-side, not supplied\nin this request.\n",
+        "required": [
+          "evaluation_goal"
+        ],
+        "properties": {
+          "evaluation_goal": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "pattern": "\\S",
+            "description": "Non-blank natural-language evaluation goal, up to 2000 characters; leading and trailing whitespace is trimmed."
+          },
+          "provider_filter": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Optional comma-separated provider IDs. Omit to search all providers visible to the tenant."
+          },
+          "max_benchmarks": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 12,
+            "description": "Maximum number of benchmarks in the generated collection (1 to 50)."
+          },
+          "strictness": {
+            "type": "string",
+            "enum": [
+              "lenient",
+              "moderate",
+              "strict"
+            ],
+            "default": "moderate",
+            "description": "How conservatively the runner selects and calibrates benchmarks."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CollectionGenerationRequestSummary": {
+        "title": "CollectionGenerationRequestSummary",
+        "description": "Normalized request stored with the generation job; defaulted options are always present.",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CollectionGenerationRequest"
+          },
+          {
+            "type": "object",
+            "required": [
+              "max_benchmarks",
+              "strictness"
+            ]
+          }
+        ]
+      },
+      "CollectionGenerationStatusError": {
+        "type": "object",
+        "title": "CollectionGenerationStatusError",
+        "description": "Safe terminal error. The message contains no raw guardrail output, prompt,\nmodel response, tool output, Secret, or credential.\n",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "guardrails_rejected",
+              "guardrails_unavailable",
+              "model_failed",
+              "tool_failed",
+              "validation_failed",
+              "timeout",
+              "launch_failed",
+              "workload_failed"
+            ],
+            "description": "Stable machine-readable terminal error code."
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Short, sanitized explanation suitable for the requesting tenant."
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "prompt_injection",
+              "exfiltration",
+              "topic_relevance",
+              "unsupported_capability"
+            ],
+            "description": "Required when code is guardrails_rejected; absent for other error codes."
+          }
+        },
+        "if": {
+          "properties": {
+            "code": {
+              "const": "guardrails_rejected"
+            }
+          },
+          "required": [
+            "code"
+          ]
+        },
+        "then": {
+          "required": [
+            "category"
+          ]
+        },
+        "else": {
+          "not": {
+            "required": [
+              "category"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "CollectionGenerationStatus": {
+        "type": "object",
+        "title": "CollectionGenerationStatus",
+        "description": "Durable generation lifecycle state from the backing evaluation job.",
+        "required": [
+          "state"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Set once the workload starts."
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Set when the workload reaches a terminal state."
+          },
+          "error": {
+            "$ref": "#/components/schemas/CollectionGenerationStatusError",
+            "description": "Required for failed generations; absent in every other state."
+          }
+        },
+        "if": {
+          "properties": {
+            "state": {
+              "const": "failed"
+            }
+          },
+          "required": [
+            "state"
+          ]
+        },
+        "then": {
+          "required": [
+            "error"
+          ]
+        },
+        "else": {
+          "not": {
+            "required": [
+              "error"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "CollectionGenerationBenchmarkReason": {
+        "type": "object",
+        "title": "CollectionGenerationBenchmarkReason",
+        "description": "Model-generated selection rationale. The provider/benchmark pair is checked\nagainst the tenant-visible catalog; the prose is explanatory, not a verified fact.\n",
+        "required": [
+          "provider_id",
+          "id",
+          "reason"
+        ],
+        "properties": {
+          "provider_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Provider ID from the visible catalog."
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Benchmark ID, matching CollectionBenchmarkConfig.id."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "description": "Concise reason for selecting or rejecting this benchmark."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CollectionGenerationExplanation": {
+        "type": "object",
+        "title": "CollectionGenerationExplanation",
+        "description": "Reasons for the final selection and the highest-ranked eligible candidates\nconsidered but not selected. References are validated against the visible catalog.\n",
+        "required": [
+          "selected_benchmarks",
+          "rejected_benchmarks"
+        ],
+        "properties": {
+          "selected_benchmarks": {
+            "type": "array",
+            "minItems": 1,
+            "description": "One entry for each final collection benchmark, in collection order.\nThe count cannot exceed the accepted request's max_benchmarks.\n",
+            "items": {
+              "$ref": "#/components/schemas/CollectionGenerationBenchmarkReason"
+            }
+          },
+          "rejected_benchmarks": {
+            "type": "array",
+            "maxItems": 5,
+            "description": "Up to five highest-ranked eligible candidates considered but not selected.\nOrdered by the runner's relevance rank, with provider_id then id as tie-breakers.\nNo pair may also appear in selected_benchmarks.\n",
+            "items": {
+              "$ref": "#/components/schemas/CollectionGenerationBenchmarkReason"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "CollectionGenerationAction": {
+        "type": "object",
+        "title": "CollectionGenerationAction",
+        "description": "Bounded, redacted summary of a runner action; never a raw tool result or prompt.",
+        "required": [
+          "name",
+          "outcome",
+          "summary"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Fixed action/tool name."
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "success",
+              "error"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "description": "Sanitized short summary without credentials or arbitrary model text."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CollectionGenerationResult": {
+        "type": "object",
+        "title": "CollectionGenerationResult",
+        "description": "Completed dry-run proposal. Generation does not create this collection; the\ncaller reviews and separately submits collection to POST /api/v1/evaluations/collections.\nThe YAML and JSON describe the same postable CollectionConfig. A later catalog\nchange may make the proposal invalid at collection-create time.\n",
+        "required": [
+          "collection",
+          "yaml",
+          "rationale",
+          "explanation",
+          "actions"
+        ],
+        "properties": {
+          "collection": {
+            "description": "Validated collection-create payload. No server-managed fields or positive\ncuration_order are generated.\n",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CollectionConfig"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "benchmarks": {
+                    "minItems": 1
+                  },
+                  "curation_order": {
+                    "minimum": 0,
+                    "maximum": 0
+                  }
+                },
+                "anyOf": [
+                  {
+                    "required": [
+                      "category"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "domains"
+                    ],
+                    "properties": {
+                      "domains": {
+                        "minItems": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "yaml": {
+            "type": "string",
+            "minLength": 1,
+            "description": "YAML serialization of exactly the collection object above."
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Short overall model-generated rationale for this proposal."
+          },
+          "explanation": {
+            "$ref": "#/components/schemas/CollectionGenerationExplanation"
+          },
+          "actions": {
+            "type": "array",
+            "maxItems": 50,
+            "description": "At most 50 redacted action summaries in execution order.",
+            "items": {
+              "$ref": "#/components/schemas/CollectionGenerationAction"
+            }
+          },
+          "actions_truncated": {
+            "type": "boolean",
+            "description": "True when more than 50 actions occurred and later summaries were omitted."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CollectionGenerationResource": {
+        "type": "object",
+        "title": "CollectionGenerationResource",
+        "description": "Tenant-scoped, pollable dry-run generation resource. resource.id is the ID of\nits backing evaluation job. Generation results remain readable after the pod\nexits until the configured retention period expires or the resource is deleted.\n",
+        "required": [
+          "resource",
+          "request",
+          "status"
+        ],
+        "properties": {
+          "resource": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Resource"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "id",
+                  "tenant",
+                  "owner",
+                  "created_at",
+                  "updated_at"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tenant": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "owner": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "created_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "updated_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            ]
+          },
+          "request": {
+            "$ref": "#/components/schemas/CollectionGenerationRequestSummary"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CollectionGenerationStatus"
+          },
+          "result": {
+            "$ref": "#/components/schemas/CollectionGenerationResult",
+            "description": "Required when status.state is completed; absent in every other state."
+          }
+        },
+        "if": {
+          "properties": {
+            "status": {
+              "properties": {
+                "state": {
+                  "const": "completed"
+                }
+              },
+              "required": [
+                "state"
+              ]
+            }
+          },
+          "required": [
+            "status"
+          ]
+        },
+        "then": {
+          "required": [
+            "result"
+          ]
+        },
+        "else": {
+          "not": {
+            "required": [
+              "result"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "CollectionCloneRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -6905,6 +7685,25 @@
             "examples": {
               "ConflictError": {
                 "$ref": "#/components/examples/ConflictError"
+              }
+            }
+          }
+        }
+      },
+      "ServiceUnavailable": {
+        "description": "Required collection-generation configuration is unavailable before admission.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "examples": {
+              "generation_not_configured": {
+                "summary": "Collection generation cannot be admitted",
+                "value": {
+                  "message_code": "collection_generation_not_configured",
+                  "message": "Collection generation is not configured."
+                }
               }
             }
           }

@@ -58,6 +58,10 @@ paths:
     $ref: paths/api_v1_evaluations_providers_{id}.yaml
   /api/v1/evaluations/collections:
     $ref: paths/api_v1_evaluations_collections.yaml
+  /api/v1/evaluations/collections/generation:
+    $ref: paths/api_v1_evaluations_collections_generation.yaml
+  /api/v1/evaluations/collections/generation/{id}:
+    $ref: paths/api_v1_evaluations_collections_generation_{id}.yaml
   /api/v1/evaluations/collections/{id}:
     $ref: paths/api_v1_evaluations_collections_{id}.yaml
   /api/v1/evaluations/collections/{id}/clones:

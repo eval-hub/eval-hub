@@ -1,0 +1,8 @@
+title: CollectionGenerationRequestSummary
+description: Normalized request stored with the generation job; defaulted options are always present.
+allOf:
+  - $ref: ./CollectionGenerationRequest.yaml
+  - type: object
+    required:
+      - max_benchmarks
+      - strictness

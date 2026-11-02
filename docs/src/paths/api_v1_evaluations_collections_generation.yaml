@@ -1,0 +1,71 @@
+post:
+  tags:
+    - Collections
+  summary: Start Collection Generation
+  description: |
+    Start an asynchronous, dry-run collection proposal from an evaluation goal.
+    The service validates the request and required feature, image, model, and
+    guardrail configuration before admission, persists a tenant-scoped backing
+    evaluation job, and returns promptly. It does not wait for model work and
+    does not create a collection. The literal generation segment is reserved
+    for this resource and cannot address a collection by ID. If a guardrail or
+    runner failure occurs after admission, poll for its safe terminal error.
+
+    In cluster mode, the caller must be authenticated and authorized through
+    kube-rbac-proxy and supply the tenant context via X-Tenant. X-User is set by
+    the trusted proxy from the authenticated caller; clients cannot use it to
+    impersonate another user. The model endpoint and credentials are configured
+    server-side and cannot be supplied in this request.
+  operationId: create_collection_generation
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../components/schemas/CollectionGenerationRequest.yaml
+        examples:
+          goal:
+            summary: Generate a collection for agent safety
+            value:
+              evaluation_goal: Assess agent safety and tool-use risks
+              provider_filter: inspect
+              max_benchmarks: 12
+              strictness: moderate
+  responses:
+    '202':
+      description: Generation admitted; poll the Location URL for state and result.
+      headers:
+        Location:
+          description: Relative URL of the tenant-scoped generation resource.
+          schema:
+            type: string
+          example: /api/v1/evaluations/collections/generation/550e8400-e29b-41d4-a716-446655440000
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/CollectionGenerationResource.yaml
+          examples:
+            pending:
+              summary: Persisted generation awaiting the runner
+              value:
+                resource:
+                  id: 550e8400-e29b-41d4-a716-446655440000
+                  tenant: team-a
+                  owner: user-a
+                  created_at: '2026-10-29T12:00:00Z'
+                  updated_at: '2026-10-29T12:00:00Z'
+                request:
+                  evaluation_goal: Assess agent safety and tool-use risks
+                  provider_filter: inspect
+                  max_benchmarks: 12
+                  strictness: moderate
+                status:
+                  state: pending
+    '400':
+      $ref: ../components/responses/BadRequest.yaml
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '503':
+      $ref: ../components/responses/ServiceUnavailable.yaml
