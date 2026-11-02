@@ -646,6 +646,25 @@ set_lmes_provider_image_pull_policy() {
   mv -- "$output" "$file"
 }
 
+# A single-node kind cluster inherits the container VM's memory (8 GiB for the
+# default podman machine), which cannot satisfy the inspect adapter's packaged
+# 8Gi request, so its job pods stay Pending until the fixture deadline expires.
+# Lower the request and limit in the rendered provider ConfigMap so inspect
+# smoke jobs can schedule; the packaged catalog keeps its production values.
+set_inspect_provider_memory_for_kind() {
+  local file="$1" output="$WORK_DIR/provider-inspect.yaml.tmp"
+  local requests limits
+  requests="$(grep -Ec '^[[:space:]]*memory_request: 8Gi[[:space:]]*$' "$file" || true)"
+  limits="$(grep -Ec '^[[:space:]]*memory_limit: 32Gi[[:space:]]*$' "$file" || true)"
+  [[ "$requests" == 1 && "$limits" == 1 ]] ||
+    fail "Expected one inspect memory_request of 8Gi and one memory_limit of 32Gi in $file."
+  sed -E \
+    -e 's/^([[:space:]]*)memory_request: 8Gi[[:space:]]*$/\1memory_request: 2Gi/' \
+    -e 's/^([[:space:]]*)memory_limit: 32Gi[[:space:]]*$/\1memory_limit: 4Gi/' \
+    "$file" >"$output"
+  mv -- "$output" "$file"
+}
+
 make_certificate() {
   local directory="$1" name="$2" common_name="$3" sans="$4" config
   config="$directory/$name.cnf"
@@ -749,6 +768,8 @@ render_operator_overlay() {
   replace_env_value "$params" evalHubImage "$(registry_image eval-hub)"
   if adapter_selected inspect; then
     replace_env_value "$params" evalhub-provider-inspect-image "$(registry_image community-inspect)"
+    set_inspect_provider_memory_for_kind \
+      "$config_root/configmaps/evalhub/provider-inspect.yaml"
   fi
   if adapter_selected followbench; then
     replace_env_value "$params" evalhub-provider-followbench-image "$(registry_image community-followbench)"
@@ -952,20 +973,84 @@ YAML
   log PASS "EvalHub custom resource and service deployment are Ready."
 }
 
+# deployment_pod_selector prints a label selector for the pods a Deployment owns.
+deployment_pod_selector() {
+  local deployment="$1" selector
+  selector="$(kubectl --kubeconfig "$KUBECONFIG_FILE" -n system get "deployment/$deployment" \
+    -o 'go-template={{range $key, $value := .spec.selector.matchLabels}}{{$key}}={{$value}},{{end}}')" ||
+    fail "Could not read the pod selector for deployment/$deployment."
+  selector="${selector%,}"
+  [[ -n "$selector" ]] || fail "Deployment/$deployment has no matchLabels selector."
+  printf '%s' "$selector"
+}
+
 restart_workloads_on_redeploy() {
-  local deployment
+  local deployment selector pod
+  local -a pods
   if [[ "$KIND_CLUSTER_CREATED" == true ]]; then
     log INFO "New kind cluster; workloads already started from the freshly built images."
     return
   fi
 
   for deployment in trustyai-service-operator-controller-manager evalhub-local; do
-    log INFO "Restarting $deployment so the reused kind cluster runs the current local image contents."
-    kubectl --kubeconfig "$KUBECONFIG_FILE" -n system rollout restart "deployment/$deployment"
+    log INFO "Restarting $deployment pods so the reused kind cluster runs the current local image contents."
+    selector="$(deployment_pod_selector "$deployment")"
+    pods=()
+    while IFS= read -r pod; do
+      if [[ -n "$pod" ]]; then
+        pods+=("$pod")
+      fi
+    done < <(kubectl --kubeconfig "$KUBECONFIG_FILE" -n system get pods -l "$selector" -o name)
+    # Delete the pods instead of running 'kubectl rollout restart'. A restart
+    # only adds a restartedAt annotation to the pod template, and the operator
+    # re-renders that template on its next reconcile, which rolls the Deployment
+    # back and replaces the pod again after this script reports success. Callers
+    # that connect immediately then reuse connections to a terminated pod and
+    # see 502 responses from the proxy. ReplicaSet-owned pod deletion restarts
+    # the workloads without changing the template.
+    if ((${#pods[@]} > 0)); then
+      kubectl --kubeconfig "$KUBECONFIG_FILE" -n system delete "${pods[@]}" \
+        --wait=false --ignore-not-found >/dev/null
+    fi
     kubectl --kubeconfig "$KUBECONFIG_FILE" -n system rollout status \
       "deployment/$deployment" --timeout=300s
   done
   log PASS "Reused-cluster operator and EvalHub workloads now use the current local images."
+}
+
+# The operator owns the evalhub-local Deployment template, so the pod set can
+# change seconds after a rollout completes. Wait until the Deployment
+# generation, the ready replica count, and the pod set stop changing so the
+# script never reports readiness while the API pod is being replaced.
+wait_for_stable_evalhub() {
+  local selector generation observed ready pods sample previous="" stable=0 attempt
+  local deadline=$((SECONDS + 180))
+  selector="$(deployment_pod_selector evalhub-local)"
+  for ((attempt = 1; SECONDS < deadline; attempt++)); do
+    generation="$(kubectl --kubeconfig "$KUBECONFIG_FILE" -n system get deployment/evalhub-local \
+      -o 'jsonpath={.metadata.generation}' 2>/dev/null || true)"
+    observed="$(kubectl --kubeconfig "$KUBECONFIG_FILE" -n system get deployment/evalhub-local \
+      -o 'jsonpath={.status.observedGeneration}' 2>/dev/null || true)"
+    ready="$(kubectl --kubeconfig "$KUBECONFIG_FILE" -n system get deployment/evalhub-local \
+      -o 'jsonpath={.status.readyReplicas}' 2>/dev/null || true)"
+    pods="$(kubectl --kubeconfig "$KUBECONFIG_FILE" -n system get pods -l "$selector" \
+      --sort-by=.metadata.name \
+      -o 'jsonpath={range .items[*]}{.metadata.name}:{.status.conditions[?(@.type=="Ready")].status},{end}' 2>/dev/null || true)"
+    sample="${generation}/${observed}/${ready:-0}/${pods}"
+    if [[ -n "$generation" && "$generation" == "$observed" && "${ready:-0}" -ge 1 &&
+      "$sample" == "$previous" ]]; then
+      stable=$((stable + 1))
+      if ((stable >= 2)); then
+        log PASS "EvalHub deployment, pods, and endpoints are stable."
+        return 0
+      fi
+    else
+      stable=0
+    fi
+    previous="$sample"
+    sleep 2
+  done
+  fail "The EvalHub deployment did not stabilize within 180 seconds (generation=${generation:-unknown}, observed=${observed:-unknown}, ready=${ready:-unknown})."
 }
 
 install_host_api_service() {
@@ -1116,6 +1201,56 @@ data:
                     "usage": {"prompt_tokens": prompt_tokens, "completion_tokens": 1, "total_tokens": prompt_tokens + 1},
                 })
                 print(json.dumps({"role": ROLE, "endpoint": "completions", "auth": "accepted"}), flush=True)
+                return
+
+            # Inspect AI's OpenAI-compatible provider calls the Responses API by
+            # default, so emulate the subset of it that a chat completion needs.
+            # Without this, inspect fails with
+            # TypeError("'NoneType' object is not iterable") on response.output.
+            if ROLE == "target" and endpoint.endswith("/responses/input_tokens"):
+                self.reply(200, {"object": "response.input_tokens", "input_tokens": 1})
+                print(json.dumps({"role": ROLE, "endpoint": "responses.input_tokens", "auth": "accepted"}), flush=True)
+                return
+
+            if ROLE == "target" and endpoint.endswith("/v1/responses"):
+                text = "I will follow the requested constraints."
+                self.reply(200, {
+                    "id": "resp-kind-mock",
+                    "object": "response",
+                    "created_at": 0,
+                    "status": "completed",
+                    "model": request.get("model", MODEL),
+                    "output": [{
+                        "type": "message",
+                        "id": "msg-kind-mock",
+                        "status": "completed",
+                        "role": "assistant",
+                        "content": [{"type": "output_text", "text": text, "annotations": []}],
+                    }],
+                    "parallel_tool_calls": False,
+                    "tool_choice": "auto",
+                    "tools": [],
+                    "error": None,
+                    "incomplete_details": None,
+                    "instructions": None,
+                    "metadata": {},
+                    "temperature": 1.0,
+                    "top_p": 1.0,
+                    "max_output_tokens": None,
+                    "previous_response_id": None,
+                    "reasoning": None,
+                    "text": {"format": {"type": "text"}},
+                    "truncation": "disabled",
+                    "usage": {
+                        "input_tokens": 1,
+                        "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
+                        "output_tokens": 1,
+                        "output_tokens_details": {"reasoning_tokens": 0},
+                        "total_tokens": 2,
+                    },
+                    "user": None,
+                })
+                print(json.dumps({"role": ROLE, "endpoint": "responses", "auth": "accepted"}), flush=True)
                 return
 
             if ROLE == "judge":
@@ -1435,6 +1570,9 @@ verify_deployment() {
     deployment/evalhub-kind-mock-target --timeout=180s
   kubectl --kubeconfig "$KUBECONFIG_FILE" -n system rollout status \
     deployment/evalhub-kind-mock-judge --timeout=180s
+  # The operator can still re-render the Deployment after a rollout reports
+  # complete, so confirm the API pod set has settled before callers connect.
+  wait_for_stable_evalhub
   check_evalhub_health
   check_service_health evalhub-kind-mock-target 8000 http /v1/models kind-target-model
   check_service_health evalhub-kind-mock-judge 8000 http /v1/models kind-judge-model
