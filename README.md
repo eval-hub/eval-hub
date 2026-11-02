@@ -687,7 +687,7 @@ eval-hub/
 ├── config/                # config.yaml and provider definitions
 ├── docs/src/              # OpenAPI 3.1.0 specification (source of truth)
 ├── tests/features/        # BDD tests (godog)
-├── Containerfile          # Multi-stage UBI9 container build
+├── Containerfile          # Multi-stage ubi10 container build
 └── Makefile               # Build, test, and dev targets
 ```
 
