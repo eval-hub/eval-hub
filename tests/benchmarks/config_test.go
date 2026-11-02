@@ -86,6 +86,47 @@ func TestMaxLengthEnvironmentOverride(t *testing.T) {
 	}
 }
 
+func TestTokenizerEnvironmentOverride(t *testing.T) {
+	for _, tc := range []struct {
+		name, parameters, value string
+		set                     bool
+		want                    any
+	}{
+		{name: "environment supplies the tokenizer", parameters: `{}`,
+			value: "hf-internal-testing/llama-tokenizer", set: true, want: "hf-internal-testing/llama-tokenizer"},
+		{name: "surrounding whitespace is trimmed", parameters: `{}`,
+			value: "  org/tokenizer  ", set: true, want: "org/tokenizer"},
+		{name: "unset keeps the model name fallback", parameters: `{}`},
+		{name: "blank keeps the model name fallback", parameters: `{}`, value: "   ", set: true},
+		{name: "pinned fixture tokenizer wins", parameters: `{"tokenizer":"/test_data/tokenizer"}`,
+			value: "org/other", set: true, want: "/test_data/tokenizer"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeFixture(t, t.TempDir(), "lm_evaluation_harness", "arc_easy",
+				`{"parameters":`+tc.parameters+`,"tokenizer_env":"LM_EVAL_TOKENIZER","timeout":"5m"}`)
+			f, err := loadFixture(path, func(key string) (string, bool) {
+				if key != "LM_EVAL_TOKENIZER" {
+					t.Fatalf("unexpected environment lookup: %s", key)
+				}
+				return tc.value, tc.set && tc.value != ""
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, ok := f.Parameters["tokenizer"]
+			if tc.want == nil {
+				if ok {
+					t.Fatalf("tokenizer = %v, want no override", got)
+				}
+				return
+			}
+			if got != tc.want {
+				t.Fatalf("tokenizer = %v, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func writeFixture(t *testing.T, root, provider, benchmark, body string) string {
 	t.Helper()
 	path := fixturePath(root, provider, benchmark)
@@ -263,8 +304,11 @@ func TestExperimentName(t *testing.T) {
 }
 
 func TestFixturePaths(t *testing.T) {
+	if got, want := fixturePath("testdata", "provider:name", "arc:challenge"), filepath.Join("testdata", "provider%3Aname", "arc%3Achallenge.json"); got != want {
+		t.Fatalf("fixture path = %q; want %q", got, want)
+	}
 	seen := make(map[string]bool)
-	for _, id := range []string{"../escape", "..", ".", "a/b", "a%2Fb", "a:b", "a.b", "a%2Eb"} {
+	for _, id := range []string{"../escape", "..", ".", "a/b", "a%2Fb", "a:b", "a%3Ab", "a.b", "a%2Eb"} {
 		path := fixturePath("testdata", id, id)
 		rel, err := filepath.Rel("testdata", path)
 		if err != nil || strings.HasPrefix(rel, "..") || len(strings.Split(rel, string(filepath.Separator))) != 2 {
