@@ -50,8 +50,9 @@ Inputs (also accepted as environment variables):
   IMAGE_TAG          matching dev-deploy image tag (default: kind-<cluster>)
   DELETE_CLUSTER     true to delete that cluster too (default: false)
   CONTAINER_RUNTIME  container engine that owns the registry container and the
-                     temporary image tags (podman or docker; default: podman
-                     when reachable, docker under WSL, otherwise docker)
+                     temporary image tags (podman or docker; default: the engine
+                     that already owns KIND_CLUSTER_NAME, otherwise podman when
+                     reachable, or docker under WSL)
 
 The system namespace is retained to avoid deleting unrelated resources that may
 have been added there. Deployment resources are removed only when their ownership
@@ -113,13 +114,43 @@ validate_inputs() {
   case "$DELETE_CLUSTER" in true|false) ;; *) fail "DELETE_CLUSTER must be true or false." ;; esac
 }
 
+# Return 0 when KIND_CLUSTER_NAME already exists under the given container
+# runtime, using the kind provider that runtime requires. A runtime that is not
+# installed or not reachable cannot own a cluster, so it reports false.
+kind_cluster_in_runtime() {
+  local runtime="$1" clusters
+  command -v "$runtime" >/dev/null 2>&1 || return 1
+  "$runtime" info >/dev/null 2>&1 || return 1
+  case "$runtime" in
+    podman)
+      clusters="$(KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters 2>/dev/null || true)"
+      ;;
+    docker)
+      clusters="$(env -u KIND_EXPERIMENTAL_PROVIDER kind get clusters 2>/dev/null || true)"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  grep -Fqx -- "$KIND_CLUSTER_NAME" <<<"$clusters"
+}
+
 # Select the container runtime that owns the registry container and the
 # temporary image tags. Set CONTAINER_RUNTIME to force a specific runtime.
-# Otherwise Podman is preferred whenever it is installed and reachable, except
-# under WSL where Docker is preferred instead (see detect_container_runtime in
-# dev-deploy.sh). The non-preferred runtime is the fallback.
+# Otherwise an existing KIND_CLUSTER_NAME decides the runtime, so cleanup always
+# targets the engine that backed the deployment even when CONTAINER_RUNTIME was
+# only passed to dev-deploy. With no existing cluster, Podman is preferred
+# whenever it is installed and reachable, except under WSL where Docker is
+# preferred instead (see detect_container_runtime in dev-deploy.sh). The
+# non-preferred runtime is the fallback when the preferred one is not reachable.
 detect_container_runtime() {
+  local runtime
   local -a preferred_runtimes=()
+  if uname -r | grep -qiE 'microsoft|wsl'; then
+    preferred_runtimes=(docker podman)
+  else
+    preferred_runtimes=(podman docker)
+  fi
   case "$CONTAINER_RUNTIME" in
     podman|docker)
       command -v "$CONTAINER_RUNTIME" >/dev/null 2>&1 ||
@@ -128,18 +159,21 @@ detect_container_runtime() {
         fail "$CONTAINER_RUNTIME is installed but not reachable. Start the $CONTAINER_RUNTIME daemon (or podman machine) and retry."
       ;;
     "")
-      if uname -r | grep -qiE 'microsoft|wsl'; then
-        preferred_runtimes=(docker podman)
-      else
-        preferred_runtimes=(podman docker)
-      fi
-      local runtime
       for runtime in "${preferred_runtimes[@]}"; do
-        if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
+        if kind_cluster_in_runtime "$runtime"; then
           CONTAINER_RUNTIME="$runtime"
+          log INFO "Kind cluster '$KIND_CLUSTER_NAME' exists under $runtime; cleaning up with $runtime."
           break
         fi
       done
+      if [[ -z "$CONTAINER_RUNTIME" ]]; then
+        for runtime in "${preferred_runtimes[@]}"; do
+          if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
+            CONTAINER_RUNTIME="$runtime"
+            break
+          fi
+        done
+      fi
       [[ -n "$CONTAINER_RUNTIME" ]] ||
         fail "Neither podman nor docker is reachable. Install podman (preferred; docker under WSL) and make sure it is running."
       ;;

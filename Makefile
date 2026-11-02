@@ -87,6 +87,7 @@ dev-demo: ## List collections, clone one, and run a mock-backed evaluation on ki
 	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" EVALHUB_HOST_PORT="$(EVALHUB_HOST_PORT)" \
 		DEMO_SOURCE_COLLECTION_ID="$(DEMO_SOURCE_COLLECTION_ID)" \
 		DEMO_JOB_TIMEOUT_SECONDS="$(DEMO_JOB_TIMEOUT_SECONDS)" \
+		CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" \
 		EVALHUB_API_BASE_URL="$(EVALHUB_API_BASE_URL)" \
 		EVALHUB_KUBECONFIG_FILE="$(EVALHUB_KUBECONFIG_FILE)" \
 		bash scripts/dev-demo.sh
@@ -357,6 +358,7 @@ KIND_BENCHMARK_TENANT ?= system
 KIND_BENCHMARK_MODEL_NAME ?= kind-target-model
 KIND_BENCHMARK_MODEL_URL ?= http://evalhub-kind-mock-target.system.svc.cluster.local:8000/v1
 KIND_BENCHMARK_MODEL_SECRET ?= evalhub-kind-demo-auth
+KIND_BENCHMARK_OWNERSHIP_ANNOTATION ?= io.evalhub.kind-smoke.cluster
 KIND_BENCHMARK_TOKEN_DURATION ?= 1h
 KIND_BENCHMARK_TIMEOUT ?= 2h
 KIND_BENCHMARK_JUDGE_MODEL_NAME ?= kind-judge-model
@@ -369,18 +371,24 @@ test-benchmarks-kind: dev-deploy ## Run benchmark smoke tests against the local 
 	if [ ! -f "$(KIND_KUBECONFIG)" ]; then \
 		echo "FAIL: private dev-deploy kubeconfig not found: $(KIND_KUBECONFIG). Run make dev-deploy first."; exit 1; \
 	fi; \
-	if [ -z "$$(kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" get secret "$(KIND_BENCHMARK_MODEL_SECRET)" --ignore-not-found -o name)" ]; then \
-		printf '%s\n' \
-			'apiVersion: v1' 'kind: Secret' \
-			'metadata:' '  name: $(KIND_BENCHMARK_MODEL_SECRET)' '  namespace: $(KIND_BENCHMARK_TENANT)' \
-			'  annotations:' '    io.evalhub.kind-smoke.cluster: $(KIND_CLUSTER_NAME)' \
-			'type: Opaque' 'stringData:' \
-			'  api-key: target-test-token' \
-			'  judge_api-key: judge-test-token' \
-			'  judge_url: http://evalhub-kind-mock-judge.system.svc.cluster.local:8000/v1' \
-			| kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" apply -f - >/dev/null; \
-		echo "Created mock-auth Secret $(KIND_BENCHMARK_MODEL_SECRET) for the mock target and judge models."; \
+	if [ -n "$$(kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" get secret "$(KIND_BENCHMARK_MODEL_SECRET)" --ignore-not-found -o name)" ]; then \
+		owner="$$(kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" get secret "$(KIND_BENCHMARK_MODEL_SECRET)" \
+			-o 'go-template={{if .metadata.annotations}}{{index .metadata.annotations "$(KIND_BENCHMARK_OWNERSHIP_ANNOTATION)"}}{{end}}')"; \
+		if [ "$$owner" != "$(KIND_CLUSTER_NAME)" ]; then \
+			echo "FAIL: Secret/$(KIND_BENCHMARK_MODEL_SECRET) in namespace $(KIND_BENCHMARK_TENANT) already exists but is not owned by dev-deploy for kind cluster $(KIND_CLUSTER_NAME) (owner '$$owner'). Delete it or set KIND_BENCHMARK_MODEL_SECRET to an unused name."; \
+			exit 1; \
+		fi; \
 	fi; \
+	printf '%s\n' \
+		'apiVersion: v1' 'kind: Secret' \
+		'metadata:' '  name: $(KIND_BENCHMARK_MODEL_SECRET)' '  namespace: $(KIND_BENCHMARK_TENANT)' \
+		'  annotations:' '    $(KIND_BENCHMARK_OWNERSHIP_ANNOTATION): $(KIND_CLUSTER_NAME)' \
+		'type: Opaque' 'stringData:' \
+		'  api-key: target-test-token' \
+		'  judge_api-key: $(KIND_BENCHMARK_JUDGE_API_KEY)' \
+		'  judge_url: $(KIND_BENCHMARK_JUDGE_URL)' \
+		| kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" apply -f - >/dev/null; \
+	echo "Applied the dev-deploy-owned mock-auth Secret $(KIND_BENCHMARK_MODEL_SECRET) with the mock target and judge keys."; \
 	token="$$(kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" create token evalhub-local-service --duration=$(KIND_BENCHMARK_TOKEN_DURATION))"; \
 	echo "Running benchmark smoke tests against $(KIND_BENCHMARK_SERVER_URL) with model $(KIND_BENCHMARK_MODEL_NAME)."; \
 	SERVER_URL="$(KIND_BENCHMARK_SERVER_URL)" \

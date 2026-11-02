@@ -76,7 +76,8 @@ environment variable and explaining how to enable the benchmark. Subtest names c
 
 `make test-benchmarks-kind` deploys the local dev stack with `make dev-deploy`
 and runs the suite against the kind mock target and mock judge. It mints a
-short-lived service-account token, creates the mock-auth Secret when missing, and
+short-lived service-account token, creates or refreshes the dev-deploy-owned
+mock-auth Secret (failing if a same-named Secret belongs to something else), and
 exports `JUDGE_MODEL_NAME`, `JUDGE_BASE_URL`, `JUDGE_API_KEY`, and
 `LM_EVAL_TOKENIZER` so judge-based and LM Evaluation Harness benchmarks execute
 instead of skipping or failing. The default `KIND_BENCHMARK_RUN` is a

@@ -64,8 +64,9 @@ Inputs (also accepted as environment variables):
   AIRGAP=true              create/use a Calico kind cluster and deny external
                           egress from system-namespace evaluation jobs (default: false)
   CONTAINER_RUNTIME        container engine for image builds, the local registry,
-                           and the kind nodes (podman or docker; default: podman
-                           when reachable, docker under WSL, otherwise docker)
+                           and the kind nodes (podman or docker; default: the
+                           engine that already owns KIND_CLUSTER_NAME, otherwise
+                           podman when reachable, or docker under WSL)
   Repeated builds use the container runtime's layer cache; the EvalHub build date is stable
   for a source commit so a no-change deploy does not rebuild Go binaries.
   Temporary localhost:<port> registry tags are removed after each successful push.
@@ -173,14 +174,45 @@ need_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
 }
 
+# Return 0 when KIND_CLUSTER_NAME already exists under the given container
+# runtime, using the kind provider that runtime requires. A runtime that is not
+# installed or not reachable cannot own a cluster, so it reports false.
+kind_cluster_in_runtime() {
+  local runtime="$1" clusters
+  command -v "$runtime" >/dev/null 2>&1 || return 1
+  "$runtime" info >/dev/null 2>&1 || return 1
+  case "$runtime" in
+    podman)
+      clusters="$(KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters 2>/dev/null || true)"
+      ;;
+    docker)
+      clusters="$(env -u KIND_EXPERIMENTAL_PROVIDER kind get clusters 2>/dev/null || true)"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  grep -Fqx -- "$KIND_CLUSTER_NAME" <<<"$clusters"
+}
+
 # Select the container runtime used for image builds, the local registry, and
-# the kind nodes. Set CONTAINER_RUNTIME to force a specific runtime. Otherwise
-# Podman is preferred whenever it is installed and reachable, except under WSL
-# where Docker is preferred instead: WSL2 podman answers 'podman info' but kind
-# node startup fails during systemd/cgroup setup. The non-preferred runtime is
-# the fallback when the preferred one is not reachable.
+# the kind nodes. Set CONTAINER_RUNTIME to force a specific runtime. Otherwise an
+# existing KIND_CLUSTER_NAME decides the runtime: kind only lists the clusters
+# owned by the runtime it is pointed at, so reusing the runtime that already owns
+# the cluster prevents creating a second cluster with the same name (and private
+# kubeconfig path) under the other engine. With no existing cluster, Podman is
+# preferred whenever it is installed and reachable, except under WSL where Docker
+# is preferred instead: WSL2 podman answers 'podman info' but kind node startup
+# fails during systemd/cgroup setup. The non-preferred runtime is the fallback
+# when the preferred one is not reachable.
 detect_container_runtime() {
+  local runtime
   local -a preferred_runtimes=()
+  if uname -r | grep -qiE 'microsoft|wsl'; then
+    preferred_runtimes=(docker podman)
+  else
+    preferred_runtimes=(podman docker)
+  fi
   case "$CONTAINER_RUNTIME" in
     podman|docker)
       need_command "$CONTAINER_RUNTIME"
@@ -188,18 +220,21 @@ detect_container_runtime() {
         fail "$CONTAINER_RUNTIME is installed but not reachable. Start the $CONTAINER_RUNTIME daemon (or podman machine) and retry."
       ;;
     "")
-      if uname -r | grep -qiE 'microsoft|wsl'; then
-        preferred_runtimes=(docker podman)
-      else
-        preferred_runtimes=(podman docker)
-      fi
-      local runtime
       for runtime in "${preferred_runtimes[@]}"; do
-        if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
+        if kind_cluster_in_runtime "$runtime"; then
           CONTAINER_RUNTIME="$runtime"
+          log INFO "Kind cluster '$KIND_CLUSTER_NAME' already exists under $runtime; using $runtime to reuse that cluster."
           break
         fi
       done
+      if [[ -z "$CONTAINER_RUNTIME" ]]; then
+        for runtime in "${preferred_runtimes[@]}"; do
+          if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
+            CONTAINER_RUNTIME="$runtime"
+            break
+          fi
+        done
+      fi
       [[ -n "$CONTAINER_RUNTIME" ]] ||
         fail "Neither podman nor docker is reachable. Install podman (preferred; docker under WSL) and make sure it is running."
       ;;

@@ -248,7 +248,11 @@ image registry. Podman is used in preference to Docker when it is installed and
 reachable, except under WSL where Docker is preferred (WSL2 podman can pass
 `podman info` but fail during kind node startup); set `CONTAINER_RUNTIME`
 (for example `make dev-deploy CONTAINER_RUNTIME=docker`) to force a specific
-runtime.
+runtime. When a kind cluster named `KIND_CLUSTER_NAME` already exists, its
+runtime is selected automatically by `make dev-deploy`, `make dev-clean`, and
+`make dev-demo`, so later commands keep using the engine that backed the
+existing cluster (passing `CONTAINER_RUNTIME` explicitly remains supported and
+must match that engine).
 
 Deploy the local EvalHub service, operator, adapters, and mock target/judge
 services:
@@ -340,7 +344,11 @@ make test-benchmarks-kind SKIP_BUILD=true BENCHMARK_TIMEOUT=1h
 ```
 
 The mock-auth Secret it creates is the same one `make dev-demo` uses, and
-`make dev-clean` removes it.
+`make dev-clean` removes it. The target re-applies the Secret's mock target and
+judge keys on every run, but only when an existing `KIND_BENCHMARK_MODEL_SECRET`
+is annotated as owned by dev-deploy for this kind cluster; otherwise it fails
+instead of running with unrelated credentials. Point
+`KIND_BENCHMARK_MODEL_SECRET` at an unused name to use a different Secret.
 
 #### Calling the API with curl
 
