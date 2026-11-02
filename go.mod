@@ -1,6 +1,6 @@
 module github.com/eval-hub/eval-hub
 
-go 1.26.10
+go 1.27
 
 require (
 	github.com/Jeffail/gabs/v2 v2.7.0
@@ -16,7 +16,7 @@ require (
 	github.com/go-logr/logr v1.4.4
 	github.com/go-playground/validator/v10 v10.30.5
 	github.com/go-viper/mapstructure/v2 v2.5.0
-	github.com/gomlx/go-huggingface v0.4.3
+	github.com/gomlx/go-huggingface v0.4.17
 	github.com/google/go-jsonnet v0.22.0
 	github.com/google/jsonschema-go v0.4.3
 	github.com/google/uuid v1.6.0
@@ -55,9 +55,9 @@ require (
 	go.yaml.in/yaml/v4 v4.0.0-rc.6
 	google.golang.org/grpc v1.85.0
 	gopkg.in/evanphx/json-patch.v4 v4.13.0
-	k8s.io/api v0.37.1
-	k8s.io/apimachinery v0.37.1
-	k8s.io/client-go v0.37.1
+	k8s.io/api v0.37.2
+	k8s.io/apimachinery v0.37.2
+	k8s.io/client-go v0.37.2
 	modernc.org/sqlite v1.61.0
 )
 
@@ -116,7 +116,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.2 // indirect
 	github.com/gofrs/flock v0.13.1 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
-	github.com/gomlx/compute v0.1.6 // indirect
+	github.com/gomlx/compute v0.1.16 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.33.0 // indirect
@@ -177,7 +177,7 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260821135717-be32def86098 // indirect
-	k8s.io/streaming v0.37.1 // indirect
+	k8s.io/streaming v0.37.2 // indirect
 	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab // indirect
 	modernc.org/libc v1.79.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
