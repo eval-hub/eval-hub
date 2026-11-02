@@ -61,10 +61,7 @@ func TestBenchmarkProviderFixtureCounts(t *testing.T) {
 								continue
 							}
 							key := benchmark.TestDataRef.S3.Key
-							if key == "offline" {
-								t.Errorf("%s/%s still uses the entire offline S3 prefix", benchmark.ProviderID, benchmark.ID)
-							}
-							if strings.HasPrefix(key, fvtS3BundleRoot+"/") && key != benchmarkTestDataKey(benchmark.ProviderID, benchmark.ID) {
+							if (key == "offline" || strings.HasPrefix(key, "offline/")) && key != benchmarkTestDataKey(benchmark.ProviderID, benchmark.ID) {
 								t.Errorf("%s/%s S3 bundle key = %q, want %q", benchmark.ProviderID, benchmark.ID, key, benchmarkTestDataKey(benchmark.ProviderID, benchmark.ID))
 							}
 						}
