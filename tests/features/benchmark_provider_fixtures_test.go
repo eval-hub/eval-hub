@@ -55,6 +55,17 @@ func TestBenchmarkProviderFixtureCounts(t *testing.T) {
 					if got := len(doc.Benchmarks); got != want {
 						t.Errorf("%s submits %d benchmarks, but the feature expects %d results", fixture, got, want)
 					}
+					if mode == "disconnected" {
+						for _, benchmark := range doc.Benchmarks {
+							if benchmark.TestDataRef == nil {
+								continue
+							}
+							key := benchmark.TestDataRef.S3.Key
+							if (key == "offline" || strings.HasPrefix(key, "offline/")) && key != benchmarkTestDataKey(benchmark.ProviderID, benchmark.ID) {
+								t.Errorf("%s/%s S3 bundle key = %q, want %q", benchmark.ProviderID, benchmark.ID, key, benchmarkTestDataKey(benchmark.ProviderID, benchmark.ID))
+							}
+						}
+					}
 				})
 			}
 		})
