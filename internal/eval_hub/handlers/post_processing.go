@@ -176,6 +176,8 @@ func (h *Handlers) validatePostProcessingResultsSource(ctx *executioncontext.Exe
 // copySourceOCIExports carries the source job's OCI coordinates and runtime
 // credentials reference into the generated job so its sidecar can download
 // per-sample results from the same registry.
+// The sidecar reads its input registry from exports.oci; this reuse does not
+// instruct the post-processor to export results to OCI or MLflow.
 func copySourceOCIExports(source *api.EvaluationJobResource) *api.EvaluationExports {
 	if source == nil || source.Exports == nil || source.Exports.OCI == nil {
 		return nil
