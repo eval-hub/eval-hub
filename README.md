@@ -237,6 +237,212 @@ make lint                   # go vet
 make fmt                    # go fmt
 ```
 
+### Local kind debugging
+
+The local deployment and demo scripts require a container runtime (**podman**
+or **Docker**), kind, kubectl, Make, Git, curl, OpenSSL, and Python 3. Install
+`jq` as well to use the API demo and curl examples. The runtime must be running
+(for podman on macOS, start the podman machine first). These scripts use the
+container runtime to build images, run the kind nodes, and manage the local
+image registry. Podman is used in preference to Docker when it is installed and
+reachable, except under WSL where Docker is preferred (WSL2 podman can pass
+`podman info` but fail during kind node startup); set `CONTAINER_RUNTIME`
+(for example `make dev-deploy CONTAINER_RUNTIME=docker`) to force a specific
+runtime. When a kind cluster named `KIND_CLUSTER_NAME` already exists, its
+runtime is selected automatically by `make dev-deploy`, `make dev-clean`, and
+`make dev-demo`, so later commands keep using the engine that backed the
+existing cluster (passing `CONTAINER_RUNTIME` explicitly remains supported and
+must match that engine). If a forced `CONTAINER_RUNTIME` does not own an
+existing `KIND_CLUSTER_NAME` while the other engine does, `make dev-deploy` and
+`make dev-clean` fail instead of creating a duplicate cluster or cleaning up
+and deleting the kubeconfig of the cluster that is still running.
+
+Deploy the local EvalHub service, operator, adapters, and mock target/judge
+services:
+
+```bash
+make dev-deploy
+```
+
+By default this creates or reuses the `evalhub-dev` kind cluster and builds the
+images from the EvalHub repository plus sibling `../trustyai-service-operator`,
+`../eval-hub-contrib`, and `../lm-evaluation-harness` checkouts. The
+lm-evaluation-harness checkout is the fork at
+<https://github.com/opendatahub-io/lm-evaluation-harness.git> — clone it
+alongside EvalHub on its `incubation` (or `stable`) branch, since only those
+branches provide the `Dockerfile.lmes-job` used for the LMES adapter image,
+not the default `main` branch. The operator
+checkout is always required; the contrib and lm-evaluation-harness checkouts
+are needed for the adapter images selected by the default `ADAPTERS=all` —
+narrow `ADAPTERS` to skip either. Each repository is searched as a sibling of
+the EvalHub checkout first and then as `<parent>/<repo>` under each
+colon-separated `DEV_REPO_PARENT_PATHS` entry (default `~/code`); set that
+variable when the repositories live elsewhere. The command
+prints the private kubeconfig path and API URL. It does not change the current
+kubectl context; use the private kubeconfig explicitly:
+
+```bash
+KIND_CLUSTER_NAME=evalhub-dev
+KCFG="${XDG_CONFIG_HOME:-$HOME/.config}/evalhub/kubeconfigs/${KIND_CLUSTER_NAME}.yaml"
+KUBECONFIG="$KCFG" kubectl get pods -n system
+```
+
+Remove the EvalHub deployment and keep the kind cluster for later use:
+
+```bash
+make dev-clean
+```
+
+Delete the deployment and the selected cluster as well:
+
+```bash
+make dev-clean DELETE_CLUSTER=true
+```
+
+Both cleanup modes retain the local build image tags and the container runtime's
+build cache.
+They remove temporary localhost:<port> tags used only to push images into the
+kind registry. Repeated deploys of unchanged EvalHub source reuse the Go build
+layers. `make dev-deploy-help` and `make dev-clean-help` list the settings.
+
+Run the API demo against the deployed cluster:
+
+```bash
+make dev-demo
+```
+
+The demo lists system collections and recent jobs, clones
+`instruction-output-v1` with a single FollowBench benchmark, submits a one-example
+job to the local mock target and judge, and polls until the job completes. It
+mints a short-lived token for the local EvalHub service account unless `API_TOKEN`
+is supplied. It creates a Secret containing only the mock services' test keys;
+no external model credentials are used. The cloned collection and job remain for
+inspection. The demo Secret is removed by `make dev-clean`.
+
+To use a different system collection as the clone source or change the polling
+timeout:
+
+```bash
+make dev-demo DEMO_SOURCE_COLLECTION_ID=instruction-output-v1 DEMO_JOB_TIMEOUT_SECONDS=900
+make dev-demo-help
+```
+
+Run the benchmark smoke tests from `tests/benchmarks` against the deployed
+cluster:
+
+```bash
+make test-benchmarks-kind
+```
+
+This deploys (or reuses) the kind cluster via `make dev-deploy` — pass
+`SKIP_BUILD=true` to reuse previously built images — mints a short-lived token
+for the local EvalHub service account, and points the suite at the loopback API
+URL with the in-cluster mock target as the model. By default it runs only the
+providers whose adapter images the deployment builds (Inspect, FollowBench, and
+LM Evaluation Harness); the remaining benchmark-test inputs are unchanged:
+
+```bash
+make test-benchmarks-kind BENCHMARK_RUN='TestBenchmarkSmoke/inspect/'
+make test-benchmarks-kind SKIP_BUILD=true BENCHMARK_TIMEOUT=1h
+```
+
+The mock-auth Secret it creates is the same one `make dev-demo` uses, and
+`make dev-clean` removes it. The target re-applies the Secret's mock target and
+judge keys on every run, but only when an existing `KIND_BENCHMARK_MODEL_SECRET`
+is annotated as owned by dev-deploy for this kind cluster; otherwise it fails
+instead of running with unrelated credentials. Point
+`KIND_BENCHMARK_MODEL_SECRET` at an unused name to use a different Secret.
+
+#### Calling the API with curl
+
+These commands use the local self-signed TLS certificate. Create a short-lived
+token and keep it in a private curl config file so the token is not placed in
+curl's process arguments:
+
+```bash
+KIND_CLUSTER_NAME=evalhub-dev
+KCFG="${XDG_CONFIG_HOME:-$HOME/.config}/evalhub/kubeconfigs/${KIND_CLUSTER_NAME}.yaml"
+API_BASE=https://127.0.0.1:18443
+API_TOKEN="$(kubectl --kubeconfig "$KCFG" -n system create token evalhub-local-service --duration=1h)"
+CURL_CONFIG="$(mktemp)"
+chmod 600 "$CURL_CONFIG"
+printf 'header = "Authorization: Bearer %s"\nheader = "X-Tenant: system"\nheader = "Content-Type: application/json"\n' "$API_TOKEN" >"$CURL_CONFIG"
+unset API_TOKEN
+trap 'rm -f -- "$CURL_CONFIG"' EXIT
+```
+
+Check health and list collections and jobs:
+
+```bash
+curl --silent --show-error --insecure "$API_BASE/api/v1/health" | jq .
+curl --silent --show-error --insecure --config "$CURL_CONFIG" \
+  "$API_BASE/api/v1/evaluations/collections?scope=system&limit=100" | jq .
+curl --silent --show-error --insecure --config "$CURL_CONFIG" \
+  "$API_BASE/api/v1/evaluations/jobs?limit=20" | jq .
+```
+
+The demo Secret can be created directly if you want to run the clone/job calls
+without `make dev-demo`. These are fake keys accepted only by the local mocks:
+
+```bash
+kubectl --kubeconfig "$KCFG" -n system create secret generic evalhub-kind-demo-auth \
+  --from-literal=api-key=target-test-token \
+  --from-literal=judge_api-key=judge-test-token \
+  --from-literal=judge_url=http://evalhub-kind-mock-judge.system.svc.cluster.local:8000/v1 \
+  --dry-run=client -o yaml | kubectl --kubeconfig "$KCFG" apply -f -
+kubectl --kubeconfig "$KCFG" -n system annotate secret evalhub-kind-demo-auth \
+  "io.evalhub.kind-smoke.cluster=$KIND_CLUSTER_NAME" --overwrite
+```
+
+Clone the system collection, narrowed to one FollowBench example:
+
+```bash
+CLONE_JSON="$(curl --silent --show-error --insecure --config "$CURL_CONFIG" \
+  --data-binary '{"name":"kind-curl-demo","benchmarks":[{"id":"followbench","provider_id":"followbench","parameters":{"judge_model":"kind-judge-model","num_examples":1,"max_tokens":64,"temperature":0,"request_timeout":60}}]}' \
+  "$API_BASE/api/v1/evaluations/collections/instruction-output-v1/clones")"
+CLONE_ID="$(jq -r '.resource.id' <<<"$CLONE_JSON")"
+printf 'Created collection %s\n' "$CLONE_ID"
+```
+
+Submit the job using the cloned collection and mock models, then retrieve its
+status using the returned job ID:
+
+```bash
+JOB_JSON="$(curl --silent --show-error --insecure --config "$CURL_CONFIG" \
+  --data-binary @- "$API_BASE/api/v1/evaluations/jobs" <<JSON
+{
+  "name": "kind-curl-demo-job",
+  "model": {
+    "url": "http://evalhub-kind-mock-target.system.svc.cluster.local:8000/v1",
+    "name": "kind-target-model",
+    "auth": {"secret_ref": "evalhub-kind-demo-auth"}
+  },
+  "collection": {
+    "id": "$CLONE_ID",
+    "benchmarks": [{
+      "id": "followbench",
+      "provider_id": "followbench",
+      "parameters": {
+        "judge_model": "kind-judge-model",
+        "num_examples": 1,
+        "max_tokens": 64,
+        "temperature": 0,
+        "request_timeout": 60
+      }
+    }]
+  }
+}
+JSON
+)"
+JOB_ID="$(jq -r '.resource.id' <<<"$JOB_JSON")"
+printf 'Created job %s\n' "$JOB_ID"
+curl --silent --show-error --insecure --config "$CURL_CONFIG" \
+  "$API_BASE/api/v1/evaluations/jobs/$JOB_ID" | jq '{id: .resource.id, name, state: .status.state}'
+rm -f -- "$CURL_CONFIG"
+```
+
+For API request and response details, see the [OpenAPI reference](docs/src/openapi.yaml).
+
 For local post-processing, the runtime launches the real adapter from a sibling
 `../eval-hub-contrib/adapters/evalhub-post-processor` checkout. Install that
 adapter's `requirements.txt` in its `.venv` before starting EvalHub from this

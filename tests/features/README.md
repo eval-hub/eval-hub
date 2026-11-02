@@ -23,6 +23,21 @@ export AUTH_TOKEN="your-token"
 export X_TENANT="tenant-namespace"
 ```
 
+For a remote cluster with a private certificate authority, obtain its CA
+certificate bundle from the cluster administrator and set:
+
+```bash
+export FVT_CA_CERT_PATH="/absolute/path/to/cluster-ca.pem"
+```
+
+The PEM bundle is added to system trust for API requests, metrics scrapes,
+MCP backend requests, and the `MODEL_URL` connectivity check. Certificate chain
+and hostname validation remain enabled. An unreadable file or a bundle without
+PEM certificates fails suite setup. With this setting unset, system trust is
+used. The tests do not read the CA from kubeconfig automatically. This setting
+does not configure certificate trust inside evaluation job containers or the
+separate MLflow and OCI clients.
+
 ### Model Overrides (Required)
 
 Set the model fields in the test payloads using environment variables:
