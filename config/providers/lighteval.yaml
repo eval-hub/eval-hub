@@ -140,7 +140,7 @@ benchmarks:
       - lighteval
       - suite
     primary_score:
-      metric: mmlu:_average.em
+      metric: all.em
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
