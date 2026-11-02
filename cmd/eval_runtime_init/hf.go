@@ -97,6 +97,7 @@ func (d downloader) resolveHFToken() (string, error) {
 	return token, nil
 }
 
+// effectiveHFCacheDir prefers the source-specific cache over the evaluation default.
 func (d downloader) effectiveHFCacheDir() string {
 	if strings.TrimSpace(d.hfCacheDir) != "" {
 		return d.hfCacheDir
@@ -104,6 +105,7 @@ func (d downloader) effectiveHFCacheDir() string {
 	return filepath.Join(d.destDir, hfCacheDirName)
 }
 
+// downloadHFRepo resolves a revision and stages its selected files using this source's cache and credentials.
 func (d downloader) downloadHFRepo(ctx context.Context, repoID, revision, subPath, token string) (string, error) {
 	cachePath := d.effectiveHFCacheDir()
 	if err := os.MkdirAll(cachePath, 0o750); err != nil {
@@ -434,6 +436,7 @@ func isHFGatedRepoError(lower string) bool {
 		(strings.Contains(lower, "gated") && !strings.Contains(lower, "repository not found"))
 }
 
+// cleanupHFCache removes only caches inside the staged data directory; external caches remain available.
 func (d downloader) cleanupHFCache() error {
 	cache := d.effectiveHFCacheDir()
 	if !pathWithinBase(d.destDir, cache) {

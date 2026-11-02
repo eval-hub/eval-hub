@@ -15,6 +15,7 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+// sourceTestJob maps a public post-processing request into the runtime job used by pod tests.
 func sourceTestJob(result *api.PostProcessingResultsDataRef, calibration []api.CalibrationDataRef) *api.EvaluationJobResource {
 	request := &api.StandalonePostProcessingRequest{Operations: api.StandalonePostProcessingOperations{
 		ConfidenceInterval: &api.StandaloneConfidenceIntervalConfig{
@@ -32,6 +33,7 @@ func sourceTestJob(result *api.PostProcessingResultsDataRef, calibration []api.C
 
 // Reproduce the complete 7 x 4 source matrix at the API-to-pod boundary.
 // These cases include all 15 previously failing source combinations.
+// TestPostProcessorSourceCombinations checks all supported result/calibration pairs at the API-to-pod boundary.
 func TestPostProcessorSourceCombinations(t *testing.T) {
 	results := map[string]*api.PostProcessingResultsDataRef{
 		"eval_job": {EvalJob: &api.EvaluationJobDataRef{ID: "source"}},
@@ -106,6 +108,7 @@ func TestPostProcessorSourceCombinations(t *testing.T) {
 	}
 }
 
+// TestPostProcessorSecretProjection confines deduplicated credentials to init and preserves the read-only data-path contract.
 func TestPostProcessorSecretProjection(t *testing.T) {
 	evaluation := sourceTestJob(&api.PostProcessingResultsDataRef{Git: &api.GitTestDataRef{URL: "https://example.org/data", Ref: "main", SecretRef: "shared"}}, []api.CalibrationDataRef{{S3: &api.S3TestDataRef{Bucket: "data", Key: "labels", SecretRef: "shared"}}, {HF: &api.HFTestDataRef{RepoID: "org/data", SecretRef: "hf-auth"}}})
 	cfg, err := buildJobConfig(evaluation, postprocessing.RuntimeProvider(), &evaluation.Benchmarks[0], 0, nil, nil)
@@ -186,6 +189,7 @@ func TestPostProcessorSecretProjection(t *testing.T) {
 	}
 }
 
+// TestPostProcessorSecretNamesRejectUnsafeNames prevents credential references from escaping the projected-secret root.
 func TestPostProcessorSecretNamesRejectUnsafeNames(t *testing.T) {
 	for _, name := range []string{"../secret", "/secret", ".", "..", "bad/name"} {
 		t.Run(name, func(t *testing.T) {
@@ -203,6 +207,7 @@ func TestPostProcessorSecretNamesRejectUnsafeNames(t *testing.T) {
 	}
 }
 
+// TestPostProcessorPVCFileSubpath checks that file basenames survive mounting and unsafe subpaths are rejected.
 func TestPostProcessorPVCFileSubpath(t *testing.T) {
 	for _, subpath := range []string{"nested/results.json", "../escape", "/absolute"} {
 		t.Run(subpath, func(t *testing.T) {
@@ -224,6 +229,7 @@ func TestPostProcessorPVCFileSubpath(t *testing.T) {
 	}
 }
 
+// TestPostProcessorResultsPVCMounts preserves each input subpath while sharing claim volumes read-only.
 func TestPostProcessorResultsPVCMounts(t *testing.T) {
 	for _, calibrationClaim := range []string{"", "results", "other"} {
 		t.Run("calibration-"+calibrationClaim, func(t *testing.T) {
@@ -279,6 +285,7 @@ func TestPostProcessorResultsPVCMounts(t *testing.T) {
 	}
 }
 
+// TestPostProcessorExternalOCIConfiguresSidecar preserves registry coordinates and optional connection credentials for sidecar downloads.
 func TestPostProcessorExternalOCIConfiguresSidecar(t *testing.T) {
 	for _, authenticated := range []bool{false, true} {
 		t.Run(map[bool]string{false: "public", true: "authenticated"}[authenticated], func(t *testing.T) {
@@ -319,5 +326,42 @@ func TestPostProcessorExternalOCIConfiguresSidecar(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestPostProcessorSourceErrorsReachPodBuilders prevents invalid internal references from being silently ignored.
+func TestPostProcessorSourceErrorsReachPodBuilders(t *testing.T) {
+	job := sourceTestJob(&api.PostProcessingResultsDataRef{S3: &api.S3TestDataRef{Bucket: "data", SecretRef: "auth"}}, nil)
+	job.Benchmarks[0].Parameters["operations"] = "invalid operations"
+	for name, read := range map[string]func() error{
+		"references": func() error { _, err := postProcessorReferences(job); return err },
+		"downloads":  func() error { _, err := postProcessorDownloadSources(job); return err },
+		"secrets":    func() error { _, err := postProcessorSecretNames(job); return err },
+		"PVCs":       func() error { _, err := postProcessorPVCConfigs(job); return err },
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := read(); err == nil {
+				t.Fatal("invalid operations accepted")
+			}
+		})
+	}
+	job = sourceTestJob(&api.PostProcessingResultsDataRef{S3: &api.S3TestDataRef{Bucket: "data", SecretRef: "../unsafe"}}, nil)
+	if _, err := buildJobConfig(job, postprocessing.RuntimeProvider(), &job.Benchmarks[0], 0, nil, nil); err == nil || !strings.Contains(err.Error(), "Secret") {
+		t.Fatalf("unsafe credential projection was accepted: %v", err)
+	}
+}
+
+// TestPostProcessorInitRequiresImage checks no-op and missing-image paths before any pod is submitted.
+func TestPostProcessorInitRequiresImage(t *testing.T) {
+	container, volumes, err := postProcessorInitContainer(&jobConfig{}, corev1.ResourceRequirements{})
+	if err != nil || container != nil || volumes != nil {
+		t.Fatalf("ordinary job received post-processing init: %+v %v %v", container, volumes, err)
+	}
+	cfg := &jobConfig{postProcessorDownloads: []shared.NamedDataSource{{Name: "results", Source: api.TestDataRef{S3: &api.S3TestDataRef{}}}}}
+	if _, _, err := postProcessorInitContainer(cfg, corev1.ResourceRequirements{}); err == nil || !strings.Contains(err.Error(), "init image") {
+		t.Fatalf("missing init image accepted: %v", err)
+	}
+	if _, _, err := initContainerVolumesAndMounts(cfg); err == nil || !strings.Contains(err.Error(), "init image") {
+		t.Fatalf("init error did not reach pod builder: %v", err)
 	}
 }

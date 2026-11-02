@@ -203,6 +203,7 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 	}
 
 	if cfg.postProcessorDownloads != nil {
+		// Init owns writes; computation containers only read the staged inputs.
 		volumes = append(volumes, corev1.Volume{Name: postProcessorDataVolumeName, VolumeSource: corev1.VolumeSource{EmptyDir: testDataEmptyDirVolumeSource()}})
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: postProcessorDataVolumeName, MountPath: shared.PostProcessorStagingRoot, ReadOnly: true})
 	}
@@ -419,6 +420,7 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 		},
 	}
 	if cfg.postProcessorDownloads != nil {
+		// Use the shared init executable instead of the ordinary single-source setup.
 		container, sourceVolumes, err := postProcessorInitContainer(cfg, initResources)
 		if err != nil {
 			return nil, nil, err

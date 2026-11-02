@@ -42,14 +42,17 @@ func PostProcessingDataSources(parameters map[string]any) ([]NamedDataSource, er
 		return nil, fmt.Errorf("post-processing job has no supported operations")
 	}
 	var refs []NamedDataSource
+	// Only local inputs need a runtime path; sidecar-backed results are resolved later.
 	if result := ci.ResultsDataRef; result != nil {
 		if result.S3 != nil || result.PVC != nil || result.Git != nil || result.HF != nil {
 			refs = append(refs, NamedDataSource{Name: "results", Source: api.TestDataRef{S3: result.S3, PVC: result.PVC, Git: result.Git, HF: result.HF}})
 		}
 	}
+	// Preserve calibration indices so init destinations match adapter lookups.
 	for i, ref := range ci.CalibrationDataRef {
 		refs = append(refs, NamedDataSource{Name: fmt.Sprintf("calibration-%d", i), Source: api.TestDataRef{S3: ref.S3, PVC: ref.PVC, Git: ref.Git, HF: ref.HF}})
 	}
+	// Reject ambiguous internal jobs even when they bypass public API validation.
 	for _, ref := range refs {
 		count := 0
 		if ref.Source.S3 != nil {

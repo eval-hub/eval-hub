@@ -20,7 +20,7 @@ type downloader struct {
 	destDir, scrtDir, gitMetadataDir, hfCacheDir string
 }
 
-// Preserve the existing evaluation init environment interface.
+// downloaderFromEnv preserves the single-source interface used by evaluation jobs.
 func downloaderFromEnv() downloader {
 	return downloader{
 		source: api.TestDataRef{
@@ -32,6 +32,7 @@ func downloaderFromEnv() downloader {
 	}
 }
 
+// runJobSources stages each downloadable job input in its own directory before the adapter starts.
 func runJobSources(path, root, secretRoot string) error {
 	data, err := safefile.ReadFile(filepath.Dir(path), filepath.Base(path))
 	if err != nil {
@@ -41,6 +42,7 @@ func runJobSources(path, root, secretRoot string) error {
 	if err := json.Unmarshal(data, &spec); err != nil {
 		return fmt.Errorf("decode init job: %w", err)
 	}
+	// Use the same role names as the runtime's adapter path mapping.
 	refs, err := shared.PostProcessingDataSources(spec.Parameters)
 	if err != nil {
 		return err
@@ -70,6 +72,7 @@ func runJobSources(path, root, secretRoot string) error {
 	return nil
 }
 
+// sourceDownloader isolates one input's credentials, staged files, and revision metadata.
 func sourceDownloader(ref shared.NamedDataSource, root, secretRoot string) (downloader, error) {
 	secret := ""
 	switch {
@@ -83,6 +86,7 @@ func sourceDownloader(ref shared.NamedDataSource, root, secretRoot string) (down
 	case ref.Source.HF != nil:
 		secret = ref.Source.HF.SecretRef
 	}
+	// Secret names become path segments under the trusted projected-secret root.
 	if secret != "" && len(validation.IsDNS1123Subdomain(secret)) != 0 {
 		return downloader{}, fmt.Errorf("%s: invalid secret_ref", ref.Name)
 	}

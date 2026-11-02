@@ -129,6 +129,7 @@ type hfTestDataConfig struct {
 	secretRef string
 }
 
+// postProcessorPVCConfigs shares claim volumes while retaining each input's mount and subpath.
 func postProcessorPVCConfigs(evaluation *api.EvaluationJobResource) ([]postProcessorPVCConfig, error) {
 	refs, err := postProcessorReferences(evaluation)
 	if err != nil {
@@ -149,6 +150,7 @@ func postProcessorPVCConfigs(evaluation *api.EvaluationJobResource) ([]postProce
 			volumeName = fmt.Sprintf("%s%d", postProcessorCalibrationPVCVolumeNamePrefix, len(seenClaims))
 			seenClaims[claimName] = volumeName
 		}
+		// Kubernetes subpaths must stay within the claim, including for file inputs.
 		if subPath := ref.Source.PVC.SubPath; subPath != "" {
 			if path.IsAbs(subPath) {
 				return nil, fmt.Errorf("post-processing PVC sub_path must be relative")
@@ -298,6 +300,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		testDataHFSecretRef = strings.TrimSpace(benchmarkConfig.TestDataRef.HF.SecretRef)
 	}
 
+	// Prepare direct mounts, credential projections, and init inputs before building the pod.
 	postProcessorPVCs, err := postProcessorPVCConfigs(evaluation)
 	if err != nil {
 		return nil, err

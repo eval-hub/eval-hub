@@ -15,6 +15,7 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+// TestSourceDownloadersHaveIsolatedConfiguration checks that input credentials, destinations, and revision metadata cannot leak between sources.
 func TestSourceDownloadersHaveIsolatedConfiguration(t *testing.T) {
 	root := t.TempDir()
 	a, err := sourceDownloader(shared.NamedDataSource{Name: "results", Source: api.TestDataRef{S3: &api.S3TestDataRef{Bucket: "data", Key: "predictions", SecretRef: "s3-auth"}}}, root, root)
@@ -39,6 +40,7 @@ func TestSourceDownloadersHaveIsolatedConfiguration(t *testing.T) {
 	}
 }
 
+// TestRunReadsJobSpec verifies that the runtime-provided job path takes precedence over evaluation environment variables.
 func TestRunReadsJobSpec(t *testing.T) {
 	t.Setenv(shared.InitJobSpecPathEnv, filepath.Join(t.TempDir(), "missing.json"))
 	if err := run(); err == nil || !strings.Contains(err.Error(), "read init job") {
@@ -47,6 +49,7 @@ func TestRunReadsJobSpec(t *testing.T) {
 }
 
 // Exercise the existing S3 downloader with references from the actual job format.
+// TestInitDownloadsMultipleS3SourcesFromJob stages results and calibration through the real S3 downloader with separate credentials.
 func TestInitDownloadsMultipleS3SourcesFromJob(t *testing.T) {
 	files := map[string]string{"predictions/results.json": "{\"samples\":[]}", "labels/calibration.jsonl": "{\"sample_id\":1,\"label\":1}\n"}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -109,6 +112,7 @@ func TestInitDownloadsMultipleS3SourcesFromJob(t *testing.T) {
 	}
 }
 
+// writeInitJob writes the adapter job format used by init integration tests.
 func writeInitJob(t *testing.T, root string, results *api.PostProcessingResultsDataRef, calibration []api.CalibrationDataRef) string {
 	t.Helper()
 	spec := shared.JobSpec{Parameters: map[string]any{"operations": api.StandalonePostProcessingOperations{ConfidenceInterval: &api.StandaloneConfidenceIntervalConfig{ResultsDataRef: results, ConfidenceIntervalConfigCommon: api.ConfidenceIntervalConfigCommon{CalibrationDataRef: calibration}}}}}
@@ -123,6 +127,7 @@ func writeInitJob(t *testing.T, root string, results *api.PostProcessingResultsD
 	return path
 }
 
+// TestInitDownloadsGitAndHFWithoutInheritedCredentials checks public Git/HF staging, revision metadata, and direct PVC handling.
 func TestInitDownloadsGitAndHFWithoutInheritedCredentials(t *testing.T) {
 	root := t.TempDir()
 	repo := newLocalBareRepo(t)
@@ -158,10 +163,111 @@ func TestInitDownloadsGitAndHFWithoutInheritedCredentials(t *testing.T) {
 	}
 }
 
+// TestInitJobDownloadFailureIncludesRole keeps download errors attributable to the results or calibration input.
 func TestInitJobDownloadFailureIncludesRole(t *testing.T) {
 	root := t.TempDir()
 	path := writeInitJob(t, root, &api.PostProcessingResultsDataRef{S3: &api.S3TestDataRef{Bucket: "data", Key: "results/", SecretRef: "missing"}}, nil)
 	if err := runJobSources(path, root, root); err == nil || !strings.Contains(err.Error(), "download results") {
 		t.Fatalf("error lacks input role: %v", err)
+	}
+}
+
+// TestInitRejectsMalformedJobSources verifies failures occur before staging any data.
+func TestInitRejectsMalformedJobSources(t *testing.T) {
+	for _, test := range []struct{ name, payload, message string }{
+		{"invalid JSON", "{", "decode init job"},
+		{"missing operations", `{"parameters":{}}`, "no operations"},
+		{"unsupported operations", `{"parameters":{"operations":{}}}`, "no supported operations"},
+		{"missing S3 credential reference", `{"parameters":{"operations":{"confidence_interval":{"results_data_ref":{"s3":{"bucket":"data","key":"results/"}}}}}}`, "results: S3 secret_ref is required"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, "job.json")
+			if err := os.WriteFile(path, []byte(test.payload), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			stage := filepath.Join(root, "stage")
+			if err := runJobSources(path, stage, filepath.Join(root, "secrets")); err == nil || !strings.Contains(err.Error(), test.message) {
+				t.Fatalf("expected %q, got %v", test.message, err)
+			}
+			if _, err := os.Stat(stage); !os.IsNotExist(err) {
+				t.Fatalf("invalid input created staged data: %v", err)
+			}
+		})
+	}
+}
+
+// TestSourceDownloaderUsesReferencedCredentials prevents Git inputs from inheriting another input's secret.
+func TestSourceDownloaderUsesReferencedCredentials(t *testing.T) {
+	root := t.TempDir()
+	d, err := sourceDownloader(shared.NamedDataSource{Name: "calibration-1", Source: api.TestDataRef{Git: &api.GitTestDataRef{URL: "https://example.org/data", SecretRef: "git-auth"}}}, filepath.Join(root, "stage"), filepath.Join(root, "secrets"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.scrtDir != filepath.Join(root, "secrets", "git-auth") || d.destDir != filepath.Join(root, "stage", "calibration-1") {
+		t.Fatalf("incorrect isolated paths: %+v", d)
+	}
+}
+
+// TestRunPreservesEvaluationGitDispatch exercises the existing environment interface without network access.
+func TestRunPreservesEvaluationGitDispatch(t *testing.T) {
+	t.Setenv(shared.InitJobSpecPathEnv, "")
+	t.Setenv(envHFRepoID, "")
+	t.Setenv(envGitURL, "ssh://unsupported.example/data")
+	if err := run(); err == nil || !strings.Contains(err.Error(), "URL") {
+		t.Fatalf("expected Git URL validation error, got %v", err)
+	}
+}
+
+// TestDownloadersReportFilesystemFailures checks that successful source access cannot hide staging or metadata failures.
+func TestDownloadersReportFilesystemFailures(t *testing.T) {
+	repo := newLocalBareRepo(t)
+	validate := validateGitCloneURL
+	validateGitCloneURL = func(string, func(string) ([]net.IP, error)) error { return nil }
+	t.Cleanup(func() { validateGitCloneURL = validate })
+	server := newMockHFServer(t, "org/labels", map[string]string{"labels.jsonl": "data"}, http.StatusOK)
+	defer server.Close()
+	t.Setenv("HF_ENDPOINT", server.URL)
+	for _, test := range []struct{ name, message string }{
+		{"git destination", "copy to dest"},
+		{"git metadata", "write git metadata"},
+		{"HF destination", "stage repository"},
+		{"S3 destination", "create dest dir"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			blocked := filepath.Join(root, "file-not-directory")
+			if err := os.WriteFile(blocked, []byte("existing file"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			d := downloader{destDir: blocked, scrtDir: filepath.Join(root, "secrets"), gitMetadataDir: filepath.Join(root, "metadata"), hfCacheDir: filepath.Join(root, "cache")}
+			var err error
+			switch test.name {
+			case "git destination", "git metadata":
+				d.source.Git = &api.GitTestDataRef{URL: "file://" + repo, Ref: "master"}
+				if test.name == "git metadata" {
+					d.destDir = filepath.Join(root, "data")
+					d.gitMetadataDir = blocked
+				}
+				err = d.runGit()
+			case "HF destination":
+				d.source.HF = &api.HFTestDataRef{RepoID: "org/labels"}
+				err = d.runHF()
+			case "S3 destination":
+				if err := os.MkdirAll(d.scrtDir, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				for key, value := range map[string]string{accessKeyIDKey: "test-access", awsAccessKeyEnvName: "test-secret", regionOptionalKey: "us-east-1", endpointKey: server.URL} {
+					if err := os.WriteFile(filepath.Join(d.scrtDir, key), []byte(value), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				d.source.S3 = &api.S3TestDataRef{Bucket: "data", Key: "results"}
+				err = d.runS3()
+			}
+			if err == nil || !strings.Contains(err.Error(), test.message) {
+				t.Fatalf("expected %q, got %v", test.message, err)
+			}
+		})
 	}
 }
