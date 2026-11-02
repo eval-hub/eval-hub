@@ -75,6 +75,19 @@ func runLMESToxiGenAirgapCase(
 ) {
 	t.Helper()
 
+	manifest, err := discoverDeploymentManifest(parentCtx, kube, instance.namespace)
+	if err != nil {
+		t.Fatalf("discover dev-deploy selection in namespace %q: %v", instance.namespace, err)
+	}
+	if !manifest.adapterSelected("lm-evaluation-harness") {
+		t.Skipf("LM Evaluation Harness was not selected by dev-deploy in cluster %q", manifest.clusterName)
+	}
+	requireDisconnectedDeployment(t, manifest)
+	if manifest.managed {
+		t.Skip("the full curated benchmark matrix covers ToxiGen for dev-deploy clusters")
+	}
+	logDeployedAdapter(t, manifest, "lm-evaluation-harness")
+
 	forwardCtx, cancelForward := context.WithCancel(parentCtx)
 	baseURL, stopForward, err := startPortForward(forwardCtx, contextName, instance)
 	if err != nil {
@@ -118,9 +131,15 @@ func runLMESToxiGenAirgapCase(
 		t.Fatalf("read providers from EvalHub API in namespace %q: %v", instance.namespace, err)
 	}
 	if provider == nil || provider.Runtime == nil || provider.Runtime.K8s == nil || provider.Runtime.K8s.Image == "" {
+		if manifest.managed {
+			t.Fatalf("dev-deploy selected LM Evaluation Harness, but EvalHub %s/%s has no Kubernetes provider exposing %q", instance.namespace, instance.serviceName, toxigenBenchmarkID)
+		}
 		t.Skipf("EvalHub %s/%s has no Kubernetes LMES provider exposing %q; this test does not apply", instance.namespace, instance.serviceName, toxigenBenchmarkID)
 	}
 	providerImage := provider.Runtime.K8s.Image
+	if err := manifest.verifyProviderImage("lm-evaluation-harness", providerImage); err != nil {
+		t.Fatalf("selected LMES provider image does not match the deployment manifest: %v", err)
+	}
 
 	policies, err := kube.NetworkingV1().NetworkPolicies(instance.namespace).List(parentCtx, metav1.ListOptions{})
 	if err != nil {
@@ -128,6 +147,9 @@ func runLMESToxiGenAirgapCase(
 	}
 	policyNames, restricted, reason := inspectAirgapPolicies(policies.Items)
 	if !restricted {
+		if manifest.managed && manifest.airgap {
+			t.Fatalf("dev-deploy manifest says AIRGAP=true, but no restrictive evaluation-job egress policy applies: %s", reason)
+		}
 		t.Skipf("EvalHub %s/%s is not configured for this disconnected test: %s", instance.namespace, instance.serviceName, reason)
 	}
 	t.Logf("detected restrictive evaluation-job egress policies: %s", strings.Join(policyNames, ", "))
@@ -137,6 +159,9 @@ func runLMESToxiGenAirgapCase(
 		t.Fatalf("discover mock target service in namespace %q: %v", instance.namespace, err)
 	}
 	if targetService == nil {
+		if manifest.managed {
+			t.Fatal("dev-deploy cluster is missing the required mock target service")
+		}
 		t.Skipf("no ready mock target Service is available in namespace %q; this e2e case needs the dev-deploy mock target", instance.namespace)
 	}
 	targetPort, err := servicePort(targetService, "http", 8000)
@@ -667,25 +692,6 @@ func findLMESToxiGenJobPod(
 		}
 	}
 	return nil, "", nil
-}
-
-func adapterImageDetails(pod *corev1.Pod) (image, imageID string) {
-	if pod == nil {
-		return "", ""
-	}
-	for _, container := range pod.Spec.Containers {
-		if container.Name == "adapter" {
-			image = container.Image
-			break
-		}
-	}
-	for _, status := range pod.Status.ContainerStatuses {
-		if status.Name == "adapter" {
-			imageID = status.ImageID
-			break
-		}
-	}
-	return image, imageID
 }
 
 func boolPointer(value bool) *bool {

@@ -12,7 +12,7 @@ KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-evalhub-dev}"
 IMAGE_TAG="${IMAGE_TAG:-kind-${KIND_CLUSTER_NAME}}"
 SKIP_BUILD="${SKIP_BUILD:-false}"
 AIRGAP="${AIRGAP:-false}"
-ADAPTERS="${ADAPTERS:-all}"
+ADAPTERS="${ADAPTERS:-inspect,lm-evaluation-harness,followbench}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-}"
 EVALHUB_HOST_PORT="${EVALHUB_HOST_PORT:-18443}"
 EVALHUB_NODE_PORT="${EVALHUB_NODE_PORT:-30443}"
@@ -59,8 +59,9 @@ Inputs (also accepted as environment variables):
   IMAGE_TAG               tag for all locally built images (default: kind-<cluster>)
   SKIP_BUILD=true         reuse locally built images with IMAGE_TAG for EvalHub,
                           the operator, and selected adapters
-  ADAPTERS=all             comma-separated adapter images to build and use
-                          (default: all): inspect, lm-evaluation-harness, followbench
+  ADAPTERS=all             build all six curated adapter images
+  ADAPTERS=<list>          comma-separated selection (default: inspect,lm-evaluation-harness,followbench):
+                          inspect, lm-evaluation-harness, lighteval, ruler, ifbench, followbench
   AIRGAP=true              create/use a Calico kind cluster and deny external
                           egress from system-namespace evaluation jobs (default: false)
   CONTAINER_RUNTIME        container engine for image builds, the local registry,
@@ -290,13 +291,21 @@ adapter_selected() {
   return 1
 }
 
+contrib_adapter_selected() {
+  local adapter
+  for adapter in inspect followbench lighteval ruler ifbench; do
+    adapter_selected "$adapter" && return 0
+  done
+  return 1
+}
+
 parse_adapters() {
   local requested adapter image
   local -a requested_adapters=()
 
   ADAPTERS="$(trim_whitespace "$ADAPTERS")"
   if [[ "$ADAPTERS" == all ]]; then
-    requested_adapters=(inspect followbench lm-evaluation-harness)
+    requested_adapters=(inspect lm-evaluation-harness lighteval ruler ifbench followbench)
   else
     [[ -n "$ADAPTERS" ]] || fail "ADAPTERS must be 'all' or a comma-separated list of supported adapters."
     IFS=, read -r -a requested_adapters <<<"$ADAPTERS"
@@ -310,8 +319,11 @@ parse_adapters() {
       inspect) image=community-inspect ;;
       followbench) image=community-followbench ;;
       lm-evaluation-harness) image=community-lmes ;;
-      "") fail "ADAPTERS contains an empty entry. Use inspect, followbench, or lm-evaluation-harness." ;;
-      *) fail "Unsupported adapter '$adapter' in ADAPTERS. Supported values: inspect, followbench, lm-evaluation-harness." ;;
+      lighteval) image=community-lighteval ;;
+      ruler) image=community-ruler ;;
+      ifbench) image=community-ifbench ;;
+      "") fail "ADAPTERS contains an empty entry. Use one or more supported adapter names." ;;
+      *) fail "Unsupported adapter '$adapter' in ADAPTERS. Supported values: inspect, lm-evaluation-harness, lighteval, ruler, ifbench, followbench." ;;
     esac
     adapter_selected "$adapter" && fail "ADAPTERS contains duplicate entry '$adapter'."
     SELECTED_ADAPTERS+=("$adapter")
@@ -592,6 +604,18 @@ build_images() {
         build_image community-lmes "$LMES_REPO" \
           "$LMES_REPO/Dockerfile.lmes-job" "$target_arch"
         ;;
+      lighteval)
+        build_image community-lighteval "$CONTRIB_REPO/adapters/lighteval" \
+          "$CONTRIB_REPO/adapters/lighteval/Containerfile" "$target_arch"
+        ;;
+      ruler)
+        build_image community-ruler "$CONTRIB_REPO/adapters/ruler" \
+          "$CONTRIB_REPO/adapters/ruler/Containerfile" "$target_arch"
+        ;;
+      ifbench)
+        build_image community-ifbench "$CONTRIB_REPO/adapters/ifbench" \
+          "$CONTRIB_REPO/adapters/ifbench/Containerfile" "$target_arch"
+        ;;
     esac
   done
 }
@@ -726,19 +750,29 @@ replace_env_value() {
   mv -- "$output" "$file"
 }
 
-set_lmes_provider_image_pull_policy() {
-  local file="$1" output="$WORK_DIR/provider-lmes.yaml.tmp"
-  awk '
-    index($0, "image: $(lmes-pod-image)") > 0 {
+set_provider_image_pull_policy() {
+  local file="$1" placeholder="$2" output="$WORK_DIR/provider-image-policy.yaml.tmp"
+  local needle="image: \$(${placeholder})"
+  awk -v needle="$needle" '
+    index($0, needle) > 0 {
       print
-      match($0, /[^ ]/)
-      print substr($0, 1, RSTART - 1) "image_pull_policy: always"
+      indent = substr($0, 1, index($0, "image:") - 1)
+      if (getline next_line) {
+        if (index(next_line, "image_pull_policy:") > 0) {
+          print indent "image_pull_policy: always"
+        } else {
+          print indent "image_pull_policy: always"
+          print next_line
+        }
+      } else {
+        print indent "image_pull_policy: always"
+      }
       found = 1
       next
     }
     { print }
     END { if (!found) exit 1 }
-  ' "$file" >"$output" || fail "Could not set LMES provider image_pull_policy in $file."
+  ' "$file" >"$output" || fail "Could not set image_pull_policy for $placeholder in $file."
   mv -- "$output" "$file"
 }
 
@@ -857,24 +891,51 @@ prepare_namespace_and_certificates() {
 
 render_operator_overlay() {
   local config_root="$WORK_DIR/operator-config" params overlay manifest
+  local adapter image_name image_parameter provider_config
   mkdir -p -- "$config_root"
   cp -a "$OPERATOR_REPO/config/." "$config_root/"
   params="$config_root/base/params.env"
   replace_env_value "$params" trustyaiOperatorImage "$(registry_image trustyai-service-operator)"
   replace_env_value "$params" evalHubImage "$(registry_image eval-hub)"
-  if adapter_selected inspect; then
-    replace_env_value "$params" evalhub-provider-inspect-image "$(registry_image community-inspect)"
-    set_inspect_provider_memory_for_kind \
-      "$config_root/configmaps/evalhub/provider-inspect.yaml"
-  fi
-  if adapter_selected followbench; then
-    replace_env_value "$params" evalhub-provider-followbench-image "$(registry_image community-followbench)"
-  fi
-  if adapter_selected lm-evaluation-harness; then
-    replace_env_value "$params" lmes-pod-image "$(registry_image community-lmes)"
-    set_lmes_provider_image_pull_policy \
-      "$config_root/configmaps/evalhub/provider-lm-evaluation-harness.yaml"
-  fi
+  for adapter in "${SELECTED_ADAPTERS[@]}"; do
+    case "$adapter" in
+      inspect)
+        image_name=community-inspect
+        image_parameter=evalhub-provider-inspect-image
+        provider_config=provider-inspect.yaml
+        ;;
+      lm-evaluation-harness)
+        image_name=community-lmes
+        image_parameter=lmes-pod-image
+        provider_config=provider-lm-evaluation-harness.yaml
+        ;;
+      lighteval)
+        image_name=community-lighteval
+        image_parameter=evalhub-provider-lighteval-image
+        provider_config=provider-lighteval.yaml
+        ;;
+      ruler)
+        image_name=community-ruler
+        image_parameter=evalhub-provider-ruler-image
+        provider_config=provider-ruler.yaml
+        ;;
+      ifbench)
+        image_name=community-ifbench
+        image_parameter=evalhub-provider-ifbench-image
+        provider_config=provider-ifbench.yaml
+        ;;
+      followbench)
+        image_name=community-followbench
+        image_parameter=evalhub-provider-followbench-image
+        provider_config=provider-followbench.yaml
+        ;;
+    esac
+    replace_env_value "$params" "$image_parameter" "$(registry_image "$image_name")"
+    set_provider_image_pull_policy "$config_root/configmaps/evalhub/$provider_config" "$image_parameter"
+    if [[ "$adapter" == inspect ]]; then
+      set_inspect_provider_memory_for_kind "$config_root/configmaps/evalhub/$provider_config"
+    fi
+  done
   replace_env_value "$params" kube-rbac-proxy "localhost:${REGISTRY_PORT}/opendatahub/odh-kube-rbac-proxy:odh-stable"
 
   overlay="$config_root/overlays/evalhub-kind"
@@ -938,20 +999,12 @@ YAML
     fail "Rendered operator deployment does not use the local operator image."
   grep -Fq "evalHubImage: $(registry_image eval-hub)" "$manifest" ||
     fail "Rendered operator config does not use the local EvalHub image."
-  if adapter_selected inspect; then
-    grep -Fq "image: $(registry_image community-inspect)" "$manifest" ||
-      fail "Rendered provider config does not use the local Inspect image."
-  fi
-  if adapter_selected followbench; then
-    grep -Fq "image: $(registry_image community-followbench)" "$manifest" ||
-      fail "Rendered provider config does not use the local FollowBench image."
-  fi
-  if adapter_selected lm-evaluation-harness; then
-    grep -Fq "image: $(registry_image community-lmes)" "$manifest" ||
-      fail "Rendered LMES provider config does not use the locally built image."
-    grep -Fq 'image_pull_policy: always' "$manifest" ||
-      fail "Rendered LMES provider config does not pull the current local image."
-  fi
+  local index
+  for index in "${!SELECTED_ADAPTER_IMAGES[@]}"; do
+    image_name="${SELECTED_ADAPTER_IMAGES[$index]}"
+    grep -Fq "image: $(registry_image "$image_name")" "$manifest" ||
+      fail "Rendered provider config does not use the selected local image for ${SELECTED_ADAPTERS[$index]}: $image_name."
+  done
   grep -Fq "kube-rbac-proxy: localhost:${REGISTRY_PORT}/opendatahub/odh-kube-rbac-proxy:odh-stable" "$manifest" ||
     fail "Rendered operator config does not use the local kube-rbac-proxy image."
   grep -Fq 'name: trustyai-service-operator-controller-manager' "$manifest" ||
@@ -1067,6 +1120,70 @@ YAML
     --for=jsonpath='{.status.ready}'=True evalhub/evalhub-local --timeout=300s
   kubectl --kubeconfig "$KUBECONFIG_FILE" -n system rollout status deployment/evalhub-local --timeout=300s
   log PASS "EvalHub custom resource and service deployment are Ready."
+}
+
+git_source_revision() {
+  git -C "$1" rev-parse HEAD 2>/dev/null || printf 'unknown'
+}
+
+git_source_dirty() {
+  if [[ -n "$(git -C "$1" status --porcelain 2>/dev/null || true)" ]]; then
+    printf 'true'
+  else
+    printf 'false'
+  fi
+}
+
+record_deployment_manifest() {
+  local adapter image_name repo
+  local -a data_args=(
+    --from-literal=schema_version=1
+    --from-literal=cluster_name="$KIND_CLUSTER_NAME"
+    --from-literal=airgap="$AIRGAP"
+    --from-literal=image_tag="$IMAGE_TAG"
+    --from-literal=container_runtime="$CONTAINER_RUNTIME"
+    --from-literal=selected_adapters="$(IFS=,; printf '%s' "${SELECTED_ADAPTERS[*]}")"
+    --from-literal=source.eval-hub.revision="$(git_source_revision "$EVALHUB_REPO")"
+    --from-literal=source.eval-hub.dirty="$(git_source_dirty "$EVALHUB_REPO")"
+    --from-literal=source.trustyai-service-operator.revision="$(git_source_revision "$OPERATOR_REPO")"
+    --from-literal=source.trustyai-service-operator.dirty="$(git_source_dirty "$OPERATOR_REPO")"
+  )
+
+  if contrib_adapter_selected; then
+    data_args+=(
+      --from-literal=source.eval-hub-contrib.revision="$(git_source_revision "$CONTRIB_REPO")"
+      --from-literal=source.eval-hub-contrib.dirty="$(git_source_dirty "$CONTRIB_REPO")"
+    )
+  fi
+  if adapter_selected lm-evaluation-harness; then
+    data_args+=(
+      --from-literal=source.lm-evaluation-harness.revision="$(git_source_revision "$LMES_REPO")"
+      --from-literal=source.lm-evaluation-harness.dirty="$(git_source_dirty "$LMES_REPO")"
+    )
+  fi
+
+  for adapter in "${SELECTED_ADAPTERS[@]}"; do
+    case "$adapter" in
+      lm-evaluation-harness) image_name=community-lmes; repo="$LMES_REPO" ;;
+      *) image_name="community-$adapter"; repo="$CONTRIB_REPO" ;;
+    esac
+    data_args+=(
+      --from-literal="image.$adapter=$(registry_image "$image_name")"
+      --from-literal="image_id.$adapter=$("$CONTAINER_RUNTIME" image inspect --format '{{.Id}}' "$(image_ref "$image_name")")"
+      --from-literal="source.$adapter.revision=$(git_source_revision "$repo")"
+      --from-literal="source.$adapter.dirty=$(git_source_dirty "$repo")"
+    )
+  done
+
+  check_resource_ownership configmap evalhub-dev-deploy-manifest system
+  kubectl --kubeconfig "$KUBECONFIG_FILE" -n system create configmap evalhub-dev-deploy-manifest \
+    "${data_args[@]}" --dry-run=client -o yaml |
+    kubectl --kubeconfig "$KUBECONFIG_FILE" apply -f - >/dev/null
+  kubectl --kubeconfig "$KUBECONFIG_FILE" -n system label configmap evalhub-dev-deploy-manifest \
+    app.kubernetes.io/managed-by=evalhub-dev-deploy --overwrite >/dev/null
+  kubectl --kubeconfig "$KUBECONFIG_FILE" -n system annotate configmap evalhub-dev-deploy-manifest \
+    "io.evalhub.kind-smoke.cluster=$KIND_CLUSTER_NAME" --overwrite >/dev/null
+  log PASS "Recorded adapter selection, source revisions, and image references in system/evalhub-dev-deploy-manifest."
 }
 
 # deployment_pod_selector prints a label selector for the pods a Deployment owns.
@@ -1676,6 +1793,7 @@ verify_deployment() {
 }
 
 main() {
+  local adapter contrib_required_file
   if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then
     usage
     return 0
@@ -1690,17 +1808,18 @@ main() {
   check_repository eval-hub "$EVALHUB_REPO" Containerfile
   OPERATOR_REPO="$(find_repo_checkout trustyai-service-operator Dockerfile)"
   check_repository trustyai-service-operator "$OPERATOR_REPO" Dockerfile
-  if adapter_selected inspect || adapter_selected followbench; then
-    if adapter_selected inspect; then
-      CONTRIB_REPO="$(find_repo_checkout eval-hub-contrib adapters/inspect/Containerfile)"
-      check_repository eval-hub-contrib "$CONTRIB_REPO" adapters/inspect/Containerfile
-    else
-      CONTRIB_REPO="$(find_repo_checkout eval-hub-contrib adapters/followbench/Containerfile)"
-      check_repository eval-hub-contrib "$CONTRIB_REPO" adapters/followbench/Containerfile
-    fi
-    if adapter_selected inspect && adapter_selected followbench; then
-      check_repository eval-hub-contrib "$CONTRIB_REPO" adapters/followbench/Containerfile
-    fi
+  if contrib_adapter_selected; then
+    for adapter in "${SELECTED_ADAPTERS[@]}"; do
+      case "$adapter" in
+        inspect|followbench|lighteval|ruler|ifbench)
+          contrib_required_file="adapters/$adapter/Containerfile"
+          if [[ -z "$CONTRIB_REPO" ]]; then
+            CONTRIB_REPO="$(find_repo_checkout eval-hub-contrib "$contrib_required_file")"
+          fi
+          check_repository eval-hub-contrib "$CONTRIB_REPO" "$contrib_required_file"
+          ;;
+      esac
+    done
   fi
   if adapter_selected lm-evaluation-harness; then
     LMES_REPO="$(find_repo_checkout lm-evaluation-harness Dockerfile.lmes-job)"
@@ -1723,6 +1842,7 @@ main() {
   install_mock_services
   configure_airgap_job_egress
   verify_deployment
+  record_deployment_manifest
 
   kubectl --kubeconfig "$KUBECONFIG_FILE" -n system get pods,services,evalhub
   log PASS "EvalHub development environment is deployed."

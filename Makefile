@@ -43,7 +43,9 @@ KIND_CLUSTER_NAME ?= evalhub-dev
 IMAGE_TAG ?= kind-$(KIND_CLUSTER_NAME)
 SKIP_BUILD ?= false
 AIRGAP ?= false
-ADAPTERS ?= all
+# Keep the default comparable to the existing small local workflow. Use
+# ADAPTERS=all when you explicitly want the full curated-adapter image set.
+ADAPTERS ?= inspect,lm-evaluation-harness,followbench
 EVALHUB_HOST_PORT ?= 18443
 EVALHUB_NODE_PORT ?= 30443
 EVALHUB_HOST_BIND_ADDRESS ?= 127.0.0.1
@@ -57,13 +59,14 @@ EVALHUB_KUBECONFIG_FILE ?=
 # colon-separated DEV_REPO_PARENT_PATHS entry (default: ~/code):
 #
 #   trustyai-service-operator  requires Dockerfile                         always required
-#   eval-hub-contrib           requires adapters/inspect/Containerfile     ADAPTERS includes inspect
-#                              requires adapters/followbench/Containerfile ADAPTERS includes followbench
+#   eval-hub-contrib           requires the Containerfile for each selected adapter:
+#                              inspect, followbench, lighteval, ruler, or ifbench
 #   lm-evaluation-harness      requires Dockerfile.lmes-job                ADAPTERS includes lm-evaluation-harness
 #
-# With the default ADAPTERS=all all three checkouts must be accessible; narrow
-# ADAPTERS (comma-separated) to skip repositories you do not need. Nothing is
-# cloned automatically; the lm-evaluation-harness checkout is the fork at
+# ADAPTERS=all builds all six curated adapter images. The default builds the
+# existing Inspect, LMES, and FollowBench set. Narrow ADAPTERS (comma-separated)
+# to build only what you need. Nothing is cloned automatically; the
+# lm-evaluation-harness checkout is the fork at
 # https://github.com/opendatahub-io/lm-evaluation-harness.git, checked out on
 # its incubation (or stable) branch — the default main branch does not contain
 # the required Dockerfile.lmes-job.
@@ -269,6 +272,9 @@ vet: ## Run go vet
 # Prefer Nx so CI finishes deterministically; seed corpora also run under plain go test.
 FUZZTIME ?= 10000x
 GO_TEST_TIMEOUT ?= 10m
+# The full disconnected curated-collection suite stages four adapter bundles
+# and submits benchmark jobs serially; allow enough time for all 24 smoke cases.
+E2E_TEST_TIMEOUT ?= 480m
 # Packages that define Fuzz* tests. Keep in sync when adding new fuzz targets.
 FUZZ_PACKAGES ?= ./internal/eval_hub/runtimes/k8s ./pkg/ociclient ./pkg/mlflowclient ./pkg/api ./internal/eval_hub/handlers ./internal/eval_hub/storage/sql/shared ./internal/eval_hub/config ./internal/eval_runtime_sidecar/handlers ./internal/eval_runtime_sidecar/proxy ./internal/evalhub_mcp/server ./internal/safefile ./cmd/eval_runtime_init
 
@@ -279,7 +285,7 @@ test: ## Run unit tests (including fuzz seed corpora and a short fuzzing pass)
 	@echo "Unit tests complete"
 
 test-e2e: ## Auto-discover and run applicable end-to-end tests against the current Kubernetes context
-	@go test -v -count=1 -timeout=75m ./tests/e2e/...
+	@go test -v -count=1 -timeout=$(E2E_TEST_TIMEOUT) ./tests/e2e/...
 
 test-fuzz: ## Run mutational fuzzing briefly for each Fuzz* test
 	@echo "Running fuzz tests (fuzztime=$(FUZZTIME))..."

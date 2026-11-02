@@ -6,11 +6,86 @@ kubeconfig context:
     kubectl config current-context
     make test-e2e
 
-The target takes no Make variables. It uses the normal Kubernetes client
-configuration, including KUBECONFIG when set. Tests discover ready EvalHub API
-instances and run only cases whose runtime configuration and supporting cluster
-resources are present. A skipped case prints which prerequisite was not found;
-an unrelated cluster with no EvalHub instance is reported as skipped.
+The target automatically discovers the current Kubernetes context (or
+`KUBECONFIG`) and deployed adapter selection. `E2E_TEST_TIMEOUT` can override
+the overall Go test timeout; no adapter-selection argument is needed. Tests
+discover ready EvalHub API instances and run only cases whose runtime
+configuration and supporting cluster resources are present. A skipped case
+prints which prerequisite was not found; an unrelated cluster with no EvalHub
+instance is reported as skipped.
+
+## Kind adapter image selection
+
+`make dev-deploy` can build and deploy a subset of the curated-collection adapter
+images. The default remains the existing Inspect, LM Evaluation Harness, and
+FollowBench image set. Select any supported subset explicitly, or use
+`ADAPTERS=all` for all six:
+
+    make dev-deploy AIRGAP=true ADAPTERS=inspect,lm-evaluation-harness
+    make dev-deploy AIRGAP=true ADAPTERS=lighteval,ruler,ifbench,followbench
+    make dev-deploy AIRGAP=true ADAPTERS=all
+
+The supported names are `inspect`, `lm-evaluation-harness`, `lighteval`,
+`ruler`, `ifbench`, and `followbench`. Only selected images are built and
+published to the kind-local registry. The deployment records the selection,
+image references and local image IDs, source revisions, and air-gap setting in
+`system/evalhub-dev-deploy-manifest`. It contains no credentials.
+
+`make test-e2e` takes no adapter arguments. When this manifest is present, tests
+run only for selected adapters. A deployment-level check verifies that every
+selected adapter has an API provider configured with the selected image. The
+BFCL and ToxiGen focused cases are retained for manually configured clusters;
+for a `dev-deploy` cluster, the full curated matrix below covers those benchmarks
+and reports runtime image provenance.
+
+## Full curated-collection disconnected run
+
+`TestCuratedCollectionsAirgap` contains one job case for each of the 24 benchmark
+entries in the nine currently curated collections. It checks the matrix against
+this repository's collection YAMLs, discovers curated collections and providers
+through the deployed API, verifies selected image wiring, and submits each
+selected case serially. Duplicate BFCL entries in Tool Use v1 are separate cases
+because their category lists differ.
+
+| Adapter | Curated benchmark cases | Staged assets |
+| --- | ---: | --- |
+| Inspect | 5 | HLE, DocVQA, CyberSecEval 2, and the full BFCL cache |
+| LM Evaluation Harness | 8 | The exact eight dataset bundles and a local tokenizer |
+| LightEval | 3 | The three task datasets, `tinyBenchmarks.pkl`, and a local tokenizer |
+| RULER | 6 | The selected task inputs and a local tokenizer |
+| IFBench | 1 | Packaged with the adapter image |
+| FollowBench | 1 | Packaged with the adapter image; uses the mock judge endpoint |
+
+The test creates one temporary PVC per data-backed adapter, stages assets with
+that adapter's deployed image, runs its curated cases against the bundle, then
+removes its staging pod and PVC before staging the next adapter. Inspect's BFCL
+cache uses a separate PVC. This keeps bundles from accumulating on the cluster.
+Every data-backed job request points to its staged PVC through benchmark-level
+`test_data_ref`; the evaluation pod remains subject to the restrictive egress
+policy. Jobs use the local mock target and judge services, assert successful
+job and benchmark completion, and do not assert score quality. EvalHub job
+records remain available for review; Kubernetes Jobs and Pods are removed after
+their status and logs are read.
+
+Automatic asset preparation requires staging pods to reach Hugging Face and the
+pinned upstream data sources. The policy installed by
+`make dev-deploy AIRGAP=true` selects evaluation-job pods, not staging pods. This
+verifies that benchmark jobs consume staged assets without external network
+access; it cannot perform first-time staging in a physically isolated cluster.
+The full matrix currently does not reuse pre-staged bundles, so a physically
+disconnected cluster needs a separate asset pre-staging/reuse step before this
+full run can be used there.
+
+Use all six images for the complete matrix:
+
+    make dev-deploy AIRGAP=true ADAPTERS=all
+    make test-e2e
+
+With a selected subset, the test automatically runs only matrix rows whose
+adapter images were deployed. On a manually configured cluster without the
+dev-deploy manifest, it discovers providers and runs matching cases; missing
+curated rows are skipped, while unexpected catalog rows fail to prompt a matrix
+update.
 
 ## Inspect BFCL air-gap case
 

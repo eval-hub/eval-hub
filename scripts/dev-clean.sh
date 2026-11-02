@@ -247,7 +247,7 @@ remove_temporary_registry_tags() {
     [[ "$port" =~ ^[0-9]+$ ]] || continue
     suffix="${suffix#*/}"
     case "$suffix" in
-      evalhub/eval-hub|evalhub/community-inspect|evalhub/community-followbench|evalhub/trustyai-service-operator|evalhub/kind-openai-mock)
+      evalhub/eval-hub|evalhub/community-inspect|evalhub/community-lmes|evalhub/community-lighteval|evalhub/community-ruler|evalhub/community-ifbench|evalhub/community-followbench|evalhub/trustyai-service-operator|evalhub/kind-openai-mock)
         [[ "$tag" == "$IMAGE_TAG" ]] || continue
         ;;
       opendatahub/odh-kube-rbac-proxy)
