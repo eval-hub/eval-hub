@@ -175,6 +175,7 @@ func requiredEnv(t *testing.T, key string) string {
 type fixture struct {
 	Parameters     map[string]any               `json:"parameters"`
 	MaxLengthEnv   string                       `json:"max_length_env,omitempty"`
+	TokenizerEnv   string                       `json:"tokenizer_env,omitempty"`
 	Timeout        string                       `json:"timeout"`
 	TestDataRef    *api.TestDataRef             `json:"test_data_ref,omitempty"`
 	TestDataRefEnv string                       `json:"test_data_ref_env,omitempty"`
@@ -300,6 +301,19 @@ func loadFixture(path string, lookup func(string) (string, bool)) (fixture, erro
 	}
 	if f.ExperimentName != "" && strings.TrimSpace(f.ExperimentName) == "" {
 		return f, errors.New("experiment_name must not be blank")
+	}
+	if f.TokenizerEnv != "" {
+		// OpenAI-compatible smoke endpoints may serve a model name that does not
+		// resolve as a HuggingFace repository. Providers that resolve a tokenizer
+		// separately from the model name accept parameters.tokenizer, so let the
+		// environment supply it instead of pinning an environment-specific value
+		// in a shared fixture. A tokenizer the fixture pins (for example a staged
+		// /test_data/tokenizer bundle) always wins.
+		if value, ok := lookup(f.TokenizerEnv); ok && strings.TrimSpace(value) != "" {
+			if _, pinned := f.Parameters["tokenizer"]; !pinned {
+				f.Parameters["tokenizer"] = strings.TrimSpace(value)
+			}
+		}
 	}
 	if strings.TrimSpace(f.Timeout) == "" {
 		return f, fmt.Errorf("%w: fixture field timeout must be a positive Go duration (for example 5m)", errMissingInput)
