@@ -31,7 +31,10 @@ func (c *Client) ProbeWorkspacesEnabled() (bool, error) {
 		if mlflow.IsNotFound(err) {
 			return false, nil
 		}
-		return false, err
+		// Map the failure like every other call so callers get the typed
+		// *APIError (status, error code, server message) instead of the raw
+		// SDK error.
+		return false, mapError(err)
 	}
 	return info.WorkspacesEnabled, nil
 }

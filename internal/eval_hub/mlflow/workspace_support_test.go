@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -94,6 +95,33 @@ func TestWorkspaceSupport_Resolve(t *testing.T) {
 		}
 		if client.WorkspaceName() != "keep-me" {
 			t.Fatalf("workspace name = %q, want keep-me retained", client.WorkspaceName())
+		}
+	})
+
+	t.Run("probe failure keeps the typed API error", func(t *testing.T) {
+		t.Parallel()
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"error_code":"INTERNAL_ERROR","message":"mlflow is down"}`))
+		}))
+		t.Cleanup(srv.Close)
+
+		support := NewWorkspaceSupport()
+		err := support.Resolve(t.Context(), mlflowclient.NewClient(srv.URL))
+		if !errors.Is(err, ErrWorkspaceSupportUnresolved) {
+			t.Fatalf("error = %v, want ErrWorkspaceSupportUnresolved", err)
+		}
+		// The wrapper must not flatten the underlying error: callers still need
+		// the status and the server message.
+		var apiErr *mlflowclient.APIError
+		if !errors.As(err, &apiErr) {
+			t.Fatalf("error = %T %v, want the underlying *mlflowclient.APIError preserved", err, err)
+		}
+		if apiErr.StatusCode != http.StatusInternalServerError {
+			t.Fatalf("StatusCode = %d, want %d", apiErr.StatusCode, http.StatusInternalServerError)
+		}
+		if !strings.Contains(err.Error(), "mlflow is down") {
+			t.Fatalf("error = %v, want the server message preserved", err)
 		}
 	})
 
