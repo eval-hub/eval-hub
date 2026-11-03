@@ -105,14 +105,31 @@ func TestLMESStagerOptsIntoPinnedEthicsDatasetCode(t *testing.T) {
 	}
 }
 
+func TestInspectStagerUsesRuntimeDocVQADatasetID(t *testing.T) {
+	program, err := fs.ReadFile(curatedAssetStagers, "stagers/inspect.py")
+	if err != nil {
+		t.Fatalf("read embedded Inspect asset stager: %v", err)
+	}
+	source := string(program)
+	if !strings.Contains(source, `"lmms-lab-encoder/DocVQA"`) {
+		t.Fatal("Inspect stager does not cache the DocVQA repository ID used by the runtime task")
+	}
+	if strings.Contains(source, `"lmms-lab/DocVQA"`) {
+		t.Fatal("Inspect stager still caches DocVQA under a repository ID the runtime task does not request")
+	}
+}
+
 func TestKindMockJudgeUsesCyberSecGradeFormat(t *testing.T) {
 	script, err := os.ReadFile("../../scripts/dev-deploy.sh")
 	if err != nil {
 		t.Fatalf("read dev-deploy script: %v", err)
 	}
 	for _, required := range []string{
-		`if "Answer with GRADE:" in prompt:`,
+		`request_text = json.dumps(request, ensure_ascii=False)`,
+		`r"answer\s+with\s+grade\s*:", request_text, re.IGNORECASE`,
 		`content = "GRADE: C"`,
+		`"response_format": response_format if ROLE == "judge" else "target"`,
+		`deployment/evalhub-kind-mock-target deployment/evalhub-kind-mock-judge`,
 	} {
 		if !strings.Contains(string(script), required) {
 			t.Errorf("dev-deploy mock judge does not contain %q", required)

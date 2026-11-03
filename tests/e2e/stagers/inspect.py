@@ -27,7 +27,9 @@ DATASETS = [
         "test",
     ),
     (
-        "lmms-lab/DocVQA",
+        # Match the repository ID used by the pinned Inspect task; the Hub
+        # cache is keyed by repository ID, so the alias cannot satisfy offline loads.
+        "lmms-lab-encoder/DocVQA",
         "DocVQA",
         "539088ef8a8ada01ac8e2e6d4e372586748a265e",
         "validation",

@@ -1460,16 +1460,23 @@ data:
                 return
 
             if ROLE == "judge":
-                prompt = " ".join(str(message.get("content", "")) for message in request.get("messages", []))
-                if "Answer with GRADE:" in prompt:
+                # Search the complete serialized request because OpenAI-compatible
+                # clients may represent prompt content as strings or structured parts.
+                request_text = json.dumps(request, ensure_ascii=False)
+                grade_prompt = re.search(
+                    r"answer\s+with\s+grade\s*:", request_text, re.IGNORECASE
+                ) is not None
+                if grade_prompt:
                     # CyberSecEval 2's model_graded_qa scorer requires this
                     # grade format; an unparseable reply yields NaN and
                     # prevents the SDK from reporting the terminal status.
                     content = "GRADE: C"
+                    response_format = "grade"
                 else:
-                    match = re.search(r"with\s+(\d+)\s+values", prompt, re.IGNORECASE)
+                    match = re.search(r"with\s+(\d+)\s+values", request_text, re.IGNORECASE)
                     count = int(match.group(1)) if match else 1
                     content = "[" + ", ".join('"YES"' for _ in range(count)) + "]"
+                    response_format = "yes-array"
             else:
                 content = "I will follow the requested constraints."
             self.reply(200, {
@@ -1480,7 +1487,7 @@ data:
                 "choices": [{"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": "stop"}],
                 "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
             })
-            print(json.dumps({"role": ROLE, "auth": "accepted"}), flush=True)
+            print(json.dumps({"role": ROLE, "auth": "accepted", "response_format": response_format if ROLE == "judge" else "target"}), flush=True)
 
     HTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
 ---
@@ -1644,9 +1651,10 @@ spec:
 YAML
 
   # The mock source is mounted from a ConfigMap, but Python has already loaded
-  # the old module in a running process. Restart the target so completions
-  # support is active after every dev-deploy.
-  kubectl --kubeconfig "$KUBECONFIG_FILE" -n system rollout restart deployment/evalhub-kind-mock-target
+  # the old module in a running process. Restart both mocks so source changes
+  # are active after every dev-deploy.
+  kubectl --kubeconfig "$KUBECONFIG_FILE" -n system rollout restart \
+    deployment/evalhub-kind-mock-target deployment/evalhub-kind-mock-judge
   kubectl --kubeconfig "$KUBECONFIG_FILE" -n system rollout status deployment/evalhub-kind-mock-target --timeout=180s
   kubectl --kubeconfig "$KUBECONFIG_FILE" -n system rollout status deployment/evalhub-kind-mock-judge --timeout=180s
   log PASS "Mock target and judge deployments are Ready."
