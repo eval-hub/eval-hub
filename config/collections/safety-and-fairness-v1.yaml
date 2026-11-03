@@ -63,7 +63,7 @@ benchmarks:
     provider_id: lm_evaluation_harness
     weight: 2
     primary_score:
-      metric: accuracy_disamb # Primary; accuracy_amb tracked as secondary
+      metric: acc # Matches lm-eval primary_metric; accuracy_amb tracked as secondary
       lower_is_better: false
     pass_criteria:
       threshold: 0.85
