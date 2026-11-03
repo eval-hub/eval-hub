@@ -179,6 +179,16 @@ go test ./tests/features -run '^TestBenchmarkProviderFixtureCounts$'
 | `@hf` | Evaluation jobs that download offline test data from Hugging Face Hub (`evaluation_jobs.feature`). Defaults: `TEST_DATA_HF_REPO_ID`=`eval-hub-test/evalhub-offline-testdata`, `TEST_DATA_HF_REVISION`=`main`, nested `truthfulqa_mc1` via `TEST_DATA_HF_NESTED_SUB_PATH`=`staging_sub_path` (public mirror of `tests/git-testdata` on HF). One happy-path job runs `arc_easy` (full repo, branch revision) + `truthfulqa_mc1` (nested `sub_path`) and asserts `resolved_sha` is absent on create then populated after completion; set `TEST_DATA_HF_SHA_REVISION` to a real hex commit SHA to exercise pinned revision on `arc_easy` without a separate scenario. Runtime failures: one job covers invalid `repo_id` + bad `revision`; missing `sub_path` stays a separate job. Optional env: `TEST_DATA_HF_BAD_REPO_ID` (default `eval-hub-test/invalid-db`), `TEST_DATA_HF_BAD_REVISION`, `TEST_DATA_HF_BAD_SUB_PATH`. Job-wait negatives poll every 10s for up to 5m; API-only negatives return 400 immediately. Requires cluster egress to huggingface.co (or configure the init image with `HF_ENDPOINT` for a mirror). Opt in with `GODOG_TAGS="@hf"`. |
 | `@gha-wheel-sanity` | Local-runtime wheel validation scenario run by `scripts/gha_wheel_sanity_test.sh` during GHA wheel checks |
 
+### Disconnected benchmark fixture assets
+
+In disconnected mode, the shared Jsonnet `benchmark()` helper assigns each benchmark a separate S3 bundle prefix:
+
+```text
+s3://mlpipeline/offline/fvt/benchmarks/<provider_id>/<benchmark_id>/
+```
+
+The prefix is a folder boundary (including the trailing slash), not an exact object key. The init container strips this prefix when writing files to `/test_data`, so each bundle must preserve the layout expected by its adapter and include only that benchmark's required dataset/cache and tokenizer. The test-data mirror pipeline must publish the corresponding bundle for each benchmark fixture. Do not point these fixtures at the entire `offline` catalog; `TEST_DATA_S3_KEY` remains for standalone fixtures that explicitly exercise a generic S3 reference and does not override the benchmark-scoped prefixes.
+
 ### Metrics tests (`@metrics`)
 
 Prometheus metrics are served on a **dedicated port** (default `8081`) and are scraped directly, not through kube-rbac-proxy. API requests continue to use `SERVER_URL`; scrape requests use `METRICS_URL`.
