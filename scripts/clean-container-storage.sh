@@ -398,7 +398,7 @@ check_remaining_space() {
   fi
   log WARN "Only $(free_kb_to_gib "$STORAGE_FREE_KB") free in $STORAGE_FREE_LABEL; image builds need at least ${MIN_FREE_GB} GiB of headroom."
   if [[ "$CONTAINER_RUNTIME" == podman ]] && podman machine info >/dev/null 2>&1; then
-    log WARN "Free more space, or grow the podman machine disk (podman machine stop; podman machine set --disk-size 200; podman machine start) and grow the guest filesystem afterwards (growpart, xfs_growfs)."
+    log WARN "Free more space, or grow the podman machine disk while the machine is stopped (podman machine stop; podman machine set --disk-size 200; podman machine start) and grow the guest filesystem afterwards (growpart, xfs_growfs); providers that cannot resize in place need a new machine instead (podman machine rm; podman machine init --disk-size 200). See the container storage notes under 'Local kind debugging' in the README."
   elif is_docker_desktop; then
     log WARN "Free more space, or raise the disk image size in Docker Desktop's Resources settings and move the disk image to a filesystem with more room."
   else
