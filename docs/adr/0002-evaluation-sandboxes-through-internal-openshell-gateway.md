@@ -2,17 +2,18 @@
 
 - **Status:** Proposed
 - **Date:** 2026-10-19
+- **Revised:** 2026-11-03 — record references, supersession status and local-mode wording; no change to the decision.
 - **Deciders:** EvalHub, TrustyAI Service Operator, OpenShift AI platform and Security
 - **Strategy:** [RHAISTRAT-2289](https://redhat.atlassian.net/browse/RHAISTRAT-2289)
-- **Depends on:** [shared internal OpenShell gateway proposal, PR 174](https://github.com/opendatahub-io/architecture-decision-records/pull/174), reviewed at `57bc18bca3c487bc56b3be18ca147f112141d37b`
-- **Proposed partial supersession:** [ADR 0001 in EvalHub PR 1059](https://github.com/eval-hub/eval-hub/blob/3219296e2811b0d27d58c6284baa1d8d34e26d55/docs/adr/0001-sandboxed-evaluation-runtime-for-agentic-frameworks.md), itself still Proposed
+- **Depends on:** [shared internal OpenShell gateway proposal, PR 174](https://github.com/opendatahub-io/architecture-decision-records/pull/174), reviewed at `57bc18bca3c487bc56b3be18ca147f112141d37b`. The platform record's number and filename are provisional while that PR is open.
+- **Proposed partial supersession:** the namespace-first sandbox proposal circulated in [EvalHub PR 1059](https://github.com/eval-hub/eval-hub/pull/1059), which was closed unmerged on 2026-10-19 without landing as an ADR. ADR number 0001 stays reserved and unused, and the decisions that proposal would have recorded are restated in this record so that it stands alone.
 - **Implementation plan:** [OpenShell evaluation plan](../design/openshell-evaluation-plan.md)
 
 ## Context
 
 Agentic evaluation frameworks execute untrusted code, create child environments and require remote execution and observation. EvalHub must contain their access to tenants, credentials, cluster APIs, network destinations and compute capacity, while preserving ordinary evaluations.
 
-The earlier EvalHub proposal uses an ephemeral namespace and a Kubernetes API broker sidecar as its initial boundary, with OpenShell added later. Platform PR 174 instead proposes a shared internal OpenShell gateway and makes it the baseline for sandbox-required EvalHub execution. Implementing both independent compute control planes would duplicate security, lifecycle and operational work.
+The earlier EvalHub proposal (PR 1059, closed unmerged) uses an ephemeral namespace and a Kubernetes API broker sidecar as its initial boundary, with OpenShell added later as an optional policy layer. Platform PR 174 instead proposes a shared internal OpenShell gateway and makes it the baseline for sandbox-required EvalHub execution. Implementing both independent compute control planes would duplicate security, lifecycle and operational work.
 
 The shared gateway does not remove EvalHub's multi-tenancy obligations. Customer-supplied code remains untrusted even when executing as a bounded service operation. A common service identity across all evaluation workspaces, or a credential in the untrusted process, would undermine per-evaluation containment.
 
@@ -26,7 +27,9 @@ The strategy's [2026-10-13 refinement](https://redhat.atlassian.net/browse/RHAIS
 
 Use one platform-managed internal gateway per OpenShift AI installation, as proposed by PR 174. Sandboxing is resolved from trusted provider/task configuration and installation capabilities. Sandbox-required evaluation benchmarks run their evaluator and children as OpenShell sandboxes, never as an unsandboxed Job fallback. The existing Job backend remains for ordinary benchmarks, including those in mixed collections; the evaluation aggregates status and results across both backends.
 
-`standard` and `kata` are approved OpenShell runtime profiles. A provider requiring Kata fails closed if the profile is unavailable or unqualified. Local process execution also rejects mandatory-sandbox providers. There is no request-time escape hatch to lower a provider's requirements.
+`standard` and `kata` are approved OpenShell runtime profiles. A provider requiring Kata fails closed if the profile is unavailable or unqualified. There is no request-time escape hatch to lower a provider's requirements.
+
+Local mode is outside the platform gateway's supported contract and is never reported as providing the platform sandbox guarantee. This record keeps the stricter local position: local execution rejects mandatory-sandbox providers, and a developer who needs one uses a separately deployed qualified development gateway. PR 174 permits but does not require retained warn-and-allow behaviour, so re-adopting warn-and-allow is a reviewable amendment to this record rather than an automatic fallback.
 
 ### 2. Preserve a versioned evaluation lifecycle, delegate compute lifecycle
 
@@ -107,7 +110,7 @@ It makes the shared gateway, privileged platform provisioning service, intercept
 
 Compatibility translation, workspace churn, two-Pod sandbox footprint, storage cleanup and Kueue integration can dominate complexity and latency. The project must measure supported concurrency and prove representative frameworks before committing provider coverage or delivery dates.
 
-On acceptance, update the strategy and partially supersede ADR 0001's compute ownership, broker placement, optional OpenShell phasing, local warn-and-allow, Job scheduling and storage decisions. Keep its dedicated-evaluation isolation, governed provider selection, image controls, resource limits and lifecycle intent. Both records remain Proposed until the responsible reviewers accept them.
+On acceptance, update the strategy and partially supersede the PR 1059 proposal's compute ownership, broker placement, optional OpenShell phasing, local warn-and-allow, Job scheduling and storage decisions. Keep its dedicated-evaluation isolation, governed provider selection, image controls, resource limits and lifecycle intent. This record remains Proposed until the responsible reviewers accept it; because PR 1059 never landed, there is no earlier accepted record to amend.
 
 ## Acceptance gates
 

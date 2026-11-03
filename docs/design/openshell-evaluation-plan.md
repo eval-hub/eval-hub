@@ -1,14 +1,14 @@
 # EvalHub evaluation sandbox plan using the internal OpenShell gateway
 
-Status: Proposed. Date: 2026-10-19. Delivery teams: EvalHub, TrustyAI Service Operator, OpenShift AI platform, OpenShell integration, Security and QE.
+Status: Proposed. Date: 2026-10-19. Revised: 2026-11-03 — references and local-mode wording; no change to the plan's decisions. Delivery teams: EvalHub, TrustyAI Service Operator, OpenShift AI platform, OpenShell integration, Security and QE.
 
 ## Proposed outcome
 
 Use the platform-managed internal OpenShell gateway proposed in [architecture PR 174](https://github.com/opendatahub-io/architecture-decision-records/pull/174) as the mandatory execution backend for sandbox-required evaluation providers. Give each evaluation attempt an ephemeral OpenShell workspace and managed Kubernetes namespace. Run the evaluator and its child execution environments as OpenShell sandboxes. Keep a restricted Kubernetes compatibility adapter for providers that need it, outside the untrusted workload boundary.
 
-This replaces the independent namespace-and-Kubernetes-proxy control plane proposed in [EvalHub PR 1059](https://github.com/eval-hub/eval-hub/pull/1059). It preserves the isolation, resource, lifecycle, connectivity and provenance requirements of [RHAISTRAT-2289](https://redhat.atlassian.net/browse/RHAISTRAT-2289), with the requirement changes below submitted for review. It does not claim that OpenShell already implements every required platform control.
+This replaces the independent namespace-and-Kubernetes-proxy control plane proposed in [EvalHub PR 1059](https://github.com/eval-hub/eval-hub/pull/1059) (closed unmerged on 2026-10-19). It preserves the isolation, resource, lifecycle, connectivity and provenance requirements of [RHAISTRAT-2289](https://redhat.atlassian.net/browse/RHAISTRAT-2289), with the requirement changes below submitted for review. It does not claim that OpenShell already implements every required platform control.
 
-The decision is recorded in [ADR 0002](../adr/0002-evaluation-sandboxes-through-internal-openshell-gateway.md). Both referenced PRs were open when read; their proposals are dependencies, not accepted platform contracts.
+The decision is recorded in [ADR 0002](../adr/0002-evaluation-sandboxes-through-internal-openshell-gateway.md). PR 174 was open when read and PR 1059 closed unmerged; neither is an accepted platform contract.
 
 ## What changes from the previous plan
 
@@ -17,14 +17,14 @@ The decision is recorded in [ADR 0002](../adr/0002-evaluation-sandboxes-through-
 - **Broker:** `eval-sandbox-broker` translates a qualified subset of Kubernetes behavior into OpenShell operations. It does not forward arbitrary requests to the production API and holds no Kubernetes pod-creation credential. It runs as a trusted service per evaluation attempt, outside the primary and child sandboxes, rather than as a sidecar in the evaluated Pod.
 - **Identity:** each attempt has its own OpenShell workspace-user identity. A common EvalHub identity with membership in every evaluation workspace is prohibited for broker execution. The platform provisioning service alone holds the administrative authority needed for workspace and membership setup.
 - **Credentials:** sandboxed runs replace the co-located credential sidecar with approved OpenShell credential delivery and a remote EvalHub integration relay for operations that do not map to that delivery. Existing plain Job runs keep their current sidecar.
-- **Local mode:** sandbox-required providers fail closed in local execution. This intentionally replaces PR 1059's warn-and-allow behavior. Developers can use a separately deployed qualified development gateway; local processes are not reported as sandboxed execution.
+- **Local mode:** sandbox-required providers fail closed in local execution, which is stricter than the optional warn-and-allow that PR 174 permits for development. Developers who need one use a separately deployed qualified development gateway, and local processes are never reported as sandboxed execution or as providing the platform guarantee. Adopting warn-and-allow later requires an amendment to this plan and to ADR 0002.
 - **Storage:** OpenShell currently uses PVC-backed workspaces. Short-lived, automatically deleted PVCs therefore require an explicit amendment to the strategy's `emptyDir`-only scope; user-provided PVCs and retained workspaces remain unsupported.
 - **Kueue:** moving the primary evaluator out of a `batch/v1.Job` removes the existing Job scheduling hook. Explicit admission integration is required; namespace quotas alone do not preserve queue fairness.
 - **Compatibility:** support for Helm and resource kinds beyond Pods is a first-phase feasibility gate. A restricted OpenShell adapter cannot be described as a general Kubernetes API proxy.
 
 ## Sources and current constraints
 
-The baseline is PR 174 at [`57bc18b`](https://github.com/opendatahub-io/architecture-decision-records/blob/57bc18bca3c487bc56b3be18ca147f112141d37b/architecture-decision-records/operator/ODH-ADR-Operator-0019-internal-openshell-gateway.md), PR 1059 at [`3219296`](https://github.com/eval-hub/eval-hub/blob/3219296e2811b0d27d58c6284baa1d8d34e26d55/docs/adr/0001-sandboxed-evaluation-runtime-for-agentic-frameworks.md), and the strategy including its 2026-10-13 refinement comment. The PR 174 ADR number is provisional because its review identifies a numbering collision.
+The baseline is [platform PR 174](https://github.com/opendatahub-io/architecture-decision-records/pull/174) as reviewed at [`57bc18b`](https://github.com/opendatahub-io/architecture-decision-records/commit/57bc18bca3c487bc56b3be18ca147f112141d37b), the [EvalHub PR 1059 proposal](https://github.com/eval-hub/eval-hub/pull/1059) as read at [`3219296`](https://github.com/eval-hub/eval-hub/commit/3219296e2811b0d27d58c6284baa1d8d34e26d55) (closed unmerged), and the strategy including its 2026-10-13 refinement comment. The platform record's number and filename are provisional: it appeared as `ODH-ADR-Operator-0019-internal-openshell-gateway.md` at the reviewed commit and as `ODH-ADR-Operator-0021-internal-openshell-gateway.md` on the PR branch, while `ODH-ADR-Operator-0019` on `main` is an unrelated record on structured reconciliation error logs. Reference the PR, not the number, until it lands.
 
 The existing repository implements plain Kubernetes Jobs and an [ingress-only execution NetworkPolicy](../network-policies.md). That policy does not provide egress containment. The new sandbox path must establish and test its own effective egress controls.
 
@@ -143,7 +143,7 @@ For Kata-required providers, enforce runtime at admission and bound time spent P
 
 Owners: EvalHub and OpenShell integration, with platform, Security and QE.
 
-- Agree the revised ADR and obtain explicit disposition of gateway-required P0, local fail-closed behavior, ephemeral PVCs, Kueue admission, allowed resource kinds and the Harbor collection profile conflict. Collection metadata may request only an approved profile; it cannot lower a provider minimum or expand the administrator ceiling.
+- Agree the revised ADR and obtain explicit disposition of gateway-required P0, the stricter local fail-closed position, ephemeral PVCs, Kueue admission, allowed resource kinds and the Harbor collection profile conflict. Collection metadata may request only an approved profile; it cannot lower a provider minimum or expand the administrator ceiling.
 - Execute a minimal primary-plus-child create, exec, log, attach, delete flow through the pinned gateway. Run representative Inspect Harbor / Terminal-Bench and AgentDojo paths; distinguish actual required APIs from assumed ones. Demonstrate canary env/file injection and receiver connectivity.
 - Prototype managed namespace readiness, API-caller authentication, per-attempt membership, policy admission and cross-workspace denials. Test coexistence with a customer gateway and a pre-created namespace collision.
 - Measure cold/warm dispatch, child fan-out, concurrent streams, storage and control-plane footprint, and teardown. Agree and record p95 latency and maximum concurrent evaluations/children before increasing rollout concurrency; do not substitute the strategy's unvalidated estimate for these measurements.
