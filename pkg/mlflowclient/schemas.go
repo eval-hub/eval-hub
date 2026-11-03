@@ -118,13 +118,22 @@ func IsResourceAlreadyExistsError(err error) bool {
 	if !errors.As(err, &apiError) {
 		return false
 	}
-	if apiError.MLFlowError != nil && apiError.MLFlowError.ErrorCode == "RESOURCE_ALREADY_EXISTS" {
+	// mlflow-go's IsAlreadyExists classifies HTTP 409 as already-exists no matter
+	// which error code accompanies it, so the conflict status keeps deciding.
+	if apiError.StatusCode == http.StatusConflict {
 		return true
 	}
-	if strings.Contains(apiError.ResponseBody, "RESOURCE_ALREADY_EXISTS") {
-		return true
+	// An explicit error code wins over the legacy RESOURCE_ALREADY_EXISTS
+	// substring, whether mlflow-go decoded it or it only appears in the body of a
+	// hand-built APIError. mapError renders the code into ResponseBody, and a
+	// provider message can quote the substring; a different explicit code such as
+	// PERMISSION_DENIED means the caller may not see the resource, not that it
+	// exists.
+	if code := apiError.explicitErrorCode(); code != "" {
+		return code == "RESOURCE_ALREADY_EXISTS"
 	}
-	return apiError.StatusCode == http.StatusConflict
+	// No code anywhere: keep matching a raw body that names the code.
+	return strings.Contains(apiError.ResponseBody, "RESOURCE_ALREADY_EXISTS")
 }
 
 // IsResourceDoesNotExistError reports whether err indicates the resource does not

@@ -213,6 +213,64 @@ func TestIsResourceAlreadyExistsError(t *testing.T) {
 		}
 	})
 
+	t.Run("explicit code wins over the body excerpt", func(t *testing.T) {
+		t.Parallel()
+		// mapError renders the code and message into ResponseBody, so a provider
+		// message can quote RESOURCE_ALREADY_EXISTS while the decoded code is
+		// something else. The explicit code must decide.
+		got := mapError(&mlflow.APIError{
+			StatusCode: 403,
+			Code:       "PERMISSION_DENIED",
+			Message:    `upstream said {"error_code":"RESOURCE_ALREADY_EXISTS"}`,
+		})
+		var mapped *APIError
+		if !errors.As(got, &mapped) {
+			t.Fatalf("mapError() = %T, want *APIError", got)
+		}
+		if !strings.Contains(mapped.ResponseBody, "RESOURCE_ALREADY_EXISTS") {
+			t.Fatalf("ResponseBody = %q, want the body excerpt to contain the substring", mapped.ResponseBody)
+		}
+		if IsResourceAlreadyExistsError(got) {
+			t.Fatalf("expected false for PERMISSION_DENIED: %v", got)
+		}
+	})
+
+	// APIError is exported and its legacy shape carries only a raw body, so an
+	// explicit code in the body must decide just like a decoded one.
+	t.Run("body-only error with another explicit code is respected", func(t *testing.T) {
+		t.Parallel()
+		err := &APIError{
+			StatusCode:   400,
+			ResponseBody: `{"error_code":"PERMISSION_DENIED","message":"upstream said RESOURCE_ALREADY_EXISTS"}`,
+		}
+		if IsResourceAlreadyExistsError(err) {
+			t.Fatal("expected false when the body carries a different error code")
+		}
+	})
+
+	// HTTP 409 stays decisive on its own, matching mlflow-go's IsAlreadyExists.
+	t.Run("conflict status wins over an explicit other code", func(t *testing.T) {
+		t.Parallel()
+		err := &APIError{
+			StatusCode:  409,
+			MLFlowError: &MLFlowError{ErrorCode: "PERMISSION_DENIED", Message: "denied"},
+		}
+		if !IsResourceAlreadyExistsError(err) {
+			t.Fatal("expected true for HTTP 409 regardless of the error code")
+		}
+	})
+
+	t.Run("body-only error without a code falls back to the substring", func(t *testing.T) {
+		t.Parallel()
+		err := &APIError{
+			StatusCode:   400,
+			ResponseBody: "Bad Request: RESOURCE_ALREADY_EXISTS experiment exists",
+		}
+		if !IsResourceAlreadyExistsError(err) {
+			t.Fatal("expected true for a raw body naming the error code")
+		}
+	})
+
 	t.Run("non-API error", func(t *testing.T) {
 		t.Parallel()
 		if IsResourceAlreadyExistsError(errors.New("network unreachable")) {
