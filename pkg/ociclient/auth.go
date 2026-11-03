@@ -122,8 +122,7 @@ func (a *authenticator) createNewToken(ctx context.Context, nextURL string) erro
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("auth request failed with status %d: %s", resp.StatusCode, string(body))
+		return registryHTTPError("auth request", resp)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -157,7 +156,7 @@ func validateTokenRealmURL(registry, nextURL string) error {
 		return nil
 	case "http":
 		if strings.HasPrefix(registry, "https://") {
-			return fmt.Errorf("insecure token realm %q for https registry", nextURL)
+			return fmt.Errorf("insecure token realm for https registry")
 		}
 		return nil
 	default:

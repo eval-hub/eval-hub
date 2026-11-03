@@ -3,10 +3,10 @@ package ociclient
 import "testing"
 
 func TestEvaluationCardManifestTag(t *testing.T) {
-	if got := EvaluationCardManifestTag("job-1", ""); got != "evaluation-card-job-1" {
+	if got := EvaluationCardManifestTag("job-1"); got != "evaluation-card-job-1" {
 		t.Fatalf("got %q", got)
 	}
-	if got := EvaluationCardManifestTag("job-1", "eval-123"); got != "eval-123-job-1" {
+	if got := EvaluationCardManifestTag("  job-1  "); got != "evaluation-card-job-1" {
 		t.Fatalf("got %q", got)
 	}
 }
@@ -53,7 +53,7 @@ func TestValidateEvaluationJobID(t *testing.T) {
 }
 
 func TestEvaluationCardManifestTagEmptyJobID(t *testing.T) {
-	if got := EvaluationCardManifestTag("", "custom-tag"); got != "custom-tag" {
+	if got := EvaluationCardManifestTag(""); got != "" {
 		t.Fatalf("got %q", got)
 	}
 }

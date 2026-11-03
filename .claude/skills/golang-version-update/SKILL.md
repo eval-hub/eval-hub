@@ -2,7 +2,7 @@
 name: golang-version-update
 description: >
   Update the Go version across the repository when a newer version is available
-  in the Red Hat UBI9 go-toolset image. Checks registry.access.redhat.com/ubi9/go-toolset
+  in the Red Hat ubi10 go-toolset image. Checks registry.access.redhat.com/ubi10/go-toolset
   for supported tags, validates compatibility, and updates go.mod, Containerfile,
   and CI workflows. Use when bumping the Go version, checking for Go updates,
   or remediating Go stdlib CVEs that require a toolchain upgrade.
@@ -20,7 +20,7 @@ allowed-tools:
 # Go Version Update Skill
 
 Update the Go toolchain version across the repository, gated on availability
-in the Red Hat UBI9 go-toolset container image.
+in the Red Hat ubi10 go-toolset container image.
 
 Policy (go-toolset gate, Containerfile, CI) lives in `CLAUDE.md`.
 
@@ -103,7 +103,7 @@ If there is a commented-out `// toolchain` line, update it to match.
 Update **all** `go-toolset:` image references to use the new major.minor tag:
 
 ```dockerfile
-FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:1.XX AS builder
+FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi10/go-toolset:1.XX AS builder
 ```
 
 #### 5c. GitHub Actions workflows
@@ -174,7 +174,7 @@ If the user wants a PR, create one following conventional commit format:
 build(go): bump Go toolchain to 1.XX.Y
 
 Update Go version to 1.XX.Y, matching the latest available
-registry.access.redhat.com/ubi9/go-toolset image.
+registry.access.redhat.com/ubi10/go-toolset image.
 
 Files updated:
 - go.mod
