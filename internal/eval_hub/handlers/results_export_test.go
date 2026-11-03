@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/evalcards"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/cards"
 )
@@ -16,8 +17,8 @@ type stubResultsExporter struct {
 	err     error
 }
 
-func (s *stubResultsExporter) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (string, error) {
-	return s.cardURL, s.err
+func (s *stubResultsExporter) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (evalcards.ExportResult, error) {
+	return evalcards.ExportResult{CardURL: s.cardURL}, s.err
 }
 
 func testEvaluationJob() *api.EvaluationJobResource {
