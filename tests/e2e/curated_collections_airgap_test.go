@@ -26,6 +26,7 @@ import (
 
 const curatedAssetStagerLabel = "evalhub.io/e2e-asset-stager"
 const inspectHLEBenchmarkID = "inspect/hle"
+const terminalAdapterPodGracePeriod = time.Minute
 
 //go:embed stagers/*.py
 var curatedAssetStagers embed.FS
@@ -105,6 +106,68 @@ func TestLMESStagerOptsIntoPinnedEthicsDatasetCode(t *testing.T) {
 	}
 }
 
+func TestLMESStagerProvidesChatTemplateForSmokeTokenizer(t *testing.T) {
+	program, err := fs.ReadFile(curatedAssetStagers, "stagers/lmes.py")
+	if err != nil {
+		t.Fatalf("read embedded LMES asset stager: %v", err)
+	}
+	source := string(program)
+	for _, required := range []string{
+		`if not tokenizer.chat_template:`,
+		`tokenizer.chat_template = (`,
+		`tokenizer.save_pretrained(str(tokenizer_dir))`,
+	} {
+		if !strings.Contains(source, required) {
+			t.Errorf("LMES stager does not contain %q", required)
+		}
+	}
+}
+
+func TestLightEvalStagerCanWriteItsRegistryAsset(t *testing.T) {
+	readOnly := true
+	allowPrivilegeEscalation := false
+	input := &corev1.SecurityContext{
+		AllowPrivilegeEscalation: &allowPrivilegeEscalation,
+		ReadOnlyRootFilesystem:   &readOnly,
+	}
+
+	lightEval := buildStagerContainerSecurityContext("lighteval", input)
+	if lightEval.ReadOnlyRootFilesystem == nil || *lightEval.ReadOnlyRootFilesystem {
+		t.Fatal("LightEval asset stager must be able to write tinyBenchmarks.pkl into the installed registry")
+	}
+	if lightEval.AllowPrivilegeEscalation == nil || *lightEval.AllowPrivilegeEscalation {
+		t.Fatal("LightEval asset stager must preserve the non-privileged container setting")
+	}
+	if input.ReadOnlyRootFilesystem == nil || !*input.ReadOnlyRootFilesystem {
+		t.Fatal("stager security context helper mutated the source context")
+	}
+
+	other := buildStagerContainerSecurityContext("inspect", input)
+	if other.ReadOnlyRootFilesystem == nil || !*other.ReadOnlyRootFilesystem {
+		t.Fatal("non-LightEval stager should preserve the source read-only root filesystem setting")
+	}
+}
+
+func TestIsTerminalEvaluationPod(t *testing.T) {
+	tests := []struct {
+		name string
+		pod  *corev1.Pod
+		want bool
+	}{
+		{name: "missing pod", want: false},
+		{name: "running pod", pod: &corev1.Pod{Status: corev1.PodStatus{Phase: corev1.PodRunning}}, want: false},
+		{name: "succeeded pod", pod: &corev1.Pod{Status: corev1.PodStatus{Phase: corev1.PodSucceeded}}, want: true},
+		{name: "failed pod", pod: &corev1.Pod{Status: corev1.PodStatus{Phase: corev1.PodFailed}}, want: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := isTerminalEvaluationPod(test.pod); got != test.want {
+				t.Fatalf("isTerminalEvaluationPod() = %t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
 func TestInspectStagerUsesRuntimeDocVQADatasetID(t *testing.T) {
 	program, err := fs.ReadFile(curatedAssetStagers, "stagers/inspect.py")
 	if err != nil {
@@ -116,6 +179,9 @@ func TestInspectStagerUsesRuntimeDocVQADatasetID(t *testing.T) {
 	}
 	if strings.Contains(source, `"lmms-lab/DocVQA"`) {
 		t.Fatal("Inspect stager still caches DocVQA under a repository ID the runtime task does not request")
+	}
+	if strings.Contains(source, `"cache_dir": str(CACHE)`) {
+		t.Fatal("Inspect stager overrides the HF cache paths used by the offline adapter")
 	}
 }
 
@@ -570,10 +636,7 @@ func stagePythonAssetBundle(
 	if stagerPodSecurityContext.FSGroup == nil {
 		stagerPodSecurityContext.FSGroup = &groupID
 	}
-	var stagerContainerSecurityContext *corev1.SecurityContext
-	if containerSecurityContext != nil {
-		stagerContainerSecurityContext = containerSecurityContext.DeepCopy()
-	}
+	stagerContainerSecurityContext := buildStagerContainerSecurityContext(adapterID, containerSecurityContext)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: instance.namespace, Labels: map[string]string{"app.kubernetes.io/managed-by": "evalhub-test-e2e", curatedAssetStagerLabel: adapterID}},
 		Spec: corev1.PodSpec{
@@ -626,6 +689,23 @@ func stagePythonAssetBundle(
 		_ = kube.CoreV1().PersistentVolumeClaims(instance.namespace).Delete(cleanupCtx, claimName, metav1.DeleteOptions{})
 	}
 	return claimName, cleanup, nil
+}
+
+func buildStagerContainerSecurityContext(adapterID string, source *corev1.SecurityContext) *corev1.SecurityContext {
+	var result *corev1.SecurityContext
+	if source != nil {
+		result = source.DeepCopy()
+	}
+	if adapterID == "lighteval" {
+		if result == nil {
+			result = &corev1.SecurityContext{}
+		}
+		// The LightEval stager copies tinyBenchmarks.pkl into the installed task
+		// registry before importing it. The mock endpoint uses a read-only rootfs,
+		// but carrying that setting into this staging pod prevents the required copy.
+		result.ReadOnlyRootFilesystem = boolPointer(false)
+	}
+	return result
 }
 
 func waitForCuratedStager(ctx context.Context, kube kubernetes.Interface, namespace, podName string) (*corev1.Pod, string, error) {
@@ -932,6 +1012,7 @@ func runCuratedBenchmarkCase(
 	}()
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
+	var terminalPodSince time.Time
 	for {
 		job, err := jobClient.GetJob(jobID)
 		if err != nil {
@@ -974,6 +1055,21 @@ func runCuratedBenchmarkCase(
 			}
 			return
 		}
+		pod, podErr := findEvaluationAdapterPod(parentCtx, kube, instance.namespace, jobID)
+		if podErr == nil && isTerminalEvaluationPod(pod) {
+			if terminalPodSince.IsZero() {
+				terminalPodSince = time.Now()
+			} else if time.Since(terminalPodSince) >= terminalAdapterPodGracePeriod {
+				logs := getBenchmarkLogs(parentCtx, connection, jobID, 40)
+				t.Fatalf(
+					"Kubernetes adapter pod %s reached terminal phase %q, but EvalHub job %s remained %q for %s: %v\nadapter log tail:\n%s",
+					pod.Name, pod.Status.Phase, jobID, job.Status.State,
+					terminalAdapterPodGracePeriod, job.Status.Message, logs,
+				)
+			}
+		} else {
+			terminalPodSince = time.Time{}
+		}
 		select {
 		case <-jobCtx.Done():
 			logs := getBenchmarkLogs(parentCtx, connection, jobID, 40)
@@ -981,6 +1077,10 @@ func runCuratedBenchmarkCase(
 		case <-ticker.C:
 		}
 	}
+}
+
+func isTerminalEvaluationPod(pod *corev1.Pod) bool {
+	return pod != nil && (pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed)
 }
 
 func providerImageForCase(manifest deploymentManifest, testCase curatedBenchmarkCase) string {

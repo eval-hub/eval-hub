@@ -57,6 +57,17 @@ tokenizer_dir = ROOT / "tokenizer"
 if not (tokenizer_dir / "tokenizer.json").is_file():
     print("Staging the public smoke-test tokenizer", flush=True)
     snapshot_download(repo_id="sshleifer/tiny-gpt2", local_dir=str(tokenizer_dir))
-AutoTokenizer.from_pretrained(str(tokenizer_dir), local_files_only=True)
+tokenizer = AutoTokenizer.from_pretrained(str(tokenizer_dir), local_files_only=True)
+if not tokenizer.chat_template:
+    # The curated JSONSchemaBench case enables apply_chat_template. The tiny
+    # smoke tokenizer has no built-in template, so provide one for the local
+    # OpenAI-compatible endpoint test without depending on a model download.
+    tokenizer.chat_template = (
+        "{% for message in messages %}"
+        "{{ message['role'] }}: {{ message['content'] }}\n"
+        "{% endfor %}"
+        "{% if add_generation_prompt %}assistant: {% endif %}"
+    )
+tokenizer.save_pretrained(str(tokenizer_dir))
 
 print("CURATED_ASSETS_READY", flush=True)

@@ -9,7 +9,6 @@ from urllib.request import urlopen
 from datasets import load_dataset
 
 ROOT = Path("/test_data")
-CACHE = ROOT / "datasets"
 HF_TOKEN = os.environ.get("HF_TOKEN", "").strip()
 CYBERSECEVAL_URL = (
     "https://raw.githubusercontent.com/meta-llama/PurpleLlama/"
@@ -17,7 +16,6 @@ CYBERSECEVAL_URL = (
     "CybersecurityBenchmarks/datasets/prompt_injection/prompt_injection.json"
 )
 ROOT.mkdir(parents=True, exist_ok=True)
-CACHE.mkdir(parents=True, exist_ok=True)
 
 DATASETS = [
     (
@@ -40,7 +38,9 @@ for repo, config, revision, required_split in DATASETS:
         print("Skipping gated cais/hle staging: set HF_TOKEN to include the HLE e2e case", flush=True)
         continue
     print(f"Caching {repo} ({config or 'default'}) at revision {revision}", flush=True)
-    kwargs = {"revision": revision, "cache_dir": str(CACHE)}
+    # Use the standard HF_HOME/HF_HUB_CACHE/HF_DATASETS_CACHE paths configured
+    # on the staging pod; the evaluation adapter uses the same paths offline.
+    kwargs = {"revision": revision}
     if repo == "cais/hle":
         kwargs["token"] = HF_TOKEN
     if config:
