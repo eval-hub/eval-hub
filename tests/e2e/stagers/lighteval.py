@@ -12,7 +12,7 @@ ROOT = Path("/test_data")
 DATA_CACHE = ROOT / "datasets"
 TINY_BENCHMARKS_URL = (
     "https://raw.githubusercontent.com/felipemaiapolo/tinyBenchmarks/"
-    "main/tinyBenchmarks/tinyBenchmarks.pkl"
+    "e9a8b1031b0340571beb6c9ca3a27891be09a8fd/tinyBenchmarks/tinyBenchmarks.pkl"
 )
 DATA_CACHE.mkdir(parents=True, exist_ok=True)
 

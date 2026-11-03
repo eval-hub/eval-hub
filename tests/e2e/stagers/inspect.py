@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 from pathlib import Path
 from urllib.request import urlopen
 
@@ -9,6 +10,7 @@ from datasets import load_dataset
 
 ROOT = Path("/test_data")
 CACHE = ROOT / "datasets"
+HF_TOKEN = os.environ.get("HF_TOKEN", "").strip()
 CYBERSECEVAL_URL = (
     "https://raw.githubusercontent.com/meta-llama/PurpleLlama/"
     "70e7a376f2a310fb89f7ad207685baa69f78107f/"
@@ -32,8 +34,13 @@ DATASETS = [
     ),
 ]
 for repo, config, revision, required_split in DATASETS:
+    if repo == "cais/hle" and not HF_TOKEN:
+        print("Skipping gated cais/hle staging: set HF_TOKEN to include the HLE e2e case", flush=True)
+        continue
     print(f"Caching {repo} ({config or 'default'}) at revision {revision}", flush=True)
     kwargs = {"revision": revision, "cache_dir": str(CACHE)}
+    if repo == "cais/hle":
+        kwargs["token"] = HF_TOKEN
     if config:
         kwargs["name"] = config
     dataset = load_dataset(repo, **kwargs)

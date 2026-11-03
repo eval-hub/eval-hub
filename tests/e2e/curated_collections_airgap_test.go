@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"os"
 	"sort"
 	"strings"
 	"testing"
@@ -24,6 +25,7 @@ import (
 )
 
 const curatedAssetStagerLabel = "evalhub.io/e2e-asset-stager"
+const inspectHLEBenchmarkID = "inspect/hle"
 
 //go:embed stagers/*.py
 var curatedAssetStagers embed.FS
@@ -110,6 +112,50 @@ func TestCuratedBenchmarkMatrixMatchesRepositoryConfigs(t *testing.T) {
 	}
 	if len(matched) != len(curatedBenchmarkMatrix) {
 		t.Fatalf("matched %d benchmark rows, want %d", len(matched), len(curatedBenchmarkMatrix))
+	}
+}
+
+func TestFilterCuratedCasesForHFToken(t *testing.T) {
+	cases := []curatedBenchmarkCase{
+		{collectionID: "knowledge-reasoning-v1", providerID: "inspect", benchmarkID: inspectHLEBenchmarkID},
+		{collectionID: "multimodal-v1", providerID: "inspect", benchmarkID: "inspect/docvqa"},
+		{collectionID: "tool-use-v1", providerID: "inspect", benchmarkID: bfclBenchmarkID},
+	}
+
+	t.Run("without token skips only HLE", func(t *testing.T) {
+		runnable, skipped := filterCuratedCasesForHFToken(cases, false)
+		if len(runnable) != 2 || runnable[0].benchmarkID != "inspect/docvqa" || runnable[1].benchmarkID != bfclBenchmarkID {
+			t.Fatalf("runnable cases = %#v, want DocVQA and BFCL", runnable)
+		}
+		if len(skipped) != 1 || skipped[0].benchmarkID != inspectHLEBenchmarkID {
+			t.Fatalf("skipped cases = %#v, want only HLE", skipped)
+		}
+	})
+
+	t.Run("with token keeps HLE", func(t *testing.T) {
+		runnable, skipped := filterCuratedCasesForHFToken(cases, true)
+		if len(runnable) != len(cases) || len(skipped) != 0 {
+			t.Fatalf("runnable=%d skipped=%d, want runnable=%d skipped=0", len(runnable), len(skipped), len(cases))
+		}
+	})
+}
+
+func TestInspectStagerEnvUsesOptionalSecretReference(t *testing.T) {
+	if env := inspectStagerEnv("inspect", ""); len(env) != 0 {
+		t.Fatalf("Inspect stager env without Secret = %#v, want no additional variables", env)
+	}
+	if env := inspectStagerEnv("lighteval", "hf-secret"); len(env) != 0 {
+		t.Fatalf("non-Inspect stager env = %#v, want no additional variables", env)
+	}
+	env := inspectStagerEnv("inspect", "hf-secret")
+	if len(env) != 1 || env[0].Name != "HF_TOKEN" || env[0].ValueFrom == nil || env[0].ValueFrom.SecretKeyRef == nil {
+		t.Fatalf("Inspect stager env = %#v, want HF_TOKEN from Secret", env)
+	}
+	if got := env[0].ValueFrom.SecretKeyRef.Name; got != "hf-secret" {
+		t.Errorf("Secret name = %q, want hf-secret", got)
+	}
+	if got := env[0].ValueFrom.SecretKeyRef.Key; got != "HF_TOKEN" {
+		t.Errorf("Secret key = %q, want HF_TOKEN", got)
 	}
 }
 
@@ -205,6 +251,15 @@ func runCuratedCollectionsAirgap(
 		t.Skip("none of the curated adapters selected by dev-deploy have benchmark cases in this matrix")
 	}
 
+	hfToken := strings.TrimSpace(os.Getenv("HF_TOKEN"))
+	selectedCases, skippedCases := filterCuratedCasesForHFToken(selectedCases, hfToken != "")
+	for _, testCase := range skippedCases {
+		t.Logf("skipping %s/%s: set HF_TOKEN to stage this gated Hugging Face dataset", testCase.collectionID, testCase.benchmarkID)
+	}
+	if len(selectedCases) == 0 {
+		t.Skip("all selected curated benchmark cases require credentials that are not configured")
+	}
+
 	policies, err := kube.NetworkingV1().NetworkPolicies(instance.namespace).List(parentCtx, metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("list NetworkPolicies in namespace %q: %v", instance.namespace, err)
@@ -219,16 +274,28 @@ func runCuratedCollectionsAirgap(
 	t.Logf("detected restrictive evaluation-job egress policies: %s", strings.Join(policyNames, ", "))
 
 	targetService, err := discoverMockTargetService(parentCtx, kube, instance.namespace)
-	if err != nil || targetService == nil {
-		t.Fatalf("discover ready mock target service: service=%v err=%v", targetService, err)
+	if err != nil {
+		t.Fatalf("discover ready mock target service: %v", err)
+	}
+	if targetService == nil {
+		if manifest.managed {
+			t.Fatal("dev-deploy cluster is missing the required mock target service")
+		}
+		t.Skipf("no ready mock target Service is available in namespace %q", instance.namespace)
 	}
 	targetPort, err := servicePort(targetService, "http", 8000)
 	if err != nil {
 		t.Fatalf("mock target service %s/%s: %v", instance.namespace, targetService.Name, err)
 	}
 	judgeService, err := discoverCuratedMockService(parentCtx, kube, instance.namespace, "evalhub-kind-mock-judge")
-	if err != nil || judgeService == nil {
-		t.Fatalf("discover ready mock judge service: service=%v err=%v", judgeService, err)
+	if err != nil {
+		t.Fatalf("discover ready mock judge service: %v", err)
+	}
+	if judgeService == nil {
+		if manifest.managed {
+			t.Fatal("dev-deploy cluster is missing the required mock judge service")
+		}
+		t.Skipf("no ready mock judge Service is available in namespace %q", instance.namespace)
 	}
 	judgePort, err := servicePort(judgeService, "http", 8000)
 	if err != nil {
@@ -254,6 +321,24 @@ func runCuratedCollectionsAirgap(
 		_ = kube.CoreV1().Secrets(instance.namespace).Delete(cleanupCtx, secretName, metav1.DeleteOptions{})
 	}()
 
+	hfTokenSecretName := ""
+	if hfToken != "" && containsCuratedCase(selectedCases, "inspect", inspectHLEBenchmarkID) {
+		hfTokenSecretName = "eh-e2e-hf-" + mustRandomResourceSuffix(t)
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: hfTokenSecretName, Namespace: instance.namespace, Labels: map[string]string{"app.kubernetes.io/managed-by": "evalhub-test-e2e"}},
+			Type:       corev1.SecretTypeOpaque,
+			Data:       map[string][]byte{"HF_TOKEN": []byte(hfToken)},
+		}
+		if _, err := kube.CoreV1().Secrets(instance.namespace).Create(parentCtx, secret, metav1.CreateOptions{}); err != nil {
+			t.Fatalf("create temporary Hugging Face staging Secret %s/%s: %v", instance.namespace, hfTokenSecretName, err)
+		}
+		defer func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			_ = kube.CoreV1().Secrets(instance.namespace).Delete(cleanupCtx, hfTokenSecretName, metav1.DeleteOptions{})
+		}()
+	}
+
 	// Stage one narrow bundle per adapter, then run that adapter's cases before
 	// moving to the next bundle. This bounds temporary PVC use and ensures each
 	// data-backed benchmark request carries its own test_data_ref.
@@ -269,7 +354,7 @@ func runCuratedCollectionsAirgap(
 			var refs curatedAssetRefs
 			if adapterRequiresStagedAssets(adapterID) {
 				stageCtx, cancel := context.WithTimeout(parentCtx, 35*time.Minute)
-				refs, err = stageCuratedAssets(stageCtx, kube, contextName, instance, adapterID, provider.Runtime.K8s.Image, provider.Runtime.K8s.ImagePullPolicy)
+				refs, err = stageCuratedAssets(stageCtx, kube, contextName, instance, adapterID, provider.Runtime.K8s.Image, provider.Runtime.K8s.ImagePullPolicy, hfTokenSecretName)
 				cancel()
 				if err != nil {
 					t.Fatalf("stage curated %s assets: %v", adapterID, err)
@@ -316,6 +401,7 @@ func stageCuratedAssets(
 	adapterID string,
 	image string,
 	imagePullPolicy string,
+	hfTokenSecretName string,
 ) (curatedAssetRefs, error) {
 	program, storage, err := curatedAssetStagingProgram(adapterID)
 	if err != nil {
@@ -334,6 +420,7 @@ func stageCuratedAssets(
 		imagePullPolicy,
 		storage,
 		program,
+		inspectStagerEnv(adapterID, hfTokenSecretName),
 		imagePullSecrets,
 		podSecurityContext,
 		containerSecurityContext,
@@ -367,6 +454,7 @@ func stagePythonAssetBundle(
 	imagePullPolicy string,
 	storage string,
 	program string,
+	extraEnv []corev1.EnvVar,
 	imagePullSecrets []corev1.LocalObjectReference,
 	podSecurityContext *corev1.PodSecurityContext,
 	containerSecurityContext *corev1.SecurityContext,
@@ -448,14 +536,14 @@ func stagePythonAssetBundle(
 			Containers: []corev1.Container{{
 				Name: "asset-stager", Image: image, ImagePullPolicy: pullPolicy,
 				Command: []string{python, "-c", program},
-				Env: []corev1.EnvVar{
+				Env: append([]corev1.EnvVar{
 					{Name: "HOME", Value: "/test_data/home"}, {Name: "TMPDIR", Value: "/tmp"},
 					{Name: "HF_HOME", Value: "/test_data"}, {Name: "HF_HUB_CACHE", Value: "/test_data/hub"},
 					{Name: "HF_DATASETS_CACHE", Value: "/test_data/datasets"}, {Name: "XDG_CACHE_HOME", Value: "/test_data/cache"},
 					{Name: "HF_HUB_OFFLINE", Value: "0"}, {Name: "HF_DATASETS_OFFLINE", Value: "0"},
 					{Name: "HF_EVALUATE_OFFLINE", Value: "0"}, {Name: "TRANSFORMERS_OFFLINE", Value: "0"},
 					{Name: "PYTHONDONTWRITEBYTECODE", Value: "1"},
-				},
+				}, extraEnv...),
 				VolumeMounts:    []corev1.VolumeMount{{Name: "assets", MountPath: "/test_data"}, {Name: "tmp", MountPath: "/tmp"}},
 				SecurityContext: stagerContainerSecurityContext,
 				Resources:       corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("250m"), corev1.ResourceMemory: resource.MustParse("512Mi")}, Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("4"), corev1.ResourceMemory: resource.MustParse("12Gi")}},
@@ -578,6 +666,39 @@ func casesForAdapter(cases []curatedBenchmarkCase, adapterID string) []curatedBe
 		}
 	}
 	return result
+}
+
+func filterCuratedCasesForHFToken(cases []curatedBenchmarkCase, tokenAvailable bool) (runnable, skipped []curatedBenchmarkCase) {
+	for _, testCase := range cases {
+		if !tokenAvailable && testCase.providerID == "inspect" && testCase.benchmarkID == inspectHLEBenchmarkID {
+			skipped = append(skipped, testCase)
+			continue
+		}
+		runnable = append(runnable, testCase)
+	}
+	return runnable, skipped
+}
+
+func containsCuratedCase(cases []curatedBenchmarkCase, providerID, benchmarkID string) bool {
+	for _, testCase := range cases {
+		if testCase.providerID == providerID && testCase.benchmarkID == benchmarkID {
+			return true
+		}
+	}
+	return false
+}
+
+func inspectStagerEnv(adapterID, hfTokenSecretName string) []corev1.EnvVar {
+	if adapterID != "inspect" || hfTokenSecretName == "" {
+		return nil
+	}
+	return []corev1.EnvVar{{
+		Name: "HF_TOKEN",
+		ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: hfTokenSecretName},
+			Key:                  "HF_TOKEN",
+		}},
+	}}
 }
 
 func curatedBenchmarkCaseKey(testCase curatedBenchmarkCase) string {

@@ -49,7 +49,7 @@ because their category lists differ.
 
 | Adapter | Curated benchmark cases | Staged assets |
 | --- | ---: | --- |
-| Inspect | 5 | HLE, DocVQA, CyberSecEval 2, and the full BFCL cache |
+| Inspect | 5 | HLE (requires optional Hugging Face authentication), DocVQA, CyberSecEval 2, and the full BFCL cache |
 | LM Evaluation Harness | 8 | The exact eight dataset bundles and a local tokenizer |
 | LightEval | 3 | The three task datasets, `tinyBenchmarks.pkl`, and a local tokenizer |
 | RULER | 6 | The selected task inputs and a local tokenizer |
@@ -66,6 +66,14 @@ policy. Jobs use the local mock target and judge services, assert successful
 job and benchmark completion, and do not assert score quality. EvalHub job
 records remain available for review; Kubernetes Jobs and Pods are removed after
 their status and logs are read.
+
+The HLE dataset is gated on Hugging Face. To include the HLE row, first accept
+the dataset's access conditions and provide an authorized token in the local
+`HF_TOKEN` environment variable before running `make test-e2e`. The test stores
+it in a temporary Kubernetes Secret and exposes it only to the Inspect asset
+staging pod; it is not passed to evaluation jobs or printed. The Secret is
+deleted when the test finishes. If `HF_TOKEN` is unset, only the HLE row is
+skipped; the remaining selected matrix cases still run.
 
 Automatic asset preparation requires staging pods to reach Hugging Face and the
 pinned upstream data sources. The policy installed by

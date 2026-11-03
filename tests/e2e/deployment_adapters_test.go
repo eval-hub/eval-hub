@@ -92,9 +92,11 @@ func TestDevDeploySelectedAdapterProviderImages(t *testing.T) {
 						provider := findDeploymentTestProvider(providers, selected.providerID)
 						if provider == nil {
 							t.Fatalf("dev-deploy selected %q, but provider %q is absent from the EvalHub API", selected.adapterID, selected.providerID)
+							return
 						}
 						if provider.Runtime == nil || provider.Runtime.K8s == nil || provider.Runtime.K8s.Image == "" {
 							t.Fatalf("selected provider %q has no Kubernetes image configured: %+v", selected.providerID, provider.Runtime)
+							return
 						}
 						if len(provider.Benchmarks) == 0 {
 							t.Fatalf("selected provider %q exposes no benchmarks", selected.providerID)

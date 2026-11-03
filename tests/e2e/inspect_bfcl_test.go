@@ -185,8 +185,10 @@ func runInspectBFCLAirgapCase(
 	if provider == nil {
 		if manifest.managed {
 			t.Fatalf("dev-deploy selected Inspect, but EvalHub %s/%s has no Kubernetes provider exposing %q", instance.namespace, instance.serviceName, bfclBenchmarkID)
+			return
 		}
 		t.Skipf("EvalHub %s/%s has no Kubernetes Inspect provider exposing %q; this test does not apply", instance.namespace, instance.serviceName, bfclBenchmarkID)
+		return
 	}
 	if err := manifest.verifyProviderImage("inspect", provider.Runtime.K8s.Image); err != nil {
 		t.Fatalf("selected Inspect provider image does not match the deployment manifest: %v", err)
@@ -373,6 +375,7 @@ func runInspectBFCLAirgapCase(
 			adapterImage, adapterImageID := adapterImageDetails(pod)
 			if adapterImage != provider.Runtime.K8s.Image {
 				t.Fatalf("BFCL pod used adapter image %q, provider config specifies %q", adapterImage, provider.Runtime.K8s.Image)
+				return
 			}
 			if adapterImageID == "" {
 				t.Fatalf("completed BFCL pod has no adapter imageID: %+v", pod.Status.ContainerStatuses)
