@@ -66,7 +66,7 @@ The version in `go.mod` is the source of truth for local development. If your lo
 
 `GOTOOLCHAIN=auto` requires an installed Go 1.21+ binary. Contributors on older Go versions should upgrade to Go 1.21 or newer, or use the project container (`podman build` / `podman run` with the repo `Containerfile`; see README), before relying on automatic toolchain switching.
 
-For intentional Go upgrades, follow `CLAUDE.md` (CVE fixing → Updating the golang version) and the `golang-version-update` skill at `.claude/skills/golang-version-update/SKILL.md`. The target version must exist in `registry.access.redhat.com/ubi9/go-toolset` before updating `go.mod`.
+For intentional Go upgrades, follow `CLAUDE.md` (CVE fixing → Updating the golang version) and the `golang-version-update` skill at `.claude/skills/golang-version-update/SKILL.md`. The target version must exist in `registry.access.redhat.com/ubi10/go-toolset` before updating `go.mod`.
 
 ### Version Bumps
 
