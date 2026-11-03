@@ -318,14 +318,17 @@ make clean-container-storage DRY_RUN=true           # print the commands only
 
 Images and volumes used by running containers — the kind node and the local
 registry — are never removed, so the cluster keeps working. Their space is
-released only by `make dev-clean DELETE_CLUSTER=true`. The target reports
-`system df` and free space before and after cleanup and warns when less than
-`MIN_FREE_GB` (default 15) remains. On macOS, podman storage
-lives in the podman machine's disk: grow it with `podman machine stop`,
-`podman machine set --disk-size 200`, and `podman machine start`, then grow the
-guest filesystem (`growpart`/`xfs_growfs` inside the machine). Docker Desktop
-storage is sized in its own settings. `make clean-container-storage-help` lists
-the settings.
+released only by `make dev-clean DELETE_CLUSTER=true`. `VOLUMES=true` prunes
+unused named volumes as well as anonymous ones on both podman and Docker. The
+target reports `system df` and free space before and after cleanup and warns when
+less than `MIN_FREE_GB` (default 15) remains. Free space is read where the
+runtime keeps its storage: on the host, in the podman machine's disk, or, for
+Docker Desktop, in its VM (through a running container, or else the host
+filesystem holding its disk image). On macOS, grow podman storage with
+`podman machine stop`, `podman machine set --disk-size 200`, and
+`podman machine start`, then grow the guest filesystem (`growpart`/`xfs_growfs`
+inside the machine). Docker Desktop storage is sized in its own settings.
+`make clean-container-storage-help` lists the settings.
 
 Run the API demo against the deployed cluster:
 

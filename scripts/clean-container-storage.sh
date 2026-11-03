@@ -53,6 +53,11 @@ Inputs (also accepted as environment variables):
   MIN_FREE_GB        warn when container storage still holds less free space
                      than this afterwards (default: 15)
 
+Free space is measured where the runtime keeps its storage: on the host, inside a
+podman machine, or, for Docker Desktop, inside its VM (through a running
+container, or else the host filesystem holding its disk image). The free-space
+report is skipped, with a warning, when none of those can be read.
+
 Space held by a kind cluster is released only by `make dev-clean
 DELETE_CLUSTER=true`: the node's image store and the local registry live in
 volumes that the running containers keep in use. Temporary localhost:<port> tags
@@ -146,19 +151,107 @@ check_prerequisites() {
   detect_container_runtime
 }
 
-# Free space, in KiB, of the filesystem that holds container storage. Podman on
-# macOS and Docker Desktop keep storage inside a VM, so the runtime's own report
-# is used when the path is not visible from the host; returning non-zero only
-# suppresses the free-space hints.
-storage_free_kb() {
+# Free space, in KiB, measured by the last successful measure_storage_free call,
+# together with a description of what was measured.
+STORAGE_FREE_KB=""
+STORAGE_FREE_LABEL="container storage"
+
+set_storage_free() {
+  local free="$1" label="$2"
+  [[ "$free" =~ ^[0-9]+$ ]] || return 1
+  STORAGE_FREE_KB="$free"
+  STORAGE_FREE_LABEL="$label"
+}
+
+# Host directories where Docker Desktop keeps its VM and disk image. The disk
+# image grows into the host filesystem, so that filesystem bounds how much more
+# container storage Docker Desktop can use.
+docker_desktop_data_dirs() {
+  case "$(uname -s)" in
+    Darwin)
+      printf '%s\n' \
+        "$HOME/Library/Containers/com.docker.docker/Data/vms/0/data" \
+        "$HOME/Library/Containers/com.docker.docker/Data" \
+        "$HOME/.docker/desktop"
+      ;;
+    MINGW*|MSYS*|CYGWIN*)
+      if [[ -n "${LOCALAPPDATA:-}" ]]; then
+        printf '%s\n' "$LOCALAPPDATA/Docker/wsl" "$LOCALAPPDATA/Docker"
+      fi
+      if [[ -n "${PROGRAMDATA:-}" ]]; then
+        printf '%s\n' "$PROGRAMDATA/DockerDesktop"
+      fi
+      ;;
+    *)
+      printf '%s\n' "$HOME/.docker/desktop" \
+        "${XDG_DATA_HOME:-$HOME/.local/share}/docker-desktop"
+      ;;
+  esac
+}
+
+# True when the selected Docker engine is Docker Desktop, which keeps container
+# storage in a disk image sized in its own settings.
+is_docker_desktop() {
+  local dir
+  [[ "$CONTAINER_RUNTIME" == docker ]] || return 1
+  if [[ "$(docker info --format '{{.OperatingSystem}}' 2>/dev/null || true)" == *"Docker Desktop"* ]]; then
+    return 0
+  fi
+  while IFS= read -r dir; do
+    if [[ -d "$dir" ]]; then
+      return 0
+    fi
+  done < <(docker_desktop_data_dirs)
+  return 1
+}
+
+# Ask the daemon for its free space through one of its running containers. Docker
+# Desktop keeps every container in a single VM, and a remote daemon keeps storage
+# on its own host, so the DockerRootDir that `docker info` reports is not always
+# visible here. `df` only reads, so nothing is pulled, started, or changed. The
+# first container whose image ships `df` answers for the whole VM.
+docker_daemon_storage_free() {
+  local container free
+  while IFS= read -r container; do
+    [[ -n "$container" ]] || continue
+    free="$("$CONTAINER_RUNTIME" exec "$container" df -Pk / 2>/dev/null | tail -n 1 | awk '{print $4}')" || continue
+    if set_storage_free "$free" "the $CONTAINER_RUNTIME daemon filesystem"; then
+      return 0
+    fi
+  done < <("$CONTAINER_RUNTIME" ps --quiet 2>/dev/null || true)
+  return 1
+}
+
+# Last resort for Docker Desktop with no running container: report the host
+# filesystem that holds its disk image.
+docker_desktop_storage_free() {
+  local dir free
+  while IFS= read -r dir; do
+    if [[ -d "$dir" ]]; then
+      free="$(df -Pk "$dir" 2>/dev/null | tail -n 1 | awk '{print $4}')" || continue
+      if set_storage_free "$free" "the host filesystem holding Docker Desktop's disk image"; then
+        return 0
+      fi
+    fi
+  done < <(docker_desktop_data_dirs)
+  return 1
+}
+
+# Measure the free space available to container storage into STORAGE_FREE_KB,
+# with STORAGE_FREE_LABEL describing what was measured. Podman on macOS/Windows
+# and Docker Desktop keep storage inside a VM, so the runtime's own report is
+# used when the path is not visible from the host. Returns non-zero only when the
+# free space cannot be determined, which suppresses the free-space hints.
+measure_storage_free() {
   local free path=""
+  STORAGE_FREE_KB=""
+  STORAGE_FREE_LABEL="container storage"
   case "$CONTAINER_RUNTIME" in
     podman)
       if podman machine info >/dev/null 2>&1 &&
         [[ -n "$(podman machine list --format '{{.Name}}' 2>/dev/null | head -n 1)" ]]; then
         free="$(podman machine ssh 'df -Pk /' 2>/dev/null | tail -n 1 | awk '{print $4}')" || return 1
-        [[ "$free" =~ ^[0-9]+$ ]] || return 1
-        printf '%s' "$free"
+        set_storage_free "$free" "the podman machine disk" || return 1
         return 0
       fi
       path="$(podman info --format '{{.Store.GraphRoot}}' 2>/dev/null || true)"
@@ -167,10 +260,23 @@ storage_free_kb() {
       path="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true)"
       ;;
   esac
-  [[ -n "$path" && -d "$path" ]] || return 1
-  free="$(df -Pk "$path" 2>/dev/null | tail -n 1 | awk '{print $4}')" || return 1
-  [[ "$free" =~ ^[0-9]+$ ]] || return 1
-  printf '%s' "$free"
+  if [[ -n "$path" && -d "$path" ]]; then
+    free="$(df -Pk "$path" 2>/dev/null | tail -n 1 | awk '{print $4}')" || return 1
+    set_storage_free "$free" "container storage" || return 1
+    return 0
+  fi
+  [[ "$CONTAINER_RUNTIME" == docker ]] || return 1
+  # Docker Desktop reports a DockerRootDir inside its VM, which does not exist on
+  # the host, so measure the VM through its containers or, when none is running,
+  # the host filesystem that holds its disk image.
+  if docker_daemon_storage_free; then
+    return 0
+  fi
+  if docker_desktop_storage_free; then
+    return 0
+  fi
+  log WARN "Cannot read free space in $CONTAINER_RUNTIME storage: '$path' is not visible from this host and no running container can report it."
+  return 1
 }
 
 free_kb_to_gib() {
@@ -178,11 +284,11 @@ free_kb_to_gib() {
 }
 
 report_storage() {
-  local label="$1" free
+  local label="$1"
   log INFO "$label"
   "$CONTAINER_RUNTIME" system df || log WARN "Could not report $CONTAINER_RUNTIME storage usage."
-  if free="$(storage_free_kb)"; then
-    log INFO "Free space left in container storage: $(free_kb_to_gib "$free")."
+  if measure_storage_free; then
+    log INFO "Free space left in $STORAGE_FREE_LABEL: $(free_kb_to_gib "$STORAGE_FREE_KB")."
   fi
 }
 
@@ -222,36 +328,42 @@ run_prune() {
   if [[ "$DRY_RUN" == true ]]; then
     log INFO "DRY_RUN=true; would run: $CONTAINER_RUNTIME ${args[*]}"
     if [[ "$VOLUMES" == true && "$CONTAINER_RUNTIME" == docker ]]; then
-      log INFO "DRY_RUN=true; would run: docker volume prune -f"
+      log INFO "DRY_RUN=true; would run: docker volume prune --all -f"
     fi
     return 0
   fi
   log INFO "Running: $CONTAINER_RUNTIME ${args[*]}"
   "$CONTAINER_RUNTIME" "${args[@]}" || fail "$CONTAINER_RUNTIME ${args[*]} failed."
-  # Docker's system prune only reclaims anonymous volumes; unused named volumes
-  # need an explicit prune, which is what podman's --volumes already covers.
+  # Docker's system prune only reclaims anonymous volumes, and `docker volume
+  # prune` defaults to anonymous volumes too, so unused named volumes need an
+  # explicit prune with --all. Podman's --volumes already covers both.
   if [[ "$VOLUMES" == true && "$CONTAINER_RUNTIME" == docker ]]; then
-    log INFO "Running: docker volume prune -f"
-    docker volume prune -f || fail "docker volume prune -f failed."
+    log INFO "Running: docker volume prune --all -f"
+    docker volume prune --all -f || fail "docker volume prune --all -f failed."
   fi
 }
 
 # Warn when an image build would still run out of space, and point at the fix for
 # the runtime in use.
 check_remaining_space() {
-  local free min_kb
-  free="$(storage_free_kb)" || return 0
-  min_kb=$((MIN_FREE_GB * 1048576))
-  if ((free < min_kb)); then
-    log WARN "Only $(free_kb_to_gib "$free") free; image builds need at least ${MIN_FREE_GB} GiB of headroom."
-    if [[ "$CONTAINER_RUNTIME" == podman ]] && podman machine info >/dev/null 2>&1; then
-      log WARN "Free more space, or grow the podman machine disk (podman machine stop; podman machine set --disk-size 200; podman machine start) and grow the guest filesystem afterwards (growpart, xfs_growfs)."
-    else
-      log WARN "Free more space, or give $CONTAINER_RUNTIME more disk."
-    fi
+  local min_kb
+  if ! measure_storage_free; then
+    log INFO "Skipping the free-space check because $CONTAINER_RUNTIME storage cannot be measured from this host."
     return 0
   fi
-  log PASS "$(free_kb_to_gib "$free") free in container storage."
+  min_kb=$((MIN_FREE_GB * 1048576))
+  if ((STORAGE_FREE_KB >= min_kb)); then
+    log PASS "$(free_kb_to_gib "$STORAGE_FREE_KB") free in $STORAGE_FREE_LABEL."
+    return 0
+  fi
+  log WARN "Only $(free_kb_to_gib "$STORAGE_FREE_KB") free in $STORAGE_FREE_LABEL; image builds need at least ${MIN_FREE_GB} GiB of headroom."
+  if [[ "$CONTAINER_RUNTIME" == podman ]] && podman machine info >/dev/null 2>&1; then
+    log WARN "Free more space, or grow the podman machine disk (podman machine stop; podman machine set --disk-size 200; podman machine start) and grow the guest filesystem afterwards (growpart, xfs_growfs)."
+  elif is_docker_desktop; then
+    log WARN "Free more space, or raise the disk image size in Docker Desktop's Resources settings and move the disk image to a filesystem with more room."
+  else
+    log WARN "Free more space, or give $CONTAINER_RUNTIME more disk."
+  fi
 }
 
 main() {
