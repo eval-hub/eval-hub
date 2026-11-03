@@ -31,7 +31,10 @@ func (c *Client) ProbeWorkspacesEnabled() (bool, error) {
 		if mlflow.IsNotFound(err) {
 			return false, nil
 		}
-		return false, err
+		// Map the failure like every other call so callers get the typed
+		// *APIError (status, error code, server message) instead of the raw
+		// SDK error.
+		return false, mapError(err)
 	}
 	return info.WorkspacesEnabled, nil
 }
@@ -121,7 +124,15 @@ func (c *Client) EnsureWorkspace() error {
 	// A concurrent creator won the race; confirm the workspace now exists.
 	if IsResourceAlreadyExistsError(err) {
 		_, getErr := c.GetWorkspace(name)
-		return getErr
+		if getErr == nil {
+			return nil
+		}
+		// The conflict is unconfirmed, so report the create error rather than the
+		// secondary lookup failure: only the create error carries the provider's
+		// status, error code, and message (RHAI-17156).
+		c.logger.Warn("MLflow workspace confirmation lookup failed after a create conflict",
+			"workspace", name, "error", getErr)
+		return err
 	}
 	return err
 }
