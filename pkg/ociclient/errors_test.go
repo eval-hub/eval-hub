@@ -28,7 +28,10 @@ func TestRegistryHTTPFailures(t *testing.T) {
 		{"chunked completion", func(c *Client) error {
 			return c.completeBlobUpload(context.Background(), c.registry+"/upload", "sha256:abc")
 		}},
-		{"put manifest", func(c *Client) error { return c.putManifest(context.Background(), "card", []byte("{}")) }},
+		{"put manifest", func(c *Client) error {
+			_, err := c.putManifest(context.Background(), "card", []byte("{}"))
+			return err
+		}},
 		{"auth request", func(c *Client) error { return c.auth.createNewToken(context.Background(), c.registry+"/token") }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

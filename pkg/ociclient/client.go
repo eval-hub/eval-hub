@@ -109,10 +109,10 @@ func (c *Client) PushEvaluationCard(ctx context.Context, jobID string, cardJSON 
 		return nil, fmt.Errorf("marshal manifest: %w", err)
 	}
 
-	if err := c.putManifest(ctx, tag, manifestBytes); err != nil {
+	digest, err := c.putManifest(ctx, tag, manifestBytes)
+	if err != nil {
 		return nil, fmt.Errorf("push manifest: %w", err)
 	}
-	digest := blobDigest(manifestBytes)
 	return &api.OCIArtifactReference{
 		OCIDigest:    digest,
 		OCIReference: strings.TrimPrefix(strings.TrimPrefix(c.registry, "https://"), "http://") + "/" + c.repository + ":" + tag + "@" + digest,
@@ -347,21 +347,30 @@ func (c *Client) completeBlobUpload(ctx context.Context, uploadURL, digest strin
 }
 
 // putManifest publishes the artifact manifest under the given tag in the target repository.
-func (c *Client) putManifest(ctx context.Context, tag string, manifestJSON []byte) error {
+// It verifies the registry's SHA-256 digest, falling back to the local digest when the header is absent.
+func (c *Client) putManifest(ctx context.Context, tag string, manifestJSON []byte) (string, error) {
 	req, err := c.newRequestWithBody(ctx, http.MethodPut, c.registryURL("/v2/"+c.repository+"/manifests/"+tag), manifestJSON)
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("Content-Type", MediaTypeImageManifest)
 	resp, err := c.do(req)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusCreated {
-		return registryHTTPError("put manifest", resp)
+		return "", registryHTTPError("put manifest", resp)
 	}
-	return nil
+	expected := blobDigest(manifestJSON)
+	digest := resp.Header.Get("Docker-Content-Digest")
+	if digest == "" {
+		return expected, nil
+	}
+	if digest != expected {
+		return "", fmt.Errorf("registry manifest digest %q does not match expected %q", digest, expected)
+	}
+	return digest, nil
 }
 
 // registryURL joins the configured registry origin with a Distribution API path.

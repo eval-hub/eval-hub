@@ -237,6 +237,39 @@ func TestManagerExportJoinsTargetErrors(t *testing.T) {
 	}
 }
 
+type nilResultTarget struct {
+	name Target
+}
+
+func (t *nilResultTarget) Target() Target { return t.name }
+func (t *nilResultTarget) Enabled(_ *api.EvaluationJobResource) bool {
+	return true
+}
+func (t *nilResultTarget) Export(context.Context, *api.EvaluationJobResource, *cards.EvaluationCard) (*ExportResult, error) {
+	return nil, nil
+}
+
+func TestManagerHandlesNilTargetResult(t *testing.T) {
+	job := &api.EvaluationJobResource{Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}}}
+	card := &cards.EvaluationCard{}
+	for _, targetName := range []Target{TargetMLflow, TargetOCI} {
+		t.Run(string(targetName), func(t *testing.T) {
+			manager := &Manager{targets: []ExportTarget{&nilResultTarget{name: targetName}}}
+			result, err := manager.Export(context.Background(), job, card)
+			if err == nil || !strings.Contains(err.Error(), "export target returned no result") {
+				t.Fatalf("result=%#v, err=%v; want nil-result error", result, err)
+			}
+			if targetName == TargetOCI {
+				if result.OCIError == nil || !strings.Contains(result.OCIError.Error(), "export target returned no result") {
+					t.Fatalf("OCI error = %v, want nil-result error", result.OCIError)
+				}
+			} else if result.OCIError != nil {
+				t.Fatalf("unexpected OCI error for MLflow target: %v", result.OCIError)
+			}
+		})
+	}
+}
+
 func TestMLflowTargetExportNilClient(t *testing.T) {
 	target := NewMLflowTarget(nil, nil, nil)
 	if target.Target() != TargetMLflow {

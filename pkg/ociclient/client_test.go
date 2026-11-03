@@ -103,6 +103,69 @@ func TestPushEvaluationCard(t *testing.T) {
 	}
 }
 
+func TestPushEvaluationCardRegistryDigest(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name    string
+		header  string
+		wantErr bool
+	}{
+		{name: "matching", header: "matching"},
+		{name: "absent"},
+		{name: "mismatch", header: blobDigest([]byte("different manifest")), wantErr: true},
+		{name: "malformed", header: "not-a-digest", wantErr: true},
+		{name: "unsupported algorithm", header: "unknown:1234", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var expected string
+			srv, httpClient := startTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == "/v2":
+					w.WriteHeader(http.StatusOK)
+				case r.Method == http.MethodHead && strings.HasPrefix(r.URL.Path, "/v2/org/repo/blobs/"):
+					w.WriteHeader(http.StatusOK)
+				case r.Method == http.MethodPut && r.URL.Path == "/v2/org/repo/manifests/evaluation-card-job-1":
+					body, err := io.ReadAll(r.Body)
+					if err != nil {
+						t.Error(err)
+						w.WriteHeader(http.StatusBadRequest)
+						return
+					}
+					expected = blobDigest(body)
+					if tc.header == "matching" {
+						w.Header().Set("Docker-Content-Digest", expected)
+					} else if tc.header != "" {
+						w.Header().Set("Docker-Content-Digest", tc.header)
+					}
+					w.WriteHeader(http.StatusCreated)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			client, err := NewClient(srv.URL, "org/repo", Credentials{}, httpClient)
+			if err != nil {
+				t.Fatal(err)
+			}
+			artifact, err := client.PushEvaluationCard(context.Background(), "job-1", []byte(`{"card_version":"1.0"}`), nil)
+			if tc.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "registry manifest digest") || artifact != nil {
+					t.Fatalf("expected digest rejection without artifact, got %#v, %v", artifact, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantReference := strings.TrimPrefix(srv.URL, "http://") + "/org/repo:evaluation-card-job-1@" + expected
+			if artifact == nil || artifact.OCIDigest != expected || artifact.OCIReference != wantReference {
+				t.Fatalf("artifact = %#v, want digest %s and reference %s", artifact, expected, wantReference)
+			}
+		})
+	}
+}
+
 func TestPushEvaluationCardSkipsExistingBlob(t *testing.T) {
 	t.Parallel()
 
@@ -499,7 +562,7 @@ func TestPutManifestRetriesAuthWithReplayableBody(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
-	if err := client.putManifest(context.Background(), "evaluation-card-job-1", []byte(`{"schemaVersion":2}`)); err != nil {
+	if _, err := client.putManifest(context.Background(), "evaluation-card-job-1", []byte(`{"schemaVersion":2}`)); err != nil {
 		t.Fatalf("putManifest() err = %v", err)
 	}
 	if putAttempts != 2 {
@@ -655,7 +718,7 @@ func TestPutManifestError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient() err = %v", err)
 	}
-	if err := client.putManifest(context.Background(), "tag-1", []byte(`{}`)); err == nil {
+	if _, err := client.putManifest(context.Background(), "tag-1", []byte(`{}`)); err == nil {
 		t.Fatal("expected put manifest error")
 	}
 }

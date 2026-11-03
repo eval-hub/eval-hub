@@ -89,6 +89,9 @@ func (m *Manager) Export(ctx context.Context, job *api.EvaluationJobResource, ca
 			continue
 		}
 		outcome, err := target.Export(ctx, job, card)
+		if err == nil && outcome == nil {
+			err = fmt.Errorf("export target returned no result")
+		}
 		if err != nil {
 			if target.Target() == TargetOCI {
 				result.OCIError = err
