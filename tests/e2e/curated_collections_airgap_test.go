@@ -1029,10 +1029,17 @@ func runCuratedBenchmarkCase(
 			jobFinished = true
 			pod, podErr := findEvaluationAdapterPod(parentCtx, kube, instance.namespace, jobID)
 			image, imageID := adapterImageDetails(pod)
+			if job.Status.State != api.OverallStateCompleted {
+				logs := getBenchmarkLogs(parentCtx, connection, jobID, 40)
+				t.Fatalf(
+					"disconnected job %s ended in state %q: %v\nadapter image=%q imageID=%q pod lookup error=%v\nadapter log tail:\n%s",
+					jobID, job.Status.State, job.Status.Message, image, imageID, podErr, logs,
+				)
+			}
 			if manifest.managed {
 				logDeployedAdapter(t, manifest, adapterIDForProvider(testCase.providerID))
 				if podErr != nil {
-					t.Fatalf("read adapter pod image provenance: %v", podErr)
+					t.Fatalf("completed job %s: read adapter pod image provenance: %v", jobID, podErr)
 				}
 				if pod == nil {
 					t.Fatal("completed benchmark has no observable adapter pod; cannot verify the deployed image")
@@ -1047,10 +1054,6 @@ func runCuratedBenchmarkCase(
 			t.Logf("adapter runtime: provider=%s image=%s imageID=%s", testCase.providerID, image, imageID)
 			if podErr != nil {
 				t.Logf("could not read adapter pod image provenance: %v", podErr)
-			}
-			if job.Status.State != api.OverallStateCompleted {
-				logs := getBenchmarkLogs(parentCtx, connection, jobID, 40)
-				t.Fatalf("disconnected job %s ended in state %q: %v\nadapter log tail:\n%s", jobID, job.Status.State, job.Status.Message, logs)
 			}
 			if len(job.Status.Benchmarks) != 1 {
 				t.Fatalf("job %s completed with %d benchmark statuses, want 1: %+v", jobID, len(job.Status.Benchmarks), job.Status.Benchmarks)
