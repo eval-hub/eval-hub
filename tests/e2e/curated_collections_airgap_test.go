@@ -26,6 +26,7 @@ import (
 
 const curatedAssetStagerLabel = "evalhub.io/e2e-asset-stager"
 const inspectHLEBenchmarkID = "inspect/hle"
+const lightEvalGPQABenchmarkID = "gpqa:diamond"
 const terminalAdapterPodGracePeriod = time.Minute
 
 //go:embed stagers/*.py
@@ -232,21 +233,22 @@ func TestCuratedBenchmarkMatrixMatchesRepositoryConfigs(t *testing.T) {
 func TestFilterCuratedCasesForHFToken(t *testing.T) {
 	cases := []curatedBenchmarkCase{
 		{collectionID: "knowledge-reasoning-v1", providerID: "inspect", benchmarkID: inspectHLEBenchmarkID},
+		{collectionID: "knowledge-reasoning-v1", providerID: "lighteval", benchmarkID: lightEvalGPQABenchmarkID},
 		{collectionID: "multimodal-v1", providerID: "inspect", benchmarkID: "inspect/docvqa"},
 		{collectionID: "tool-use-v1", providerID: "inspect", benchmarkID: bfclBenchmarkID},
 	}
 
-	t.Run("without token skips only HLE", func(t *testing.T) {
+	t.Run("without token skips gated HLE and GPQA", func(t *testing.T) {
 		runnable, skipped := filterCuratedCasesForHFToken(cases, false)
 		if len(runnable) != 2 || runnable[0].benchmarkID != "inspect/docvqa" || runnable[1].benchmarkID != bfclBenchmarkID {
 			t.Fatalf("runnable cases = %#v, want DocVQA and BFCL", runnable)
 		}
-		if len(skipped) != 1 || skipped[0].benchmarkID != inspectHLEBenchmarkID {
-			t.Fatalf("skipped cases = %#v, want only HLE", skipped)
+		if len(skipped) != 2 || skipped[0].benchmarkID != inspectHLEBenchmarkID || skipped[1].benchmarkID != lightEvalGPQABenchmarkID {
+			t.Fatalf("skipped cases = %#v, want HLE and GPQA", skipped)
 		}
 	})
 
-	t.Run("with token keeps HLE", func(t *testing.T) {
+	t.Run("with token keeps gated HLE and GPQA", func(t *testing.T) {
 		runnable, skipped := filterCuratedCasesForHFToken(cases, true)
 		if len(runnable) != len(cases) || len(skipped) != 0 {
 			t.Fatalf("runnable=%d skipped=%d, want runnable=%d skipped=0", len(runnable), len(skipped), len(cases))
@@ -254,22 +256,27 @@ func TestFilterCuratedCasesForHFToken(t *testing.T) {
 	})
 }
 
-func TestInspectStagerEnvUsesOptionalSecretReference(t *testing.T) {
-	if env := inspectStagerEnv("inspect", ""); len(env) != 0 {
+func TestHFStagerEnvUsesOptionalSecretReference(t *testing.T) {
+	if env := hfStagerEnv("inspect", ""); len(env) != 0 {
 		t.Fatalf("Inspect stager env without Secret = %#v, want no additional variables", env)
 	}
-	if env := inspectStagerEnv("lighteval", "hf-secret"); len(env) != 0 {
-		t.Fatalf("non-Inspect stager env = %#v, want no additional variables", env)
+	if env := hfStagerEnv("lighteval", ""); len(env) != 0 {
+		t.Fatalf("LightEval stager env without Secret = %#v, want no additional variables", env)
 	}
-	env := inspectStagerEnv("inspect", "hf-secret")
-	if len(env) != 1 || env[0].Name != "HF_TOKEN" || env[0].ValueFrom == nil || env[0].ValueFrom.SecretKeyRef == nil {
-		t.Fatalf("Inspect stager env = %#v, want HF_TOKEN from Secret", env)
+	if env := hfStagerEnv("lm-evaluation-harness", "hf-secret"); len(env) != 0 {
+		t.Fatalf("LM Evaluation Harness stager env = %#v, want no additional variables", env)
 	}
-	if got := env[0].ValueFrom.SecretKeyRef.Name; got != "hf-secret" {
-		t.Errorf("Secret name = %q, want hf-secret", got)
-	}
-	if got := env[0].ValueFrom.SecretKeyRef.Key; got != "HF_TOKEN" {
-		t.Errorf("Secret key = %q, want HF_TOKEN", got)
+	for _, adapterID := range []string{"inspect", "lighteval"} {
+		env := hfStagerEnv(adapterID, "hf-secret")
+		if len(env) != 1 || env[0].Name != "HF_TOKEN" || env[0].ValueFrom == nil || env[0].ValueFrom.SecretKeyRef == nil {
+			t.Fatalf("%s stager env = %#v, want HF_TOKEN from Secret", adapterID, env)
+		}
+		if got := env[0].ValueFrom.SecretKeyRef.Name; got != "hf-secret" {
+			t.Errorf("Secret name = %q, want hf-secret", got)
+		}
+		if got := env[0].ValueFrom.SecretKeyRef.Key; got != "HF_TOKEN" {
+			t.Errorf("Secret key = %q, want HF_TOKEN", got)
+		}
 	}
 }
 
@@ -436,7 +443,7 @@ func runCuratedCollectionsAirgap(
 	}()
 
 	hfTokenSecretName := ""
-	if hfToken != "" && containsCuratedCase(selectedCases, "inspect", inspectHLEBenchmarkID) {
+	if hfToken != "" && (containsCuratedCase(selectedCases, "inspect", inspectHLEBenchmarkID) || containsCuratedCase(selectedCases, "lighteval", lightEvalGPQABenchmarkID)) {
 		hfTokenSecretName = "eh-e2e-hf-" + mustRandomResourceSuffix(t)
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: hfTokenSecretName, Namespace: instance.namespace, Labels: map[string]string{"app.kubernetes.io/managed-by": "evalhub-test-e2e"}},
@@ -534,7 +541,7 @@ func stageCuratedAssets(
 		imagePullPolicy,
 		storage,
 		program,
-		inspectStagerEnv(adapterID, hfTokenSecretName),
+		hfStagerEnv(adapterID, hfTokenSecretName),
 		imagePullSecrets,
 		podSecurityContext,
 		containerSecurityContext,
@@ -798,7 +805,7 @@ func casesForAdapter(cases []curatedBenchmarkCase, adapterID string) []curatedBe
 
 func filterCuratedCasesForHFToken(cases []curatedBenchmarkCase, tokenAvailable bool) (runnable, skipped []curatedBenchmarkCase) {
 	for _, testCase := range cases {
-		if !tokenAvailable && testCase.providerID == "inspect" && testCase.benchmarkID == inspectHLEBenchmarkID {
+		if !tokenAvailable && ((testCase.providerID == "inspect" && testCase.benchmarkID == inspectHLEBenchmarkID) || (testCase.providerID == "lighteval" && testCase.benchmarkID == lightEvalGPQABenchmarkID)) {
 			skipped = append(skipped, testCase)
 			continue
 		}
@@ -816,8 +823,8 @@ func containsCuratedCase(cases []curatedBenchmarkCase, providerID, benchmarkID s
 	return false
 }
 
-func inspectStagerEnv(adapterID, hfTokenSecretName string) []corev1.EnvVar {
-	if adapterID != "inspect" || hfTokenSecretName == "" {
+func hfStagerEnv(adapterID, hfTokenSecretName string) []corev1.EnvVar {
+	if (adapterID != "inspect" && adapterID != "lighteval") || hfTokenSecretName == "" {
 		return nil
 	}
 	return []corev1.EnvVar{{

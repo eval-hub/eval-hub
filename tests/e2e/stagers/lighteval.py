@@ -1,6 +1,7 @@
 """Prepare LightEval's selected dataset caches and eager registry file."""
 
 import importlib.util
+import os
 import shutil
 from pathlib import Path
 from urllib.request import urlopen
@@ -10,6 +11,7 @@ from transformers import AutoTokenizer
 
 ROOT = Path("/test_data")
 DATA_CACHE = ROOT / "datasets"
+HF_TOKEN = os.environ.get("HF_TOKEN", "").strip()
 TINY_BENCHMARKS_URL = (
     "https://raw.githubusercontent.com/felipemaiapolo/tinyBenchmarks/"
     "e9a8b1031b0340571beb6c9ca3a27891be09a8fd/tinyBenchmarks/tinyBenchmarks.pkl"
@@ -38,6 +40,9 @@ import main as lighteval_adapter  # noqa: E402
 configs = lighteval_adapter._task_configs()
 TASKS = ("lcb:codegeneration_v6", "gpqa:diamond", "math_500")
 for task_name in TASKS:
+    if task_name == "gpqa:diamond" and not HF_TOKEN:
+        print("Skipping gated LightEval GPQA staging: set HF_TOKEN to include the GPQA e2e case", flush=True)
+        continue
     config = configs.get(task_name)
     if config is None:
         raise RuntimeError(f"installed LightEval registry has no task {task_name!r}")
@@ -48,6 +53,8 @@ for task_name in TASKS:
         raise RuntimeError(f"LightEval task {task_name!r} has no Hugging Face repository")
     print(f"Caching LightEval task {task_name}: {repo}/{subset or 'default'}", flush=True)
     kwargs = {"cache_dir": str(DATA_CACHE)}
+    if task_name == "gpqa:diamond":
+        kwargs["token"] = HF_TOKEN
     if subset:
         kwargs["name"] = subset
     if revision:

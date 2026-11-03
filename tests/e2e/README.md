@@ -67,13 +67,14 @@ job and benchmark completion, and do not assert score quality. EvalHub job
 records remain available for review; Kubernetes Jobs and Pods are removed after
 their status and logs are read.
 
-The HLE dataset is gated on Hugging Face. To include the HLE row, first accept
-the dataset's access conditions and provide an authorized token in the local
-`HF_TOKEN` environment variable before running `make test-e2e`. The test stores
-it in a temporary Kubernetes Secret and exposes it only to the Inspect asset
-staging pod; it is not passed to evaluation jobs or printed. The Secret is
-deleted when the test finishes. If `HF_TOKEN` is unset, only the HLE row is
-skipped; the remaining selected matrix cases still run.
+The HLE and LightEval GPQA datasets are gated on Hugging Face. To include these
+rows, first accept each dataset's access conditions and provide an authorized
+token in the local `HF_TOKEN` environment variable before running
+`make test-e2e`. The test stores it in a temporary Kubernetes Secret and
+exposes it only to the Inspect and LightEval asset-staging pods as needed; it
+is not passed to evaluation jobs or printed. The Secret is deleted when the
+test finishes. If `HF_TOKEN` is unset, the HLE and GPQA rows are skipped, while
+the remaining selected matrix cases still run.
 
 Automatic asset preparation requires staging pods to reach Hugging Face and the
 pinned upstream data sources. The policy installed by
