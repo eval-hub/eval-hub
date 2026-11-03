@@ -4,6 +4,8 @@ updates:
     directory: /
     schedule:
       interval: daily
+    labels:
+      - dependencies
     groups:
       # Composite actions (e.g. codeql-action/init vs analyze) are separate
       # Dependabot deps; group by prefix so related bumps share one PR.
@@ -21,6 +23,15 @@ updates:
     directory: /
     schedule:
       interval: daily
+    labels:
+      - dependencies
+    # NOTE: Dependabot cannot be told to leave the `go` directive in go.mod
+    # alone. The updater runs `go get`/`go mod tidy`, which raise the `go`
+    # directive whenever an updated dependency (direct or transitive) declares a
+    # higher minimum Go version; `ignore` rules only match dependency names, so
+    # there is no supported opt-out (dependabot/dependabot-core#15714). The
+    # `go-directive-guard` job in .github/workflows/ci.yml rejects such bumps
+    # unless the pull request carries the `go-version-bump` label. See CLAUDE.md.
     groups:
       golang-dependencies:
         # for now we only do this for version updates
@@ -34,6 +45,8 @@ updates:
     directory: /
     schedule:
       interval: daily
+    labels:
+      - dependencies
     groups:
       npm-dependencies:
         # for now we only do this for version updates

@@ -95,6 +95,73 @@ jobs:
         make documentation
         git diff --exit-code || (echo "API documentation is not generated. Run 'make documentation' locally." && exit 1)
 
+  go-directive-guard:
+    name: Go directive guard
+    # Dependabot cannot be configured to skip Go module updates that would raise
+    # the `go` directive in go.mod (dependabot/dependabot-core#15714): the
+    # updater runs `go get`, which raises it whenever a dependency needs a newer
+    # Go version. Block such bumps unless a maintainer acknowledged them with the
+    # `go-version-bump` label. See CLAUDE.md and .github/dependabot.yml.
+    if: >-
+      github.event_name == 'pull_request' &&
+      !contains(github.event.pull_request.labels.*.name, 'go-version-bump')
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+      with:
+        egress-policy: audit
+
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+
+    - name: Reject unintended changes to the go and toolchain directives
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        # Prints "<go directive>|<toolchain directive>", using "<none>" for a
+        # directive that is absent from go.mod.
+        read_directives() {
+          awk '/^go /{g=$2} /^toolchain /{t=$2} \
+               END{printf "%s|%s", (g==""?"<none>":g), (t==""?"<none>":t)}'
+        }
+
+        if git cat-file -e "${BASE_SHA}:go.mod" 2>/dev/null; then
+          previous=$(git show "${BASE_SHA}:go.mod" | read_directives)
+        else
+          previous='<none>|<none>'
+        fi
+        current=$(read_directives < go.mod)
+
+        echo "base branch (${BASE_SHA}): go|toolchain = ${previous}"
+        echo "this pull request:          go|toolchain = ${current}"
+
+        if [ "${current}" != "${previous}" ]; then
+          {
+            echo "::error::The go/toolchain directive in go.mod changed: ${previous} -> ${current}"
+            echo ""
+            echo "Dependabot raises the 'go' directive automatically when an updated"
+            echo "dependency declares a higher minimum Go version, and it cannot be"
+            echo "suppressed in .github/dependabot.yml"
+            echo "(https://github.com/dependabot/dependabot-core/issues/15714)."
+            echo ""
+            echo "A Go version bump must be a dedicated pull request that follows"
+            echo "CLAUDE.md: the target version must exist in"
+            echo "registry.access.redhat.com/ubi10/go-toolset, the Containerfile"
+            echo "go-toolset tag must be updated with it, and the build and tests must"
+            echo "be re-run against that toolset."
+            echo ""
+            echo "If this bump is intentional, add the 'go-version-bump' label to this"
+            echo "pull request, or drop the go.mod hunk and keep only the dependency"
+            echo "updates."
+          } >&2
+          exit 1
+        fi
+
   security-scan:
     name: Gosec Security Scanner
     runs-on: ubuntu-latest

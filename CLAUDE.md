@@ -56,6 +56,17 @@ The go.mod must not be updated until the same version exists in go-toolset.
 If there are other files in the repository that require updating due to new golang version then mention them in the PR.
 Use `go-version-file: "go.mod"` in the github actions where possible.
 
+Dependabot cannot be configured to leave the `go` directive in `go.mod` alone: the
+updater runs `go get`, which raises it whenever an updated dependency declares a
+higher minimum Go version, and `ignore` rules only match dependency names
+(dependabot/dependabot-core#15714). The `go-directive-guard` job in
+`.github/workflows/ci.yml` therefore fails any pull request that changes the `go` or
+`toolchain` directive in `go.mod`, including the Dependabot ones. An intentional Go
+bump — the gated procedure above, targeting the version available in
+`registry.access.redhat.com/ubi10/go-toolset` — must add the `go-version-bump` label
+to its pull request to bypass the guard. Only add that label to a dedicated Go bump
+PR, never to a dependency update that happens to carry a `go` directive change.
+
 Use the project skill [`.claude/skills/golang-version-update/SKILL.md`](.claude/skills/golang-version-update/SKILL.md)
 for the full procedure (registry check, file updates, `go mod tidy`, tests, and PR).
 
