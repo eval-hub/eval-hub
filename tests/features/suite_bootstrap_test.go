@@ -2,7 +2,6 @@ package features
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -420,17 +419,15 @@ func checkModelEndpoint() {
 	fmt.Printf("Checking model endpoint connectivity: %s\n", modelURL)
 
 	// Prefer FVT_CA_CERT_PATH when present. Only skip TLS verification for this
-	// preflight when the private CA is unset or unreadable (Jenkins runners
-	// that do not yet have the MaaS CA). EvalHub API requests still verify TLS.
+	// preflight when the private CA is unset (Jenkins runners that do not yet
+	// have the MaaS CA). An unreadable FVT_CA_CERT_PATH fails earlier in
+	// setUpTestConf. EvalHub API requests still verify TLS.
 	transport, err := testhelpers.NewFVTTransport()
 	if err != nil {
-		logDebug("WARNING: FVT_CA_CERT_PATH unavailable (%v); temporarily skipping TLS verification for model preflight\n", err)
-		transport = http.DefaultTransport.(*http.Transport).Clone()
-		transport.TLSClientConfig = &tls.Config{
-			MinVersion:         tls.VersionTLS12,
-			InsecureSkipVerify: true, //nolint:gosec
-		}
-	} else if os.Getenv("FVT_CA_CERT_PATH") == "" {
+		// Defensive: setUpTestConf normally fails first when the CA is bad.
+		panic(logError(err))
+	}
+	if os.Getenv("FVT_CA_CERT_PATH") == "" {
 		logDebug("WARNING: FVT_CA_CERT_PATH not set; temporarily skipping TLS verification for model preflight\n")
 		transport.TLSClientConfig.InsecureSkipVerify = true //nolint:gosec
 	}

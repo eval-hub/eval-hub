@@ -40,11 +40,13 @@ not configure certificate trust inside evaluation job containers or the
 separate MLflow and OCI clients.
 
 Temporary exception for the `MODEL_URL` preflight only: if `FVT_CA_CERT_PATH` is
-unset or the CA file cannot be read, that connectivity check skips TLS
-verification so provider/benchmark scenarios are not skipped on runners that
-do not yet trust the model endpoint CA (for example Jenkins). Prefer
-configuring `FVT_CA_CERT_PATH` so the preflight verifies TLS like the other
-clients; remove the bypass once the runner CA is in place.
+unset, that connectivity check skips TLS verification so provider/benchmark
+scenarios are not skipped on runners that do not yet trust the model endpoint
+CA (for example Jenkins). If the path is set but the CA file is unreadable,
+suite setup (`setUpTestConf`) fails before the preflight runs — fix the file or
+unset the path to use the temporary bypass. Prefer configuring a readable
+`FVT_CA_CERT_PATH` so the preflight verifies TLS like the other clients; remove
+the bypass once the runner CA is in place.
 
 ### Model Overrides (Required)
 
