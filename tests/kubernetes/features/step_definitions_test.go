@@ -2,7 +2,6 @@ package features
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"net/http"
 	"os"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/cucumber/godog"
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -85,11 +85,9 @@ func newTestContext() *testContext {
 		namespace = "default"
 	}
 
-	// Create HTTP client with custom transport
-	// Skip TLS verification if SKIP_TLS_VERIFY is set (for self-signed certs)
-	transport := &http.Transport{}
-	if os.Getenv("SKIP_TLS_VERIFY") == "true" {
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	transport, err := testhelpers.NewFVTTransport()
+	if err != nil {
+		panic(fmt.Errorf("configure FVT TLS: %w", err))
 	}
 
 	tc := &testContext{
@@ -136,7 +134,7 @@ func newTestContext() *testContext {
 			}
 			return fmt.Sprintf("✅ SET (%d chars)", len(authToken))
 		}())
-		fmt.Printf("  SKIP_TLS_VERIFY: %s\n\n", os.Getenv("SKIP_TLS_VERIFY"))
+		fmt.Printf("  FVT_CA_CERT_PATH: %s\n\n", os.Getenv("FVT_CA_CERT_PATH"))
 		configPrinted = true
 	}
 

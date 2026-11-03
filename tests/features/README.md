@@ -23,6 +23,21 @@ export AUTH_TOKEN="your-token"
 export X_TENANT="tenant-namespace"
 ```
 
+For a remote cluster with a private certificate authority, obtain its CA
+certificate bundle from the cluster administrator and set:
+
+```bash
+export FVT_CA_CERT_PATH="/absolute/path/to/cluster-ca.pem"
+```
+
+The PEM bundle is added to system trust for API requests, metrics scrapes,
+MCP backend requests, and the `MODEL_URL` connectivity check. Certificate chain
+and hostname validation remain enabled. An unreadable file or a bundle without
+PEM certificates fails suite setup. With this setting unset, system trust is
+used. The tests do not read the CA from kubeconfig automatically. This setting
+does not configure certificate trust inside evaluation job containers or the
+separate MLflow and OCI clients.
+
 ### Model Overrides (Required)
 
 Set the model fields in the test payloads using environment variables:
@@ -163,6 +178,16 @@ go test ./tests/features -run '^TestBenchmarkProviderFixtureCounts$'
 | `@git` | Evaluation jobs that clone offline test data from a git repository (`evaluation_jobs.feature`). Defaults: `TEST_DATA_GIT_URL`=`https://github.com/eval-hub/eval-hub`, `TEST_DATA_GIT_REF`=`main`, `TEST_DATA_GIT_SUB_PATH`=`tests/git-testdata` (`arc_easy` + tokenizer; see `tests/git-testdata/README.md`). The main happy-path job runs two git benchmarks (`arc_easy` + nested `truthfulqa_mc1` via `TEST_DATA_GIT_NESTED_SUB_PATH`, default `tests/git-testdata/staging_sub_path`) and asserts `resolved_sha` is absent on create then populated after completion. Optional: `TEST_DATA_GIT_TAG_REF`; `TEST_DATA_GIT_SHA_REF` / `TEST_DATA_GIT_SHA_URL` (SHA scenario defaults to `TEST_DATA_GIT_REF`/`main`; set `TEST_DATA_GIT_SHA_REF` to a real hex commit SHA for commit-checkout coverage), blocked-host via `TEST_DATA_GIT_BLOCKED_URL`, bad-ref via `TEST_DATA_GIT_BAD_REF`, http+secret_ref negative via `TEST_DATA_GIT_HTTP_URL`, missing sub_path via `TEST_DATA_GIT_BAD_SUB_PATH`. Job-wait negatives (bad ref, missing sub_path) poll every 10s for up to 5m (same as missing-PVC); API-only negatives return 400 immediately. Requires cluster egress to the git host (or an internal mirror). Until `tests/git-testdata` is on the target ref, set `TEST_DATA_GIT_REF` accordingly. Opt in with `GODOG_TAGS="@git"`. |
 | `@hf` | Evaluation jobs that download offline test data from Hugging Face Hub (`evaluation_jobs.feature`). Defaults: `TEST_DATA_HF_REPO_ID`=`eval-hub-test/evalhub-offline-testdata`, `TEST_DATA_HF_REVISION`=`main`, nested `truthfulqa_mc1` via `TEST_DATA_HF_NESTED_SUB_PATH`=`staging_sub_path` (public mirror of `tests/git-testdata` on HF). One happy-path job runs `arc_easy` (full repo, branch revision) + `truthfulqa_mc1` (nested `sub_path`) and asserts `resolved_sha` is absent on create then populated after completion; set `TEST_DATA_HF_SHA_REVISION` to a real hex commit SHA to exercise pinned revision on `arc_easy` without a separate scenario. Runtime failures: one job covers invalid `repo_id` + bad `revision`; missing `sub_path` stays a separate job. Optional env: `TEST_DATA_HF_BAD_REPO_ID` (default `eval-hub-test/invalid-db`), `TEST_DATA_HF_BAD_REVISION`, `TEST_DATA_HF_BAD_SUB_PATH`. Job-wait negatives poll every 10s for up to 5m; API-only negatives return 400 immediately. Requires cluster egress to huggingface.co (or configure the init image with `HF_ENDPOINT` for a mirror). Opt in with `GODOG_TAGS="@hf"`. |
 | `@gha-wheel-sanity` | Local-runtime wheel validation scenario run by `scripts/gha_wheel_sanity_test.sh` during GHA wheel checks |
+
+### Disconnected benchmark fixture assets
+
+In disconnected mode, the shared Jsonnet `benchmark()` helper assigns each benchmark a separate S3 bundle prefix:
+
+```text
+s3://mlpipeline/offline/fvt/benchmarks/<provider_id>/<benchmark_id>/
+```
+
+The prefix is a folder boundary (including the trailing slash), not an exact object key. The init container strips this prefix when writing files to `/test_data`, so each bundle must preserve the layout expected by its adapter and include only that benchmark's required dataset/cache and tokenizer. The test-data mirror pipeline must publish the corresponding bundle for each benchmark fixture. Do not point these fixtures at the entire `offline` catalog; `TEST_DATA_S3_KEY` remains for standalone fixtures that explicitly exercise a generic S3 reference and does not override the benchmark-scoped prefixes.
 
 ### Metrics tests (`@metrics`)
 

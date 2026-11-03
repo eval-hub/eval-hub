@@ -2,6 +2,7 @@ package sql_test
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"net/url"
 	"os"
@@ -16,9 +17,9 @@ import (
 
 var (
 	timeout = 2 * time.Minute
+	// Reuse one generated password for container startup and connection URLs.
+	defaultPostgresImagePassword = rand.Text()
 )
-
-const defaultPostgresImagePassword = "eval-hub-test-password"
 
 func usesExternalPostgres() bool {
 	return usesExternalPostgresURL(os.Getenv("POSTGRES_URL"))

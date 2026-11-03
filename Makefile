@@ -31,6 +31,14 @@ help: ## Display this help message
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
+# Print the Assisted-by trailer for the current AI session (see AGENTS.md). The
+# model is read from the harness that runs the change, so an agent does not have
+# to guess its own deployment name or ask the author.
+.PHONY: assisted-by-trailer
+assisted-by-trailer: ## Print the Assisted-by trailer for the current AI session
+	@bash scripts/assisted-by-trailer.sh
+
+
 KIND_CLUSTER_NAME ?= evalhub-dev
 IMAGE_TAG ?= kind-$(KIND_CLUSTER_NAME)
 SKIP_BUILD ?= false

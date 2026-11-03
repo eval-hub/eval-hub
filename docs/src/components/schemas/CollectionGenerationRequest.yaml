@@ -1,0 +1,32 @@
+type: object
+title: CollectionGenerationRequest
+description: |
+  Goal and search options for a dry-run collection proposal. The service trims
+  the goal and normalizes the options before persisting the generation job.
+  The model connection and credentials are configured server-side, not supplied
+  in this request.
+required:
+  - evaluation_goal
+properties:
+  evaluation_goal:
+    type: string
+    minLength: 1
+    maxLength: 2000
+    pattern: '\S'
+    description: Non-blank natural-language evaluation goal, up to 2000 characters; leading and trailing whitespace is trimmed.
+  provider_filter:
+    type: string
+    minLength: 1
+    description: Optional comma-separated provider IDs. Omit to search all providers visible to the tenant.
+  max_benchmarks:
+    type: integer
+    minimum: 1
+    maximum: 50
+    default: 12
+    description: Maximum number of benchmarks in the generated collection (1 to 50).
+  strictness:
+    type: string
+    enum: [lenient, moderate, strict]
+    default: moderate
+    description: How conservatively the runner selects and calibrates benchmarks.
+additionalProperties: false

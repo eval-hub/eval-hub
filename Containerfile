@@ -1,6 +1,6 @@
 # Multi-stage build for the evaluation hub Go service
 # Build stage
-FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:1.26 AS builder
+FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi10/go-toolset:1.26 AS builder
 
 ARG TARGETARCH
 
@@ -52,13 +52,18 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     ./cmd/evalhub_mcp
 
 # Runtime stage
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+FROM registry.access.redhat.com/ubi10/ubi-minimal:latest
 
-# Create user and app directory
-RUN groupadd -g 1000 evalhub && \
+# Create user and app directory.
+# UBI 10 minimal no longer ships shadow-utils (groupadd/useradd), so install it
+# for the user creation step and clean the package metadata in the same layer.
+RUN microdnf install -y shadow-utils && \
+    groupadd -g 1000 evalhub && \
     useradd -u 1000 -g evalhub -s /bin/bash -m evalhub && \
     mkdir -p /app/docs && \
-    chown -R evalhub:evalhub /app
+    chown -R evalhub:evalhub /app && \
+    microdnf clean all && \
+    rm -rf /var/cache/dnf /var/cache/yum /var/cache/libdnf5
 
 # Copy both binaries from builder
 COPY --from=builder --chown=evalhub:evalhub /build/eval-hub /app/eval-hub
