@@ -418,9 +418,18 @@ func checkModelEndpoint() {
 
 	fmt.Printf("Checking model endpoint connectivity: %s\n", modelURL)
 
+	// Prefer FVT_CA_CERT_PATH when present. Only skip TLS verification for this
+	// preflight when the private CA is unset (Jenkins runners that do not yet
+	// have the MaaS CA). An unreadable FVT_CA_CERT_PATH fails earlier in
+	// setUpTestConf. EvalHub API requests still verify TLS.
 	transport, err := testhelpers.NewFVTTransport()
 	if err != nil {
+		// Defensive: setUpTestConf normally fails first when the CA is bad.
 		panic(logError(err))
+	}
+	if os.Getenv("FVT_CA_CERT_PATH") == "" {
+		logDebug("WARNING: FVT_CA_CERT_PATH not set; temporarily skipping TLS verification for model preflight\n")
+		transport.TLSClientConfig.InsecureSkipVerify = true //nolint:gosec
 	}
 	client := &http.Client{
 		Timeout:   10 * time.Second,
