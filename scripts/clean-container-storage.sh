@@ -62,6 +62,12 @@ Space held by a kind cluster is released only by `make dev-clean
 DELETE_CLUSTER=true`: the node's image store and the local registry live in
 volumes that the running containers keep in use. Temporary localhost:<port> tags
 from `make dev-deploy` are removed by `make dev-clean`.
+
+Pruning removes stopped containers, so the cleanup stops before pruning when a
+container for KIND_CLUSTER_NAME is exited or created, since that would discard
+the cluster's data: start those containers again (for example with `make
+dev-deploy`) or delete the cluster with `make dev-clean DELETE_CLUSTER=true`.
+DRY_RUN=true reports the stopped containers without stopping.
 USAGE
 }
 
@@ -138,7 +144,11 @@ validate_inputs() {
   case "$ALL" in true|false) ;; *) fail "ALL must be true or false." ;; esac
   case "$VOLUMES" in true|false) ;; *) fail "VOLUMES must be true or false." ;; esac
   case "$DRY_RUN" in true|false) ;; *) fail "DRY_RUN must be true or false." ;; esac
-  [[ "$MIN_FREE_GB" =~ ^[0-9]+$ ]] || fail "MIN_FREE_GB must be a whole number of GiB."
+  # Canonical decimal integers only: no sign, no leading zeros (bash reads a
+  # leading zero as octal inside $(( ))), and at most 12 digits so that
+  # MIN_FREE_GB * 1048576 cannot overflow 64-bit arithmetic.
+  [[ "$MIN_FREE_GB" =~ ^(0|[1-9][0-9]{0,11})$ ]] ||
+    fail "MIN_FREE_GB must be a whole number of GiB."
   [[ "$KIND_CLUSTER_NAME" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
     fail "Invalid kind cluster name: $KIND_CLUSTER_NAME"
 }
@@ -292,14 +302,44 @@ report_storage() {
   fi
 }
 
-# Volume pruning removes any volume no container references, so a stopped kind
-# node or local registry would lose its data. Running containers are never
+# Names of exited or created containers matching every given label filter, one
+# `label=key=value` filter per argument.
+stopped_containers() {
+  local filter
+  local -a filters=(--all --filter status=exited --filter status=created)
+  for filter in "$@"; do
+    filters+=(--filter "label=$filter")
+  done
+  "$CONTAINER_RUNTIME" ps "${filters[@]}" --format '{{.Names}}' 2>/dev/null || true
+}
+
+# Pruning removes stopped containers, so a stopped kind node loses its image
+# store and with it the cluster's contents. Kind node containers are stopped
+# whenever the podman machine or the host restarts (dev-deploy restarts them),
+# so refuse to prune while they are down instead of deleting the cluster.
+check_stopped_kind_containers() {
+  local name stopped
+  stopped="$(stopped_containers "io.x-k8s.kind.cluster=$KIND_CLUSTER_NAME")"
+  [[ -n "$stopped" ]] || return 0
+  log WARN "Found stopped containers for kind cluster '$KIND_CLUSTER_NAME'; pruning removes stopped containers, which would discard that cluster's data:"
+  while IFS= read -r name; do
+    [[ -n "$name" ]] && log WARN "  $name"
+  done <<<"$stopped"
+  if [[ "$DRY_RUN" == true ]]; then
+    log WARN "DRY_RUN=true; a real run would stop here. Start them first (for example 'make dev-deploy')."
+    return 0
+  fi
+  fail "Refusing to prune while containers for kind cluster '$KIND_CLUSTER_NAME' are stopped. Start them first (for example 'make dev-deploy'), or delete the cluster with 'make dev-clean DELETE_CLUSTER=true'."
+}
+
+# Volume pruning removes any volume no container references, so stopped
+# containers that are not part of the kind cluster (for example the local
+# registry) would lose the data in their volumes. Running containers are never
 # affected, so only stopped ones are reported here.
 warn_about_stopped_containers() {
   local name stopped
   [[ "$VOLUMES" == true ]] || return 0
-  stopped="$("$CONTAINER_RUNTIME" ps --all --filter status=exited --filter status=created \
-    --format '{{.Names}}' 2>/dev/null || true)"
+  stopped="$(stopped_containers)"
   [[ -n "$stopped" ]] || return 0
   log WARN "Stopped containers found; volumes only they reference would be removed:"
   while IFS= read -r name; do
@@ -351,7 +391,7 @@ check_remaining_space() {
     log INFO "Skipping the free-space check because $CONTAINER_RUNTIME storage cannot be measured from this host."
     return 0
   fi
-  min_kb=$((MIN_FREE_GB * 1048576))
+  min_kb=$((10#$MIN_FREE_GB * 1048576)) # base 10, so the value is never octal
   if ((STORAGE_FREE_KB >= min_kb)); then
     log PASS "$(free_kb_to_gib "$STORAGE_FREE_KB") free in $STORAGE_FREE_LABEL."
     return 0
@@ -381,6 +421,7 @@ main() {
   validate_inputs
   check_prerequisites
   report_storage "Container storage before cleanup:"
+  check_stopped_kind_containers
   warn_about_stopped_containers
   run_prune
   if [[ "$DRY_RUN" == false ]]; then
