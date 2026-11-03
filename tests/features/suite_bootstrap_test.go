@@ -419,13 +419,20 @@ func checkModelEndpoint() {
 
 	fmt.Printf("Checking model endpoint connectivity: %s\n", modelURL)
 
-	// Temporary test-only bypass for model endpoints whose private CA is not
-	// installed on the Jenkins runner. EvalHub API requests still verify TLS.
-	// Clone DefaultTransport so HTTP(S)_PROXY settings are preserved.
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig = &tls.Config{
-		MinVersion:         tls.VersionTLS12,
-		InsecureSkipVerify: true, //nolint:gosec
+	// Prefer FVT_CA_CERT_PATH when present. Only skip TLS verification for this
+	// preflight when the private CA is unset or unreadable (Jenkins runners
+	// that do not yet have the MaaS CA). EvalHub API requests still verify TLS.
+	transport, err := testhelpers.NewFVTTransport()
+	if err != nil {
+		logDebug("WARNING: FVT_CA_CERT_PATH unavailable (%v); temporarily skipping TLS verification for model preflight\n", err)
+		transport = http.DefaultTransport.(*http.Transport).Clone()
+		transport.TLSClientConfig = &tls.Config{
+			MinVersion:         tls.VersionTLS12,
+			InsecureSkipVerify: true, //nolint:gosec
+		}
+	} else if os.Getenv("FVT_CA_CERT_PATH") == "" {
+		logDebug("WARNING: FVT_CA_CERT_PATH not set; temporarily skipping TLS verification for model preflight\n")
+		transport.TLSClientConfig.InsecureSkipVerify = true //nolint:gosec
 	}
 	client := &http.Client{
 		Timeout:   10 * time.Second,
