@@ -2,6 +2,7 @@ package features
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -418,13 +419,16 @@ func checkModelEndpoint() {
 
 	fmt.Printf("Checking model endpoint connectivity: %s\n", modelURL)
 
-	transport, err := testhelpers.NewFVTTransport()
-	if err != nil {
-		panic(logError(err))
-	}
+	// Temporary test-only bypass for model endpoints whose private CA is not
+	// installed on the Jenkins runner. EvalHub API requests still verify TLS.
 	client := &http.Client{
-		Timeout:   10 * time.Second,
-		Transport: transport,
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				MinVersion:         tls.VersionTLS12,
+				InsecureSkipVerify: true, //nolint:gosec
+			},
+		},
 	}
 
 	maxRetries := 3
