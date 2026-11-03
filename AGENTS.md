@@ -116,14 +116,23 @@ make grant-permissions
 Use [Conventional Commits](https://www.conventionalcommits.org/) with an optional scope (e.g. `feat(http): …`).
 Accepted type prefixes: `build`, `bump`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`.
 
-When a change is assisted by AI, add one of these lines, as appropriate, to the **end** of the commit message body (after the subject and any description), as Git trailers:
+When a change is assisted by AI, add an `Assisted-by` trailer at the **end** of the commit message body (after the subject and any description). Name both the model that produced the change and the harness that ran it, using the full model identifier rather than a generic product name:
 
 ```text
-Assisted-by: Cursor
-Made-with: Cursor
-Generated with: Claude Code
-Assisted-by: Codex
+Assisted-by: <full model name> (<harness>)
 ```
+
+This file guides every agent harness used on the repository (Cline, Codex CLI, Claude Code, Cursor, …), so the trailer is generated in the harness that is running the change rather than hard-coded per tool. No harness lets an agent read its own deployment name, and an agent must not guess it or ask the author for it:
+
+```bash
+make -s assisted-by-trailer        # prints the trailer for the harness running the command
+```
+
+For example `Assisted-by: DeepSeek-V4.1-Flash-1017 (Cline)` from Cline, or `Assisted-by: gpt-6.1-sol (Codex CLI)` from Codex CLI.
+
+`scripts/assisted-by-trailer.sh` resolves the harness first, then reads that harness's model: `AI_MODEL` (any harness), else the harness environment (`CLINE_MODEL`, `CODEX_MODEL`, `CLAUDE_MODEL`, `ANTHROPIC_MODEL`, `OPENAI_MODEL`, `GEMINI_MODEL`, `CURSOR_MODEL`), else that harness's metadata (Cline `~/.cline/data`, Codex CLI `~/.codex/config.toml`, Claude Code `~/.claude/settings.json`). The harness name comes from `AI_HARNESS` or the harness environment (`CLINE_ACTIVE`, `CODEX_HOME`, `CLAUDECODE`, `CURSOR_*`, `COPILOT_AGENT`); when several harnesses are installed and none is hinted, it refuses to guess and asks for `AI_HARNESS`. It prints the last path segment of the model id by default (pass `--keep-prefix` to the script for the full routing id) and exits non-zero when either value cannot be determined — only then set `AI_MODEL='<full model name>'` (and `AI_HARNESS='<harness>'`) or ask the author. Add the printed line verbatim.
+
+Add exactly one attribution trailer per commit and do not stack several.
 
 For DCO sign-off, use `git commit -s` (or `git commit --signoff`). Do **not** include a `Signed-off-by` line in the commit message body; `-s` appends it from the author's configured `user.name` and `user.email`.
 

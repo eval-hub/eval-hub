@@ -4,7 +4,7 @@
 
 Closes #
 
-Assisted-by: <!-- Cursor, Claude etc -->
+Assisted-by: <!-- make -s assisted-by-trailer -->
 
 ## Type
 
