@@ -318,16 +318,40 @@ make clean-container-storage DRY_RUN=true           # print the commands only
 
 Images and volumes used by running containers — the kind node and the local
 registry — are never removed, so the cluster keeps working. Their space is
-released only by `make dev-clean DELETE_CLUSTER=true`. `VOLUMES=true` prunes
+released only by `make dev-clean DELETE_CLUSTER=true`. If a container for the
+kind cluster is stopped (for example after restarting the podman machine), the
+target fails before pruning instead of deleting it, because pruning removes
+stopped containers and takes the cluster's data with them. `VOLUMES=true` prunes
 unused named volumes as well as anonymous ones on both podman and Docker. The
 target reports `system df` and free space before and after cleanup and warns when
 less than `MIN_FREE_GB` (default 15) remains. Free space is read where the
 runtime keeps its storage: on the host, in the podman machine's disk, or, for
 Docker Desktop, in its VM (through a running container, or else the host
-filesystem holding its disk image). On macOS, grow podman storage with
-`podman machine stop`, `podman machine set --disk-size 200`, and
-`podman machine start`, then grow the guest filesystem (`growpart`/`xfs_growfs`
-inside the machine). Docker Desktop storage is sized in its own settings.
+filesystem holding its disk image). On macOS, grow podman storage by enlarging
+the machine's disk image while the machine is stopped, then growing the guest
+filesystem inside the machine:
+
+```bash
+podman machine stop
+podman machine set --disk-size 200      # only grows the disk image
+podman machine start
+podman machine ssh 'sudo growpart /dev/vda 4 && sudo xfs_growfs /'
+```
+
+`podman machine set --disk-size` can resize the disk image in place only for
+providers that support it: the QEMU provider, plus the `applehv` and `libkrun`
+providers used on Apple silicon by current Podman releases (the
+`podman-machine-set` man page still documents the option as QEMU-only). When the
+provider or Podman version cannot resize in place, recreate the machine with a
+larger disk instead and redeploy; the machine's images and volumes are discarded:
+
+```bash
+podman machine rm
+podman machine init --disk-size 200
+make dev-deploy
+```
+
+Docker Desktop storage is sized in its own settings.
 `make clean-container-storage-help` lists the settings.
 
 Run the API demo against the deployed cluster:
