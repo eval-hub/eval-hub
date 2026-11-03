@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/evalcards"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/cards"
 )
@@ -49,9 +50,9 @@ type terminalTestExporter struct {
 	called bool
 }
 
-func (e *terminalTestExporter) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (string, error) {
+func (e *terminalTestExporter) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (evalcards.ExportResult, error) {
 	e.called = true
-	return "https://example.com/card.json", nil
+	return evalcards.ExportResult{CardURL: "https://example.com/card.json"}, nil
 }
 
 type terminalTestStorage struct {

@@ -1,7 +1,6 @@
 package upgrade
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,6 +19,7 @@ import (
 	"github.com/PaesslerAG/jsonpath"
 	"github.com/cucumber/godog"
 	"github.com/cucumber/godog/colors"
+	"github.com/eval-hub/eval-hub/internal/testhelpers"
 	pkgapi "github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/google/go-jsonnet"
 	"github.com/spf13/pflag"
@@ -84,9 +84,10 @@ func TestMain(m *testing.M) {
 		opts.Paths = args
 	}
 
-	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{
-		MinVersion:         tls.VersionTLS12,
-		InsecureSkipVerify: true, //nolint:gosec
+	transport, err := testhelpers.NewFVTTransport()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: configure FVT TLS: %v\n", err)
+		os.Exit(1)
 	}
 
 	serverURL := os.Getenv("SERVER_URL")
@@ -106,7 +107,7 @@ func TestMain(m *testing.M) {
 
 	apiConfig = &apiFeature{
 		baseURL: uri,
-		client:  &http.Client{Timeout: 30 * time.Second},
+		client:  &http.Client{Timeout: 30 * time.Second, Transport: transport},
 	}
 
 	suite := godog.TestSuite{

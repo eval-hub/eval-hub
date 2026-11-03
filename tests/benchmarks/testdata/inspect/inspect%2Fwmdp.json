@@ -1,0 +1,10 @@
+{
+  "notes": "One example from representative task inspect_evals/wmdp_bio. Agent/code tasks still require their sandbox and external services; GPQA requires dataset access.",
+  "parameters": {
+    "epochs": 1,
+    "max_tasks": 1,
+    "num_examples": 1,
+    "task": "inspect_evals/wmdp_bio"
+  },
+  "timeout": "5m"
+}

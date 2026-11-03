@@ -1,0 +1,15 @@
+{
+  "notes": "One example per probe; broad probe groups still invoke multiple probes. garak-kfp additionally requires Data Science Pipelines.",
+  "parameters": {
+    "intents_models": {
+      "judge": {
+        "name": "${JUDGE_MODEL_NAME}",
+        "url": "${JUDGE_BASE_URL}"
+      }
+    },
+    "num_examples": 1,
+    "sdg_api_base": "${MODEL_URL}",
+    "sdg_model": "openai/${MODEL_NAME}"
+  },
+  "timeout": "5m"
+}

@@ -104,18 +104,21 @@ func validateCollectionClassification(sl validator.StructLevel) {
 }
 
 // ValidateCollectionOverrides returns an error if any override references a
-// provider_id or benchmark id that does not exist in the collection.
-// It must be called after the collection is fetched from storage.
+// provider_id or benchmark id that does not exist in the collection, or supplies
+// an ambiguous number of overrides for a repeated pair. This validates new job
+// requests only, after the collection is fetched from storage. Persisted jobs
+// may contain configurations accepted by earlier service versions.
 func ValidateCollectionOverrides(overrides []api.EvaluationBenchmarkConfig, collectionBenchmarks []api.CollectionBenchmarkConfig) error {
 	if len(overrides) == 0 {
 		return nil
 	}
 	type benchmarkKey struct{ providerID, id string }
 	providerIDs := make(map[string]struct{}, len(collectionBenchmarks))
-	pairs := make(map[benchmarkKey]struct{}, len(collectionBenchmarks))
+	pairs := make(map[benchmarkKey]int, len(collectionBenchmarks))
+	overrideCounts := make(map[benchmarkKey]int)
 	for _, b := range collectionBenchmarks {
 		providerIDs[b.ProviderID] = struct{}{}
-		pairs[benchmarkKey{b.ProviderID, b.ID}] = struct{}{}
+		pairs[benchmarkKey{b.ProviderID, b.ID}]++
 	}
 	for _, override := range overrides {
 		if _, ok := providerIDs[override.ProviderID]; !ok {
@@ -126,13 +129,24 @@ func ValidateCollectionOverrides(overrides []api.EvaluationBenchmarkConfig, coll
 			)
 		}
 		if override.ID != "" {
-			if _, ok := pairs[benchmarkKey{override.ProviderID, override.ID}]; !ok {
+			key := benchmarkKey{override.ProviderID, override.ID}
+			if pairs[key] == 0 {
 				return serviceerrors.NewServiceError(
 					messages.ResourceDoesNotExist,
 					"Type", "benchmark",
 					"ResourceID", override.ID,
 				)
 			}
+			overrideCounts[key]++
+		}
+	}
+	for _, benchmark := range collectionBenchmarks {
+		key := benchmarkKey{benchmark.ProviderID, benchmark.ID}
+		count, overrides := pairs[key], overrideCounts[key]
+		if count > 1 && overrides > 1 && overrides != count {
+			return serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error",
+				fmt.Sprintf("benchmark %q (%s) occurs %d times: provide one shared override or exactly %d overrides in collection occurrence order; got %d",
+					benchmark.ID, benchmark.ProviderID, count, count, overrides))
 		}
 	}
 	return nil

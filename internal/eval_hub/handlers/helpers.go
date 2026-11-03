@@ -243,10 +243,43 @@ func GetJobBenchmarks(job *api.EvaluationJobResource, collection *api.Collection
 				"CollectionID", job.Collection.ID,
 			)
 		}
-		var mergedBenchmarks []api.EvaluationBenchmarkConfig
+		type benchmarkKey struct{ providerID, id string }
+		type benchmarkGroup struct {
+			count     int
+			next      int
+			overrides []api.EvaluationBenchmarkConfig
+		}
+		groups := make(map[benchmarkKey]*benchmarkGroup)
 		for _, benchmark := range collection.Benchmarks {
-			benchmark := mergeBenchmarkParameters(benchmark, job.Collection.Benchmarks)
-			mergedBenchmarks = append(mergedBenchmarks, benchmark)
+			key := benchmarkKey{benchmark.ProviderID, benchmark.ID}
+			if groups[key] == nil {
+				groups[key] = &benchmarkGroup{}
+			}
+			groups[key].count++
+		}
+		var providerOverrides []api.EvaluationBenchmarkConfig
+		for _, override := range job.Collection.Benchmarks {
+			if override.ID == "" {
+				providerOverrides = append(providerOverrides, override)
+			} else if group := groups[benchmarkKey{override.ProviderID, override.ID}]; group != nil {
+				group.overrides = append(group.overrides, override)
+			}
+		}
+		mergedBenchmarks := make([]api.EvaluationBenchmarkConfig, 0, len(collection.Benchmarks))
+		for _, benchmark := range collection.Benchmarks {
+			group := groups[benchmarkKey{benchmark.ProviderID, benchmark.ID}]
+			overrides := job.Collection.Benchmarks
+			// A single override retains its existing broadcast behavior. Multiple
+			// overrides for a repeated pair map by occurrence within that pair,
+			// independently of other pairs or provider-level hardware overrides.
+			// New requests reject mismatched counts in POST validation. Older
+			// persisted jobs may have them; preserve their previous merging behavior
+			// so shared resolution (including status callbacks) remains compatible.
+			if group.count > 1 && len(group.overrides) == group.count {
+				overrides = append([]api.EvaluationBenchmarkConfig{group.overrides[group.next]}, providerOverrides...)
+				group.next++
+			}
+			mergedBenchmarks = append(mergedBenchmarks, mergeBenchmarkParameters(benchmark, overrides))
 		}
 		return mergedBenchmarks, nil
 	}

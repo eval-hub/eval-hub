@@ -1,0 +1,19 @@
+{
+  "model": {
+    "name": "${MTEB_MODEL_NAME}",
+    "url": "${MODEL_URL}"
+  },
+  "notes": "MTEB loads an embedding model locally rather than using MODEL_URL. No supported per-task sample cap; BENCHMARK_ALLOW_UNBOUNDED=1 explicitly allows a full selected task within the deadline.",
+  "parameters": {
+    "batch_size": 1,
+    "co2_tracker": false,
+    "languages": [
+      "eng"
+    ],
+    "tasks": [
+      "NFCorpus"
+    ]
+  },
+  "timeout": "5m",
+  "unbounded": true
+}

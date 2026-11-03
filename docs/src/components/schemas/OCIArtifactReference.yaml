@@ -1,5 +1,10 @@
 type: object
-description: OCI artifact reference.
+description: >-
+  OCI artifact reference returned by the publisher. The digest identifies the
+  immutable artifact and is authoritative. The reference may include the
+  publication tag in the form registry/repository:tag@digest; the tag is
+  informational and may move independently of the digest. Changing the tag does
+  not change or invalidate the digest-qualified reference.
 properties:
   oci_digest:
     type: string
@@ -12,7 +17,9 @@ properties:
     type: string
     minLength: 1
     pattern: '\S'
-    description: Registry reference identifying the artifact by digest.
+    description: Registry reference identifying the artifact by digest; it may include the publication tag.
+    examples:
+      - quay.io/my-org/eval-results:evaluation-card-v1@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 required:
   - oci_digest
   - oci_reference

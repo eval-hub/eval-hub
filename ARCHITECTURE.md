@@ -68,6 +68,8 @@ Every runnable workload is an **`EvaluationJobResource`** under the hood: its AP
 
 The APIs keep different contracts over that shared representation. `/api/v1/evaluations/jobs` accepts model and benchmark configuration and resolves providers from the catalog. `/api/v1/evaluations/post-processing` accepts operations and data references, stores them as parameters of one internal benchmark, then returns a post-processing resource. The server assigns internal provider and benchmark IDs; public evaluation requests cannot select them. Each API must restrict reads and deletes to its own workload, and evaluation lists must exclude other workloads.
 
+Post-processing uses standalone create, get, and delete APIs. A completed evaluation is supplied as input through `operations.confidence_interval.results_data_ref.eval_job.id`. The returned post-processing resource has its own ID, which is used with `/api/v1/evaluations/post-processing/{post_processing_job_id}` for retrieval and deletion.
+
 ### API and status flow for post processing workload
 
 ```mermaid
@@ -95,13 +97,11 @@ flowchart TB
     ppAdapter --> events
     events --> update["HandleUpdateEvaluation + storage.UpdateEvaluationJob"]
     update --> db
-    update -- "completed post-processing with eval_job source" --> link["Link result to source evaluation (new)"]
-    link --> db
     classDef ppNew fill:#dbeafe,stroke:#2563eb,color:#111827;
-    class ppAPI,ppHandlers,ppMapping,registry,ppProvider,ppAdapter,link ppNew;
+    class ppAPI,ppHandlers,ppMapping,registry,ppProvider,ppAdapter ppNew;
 ```
 
-Blue nodes mark post-processing additions. Both workloads use the existing [status-event route](internal/eval_hub/server/server.go), [update handler](internal/eval_hub/handlers/evaluations.go), and [SQL status update](internal/eval_hub/storage/sql/evaluations_status.go); completed post-processing jobs with an `eval_job` source also use [SQL completion linking](internal/eval_hub/storage/sql/post_processing.go). The evaluation-job GET/DELETE routes still hide post-processing jobs.
+Blue nodes mark post-processing additions. Both workloads use the existing [status-event route](internal/eval_hub/server/server.go), [update handler](internal/eval_hub/handlers/evaluations.go), and [SQL status update](internal/eval_hub/storage/sql/evaluations_status.go). Post-processing completion [validates the referenced source evaluation](internal/eval_hub/storage/sql/post_processing.go) without changing its resource. The evaluation-job GET/DELETE routes still hide post-processing jobs.
 
 ### Post-processing code call relationships
 

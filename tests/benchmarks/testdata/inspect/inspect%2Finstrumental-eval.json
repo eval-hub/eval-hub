@@ -1,0 +1,12 @@
+{
+  "notes": "One smoke sample, using the target model and its endpoint/credentials as grader instead of an unavailable task-default model. Not an independent accuracy assessment.",
+  "parameters": {
+    "epochs": 1,
+    "max_tasks": 1,
+    "num_examples": 1,
+    "task_args": {
+      "grader_model": "openai/${MODEL_NAME}"
+    }
+  },
+  "timeout": "5m"
+}

@@ -340,6 +340,10 @@ type BenchmarkStatusEvent struct {
 	Phase          JobPhase       `json:"phase,omitempty" validate:"omitempty,oneof=initializing loading_data running_evaluation post_processing persisting_artifacts completed"`
 	Metrics        map[string]any `json:"metrics,omitempty"`
 	MetricsSchema  []MetricSchema `json:"metrics_schema,omitempty" validate:"omitempty,dive"`
+	// PrimaryScore is the adapter-reported primary metric for this completed run.
+	// Used when the job/catalog primary_score.metric is absent from Metrics
+	// (e.g. inspect/custom task-dependent scorers). Exact key match only.
+	PrimaryScore   *PrimaryScore  `json:"primary_score,omitempty"`
 	AdditionalInfo map[string]any `json:"additional_info,omitempty"`
 	Artifacts      map[string]any `json:"artifacts,omitempty"`
 	ErrorMessage   *MessageInfo   `json:"error_message,omitempty"`
@@ -416,7 +420,11 @@ type EvaluationExports struct {
 }
 
 type CollectionRef struct {
-	ID         string                      `mapstructure:"id" json:"id" validate:"required"`
+	ID string `mapstructure:"id" json:"id" validate:"required"`
+	// Benchmarks override collection entries by provider_id and id. For a repeated
+	// pair, one override applies to every occurrence. New requests with multiple
+	// overrides must match the number of occurrences and use collection occurrence order.
+	// Other pairs may be omitted or reordered independently.
 	Benchmarks []EvaluationBenchmarkConfig `json:"benchmarks,omitempty" validate:"omitempty,dive"`
 
 	// CollectionUpdatedAt captures the collection's updated_at timestamp at job-creation time.
@@ -503,6 +511,11 @@ type EvaluationTest struct {
 type BenchmarkTest struct {
 	PrimaryScore       float32 `json:"primary_score"`
 	PrimaryScoreMetric string  `json:"primary_score_metric"`
-	Threshold          float32 `json:"threshold"`
-	Pass               bool    `json:"pass"`
+	// LowerIsBetter is the direction of the selected primary (job, event, or
+	// catalog). Serialized so it survives the storage round-trip before
+	// computeJobTestResult aggregates multi-benchmark jobs; omitted when unset
+	// (legacy results fall back to job/catalog PrimaryScore).
+	LowerIsBetter *bool   `json:"lower_is_better,omitempty"`
+	Threshold     float32 `json:"threshold"`
+	Pass          bool    `json:"pass"`
 }

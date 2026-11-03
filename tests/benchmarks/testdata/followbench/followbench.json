@@ -1,0 +1,11 @@
+{
+  "notes": "Requires model.auth.secret_ref to contain judge_api-key and judge_url for the independent judge connection; judge_model cannot be combined with inline judge_url or judge_api_key.",
+  "parameters": {
+    "judge_model": "${JUDGE_MODEL_NAME}",
+    "max_tokens": 128,
+    "num_examples": 1,
+    "request_timeout": 60,
+    "temperature": 0
+  },
+  "timeout": "5m"
+}

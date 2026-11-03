@@ -367,6 +367,9 @@ func fvtBenchmarkTokenizer() string {
 	if fvtDisconnected() {
 		return "/test_data/tokenizer"
 	}
+	if tokenizer := os.Getenv("FVT_BENCHMARK_TOKENIZER"); tokenizer != "" {
+		return tokenizer
+	}
 	return "google/flan-t5-small"
 }
 

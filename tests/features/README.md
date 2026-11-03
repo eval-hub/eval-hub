@@ -23,18 +23,51 @@ export AUTH_TOKEN="your-token"
 export X_TENANT="tenant-namespace"
 ```
 
+For a remote cluster with a private certificate authority, obtain its CA
+certificate bundle from the cluster administrator and set:
+
+```bash
+export FVT_CA_CERT_PATH="/absolute/path/to/cluster-ca.pem"
+```
+
+The PEM bundle is added to system trust for API requests, metrics scrapes,
+MCP backend requests, and the `MODEL_URL` connectivity check. Certificate chain
+and hostname validation remain enabled for those clients when the CA is loaded.
+An unreadable file or a bundle without PEM certificates fails suite setup for
+API/metrics/MCP clients. With this setting unset, those clients use system trust.
+The tests do not read the CA from kubeconfig automatically. This setting does
+not configure certificate trust inside evaluation job containers or the
+separate MLflow and OCI clients.
+
+Temporary exception for the `MODEL_URL` preflight only: if `FVT_CA_CERT_PATH` is
+unset, that connectivity check skips TLS verification so provider/benchmark
+scenarios are not skipped on runners that do not yet trust the model endpoint
+CA (for example Jenkins). If the path is set but the CA file is unreadable,
+suite setup (`setUpTestConf`) fails before the preflight runs — fix the file or
+unset the path to use the temporary bypass. Prefer configuring a readable
+`FVT_CA_CERT_PATH` so the preflight verifies TLS like the other clients; remove
+the bypass once the runner CA is in place.
+
 ### Model Overrides (Required)
 
 Set the model fields in the test payloads using environment variables:
 
 - `MODEL_URL` (defaults to `http://test.com`)
 - `MODEL_NAME` (defaults to `test`)
+- `FVT_BENCHMARK_TOKENIZER`: matching Hugging Face tokenizer ID or a path accessible
+  inside the adapter container. Set this separately when `MODEL_NAME` is a deployment alias.
+  Connected runs retain `google/flan-t5-small` when unset or empty; this default has
+  no chat template, so chat-template benchmarks require a compatible tokenizer override.
+  Disconnected runs continue to use `/test_data/tokenizer`, ignoring this override;
+  stage a tokenizer compatible with the model and benchmark requirements at that path.
 
 Example:
 
 ```bash
 export MODEL_URL="http://granite-llm-metrics.prabhu.svc.cluster.local:8080/v1"
 export MODEL_NAME="granite-llm"
+# Set this to the actual tokenizer for the model behind the endpoint:
+export FVT_BENCHMARK_TOKENIZER="<matching-tokenizer-id>"
 ```
 
 Run all feature tests:
@@ -42,6 +75,32 @@ Run all feature tests:
 ```bash
 go test ./tests/features/...
 ```
+
+### Ragas model connections (required for the Ragas provider scenario)
+
+Both Ragas suites call `/v1/embeddings`. Set the embedding model ID and use the
+existing model-auth Secret for the connection. A chat-only MaaS endpoint cannot
+serve embedding calls. For example:
+
+```bash
+export RAGAS_EMBEDDING_MODEL="granite-embedding"
+export MODEL_AUTH_SECRET_REF="ragas-model-connections"
+```
+
+Use your deployment's actual model ID. In the Secret named by
+`MODEL_AUTH_SECRET_REF`, retain the evaluated model's `api-key` and add
+`embedding_api-key` and `embedding_url` (for example,
+`http://granite-embedding:8080/v1`). For an unauthenticated embedding service
+that ignores Authorization, the embedding key can be a nonempty dummy value.
+The adapter receives `embedding_api-key:ref` and a projected sidecar URL; the
+sidecar selects the embedding upstream and injects its real key. No embedding
+URL environment variable or `OPENAI_API_KEY` injection is required.
+
+Both suites receive `RAGAS_EMBEDDING_MODEL`; the payload reports a configuration
+error before submission if that setting is missing or blank. Use an adapter
+image that reads the role-specific projected Secret entries. Optional
+`judge_api-key` and `judge_url` entries select a separate judge connection;
+without them Ragas uses the evaluated model's endpoint and credential.
 
 ### Local Server Mode (Default)
 
@@ -64,6 +123,35 @@ When running in local server mode, the tests will:
 1. Start the server in a background goroutine during test suite initialization
 2. Wait for the server to be ready by checking the health endpoint
 3. Automatically shut down the server after all tests complete
+
+## Benchmark provider selection
+
+The `@benchmark_providers` scenarios use a curated subset of the provider
+catalogs for runs against a model endpoint:
+
+- Garak uses `quick`, `avid_ethics`, and `avid_performance` to keep the provider
+  smoke run bounded.
+- GuideLLM uses `throughput` and `quick_perf_test`; the broader scheduling and
+  performance profiles are excluded from this baseline run.
+- LightEval uses two groups of generative tasks. The LiteLLM endpoint backend
+  does not implement loglikelihood, and the affected TruthfulQA generation
+  formatter requires fields absent from its dataset. The baseline also omits
+  the AIME and LiveCodeBench cases.
+- LM Evaluation Harness omits ACLUE, CMMLU, SCROLLS, and Pile tasks that fail
+  dataset loading because remote-code trust is not enabled. It also omits
+  `careqa_open_perplexity` and `tinyTruthfulQA`, which require additional
+  packages, and the affected HumanEval/MBPP tasks that require code execution
+  opt-in or are unavailable in the adapter.
+
+These selections do not change the provider catalogs. Individual catalog
+benchmarks can still be run through the opt-in [benchmark smoke suite](../benchmarks/README.md).
+Keep each scenario's expected `results.benchmarks` length aligned with its
+Jsonnet payload. CI checks this automatically; run the same check locally
+without a server or cluster:
+
+```bash
+go test ./tests/features -run '^TestBenchmarkProviderFixtureCounts$'
+```
 
 ## Test Structure
 
@@ -100,6 +188,16 @@ When running in local server mode, the tests will:
 | `@git` | Evaluation jobs that clone offline test data from a git repository (`evaluation_jobs.feature`). Defaults: `TEST_DATA_GIT_URL`=`https://github.com/eval-hub/eval-hub`, `TEST_DATA_GIT_REF`=`main`, `TEST_DATA_GIT_SUB_PATH`=`tests/git-testdata` (`arc_easy` + tokenizer; see `tests/git-testdata/README.md`). The main happy-path job runs two git benchmarks (`arc_easy` + nested `truthfulqa_mc1` via `TEST_DATA_GIT_NESTED_SUB_PATH`, default `tests/git-testdata/staging_sub_path`) and asserts `resolved_sha` is absent on create then populated after completion. Optional: `TEST_DATA_GIT_TAG_REF`; `TEST_DATA_GIT_SHA_REF` / `TEST_DATA_GIT_SHA_URL` (SHA scenario defaults to `TEST_DATA_GIT_REF`/`main`; set `TEST_DATA_GIT_SHA_REF` to a real hex commit SHA for commit-checkout coverage), blocked-host via `TEST_DATA_GIT_BLOCKED_URL`, bad-ref via `TEST_DATA_GIT_BAD_REF`, http+secret_ref negative via `TEST_DATA_GIT_HTTP_URL`, missing sub_path via `TEST_DATA_GIT_BAD_SUB_PATH`. Job-wait negatives (bad ref, missing sub_path) poll every 10s for up to 5m (same as missing-PVC); API-only negatives return 400 immediately. Requires cluster egress to the git host (or an internal mirror). Until `tests/git-testdata` is on the target ref, set `TEST_DATA_GIT_REF` accordingly. Opt in with `GODOG_TAGS="@git"`. |
 | `@hf` | Evaluation jobs that download offline test data from Hugging Face Hub (`evaluation_jobs.feature`). Defaults: `TEST_DATA_HF_REPO_ID`=`eval-hub-test/evalhub-offline-testdata`, `TEST_DATA_HF_REVISION`=`main`, nested `truthfulqa_mc1` via `TEST_DATA_HF_NESTED_SUB_PATH`=`staging_sub_path` (public mirror of `tests/git-testdata` on HF). One happy-path job runs `arc_easy` (full repo, branch revision) + `truthfulqa_mc1` (nested `sub_path`) and asserts `resolved_sha` is absent on create then populated after completion; set `TEST_DATA_HF_SHA_REVISION` to a real hex commit SHA to exercise pinned revision on `arc_easy` without a separate scenario. Runtime failures: one job covers invalid `repo_id` + bad `revision`; missing `sub_path` stays a separate job. Optional env: `TEST_DATA_HF_BAD_REPO_ID` (default `eval-hub-test/invalid-db`), `TEST_DATA_HF_BAD_REVISION`, `TEST_DATA_HF_BAD_SUB_PATH`. Job-wait negatives poll every 10s for up to 5m; API-only negatives return 400 immediately. Requires cluster egress to huggingface.co (or configure the init image with `HF_ENDPOINT` for a mirror). Opt in with `GODOG_TAGS="@hf"`. |
 | `@gha-wheel-sanity` | Local-runtime wheel validation scenario run by `scripts/gha_wheel_sanity_test.sh` during GHA wheel checks |
+
+### Disconnected benchmark fixture assets
+
+In disconnected mode, the shared Jsonnet `benchmark()` helper assigns each benchmark a separate S3 bundle prefix:
+
+```text
+s3://mlpipeline/offline/fvt/benchmarks/<provider_id>/<benchmark_id>/
+```
+
+The prefix is a folder boundary (including the trailing slash), not an exact object key. The init container strips this prefix when writing files to `/test_data`, so each bundle must preserve the layout expected by its adapter and include only that benchmark's required dataset/cache and tokenizer. The test-data mirror pipeline must publish the corresponding bundle for each benchmark fixture. Do not point these fixtures at the entire `offline` catalog; `TEST_DATA_S3_KEY` remains for standalone fixtures that explicitly exercise a generic S3 reference and does not override the benchmark-scoped prefixes.
 
 ### Metrics tests (`@metrics`)
 

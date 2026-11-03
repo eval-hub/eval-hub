@@ -249,11 +249,14 @@ chore(skills): add release-notes skill for OpenSSF-compliant GitHub releases
 ```
 
 Append **one** approved AI attribution trailer at the end of the commit message
-body (after the subject and any description), for example:
+body (after the subject and any description), naming the full model identifier
+and the harness that ran it. Generate it instead of guessing:
 
-```text
-Assisted-by: Cursor
+```bash
+make -s assisted-by-trailer
 ```
 
-or `Made-with: Cursor` / `Generated with: Claude Code` as appropriate. Do not
-stack multiple attribution trailers.
+which prints the trailer for the harness running the command, e.g.
+`Assisted-by: claude-opus-4-5 (Claude Code)`; see `AGENTS.md` for the detection
+order and the `AI_MODEL` / `AI_HARNESS` overrides. Do not stack multiple
+attribution trailers.

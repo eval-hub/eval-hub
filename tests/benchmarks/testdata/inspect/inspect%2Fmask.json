@@ -1,0 +1,13 @@
+{
+  "notes": "One smoke sample, using the target model and its endpoint/credentials for both judges instead of unavailable task-default models. Not an independent accuracy assessment.",
+  "parameters": {
+    "epochs": 1,
+    "max_tasks": 1,
+    "num_examples": 1,
+    "task_args": {
+      "binary_judge_model": "openai/${MODEL_NAME}",
+      "numeric_judge_model": "openai/${MODEL_NAME}"
+    }
+  },
+  "timeout": "5m"
+}

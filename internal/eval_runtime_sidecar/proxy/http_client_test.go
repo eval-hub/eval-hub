@@ -1,19 +1,26 @@
 package proxy
 
 import (
+	"crypto/fips140"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"log/slog"
 	"math/big"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/platform"
 )
 
 func TestSchemeRequiresTLS(t *testing.T) {
@@ -72,6 +79,12 @@ func TestNewEvalHubHTTPClient(t *testing.T) {
 			},
 		}
 		client, err := NewEvalHubHTTPClient(cfg, false, logger)
+		if platform.IsFIPS() || fips140.Enabled() {
+			if err == nil || client != nil || !strings.Contains(err.Error(), "FIPS") {
+				t.Fatalf("expected FIPS rejection, got client %v and error %v", client, err)
+			}
+			return
+		}
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -110,6 +123,12 @@ func TestNewEvalHubHTTPClient(t *testing.T) {
 			},
 		}
 		client, err := NewEvalHubHTTPClient(cfg, false, logger)
+		if platform.IsFIPS() || fips140.Enabled() {
+			if err == nil || client != nil || !strings.Contains(err.Error(), "FIPS") {
+				t.Fatalf("expected FIPS rejection, got client %v and error %v", client, err)
+			}
+			return
+		}
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -228,7 +247,7 @@ func TestNewModelHTTPClient(t *testing.T) {
 		}
 	})
 
-	t.Run("http URL skips TLS config", func(t *testing.T) {
+	t.Run("http URL without CA cert skips TLS config", func(t *testing.T) {
 		cfg := &config.Config{
 			Sidecar: &config.SidecarConfig{
 				Model: &config.SidecarModelConfig{
@@ -245,6 +264,73 @@ func TestNewModelHTTPClient(t *testing.T) {
 		}
 	})
 
+	t.Run("http URL with CA cert builds TLS config for multi-destination routing", func(t *testing.T) {
+		previousToken := modelSACachedToken.Swap(nil)
+		t.Cleanup(func() { modelSACachedToken.Store(previousToken) })
+		model := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer model.Close()
+		kfp := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Authorization") != "Bearer test-sa-token" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			w.WriteHeader(http.StatusAccepted)
+		}))
+		defer kfp.Close()
+		for _, withCA := range []bool{true, false} {
+			t.Run(fmt.Sprintf("with_CA=%t", withCA), func(t *testing.T) {
+				secretDir := t.TempDir()
+				files := map[string][]byte{
+					"kfp_url":      []byte(kfp.URL),
+					"kfp_sa_token": {},
+				}
+				if withCA {
+					files["ca_cert"] = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: kfp.Certificate().Raw})
+				}
+				for name, data := range files {
+					if err := os.WriteFile(filepath.Join(secretDir, name), data, 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				saTokenPath := filepath.Join(t.TempDir(), "token")
+				if err := os.WriteFile(saTokenPath, []byte("test-sa-token"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				cfg := &config.Config{Sidecar: &config.SidecarConfig{Model: &config.SidecarModelConfig{
+					URL: model.URL, AuthSecretMountPath: secretDir,
+				}}}
+				client, err := NewModelHTTPClient(cfg, false, logger)
+				if err != nil {
+					t.Fatalf("NewModelHTTPClient: %v", err)
+				}
+				t.Cleanup(client.CloseIdleConnections)
+				target, err := url.Parse(model.URL)
+				if err != nil {
+					t.Fatal(err)
+				}
+				proxy := NewModelReverseProxy(target, client, logger, secretDir, saTokenPath)
+				for _, useRef := range []bool{false, true} {
+					req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+					wantStatus := http.StatusNoContent
+					if useRef {
+						req.Header.Set("Authorization", "Bearer kfp_sa_token:ref")
+						wantStatus = http.StatusBadGateway
+						if withCA {
+							wantStatus = http.StatusAccepted
+						}
+					}
+					rr := httptest.NewRecorder()
+					proxy.ServeHTTP(rr, req)
+					if rr.Code != wantStatus {
+						t.Fatalf("ref=%t: status = %d, want %d; body = %s", useRef, rr.Code, wantStatus, rr.Body.String())
+					}
+				}
+			})
+		}
+	})
+
 	t.Run("https URL with insecure_skip_verify", func(t *testing.T) {
 		cfg := &config.Config{
 			Sidecar: &config.SidecarConfig{
@@ -255,6 +341,12 @@ func TestNewModelHTTPClient(t *testing.T) {
 			},
 		}
 		client, err := NewModelHTTPClient(cfg, false, logger)
+		if platform.IsFIPS() || fips140.Enabled() {
+			if err == nil || client != nil || !strings.Contains(err.Error(), "FIPS") {
+				t.Fatalf("expected FIPS rejection, got client %v and error %v", client, err)
+			}
+			return
+		}
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -329,6 +421,29 @@ func TestBuildTLSConfig_LoadsCACert(t *testing.T) {
 	}
 	if tlsCfg == nil || tlsCfg.RootCAs == nil {
 		t.Fatal("expected TLS config with RootCAs")
+	}
+}
+
+func TestBuildTLSConfig_PreservesSystemRoots(t *testing.T) {
+	t.Parallel()
+	caPath := writeProxyTestCACert(t)
+	wantRoots, err := x509.SystemCertPool()
+	if err != nil {
+		t.Fatalf("SystemCertPool: %v", err)
+	}
+	caPEM, err := os.ReadFile(caPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !wantRoots.AppendCertsFromPEM(caPEM) {
+		t.Fatal("failed to parse test CA")
+	}
+	tlsCfg, err := buildTLSConfig(caPath, false, slog.Default(), "test")
+	if err != nil {
+		t.Fatalf("buildTLSConfig: %v", err)
+	}
+	if !tlsCfg.RootCAs.Equal(wantRoots) {
+		t.Fatal("custom CA must extend the system trust store so other HTTPS destinations remain trusted")
 	}
 }
 
