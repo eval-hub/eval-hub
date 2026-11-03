@@ -40,6 +40,11 @@ for task_path, source_repo, config, revision in DATASETS:
     kwargs = {"name": config, "cache_dir": str(CACHE)}
     if revision:
         kwargs["revision"] = revision
+    if source_repo == "EleutherAI/hendrycks_ethics":
+        # This pinned dataset revision includes its loading script. The staging
+        # pod is the trusted, connected preparation step; evaluation consumes
+        # the resulting local bundle without executing remote code.
+        kwargs["trust_remote_code"] = True
     dataset = load_dataset(source_repo, **kwargs)
     if not len(dataset):
         raise RuntimeError(f"{source_repo}/{config} has no splits")

@@ -1461,9 +1461,15 @@ data:
 
             if ROLE == "judge":
                 prompt = " ".join(str(message.get("content", "")) for message in request.get("messages", []))
-                match = re.search(r"with\s+(\d+)\s+values", prompt, re.IGNORECASE)
-                count = int(match.group(1)) if match else 1
-                content = "[" + ", ".join('"YES"' for _ in range(count)) + "]"
+                if "Answer with GRADE:" in prompt:
+                    # CyberSecEval 2's model_graded_qa scorer requires this
+                    # grade format; an unparseable reply yields NaN and
+                    # prevents the SDK from reporting the terminal status.
+                    content = "GRADE: C"
+                else:
+                    match = re.search(r"with\s+(\d+)\s+values", prompt, re.IGNORECASE)
+                    count = int(match.group(1)) if match else 1
+                    content = "[" + ", ".join('"YES"' for _ in range(count)) + "]"
             else:
                 content = "I will follow the requested constraints."
             self.reply(200, {

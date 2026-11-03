@@ -89,6 +89,37 @@ func TestCuratedBenchmarkMatrixComplete(t *testing.T) {
 	}
 }
 
+func TestLMESStagerOptsIntoPinnedEthicsDatasetCode(t *testing.T) {
+	program, err := fs.ReadFile(curatedAssetStagers, "stagers/lmes.py")
+	if err != nil {
+		t.Fatalf("read embedded LMES asset stager: %v", err)
+	}
+	source := string(program)
+	for _, required := range []string{
+		`source_repo == "EleutherAI/hendrycks_ethics"`,
+		`kwargs["trust_remote_code"] = True`,
+	} {
+		if !strings.Contains(source, required) {
+			t.Errorf("LMES stager does not contain %q", required)
+		}
+	}
+}
+
+func TestKindMockJudgeUsesCyberSecGradeFormat(t *testing.T) {
+	script, err := os.ReadFile("../../scripts/dev-deploy.sh")
+	if err != nil {
+		t.Fatalf("read dev-deploy script: %v", err)
+	}
+	for _, required := range []string{
+		`if "Answer with GRADE:" in prompt:`,
+		`content = "GRADE: C"`,
+	} {
+		if !strings.Contains(string(script), required) {
+			t.Errorf("dev-deploy mock judge does not contain %q", required)
+		}
+	}
+}
+
 func TestCuratedBenchmarkMatrixMatchesRepositoryConfigs(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	collectionsByID, err := config.LoadCollectionConfigs(logger, testhelpers.NewValidator(t), "../../config")
