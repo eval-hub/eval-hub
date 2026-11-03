@@ -32,11 +32,19 @@ export FVT_CA_CERT_PATH="/absolute/path/to/cluster-ca.pem"
 
 The PEM bundle is added to system trust for API requests, metrics scrapes,
 MCP backend requests, and the `MODEL_URL` connectivity check. Certificate chain
-and hostname validation remain enabled. An unreadable file or a bundle without
-PEM certificates fails suite setup. With this setting unset, system trust is
-used. The tests do not read the CA from kubeconfig automatically. This setting
-does not configure certificate trust inside evaluation job containers or the
+and hostname validation remain enabled for those clients when the CA is loaded.
+An unreadable file or a bundle without PEM certificates fails suite setup for
+API/metrics/MCP clients. With this setting unset, those clients use system trust.
+The tests do not read the CA from kubeconfig automatically. This setting does
+not configure certificate trust inside evaluation job containers or the
 separate MLflow and OCI clients.
+
+Temporary exception for the `MODEL_URL` preflight only: if `FVT_CA_CERT_PATH` is
+unset or the CA file cannot be read, that connectivity check skips TLS
+verification so provider/benchmark scenarios are not skipped on runners that
+do not yet trust the model endpoint CA (for example Jenkins). Prefer
+configuring `FVT_CA_CERT_PATH` so the preflight verifies TLS like the other
+clients; remove the bypass once the runner CA is in place.
 
 ### Model Overrides (Required)
 
