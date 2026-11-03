@@ -1155,13 +1155,6 @@ record_deployment_manifest() {
       --from-literal=source.eval-hub-contrib.dirty="$(git_source_dirty "$CONTRIB_REPO")"
     )
   fi
-  if adapter_selected lm-evaluation-harness; then
-    data_args+=(
-      --from-literal=source.lm-evaluation-harness.revision="$(git_source_revision "$LMES_REPO")"
-      --from-literal=source.lm-evaluation-harness.dirty="$(git_source_dirty "$LMES_REPO")"
-    )
-  fi
-
   for adapter in "${SELECTED_ADAPTERS[@]}"; do
     case "$adapter" in
       lm-evaluation-harness) image_name=community-lmes; repo="$LMES_REPO" ;;
