@@ -137,26 +137,42 @@ func IsResourceDoesNotExistError(err error) bool {
 	if !errors.As(err, &apiError) || apiError.StatusCode != http.StatusNotFound {
 		return false
 	}
-	// A decoded error code is authoritative and is checked before the response
-	// body: mapError renders the code into ResponseBody, so the legacy
-	// RESOURCE_DOES_NOT_EXIST substring must never override a different explicit
-	// code such as ENDPOINT_NOT_FOUND (a provider that does not serve the route).
-	if code := apiError.decodedErrorCode(); code != "" {
+	// An explicit error code wins over the status fallback, whether mlflow-go
+	// decoded it or it only appears in the body of a hand-built APIError. It also
+	// wins over the legacy RESOURCE_DOES_NOT_EXIST substring, because mapError
+	// renders the code into ResponseBody and a provider message can quote the
+	// substring; a different explicit code such as ENDPOINT_NOT_FOUND means the
+	// workspace route is missing, not the workspace.
+	if code := apiError.explicitErrorCode(); code != "" {
 		return code == "RESOURCE_DOES_NOT_EXIST"
 	}
-	// No decoded code, so the server answered outside MLflow's schema: the body
-	// holds the plain message (which has no code to contradict the status) and the
-	// 404 alone says the resource is missing.
+	// No code anywhere, so the server answered outside MLflow's schema: the 404
+	// status alone says the resource is missing (RHAI-17156).
 	return true
 }
 
-// decodedErrorCode returns the MLflow error code decoded by mlflow-go, or "" when
-// the server answered outside MLflow's error_code/message schema.
-func (e *APIError) decodedErrorCode() string {
-	if e.MLFlowError == nil {
+// explicitErrorCode returns the MLflow error code carried by the error, preferring
+// the one decoded by mlflow-go and falling back to MLflow's JSON error shape in the
+// captured response body. It returns "" when neither carries a code.
+func (e *APIError) explicitErrorCode() string {
+	if e.MLFlowError != nil && e.MLFlowError.ErrorCode != "" {
+		return e.MLFlowError.ErrorCode
+	}
+	return responseBodyErrorCode(e.ResponseBody)
+}
+
+// responseBodyErrorCode extracts MLflow's error_code from a raw response body, or
+// "" when the body is not in MLflow's JSON error shape.
+func responseBodyErrorCode(body string) string {
+	body = strings.TrimSpace(body)
+	if !strings.HasPrefix(body, "{") {
 		return ""
 	}
-	return e.MLFlowError.ErrorCode
+	var decoded MLFlowError
+	if err := json.Unmarshal([]byte(body), &decoded); err != nil {
+		return ""
+	}
+	return decoded.ErrorCode
 }
 
 // Experiment represents an MLflow experiment

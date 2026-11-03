@@ -126,6 +126,33 @@ func TestIsResourceDoesNotExistError(t *testing.T) {
 		}
 	})
 
+	// APIError is exported and its legacy shape carries only a raw body, so an
+	// explicit code in the body must decide just like a decoded one.
+	t.Run("body-only error with another explicit code is respected", func(t *testing.T) {
+		t.Parallel()
+		err := &APIError{
+			StatusCode:   404,
+			ResponseBody: `{"error_code":"ENDPOINT_NOT_FOUND","message":"no such endpoint"}`,
+		}
+		if IsResourceDoesNotExistError(err) {
+			t.Fatal("expected false when the body carries a different error code")
+		}
+	})
+
+	t.Run("body-only error without a code falls back to the status", func(t *testing.T) {
+		t.Parallel()
+		for _, body := range []string{
+			`{"detail":"workspace new-project not found"}`,
+			`{"error_code":"","message":"not found"}`,
+			`{"error_code":`,
+			"Not Found: workspace new-project not found",
+		} {
+			if !IsResourceDoesNotExistError(&APIError{StatusCode: 404, ResponseBody: body}) {
+				t.Fatalf("expected true for body %q without an error code", body)
+			}
+		}
+	})
+
 	t.Run("wrapped", func(t *testing.T) {
 		t.Parallel()
 		inner := &APIError{StatusCode: 404, MLFlowError: &MLFlowError{ErrorCode: "RESOURCE_DOES_NOT_EXIST"}}

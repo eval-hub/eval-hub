@@ -273,8 +273,9 @@ depend on (see RHAI-17156):
   status text is used.
 - **Classification follows the SDK.** `RESOURCE_ALREADY_EXISTS` matches on the
   error code or on HTTP 409 (mlflow-go's `IsAlreadyExists`); a 404 matches on
-  `RESOURCE_DOES_NOT_EXIST` or, when the body carries no MLflow code, on the
-  status alone. A 404 with a *different* explicit code is not treated as a missing
-  workspace, so a missing endpoint is never mistaken for a missing resource.
+  `RESOURCE_DOES_NOT_EXIST` — from the decoded error or from MLflow's JSON error
+  shape in the body — or, when no code is available at all, on the status alone. A
+  404 with a *different* explicit code is not treated as a missing workspace, so a
+  missing endpoint is never mistaken for a missing resource.
 - **No retries.** A failed workspace create is returned to the caller; the client
   never retries it or infers provider capabilities from a generic 403.
