@@ -93,9 +93,10 @@ func mapError(err error) error {
 }
 
 // errorResponseBody renders the mapped details in MLflow's JSON error shape when
-// an error code is present, so the legacy substring fallbacks keep matching. A
-// nonstandard body has no code, so the message is kept as plain text rather than
-// being wrapped in a bogus empty error_code field.
+// an error code is present, so the legacy substring fallback in
+// IsResourceAlreadyExistsError keeps matching. A nonstandard body has no code, so
+// the message is kept as plain text rather than being wrapped in a bogus empty
+// error_code field.
 func errorResponseBody(code, message string) string {
 	if code == "" {
 		return message
@@ -136,13 +137,26 @@ func IsResourceDoesNotExistError(err error) bool {
 	if !errors.As(err, &apiError) || apiError.StatusCode != http.StatusNotFound {
 		return false
 	}
-	if apiError.MLFlowError != nil && apiError.MLFlowError.ErrorCode == "RESOURCE_DOES_NOT_EXIST" {
-		return true
+	// A decoded error code is authoritative and is checked before the response
+	// body: mapError renders the code into ResponseBody, so the legacy
+	// RESOURCE_DOES_NOT_EXIST substring must never override a different explicit
+	// code such as ENDPOINT_NOT_FOUND (a provider that does not serve the route).
+	if code := apiError.decodedErrorCode(); code != "" {
+		return code == "RESOURCE_DOES_NOT_EXIST"
 	}
-	if strings.Contains(apiError.ResponseBody, "RESOURCE_DOES_NOT_EXIST") {
-		return true
+	// No decoded code, so the server answered outside MLflow's schema: the body
+	// holds the plain message (which has no code to contradict the status) and the
+	// 404 alone says the resource is missing.
+	return true
+}
+
+// decodedErrorCode returns the MLflow error code decoded by mlflow-go, or "" when
+// the server answered outside MLflow's error_code/message schema.
+func (e *APIError) decodedErrorCode() string {
+	if e.MLFlowError == nil {
+		return ""
 	}
-	return apiError.MLFlowError == nil || apiError.MLFlowError.ErrorCode == ""
+	return e.MLFlowError.ErrorCode
 }
 
 // Experiment represents an MLflow experiment

@@ -104,6 +104,28 @@ func TestIsResourceDoesNotExistError(t *testing.T) {
 		}
 	})
 
+	t.Run("explicit code wins over the body excerpt", func(t *testing.T) {
+		t.Parallel()
+		// mapError renders the code and message into ResponseBody, so a provider
+		// message can mention RESOURCE_DOES_NOT_EXIST while the decoded code is
+		// something else. The explicit code must decide.
+		got := mapError(&mlflow.APIError{
+			StatusCode: 404,
+			Code:       "ENDPOINT_NOT_FOUND",
+			Message:    `upstream said {"error_code":"RESOURCE_DOES_NOT_EXIST"}`,
+		})
+		var mapped *APIError
+		if !errors.As(got, &mapped) {
+			t.Fatalf("mapError() = %T, want *APIError", got)
+		}
+		if !strings.Contains(mapped.ResponseBody, "RESOURCE_DOES_NOT_EXIST") {
+			t.Fatalf("ResponseBody = %q, want the body excerpt to contain the substring", mapped.ResponseBody)
+		}
+		if IsResourceDoesNotExistError(got) {
+			t.Fatalf("expected false for ENDPOINT_NOT_FOUND: %v", got)
+		}
+	})
+
 	t.Run("wrapped", func(t *testing.T) {
 		t.Parallel()
 		inner := &APIError{StatusCode: 404, MLFlowError: &MLFlowError{ErrorCode: "RESOURCE_DOES_NOT_EXIST"}}

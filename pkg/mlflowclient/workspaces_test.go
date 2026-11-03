@@ -233,6 +233,57 @@ func TestEnsureWorkspaceProviderErrors(t *testing.T) {
 			t.Fatalf("lookup calls = %d, want 2 (initial miss + confirmation)", gets.Load())
 		}
 	})
+
+	// If the confirming lookup fails there is no evidence the workspace exists,
+	// and the create error is the only one carrying the provider's details.
+	t.Run("conflict without a confirming lookup keeps the create error", func(t *testing.T) {
+		t.Parallel()
+		const conflictMessage = "workspace new-project exists in the provider"
+		var gets atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case r.Method == http.MethodGet && r.URL.Path == "/api/3.0/mlflow/workspaces/new-project":
+				if gets.Add(1) == 1 {
+					w.WriteHeader(http.StatusNotFound)
+					_, _ = fmt.Fprint(w, `{"error_code":"RESOURCE_DOES_NOT_EXIST","message":"not found"}`)
+					return
+				}
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = fmt.Fprint(w, `{"error_code":"PERMISSION_DENIED","message":"lookup denied"}`)
+			case r.Method == http.MethodPost && r.URL.Path == "/api/3.0/mlflow/workspaces":
+				w.WriteHeader(http.StatusConflict)
+				_, _ = fmt.Fprintf(w, `{"error_code":"RESOURCE_ALREADY_EXISTS","message":%q}`, conflictMessage)
+			default:
+				t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+		}))
+		t.Cleanup(srv.Close)
+
+		client := NewClient(srv.URL).WithWorkspacesSupport(true).WithWorkspace("new-project")
+		err := client.EnsureWorkspace()
+		if err == nil {
+			t.Fatal("expected EnsureWorkspace to fail")
+		}
+		var apiErr *APIError
+		if !errors.As(err, &apiErr) {
+			t.Fatalf("EnsureWorkspace() = %T %v, want *APIError from the create", err, err)
+		}
+		if apiErr.StatusCode != http.StatusConflict {
+			t.Fatalf("StatusCode = %d, want %d (the create status, not the lookup status)", apiErr.StatusCode, http.StatusConflict)
+		}
+		if apiErr.MLFlowError == nil || apiErr.MLFlowError.ErrorCode != "RESOURCE_ALREADY_EXISTS" {
+			t.Fatalf("MLFlowError = %+v, want the create error code preserved", apiErr.MLFlowError)
+		}
+		if !strings.Contains(err.Error(), conflictMessage) {
+			t.Fatalf("Error() = %q, want it to contain %q", err.Error(), conflictMessage)
+		}
+		if !IsResourceAlreadyExistsError(err) {
+			t.Fatal("expected the returned error to stay classified as already-exists")
+		}
+		if gets.Load() != 2 {
+			t.Fatalf("lookup calls = %d, want 2 (initial miss + confirmation)", gets.Load())
+		}
+	})
 }
 
 func TestWorkspacesEnabled(t *testing.T) {

@@ -247,7 +247,9 @@ handles the wire-level MLflow protocol.
    `WithWorkspacesSupport(true)` is set. Does **not** probe capability; callers
    must resolve first (`WorkspaceSupport.PrepareClient` or startup
    `NewMLFlowClient`). Skips creation for the reserved `default` workspace.
-   Handles the `RESOURCE_ALREADY_EXISTS` race from concurrent creators.
+   Handles the `RESOURCE_ALREADY_EXISTS` race from concurrent creators: a conflict
+   is confirmed with a second lookup, and if that lookup fails the create error
+   (with the provider's details) is returned rather than the lookup failure.
    Workspace **names** are per client copy (tenant isolation); capability state
    lives on the shared `WorkspaceSupport` instance.
 
