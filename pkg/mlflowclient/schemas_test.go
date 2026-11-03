@@ -213,6 +213,13 @@ func TestIsResourceAlreadyExistsError(t *testing.T) {
 		}
 	})
 
+	t.Run("non-API error", func(t *testing.T) {
+		t.Parallel()
+		if IsResourceAlreadyExistsError(errors.New("network unreachable")) {
+			t.Fatal("expected false for a non-API error")
+		}
+	})
+
 	t.Run("unrelated status", func(t *testing.T) {
 		t.Parallel()
 		if IsResourceAlreadyExistsError(&APIError{StatusCode: 403, MLFlowError: &MLFlowError{Message: "Forbidden"}}) {
