@@ -1452,6 +1452,60 @@ func TestEvaluateOobCollectionJobJsonnetDisconnectedAware(t *testing.T) {
 	}
 }
 
+func TestDocumentUnderstandingRulerFVTUsesDisconnectedAssets(t *testing.T) {
+	wantIDs := []string{
+		"common-words-extraction",
+		"frequency-words-extraction",
+		"qa-squad",
+		"qa-hotpotqa",
+		"niah-single-essay",
+		"variable-tracking",
+	}
+	for _, disconnected := range []bool{false, true} {
+		t.Run(fmt.Sprintf("disconnected=%v", disconnected), func(t *testing.T) {
+			environment := "connected"
+			if disconnected {
+				environment = "disconnected"
+			}
+			tc := &scenarioConfig{jsonnetHarnessEnv: map[string]string{
+				"ENVIRONMENT_ID":          environment,
+				"TEST_DATA_S3_BUCKET":     "mlpipeline",
+				"TEST_DATA_S3_KEY":        "offline",
+				"TEST_DATA_S3_SECRET_REF": "minio-test",
+			}}
+			out, err := tc.evaluateJsonnetFile(jsonnetPayloadFilePath(t, "evaluation_job_document-understanding-v1.jsonnet"))
+			if err != nil {
+				t.Fatalf("evaluate document-understanding RULER fixture: %v", err)
+			}
+			var job struct {
+				Name       string `json:"name"`
+				Collection struct {
+					ID         string                    `json:"id"`
+					Benchmarks []jsonnetBenchmarkPayload `json:"benchmarks"`
+				} `json:"collection"`
+			}
+			if err := json.Unmarshal([]byte(out), &job); err != nil {
+				t.Fatalf("unmarshal document-understanding fixture: %v\noutput: %s", err, out)
+			}
+			if job.Name != "test-evaluation-job-oob-collection" || job.Collection.ID != "document-understanding-v1" {
+				t.Fatalf("unexpected job identity: name=%q collection=%q", job.Name, job.Collection.ID)
+			}
+			if len(job.Collection.Benchmarks) != len(wantIDs) {
+				t.Fatalf("got %d RULER benchmarks, want %d", len(job.Collection.Benchmarks), len(wantIDs))
+			}
+			for i, benchmark := range job.Collection.Benchmarks {
+				if benchmark.ID != wantIDs[i] || benchmark.ProviderID != "ruler" {
+					t.Errorf("benchmark[%d] = %s/%s, want ruler/%s", i, benchmark.ProviderID, benchmark.ID, wantIDs[i])
+				}
+				if benchmark.Parameters["context_lengths"] == nil || benchmark.Parameters["num_samples"] != float64(1) {
+					t.Errorf("benchmark %s lost its FVT parameters: %+v", benchmark.ID, benchmark.Parameters)
+				}
+			}
+			assertJsonnetBenchmarksDisconnectedAware(t, "evaluation_job_document-understanding-v1.jsonnet", job.Collection.Benchmarks, disconnected)
+		})
+	}
+}
+
 type jsonnetTestDataRef struct {
 	S3 struct {
 		Bucket    string `json:"bucket"`
