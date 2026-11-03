@@ -54,11 +54,16 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
 # Runtime stage
 FROM registry.access.redhat.com/ubi10/ubi-minimal:latest
 
-# Create user and app directory
-RUN groupadd -g 1000 evalhub && \
+# Create user and app directory.
+# UBI 10 minimal no longer ships shadow-utils (groupadd/useradd), so install it
+# for the user creation step and clean the package metadata in the same layer.
+RUN microdnf install -y shadow-utils && \
+    groupadd -g 1000 evalhub && \
     useradd -u 1000 -g evalhub -s /bin/bash -m evalhub && \
     mkdir -p /app/docs && \
-    chown -R evalhub:evalhub /app
+    chown -R evalhub:evalhub /app && \
+    microdnf clean all && \
+    rm -rf /var/cache/dnf /var/cache/yum /var/cache/libdnf5
 
 # Copy both binaries from builder
 COPY --from=builder --chown=evalhub:evalhub /build/eval-hub /app/eval-hub
