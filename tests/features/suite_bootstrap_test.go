@@ -421,14 +421,15 @@ func checkModelEndpoint() {
 
 	// Temporary test-only bypass for model endpoints whose private CA is not
 	// installed on the Jenkins runner. EvalHub API requests still verify TLS.
+	// Clone DefaultTransport so HTTP(S)_PROXY settings are preserved.
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = &tls.Config{
+		MinVersion:         tls.VersionTLS12,
+		InsecureSkipVerify: true, //nolint:gosec
+	}
 	client := &http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				MinVersion:         tls.VersionTLS12,
-				InsecureSkipVerify: true, //nolint:gosec
-			},
-		},
+		Timeout:   10 * time.Second,
+		Transport: transport,
 	}
 
 	maxRetries := 3
