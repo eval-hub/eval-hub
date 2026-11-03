@@ -573,7 +573,6 @@ Run the check:
 
 ```sh
 bash scripts/test-local-oci-export.sh
-OCI_TAG=custom OUTPUT_DIR=/tmp/local-oci-custom bash scripts/test-local-oci-export.sh
 ```
 
 A successful run prints a verification message and saves these files in
