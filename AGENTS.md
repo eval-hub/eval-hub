@@ -127,8 +127,8 @@ copies under `.claude/skills/`; change the external skill instead.
 | `golang-toolchain-update` | Auditing Go CVEs and bumping the Go toolchain, gated on the go-toolset image publishing the target tag. Modes: `cve` (default) and `latest`. |
 | `release-notes` | Drafting OpenSSF-compliant, human-readable GitHub release notes for a tag or version. |
 
-The human review workflow — the `ready-for-review` label, the requested-reviewer
-approval gate and the reviewer checklist — is documented in `CONTRIBUTING.md` →
+The human review workflow — the `ready-for-review` label, the approval ruleset
+and the reviewer checklist — is documented in `CONTRIBUTING.md` →
 [Review Process](./CONTRIBUTING.md#review-process).
 
 **Claude Code:** the committed `.claude/settings.json` declares the `evalhub`

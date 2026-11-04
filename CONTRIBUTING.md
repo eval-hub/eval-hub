@@ -467,13 +467,8 @@ checklist, then record a clear verdict.
 1. **Automated Checks**: CI must pass (format check, `go vet`, tests with coverage, API doc generation). For `python-server/`, pre-commit may run mypy when Python files change; Go types are checked by the compiler during build and tests
 2. **Apply the `ready-for-review` label** once the PR is ready for human review. It is this repository's opt-in signal: `.coderabbit.yaml` turns automatic CodeRabbit review off, so automated review only runs on PRs carrying the label (#879). Apply it when you actually intend to review — not on a draft, and not on a PR that still needs author changes.
 3. **Reviewer assignment**: Path-specific owners are defined in `.github/CODEOWNERS`; anything unowned falls back to `@eval-hub/maintainers`. GitHub requests the owning team automatically — update `CODEOWNERS` when ownership of a code area changes.
-4. **Approval requirement**: every PR needs at least one approving review (the rule recorded at the top of `.github/CODEOWNERS`). An author cannot supply their own approval, and a maintainer can dismiss a review that no longer applies.
-5. **Requested-reviewer approval gate**: `.github/workflows/required-reviewer-approvals.yml` runs `.github/scripts/verify-requested-reviewer-approvals.sh` on every non-draft PR targeting `main` or `develop`, and requires every user *and team* still listed as a requested reviewer to have approved. Its behaviour: it passes (reporting that it is skipping) unless the PR carries `ready-for-review`; it requires each requested user's *latest* review to be `APPROVED`, so a later comment or change request supersedes an earlier approval; a requested team passes when any current member's latest review is `APPROVED`, or — since the workflow's `GITHUB_TOKEN` cannot read organisation membership — when the approval comes from an organisation member or collaborator; and a PR with no requested reviewers passes trivially. Run it locally when the check fails and the reason is not obvious:
-
-   ```bash
-   PR_NUMBER=<number> REPOSITORY=eval-hub/eval-hub GH_TOKEN="$(gh auth token)" \
-     bash .github/scripts/verify-requested-reviewer-approvals.sh
-   ```
+4. **Approval requirements**: the `main` ruleset enforces them, so the merge box is the source of truth — there is no separate approval workflow to interpret. A PR needs at least one approving review, and it must come from a code owner: `.github/CODEOWNERS` assigns every path to `@eval-hub/maintainers`, and GitHub counts only approvals from people with write access to the repository. Approvals are dismissed when a code-modifying commit is pushed, the most recent push must be approved, and every review thread must be resolved before merging. An author cannot approve their own pull request, and a maintainer can dismiss a review that no longer applies.
+5. **Review requests are advisory**: GitHub does not block a merge because a requested reviewer has not responded, and a comment review is not an approval. Submit a review with "request changes" when you mean to block, and re-request the people you still need rather than waiting on a silent request.
 
 #### 2. What reviewers check
 
