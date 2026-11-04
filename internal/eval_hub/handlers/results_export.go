@@ -8,6 +8,8 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/evalcards"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/cards"
 )
@@ -19,22 +21,16 @@ func (h *Handlers) exportEvaluationResults(ctx context.Context, storage abstract
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
-	ociEligible := job.Status != nil && job.Status.State == api.OverallStateCompleted && job.Exports != nil && job.Exports.OCI != nil
+	ociEligible := api.IsOCIExportEnabled(job)
 	// Persist OCI progress before updating the in-memory job. A nil card preserves
 	// any previously published reference; a supplied card is saved with the status.
 	reportOCI := func(state api.OCIProcessingState, code, message string, card *api.OCIArtifactReference) bool {
 		status := &api.OCIProcessingStatus{State: state, Message: &api.MessageInfo{Message: message, MessageCode: code, MessageOrigin: api.MessageOriginServer}}
-		var err error
-		if storage == nil {
-			err = errors.New("storage is not configured")
-		} else {
-			err = storage.UpdateEvaluationJobOCI(job.Resource.ID, status, card)
-		}
+		err := h.persistOCIResults(storage, job, status, card)
 		if err != nil {
 			logger.Error("Failed to persist OCI evaluation-card processing", "job_id", job.Resource.ID, "operation", code, "error", err)
 			return false
 		}
-		job.Results = api.UpdateOCIResults(job.Results, status, card)
 		return true
 	}
 	// Log the cause even if storage is unavailable and saving the failure also fails.
@@ -90,13 +86,33 @@ func (h *Handlers) exportEvaluationResults(ctx context.Context, storage abstract
 		}
 		return
 	}
-	if result.OCIArtifact == nil || result.OCIArtifact.OCIDigest == "" || result.OCIArtifact.OCIReference == "" {
+	if result.OCIArtifact == nil {
 		failOCI(constants.MessageCodeOCIProcessingFailed, "Publish evaluation card: no published manifest reference is available", nil)
 		return
 	}
 	// Save outputs and the final status together. Future bundle generation and
 	// signing phases run before this update, without intermediate progress writes.
 	if !reportOCI(api.OCIProcessingCompleted, constants.MessageCodeOCIProcessingCompleted, "OCI processing completed", result.OCIArtifact) {
-		failOCI(constants.MessageCodeOCIProcessingFailed, "Persist evaluation-card OCI completion: storage update failed", result.OCIArtifact)
+		failOCI(constants.MessageCodeOCIProcessingFailed, "Persist evaluation-card OCI completion: validation or storage update failed", nil)
 	}
+}
+
+// persistOCIResults validates workflow output before touching storage or the job.
+func (h *Handlers) persistOCIResults(storage abstractions.Storage, job *api.EvaluationJobResource, status *api.OCIProcessingStatus, card *api.OCIArtifactReference) error {
+	if err := h.validate.Struct(status); err != nil {
+		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", "invalid OCI processing status: "+err.Error())
+	}
+	if card != nil {
+		if err := h.validate.Struct(card); err != nil {
+			return serviceerrors.NewServiceError(messages.InternalServerError, "Error", "invalid OCI artifact reference: "+err.Error())
+		}
+	}
+	if storage == nil {
+		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", "storage is not configured")
+	}
+	if err := storage.UpdateEvaluationJobOCI(job.Resource.ID, status, card); err != nil {
+		return err
+	}
+	job.Results = api.UpdateOCIResults(job.Results, status, card)
+	return nil
 }

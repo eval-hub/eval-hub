@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/go-playground/validator/v10"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/evalcards"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/oci"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/cards"
 )
@@ -83,7 +86,7 @@ func TestOCIReportingSuccessAndUnchangedTerminalCallback(t *testing.T) {
 	before, _ := json.Marshal(job.Status)
 	exporter := &ociOutcomeExporter{result: evalcards.ExportResult{OCIArtifact: publishedCard()}, err: errors.New("MLflow upload failed")}
 	storage := &ociReportingStorage{job: job}
-	h := &Handlers{resultsExporter: exporter}
+	h := &Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exporter}
 	h.onEvaluationJobUpdated(context.Background(), storage, func() (*api.EvaluationJobResource, error) { return job, nil }, api.OverallStateRunning, nil)
 	want := []api.OCIProcessingState{api.OCIProcessingRunning, api.OCIProcessingCompleted}
 	if !reflect.DeepEqual(storage.calls, want) {
@@ -127,7 +130,7 @@ func TestOCIReportingPreservesRegistryFailure(t *testing.T) {
 		OCIPublisherFactory: evalcards.NewOCIPublisherFactory(oci.NewLocalCredentialResolver(), srv.Client()),
 	})
 	var logs bytes.Buffer
-	(&Handlers{resultsExporter: exporter}).exportEvaluationResults(context.Background(), storage, job, slog.New(slog.NewTextHandler(&logs, nil)))
+	(&Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exporter}).exportEvaluationResults(context.Background(), storage, job, slog.New(slog.NewTextHandler(&logs, nil)))
 	status := job.Results.OCI.Status
 	if status.State != api.OCIProcessingFailed || !strings.Contains(status.Message.Message, "HTTP status 403") || !strings.Contains(status.Message.Message, message) {
 		t.Fatalf("registry diagnostics not persisted: %#v", status)
@@ -156,10 +159,10 @@ func TestOCIReportingFailures(t *testing.T) {
 		{name: "publisher failure", exportError: &evalcards.OCIExportError{Operation: "resolve credentials", Reason: "tenant connection Secret was not found"}, wantCode: "oci_processing_failed", wantExport: true},
 		{name: "missing published reference", emptyResult: true, wantCode: "oci_processing_failed", wantExport: true},
 		{name: "untyped publisher error", result: &evalcards.ExportResult{OCIError: errors.New("publisher failed"), OCIArtifact: publishedCard()}, wantCode: "oci_processing_failed", wantMessage: "Publish evaluation card: OCI publisher failed", wantExport: true},
-		{name: "missing digest", result: &evalcards.ExportResult{OCIArtifact: &api.OCIArtifactReference{OCIReference: publishedCard().OCIReference}}, wantCode: "oci_processing_failed", wantMessage: "Publish evaluation card: no published manifest reference is available", wantExport: true},
-		{name: "missing reference", result: &evalcards.ExportResult{OCIArtifact: &api.OCIArtifactReference{OCIDigest: publishedCard().OCIDigest}}, wantCode: "oci_processing_failed", wantMessage: "Publish evaluation card: no published manifest reference is available", wantExport: true},
+		{name: "missing digest", result: &evalcards.ExportResult{OCIArtifact: &api.OCIArtifactReference{OCIReference: publishedCard().OCIReference}}, wantCode: "oci_processing_failed", wantMessage: "Persist evaluation-card OCI completion: validation or storage update failed", wantExport: true},
+		{name: "missing reference", result: &evalcards.ExportResult{OCIArtifact: &api.OCIArtifactReference{OCIDigest: publishedCard().OCIDigest}}, wantCode: "oci_processing_failed", wantMessage: "Persist evaluation-card OCI completion: validation or storage update failed", wantExport: true},
 		{name: "running persistence", failAt: 1, wantCode: "oci_processing_failed"},
-		{name: "completion persistence", failAt: 2, wantCode: "oci_processing_failed", wantCard: true, wantExport: true},
+		{name: "completion persistence", failAt: 2, wantCode: "oci_processing_failed", wantExport: true},
 		{name: "unavailable storage", unavailable: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -172,7 +175,7 @@ func TestOCIReportingFailures(t *testing.T) {
 			if tc.result != nil {
 				exporter.result = *tc.result
 			}
-			h := &Handlers{resultsExporter: exporter}
+			h := &Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exporter}
 			var logs bytes.Buffer
 			h.exportEvaluationResults(context.Background(), storage, job, slog.New(slog.NewTextHandler(&logs, nil)))
 			if exporter.calls != 1 || exporter.ociEnabled != tc.wantExport {
@@ -207,7 +210,7 @@ func TestOCIReportingFailures(t *testing.T) {
 					t.Fatalf("artifact = %#v", job.Results.OCI.EvaluationCard)
 				}
 				if tc.failAt == 2 {
-					if !reflect.DeepEqual(storage.cards, []*api.OCIArtifactReference{nil, publishedCard(), publishedCard()}) {
+					if !reflect.DeepEqual(storage.cards, []*api.OCIArtifactReference{nil, publishedCard(), nil}) {
 						t.Fatalf("completion failure did not save the published reference with failed status: states=%v cards=%v", storage.calls, storage.cards)
 					}
 				}
@@ -221,23 +224,33 @@ func TestOCIReportingFailures(t *testing.T) {
 
 func TestOCIReportingEligibility(t *testing.T) {
 	for _, state := range []api.OverallState{api.OverallStateFailed, api.OverallStateCancelled, api.OverallStatePartiallyFailed, api.OverallStateCompleted} {
-		t.Run(string(state), func(t *testing.T) {
-			job := completedOCIJob()
-			job.Status.State = state
-			if state == api.OverallStateCompleted {
-				job.Exports = nil
-			}
-			storage := &ociReportingStorage{job: job}
-			exporter := &ociOutcomeExporter{}
-			(&Handlers{resultsExporter: exporter}).exportEvaluationResults(context.Background(), storage, job, nil)
-			wantCalls := 0
-			if state == api.OverallStateCompleted || state == api.OverallStatePartiallyFailed {
-				wantCalls = 1
-			}
-			if len(storage.calls) != 0 || job.Results.OCI != nil || exporter.calls != wantCalls {
-				t.Fatal("changed export eligibility or added synthetic OCI output")
-			}
-		})
+		for _, enabled := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/oci=%t", state, enabled), func(t *testing.T) {
+				job := completedOCIJob()
+				job.Status.State = state
+				if !enabled {
+					job.Exports = nil
+				}
+				storage := &ociReportingStorage{job: job}
+				exporter := &ociOutcomeExporter{result: evalcards.ExportResult{OCIArtifact: publishedCard()}}
+				(&Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exporter}).exportEvaluationResults(context.Background(), storage, job, nil)
+				eligible := state == api.OverallStateCompleted || state == api.OverallStatePartiallyFailed
+				wantCalls := 0
+				if eligible {
+					wantCalls = 1
+				}
+				if exporter.calls != wantCalls {
+					t.Fatalf("export calls=%d, want %d", exporter.calls, wantCalls)
+				}
+				if eligible && enabled {
+					if !exporter.ociEnabled || !reflect.DeepEqual(storage.calls, []api.OCIProcessingState{api.OCIProcessingRunning, api.OCIProcessingCompleted}) || !reflect.DeepEqual(job.Results.OCI.EvaluationCard, publishedCard()) {
+						t.Fatal("eligible job did not publish and persist its OCI card")
+					}
+				} else if len(storage.calls) != 0 || job.Results.OCI != nil {
+					t.Fatal("ineligible job received OCI updates")
+				}
+			})
+		}
 	}
 }
 
@@ -248,7 +261,7 @@ func TestOCIReportingMissingExporterAndInvalidCard(t *testing.T) {
 			job.Resource.ID = ""
 		}
 		storage := &ociReportingStorage{job: job}
-		(&Handlers{}).exportEvaluationResults(context.Background(), storage, job, nil)
+		(&Handlers{validate: newOCIWorkflowValidator(t)}).exportEvaluationResults(context.Background(), storage, job, nil)
 		if job.Results.OCI.Status.Message.MessageCode != "oci_processing_failed" {
 			t.Fatalf("message = %#v", job.Results.OCI.Status.Message)
 		}
@@ -263,7 +276,7 @@ func TestOCIReportingWithoutStoragePreservesJobAndIndependentExports(t *testing.
 	}
 	exporter := &ociOutcomeExporter{result: evalcards.ExportResult{CardURL: "https://mlflow/card"}}
 	var logs bytes.Buffer
-	(&Handlers{resultsExporter: exporter}).exportEvaluationResults(context.Background(), nil, job, slog.New(slog.NewTextHandler(&logs, nil)))
+	(&Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exporter}).exportEvaluationResults(context.Background(), nil, job, slog.New(slog.NewTextHandler(&logs, nil)))
 	after, err := json.Marshal(job)
 	if err != nil {
 		t.Fatal(err)
@@ -273,5 +286,110 @@ func TestOCIReportingWithoutStoragePreservesJobAndIndependentExports(t *testing.
 	}
 	if !strings.Contains(logs.String(), "storage is not configured") {
 		t.Fatalf("missing storage diagnostic: %s", logs.String())
+	}
+}
+
+func newOCIWorkflowValidator(t *testing.T) *validator.Validate {
+	t.Helper()
+	v, err := validation.NewValidator()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
+func TestPersistOCIResultsValidation(t *testing.T) {
+	validStatus := func() *api.OCIProcessingStatus {
+		return &api.OCIProcessingStatus{State: api.OCIProcessingRunning, Message: &api.MessageInfo{Message: "Running", MessageCode: "running", MessageOrigin: api.MessageOriginServer}}
+	}
+	for _, name := range []string{"nil status", "invalid state", "missing message", "missing text", "missing code", "empty artifact", "malformed digest", "blank reference", "storage failure", "running", "completed", "failed"} {
+		t.Run(name, func(t *testing.T) {
+			job := completedOCIJob()
+			storage := &ociReportingStorage{job: job}
+			h := &Handlers{validate: newOCIWorkflowValidator(t)}
+			status := validStatus()
+			var card *api.OCIArtifactReference
+			valid := false
+			switch name {
+			case "nil status":
+				status = nil
+			case "invalid state":
+				status.State = "invalid"
+			case "missing message":
+				status.Message = nil
+			case "missing text":
+				status.Message.Message = ""
+			case "missing code":
+				status.Message.MessageCode = ""
+			case "empty artifact":
+				card = &api.OCIArtifactReference{}
+			case "malformed digest":
+				card = publishedCard()
+				card.OCIDigest = "sha256:bad"
+			case "blank reference":
+				card = publishedCard()
+				card.OCIReference = "  "
+			case "storage failure":
+				storage.failAt = 1
+			case "running":
+				valid = true
+			case "completed":
+				valid = true
+				status.State = api.OCIProcessingCompleted
+				card = publishedCard()
+			case "failed":
+				valid = true
+				status.State = api.OCIProcessingFailed
+			}
+			before, _ := json.Marshal(job.Results)
+			err := h.persistOCIResults(storage, job, status, card)
+			if valid {
+				if err != nil || len(storage.calls) != 1 || job.Results.OCI.Status != status {
+					t.Fatalf("valid update failed: %v", err)
+				}
+			} else {
+				after, _ := json.Marshal(job.Results)
+				if err == nil || !bytes.Equal(before, after) {
+					t.Fatalf("invalid or failed update changed results: %v", err)
+				}
+				if name != "storage failure" && len(storage.calls) != 0 {
+					t.Fatal("invalid update reached storage")
+				}
+			}
+		})
+	}
+}
+
+func TestOCIInvalidCompletionArtifactIsNotRetried(t *testing.T) {
+	for _, card := range []*api.OCIArtifactReference{{}, {OCIDigest: "sha256:bad", OCIReference: "registry/card"}, {OCIDigest: publishedCard().OCIDigest, OCIReference: " "}} {
+		job := completedOCIJob()
+		storage := &ociReportingStorage{job: job}
+		exporter := &ociOutcomeExporter{result: evalcards.ExportResult{OCIArtifact: card}}
+		h := &Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exporter}
+		h.exportEvaluationResults(context.Background(), storage, job, nil)
+		if !reflect.DeepEqual(storage.calls, []api.OCIProcessingState{api.OCIProcessingRunning, api.OCIProcessingFailed}) || job.Results.OCI.EvaluationCard != nil {
+			t.Fatalf("invalid artifact persisted: states=%v", storage.calls)
+		}
+		for _, saved := range storage.cards {
+			if saved != nil {
+				t.Fatal("retried invalid artifact")
+			}
+		}
+	}
+}
+
+func TestOCIReportingValidationFailurePreventsPublishing(t *testing.T) {
+	job := completedOCIJob()
+	storage := &ociReportingStorage{job: job}
+	exporter := &ociOutcomeExporter{result: evalcards.ExportResult{OCIArtifact: publishedCard()}}
+	v := newOCIWorkflowValidator(t)
+	// Reject generated statuses to exercise both running and failure-reporting validation.
+	v.RegisterStructValidation(func(sl validator.StructLevel) {
+		sl.ReportError(sl.Current().Interface(), "State", "State", "workflow", "")
+	}, api.OCIProcessingStatus{})
+	h := &Handlers{validate: v, resultsExporter: exporter}
+	h.exportEvaluationResults(context.Background(), storage, job, nil)
+	if len(storage.calls) != 0 || job.Results.OCI != nil || exporter.ociEnabled {
+		t.Fatal("validation failure persisted progress or allowed OCI publishing")
 	}
 }
