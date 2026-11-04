@@ -9,6 +9,19 @@ local scanParameters = {
     plugins: { extended_detectors: false },
   },
 };
+// atkgen.Tox has its own conversation loop, independent of generations and the
+// soft prompt cap. Keep it to one conversation and one turn for this smoke test.
+local ethicsParameters = scanParameters {
+  garak_config+: {
+    plugins+: {
+      probes: {
+        atkgen: {
+          Tox: { convs_per_generation: 1, max_calls_per_conv: 1 },
+        },
+      },
+    },
+  },
+};
 
 test.mergeOptional(
   test.mergeOptional(
@@ -18,7 +31,7 @@ test.mergeOptional(
     } + if collectionId == '' then {
       benchmarks: [
         test.benchmark('quick', 'garak', scanParameters),
-        test.benchmark('avid_ethics', 'garak', scanParameters),
+        test.benchmark('avid_ethics', 'garak', ethicsParameters),
         test.benchmark('avid_performance', 'garak', scanParameters),
       ],
       tags: ['benchmark-providers', 'garak'],
