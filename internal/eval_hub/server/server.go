@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"log/slog"
 	"net"
@@ -19,7 +18,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/httpwrappers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
-	"github.com/eval-hub/eval-hub/internal/platform"
+	"github.com/eval-hub/eval-hub/internal/servingtls"
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 	"github.com/go-playground/validator/v10"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -587,6 +586,10 @@ func (s *Server) Start() error {
 		return err
 	}
 
+	serverTLS, err := servingtls.FromEnv(s.serviceConfig.Service.TLSCertFile, s.serviceConfig.Service.TLSKeyFile)
+	if err != nil {
+		return err
+	}
 	handler, err := s.setupRoutes()
 	if err != nil {
 		return err
@@ -604,24 +607,14 @@ func (s *Server) Start() error {
 		WriteTimeout:      s.serviceConfig.Service.EffectiveWriteTimeout(),
 		IdleTimeout:       s.serviceConfig.Service.EffectiveIdleTimeout(),
 		MaxHeaderBytes:    s.serviceConfig.Service.EffectiveMaxHeaderBytes(),
-		TLSConfig: &tls.Config{
-			MinVersion: tls.VersionTLS12,
-			MaxVersion: tls.VersionTLS13,
-		},
+		TLSConfig:         serverTLS,
 	}
 
-	if platform.IsFIPS() && s.httpServer.TLSConfig.InsecureSkipVerify {
-		return fmt.Errorf("FIPS mode enabled, but TLS certificate verification is required")
-	}
-
-	tlsEnabled := s.serviceConfig.Service.TLSEnabled()
+	tlsEnabled := serverTLS != nil
 	s.logger.Info("API Server starting", "addr", addr, "tls", tlsEnabled)
 
 	if tlsEnabled {
-		err = s.httpServer.ListenAndServeTLS(
-			s.serviceConfig.Service.TLSCertFile,
-			s.serviceConfig.Service.TLSKeyFile,
-		)
+		err = s.httpServer.ListenAndServeTLS("", "")
 	} else {
 		err = s.httpServer.ListenAndServe()
 	}

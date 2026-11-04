@@ -2,29 +2,33 @@ package benchmarks
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
-	"strings"
+	"slices"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
+	"github.com/eval-hub/eval-hub/tests/benchmarks/internal/fixturecheck"
+	"go.yaml.in/yaml/v4"
 )
 
 func TestRoleFixturesDoNotSerializeConnectionParameters(t *testing.T) {
-	for _, provider := range []string{"inspect", "deepeval", "ragas", "followbench", "tooleval", "ibm-clear", "promptfoo"} {
+	for _, provider := range fixturecheck.Providers() {
 		paths, err := filepath.Glob(filepath.Join("testdata", provider, "*.json"))
 		if err != nil {
 			t.Fatal(err)
 		}
+		if len(paths) == 0 {
+			t.Fatalf("no fixtures found for %s", provider)
+		}
 		for _, path := range paths {
 			t.Run(path, func(t *testing.T) {
 				lookup := func(key string) (string, bool) {
-					if key == "JUDGE_API_KEY" {
-						return "credential-must-not-enter-job", true
+					value, ok := fixtureEnv(key)
+					if !ok {
+						t.Fatalf("unexpected fixture environment input %q", key)
 					}
-					if key == "JUDGE_BASE_URL" {
-						return "https://judge-must-not-enter-parameters.example/v1", true
-					}
-					return fixtureEnv(key)
+					return value, ok
 				}
 				f, err := loadFixture(path, lookup)
 				if err != nil {
@@ -40,12 +44,55 @@ func TestRoleFixturesDoNotSerializeConnectionParameters(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				for _, forbidden := range []string{"credential-must-not-enter-job", "judge-must-not-enter-parameters.example", `"judge_api_key"`, `"judge_base_url"`, `"auditor_base_url"`, `"grader_base_url"`, `"eval_model_url"`, `"embedding_url"`} {
-					if strings.Contains(string(body), forbidden) {
-						t.Errorf("submitted request contains legacy connection input %s", forbidden)
+				var submitted api.EvaluationJobConfig
+				if err := json.Unmarshal(body, &submitted); err != nil {
+					t.Fatal(err)
+				}
+				for _, benchmark := range submitted.Benchmarks {
+					if fields := fixturecheck.ConnectionOptions(benchmark.Parameters); len(fields) != 0 {
+						t.Errorf("submitted parameters contain model connection fields: %v", fields)
 					}
 				}
 			})
+		}
+	}
+}
+
+func TestRoleProviderCatalogsDoNotAdvertiseConnectionParameters(t *testing.T) {
+	paths, err := filepath.Glob("../../config/providers/*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := make(map[string]bool)
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var catalog struct {
+			ID         string `yaml:"id"`
+			Parameters []struct {
+				Name string `yaml:"name"`
+			} `yaml:"parameters"`
+		}
+		if err := yaml.Unmarshal(data, &catalog); err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Contains(fixturecheck.Providers(), catalog.ID) {
+			continue
+		}
+		seen[catalog.ID] = true
+		t.Run(catalog.ID, func(t *testing.T) {
+			for _, parameter := range catalog.Parameters {
+				if fixturecheck.IsConnectionOption(parameter.Name) {
+					t.Errorf("catalog advertises model connection parameter %q", parameter.Name)
+				}
+			}
+		})
+	}
+	for _, provider := range fixturecheck.Providers() {
+		if !seen[provider] {
+			t.Errorf("no catalog found for %s", provider)
 		}
 	}
 }

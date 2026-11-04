@@ -258,6 +258,48 @@ func TestBenchmarkTokenizerConfiguration(t *testing.T) {
 	}
 }
 
+func TestGarakBenchmarkScanLimits(t *testing.T) {
+	for _, environment := range []string{"connected", "disconnected"} {
+		t.Run(environment, func(t *testing.T) {
+			sc := &scenarioConfig{
+				values:            map[string]string{"collection_id": ""},
+				jsonnetHarnessEnv: map[string]string{"ENVIRONMENT_ID": environment},
+			}
+			out, err := sc.getFile("evaluation_job_garak.json")
+			if err != nil {
+				t.Fatalf("render Garak fixture: %v", err)
+			}
+			var job struct {
+				Benchmarks []jsonnetBenchmarkPayload `json:"benchmarks"`
+			}
+			if err := json.Unmarshal([]byte(out), &job); err != nil {
+				t.Fatalf("unmarshal Garak fixture: %v", err)
+			}
+			wantIDs := []string{"quick", "avid_ethics", "avid_performance"}
+			var ids []string
+			wantConfig := map[string]any{
+				"run":     map[string]any{"generations": float64(1), "soft_probe_prompt_cap": float64(1)},
+				"plugins": map[string]any{"extended_detectors": false},
+			}
+			for _, benchmark := range job.Benchmarks {
+				ids = append(ids, benchmark.ID)
+				if benchmark.ProviderID != "garak" {
+					t.Errorf("%s provider = %q, want garak", benchmark.ID, benchmark.ProviderID)
+				}
+				if got := benchmark.Parameters["timeout_seconds"]; got != float64(600) {
+					t.Errorf("%s timeout_seconds = %v, want 600", benchmark.ID, got)
+				}
+				if got := benchmark.Parameters["garak_config"]; !reflect.DeepEqual(got, wantConfig) {
+					t.Errorf("%s garak_config = %#v, want %#v", benchmark.ID, got, wantConfig)
+				}
+			}
+			if !reflect.DeepEqual(ids, wantIDs) {
+				t.Errorf("benchmarks = %v, want %v", ids, wantIDs)
+			}
+		})
+	}
+}
+
 func TestJsonnetModelAuth(t *testing.T) {
 	tc := &scenarioConfig{
 		values:                map[string]string{},
@@ -552,8 +594,9 @@ func TestEvaluateEvaluationJobJsonnetDisconnected(t *testing.T) {
 	if b.Parameters["tokenizer"] != "/test_data/tokenizer" {
 		t.Errorf("tokenizer = %v, want /test_data/tokenizer", b.Parameters["tokenizer"])
 	}
-	if b.TestDataRef.S3.Bucket != "mlpipeline" || b.TestDataRef.S3.Key != "offline" || b.TestDataRef.S3.SecretRef != "minio-test" {
-		t.Errorf("test_data_ref.s3 = %+v, want mlpipeline/offline/minio-test", b.TestDataRef.S3)
+	wantKey := benchmarkTestDataKey("lm_evaluation_harness", "arc_easy")
+	if b.TestDataRef.S3.Bucket != "mlpipeline" || b.TestDataRef.S3.Key != wantKey || b.TestDataRef.S3.SecretRef != "minio-test" {
+		t.Errorf("test_data_ref.s3 = %+v, want mlpipeline/%s/minio-test", b.TestDataRef.S3, wantKey)
 	}
 }
 
@@ -1417,6 +1460,12 @@ type jsonnetTestDataRef struct {
 	} `json:"s3"`
 }
 
+const fvtS3BundleRoot = "offline/fvt/benchmarks"
+
+func benchmarkTestDataKey(providerID, benchmarkID string) string {
+	return strings.Join([]string{fvtS3BundleRoot, providerID, benchmarkID}, "/") + "/"
+}
+
 type jsonnetBenchmarkPayload struct {
 	ID             string              `json:"id"`
 	ProviderID     string              `json:"provider_id"`
@@ -1554,8 +1603,9 @@ func assertJsonnetBenchmarksDisconnectedAware(t *testing.T, file string, benchma
 				continue
 			}
 			s3 := b.TestDataRef.S3
-			if s3.Bucket != "mlpipeline" || s3.Key != "offline" || s3.SecretRef != "minio-test" {
-				t.Errorf("%s benchmarks[%d].test_data_ref.s3 = %+v, want mlpipeline/offline/minio-test", file, i, s3)
+			wantKey := benchmarkTestDataKey(b.ProviderID, b.ID)
+			if s3.Bucket != "mlpipeline" || s3.Key != wantKey || s3.SecretRef != "minio-test" {
+				t.Errorf("%s benchmarks[%d].test_data_ref.s3 = %+v, want mlpipeline/%s/minio-test", file, i, s3, wantKey)
 			}
 		} else if b.TestDataRef != nil {
 			t.Errorf("%s benchmarks[%d].test_data_ref = %+v, want nil", file, i, b.TestDataRef.S3)

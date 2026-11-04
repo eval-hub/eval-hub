@@ -1,9 +1,16 @@
 {
-  "notes": "One sample per task. Agent/code benchmarks may require sandbox and external services. Model IDs remain job parameters; configure independent judge, auditor, scenarios, and realism connections with <role>_api-key/<role>_url in MODEL_AUTH_SECRET_REF. StrongREJECT uses the judge Secret pair for grader_model.",
+  "notes": "One experiment with turn_cap=2 so the mark can respond, using the target model and its endpoint/credentials for the mark role instead of the default Google model. Smoke execution only.",
   "parameters": {
     "epochs": 1,
     "max_tasks": 1,
-    "num_examples": 1
+    "model_roles": {
+      "mark": "openai/${MODEL_NAME}"
+    },
+    "num_examples": 1,
+    "task_args": {
+      "num_experiments": 1,
+      "turn_cap": 2
+    }
   },
   "timeout": "5m"
 }

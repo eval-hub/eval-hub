@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"crypto/fips140"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -14,10 +15,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/platform"
 )
 
 func TestSchemeRequiresTLS(t *testing.T) {
@@ -76,6 +79,12 @@ func TestNewEvalHubHTTPClient(t *testing.T) {
 			},
 		}
 		client, err := NewEvalHubHTTPClient(cfg, false, logger)
+		if platform.IsFIPS() || fips140.Enabled() {
+			if err == nil || client != nil || !strings.Contains(err.Error(), "FIPS") {
+				t.Fatalf("expected FIPS rejection, got client %v and error %v", client, err)
+			}
+			return
+		}
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -114,6 +123,12 @@ func TestNewEvalHubHTTPClient(t *testing.T) {
 			},
 		}
 		client, err := NewEvalHubHTTPClient(cfg, false, logger)
+		if platform.IsFIPS() || fips140.Enabled() {
+			if err == nil || client != nil || !strings.Contains(err.Error(), "FIPS") {
+				t.Fatalf("expected FIPS rejection, got client %v and error %v", client, err)
+			}
+			return
+		}
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -326,6 +341,12 @@ func TestNewModelHTTPClient(t *testing.T) {
 			},
 		}
 		client, err := NewModelHTTPClient(cfg, false, logger)
+		if platform.IsFIPS() || fips140.Enabled() {
+			if err == nil || client != nil || !strings.Contains(err.Error(), "FIPS") {
+				t.Fatalf("expected FIPS rejection, got client %v and error %v", client, err)
+			}
+			return
+		}
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

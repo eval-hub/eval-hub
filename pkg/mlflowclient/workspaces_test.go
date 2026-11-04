@@ -2,8 +2,12 @@ package mlflowclient
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 )
@@ -125,6 +129,159 @@ func TestEnsureWorkspace(t *testing.T) {
 		}
 		if createCalls != 0 {
 			t.Fatalf("createCalls = %d, want 0", createCalls)
+		}
+	})
+}
+
+func TestEnsureWorkspaceProviderErrors(t *testing.T) {
+	t.Parallel()
+
+	// RHAI-17156: the workspace lookup reports the workspace as missing, and the
+	// provider answers the create with HTTP 403 and a body outside MLflow's
+	// error_code/message schema. The provider's reason has to reach the caller, and
+	// the client must not retry the create or re-classify the failure.
+	t.Run("forbidden create keeps the provider detail", func(t *testing.T) {
+		t.Parallel()
+		const notFoundMessage = "Workspace 'new-project' not found in the Kubernetes cluster."
+		const creationMessage = "Namespace creation is not supported by this provider"
+		var mu sync.Mutex
+		var calls []string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mu.Lock()
+			calls = append(calls, r.Method+" "+r.URL.Path)
+			mu.Unlock()
+			switch {
+			case r.Method == http.MethodGet && r.URL.Path == "/api/3.0/mlflow/workspaces/new-project":
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = fmt.Fprintf(w, `{"error_code":"RESOURCE_DOES_NOT_EXIST","message":%q}`, notFoundMessage)
+			case r.Method == http.MethodPost && r.URL.Path == "/api/3.0/mlflow/workspaces":
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = fmt.Fprintf(w, `{"detail":%q}`, creationMessage)
+			default:
+				t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+		}))
+		t.Cleanup(srv.Close)
+
+		client := NewClient(srv.URL).WithWorkspacesSupport(true).WithWorkspace("new-project")
+		err := client.EnsureWorkspace()
+		if err == nil {
+			t.Fatal("expected EnsureWorkspace to fail")
+		}
+		var apiErr *APIError
+		if !errors.As(err, &apiErr) {
+			t.Fatalf("EnsureWorkspace() = %T %v, want *APIError", err, err)
+		}
+		if apiErr.StatusCode != http.StatusForbidden {
+			t.Fatalf("StatusCode = %d, want %d", apiErr.StatusCode, http.StatusForbidden)
+		}
+		if apiErr.MLFlowError == nil || apiErr.MLFlowError.Message == "" {
+			t.Fatalf("MLFlowError = %+v, want the provider detail preserved", apiErr.MLFlowError)
+		}
+		if !strings.Contains(err.Error(), creationMessage) {
+			t.Fatalf("Error() = %q, want it to contain %q", err.Error(), creationMessage)
+		}
+		if IsResourceAlreadyExistsError(err) || IsResourceDoesNotExistError(err) {
+			t.Fatalf("403 must not be classified as already-exists or not-found: %v", err)
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		want := []string{
+			"GET /api/3.0/mlflow/workspaces/new-project",
+			"POST /api/3.0/mlflow/workspaces",
+		}
+		if len(calls) != len(want) || calls[0] != want[0] || calls[1] != want[1] {
+			t.Fatalf("calls = %v, want %v (no retries or fallback after 403)", calls, want)
+		}
+	})
+
+	// A concurrent creator can win the race, and the provider may report it with
+	// HTTP 409 instead of MLflow's 400 + RESOURCE_ALREADY_EXISTS.
+	t.Run("conflict create recovers with a second lookup", func(t *testing.T) {
+		t.Parallel()
+		var gets atomic.Int32
+		var posts atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case r.Method == http.MethodGet && r.URL.Path == "/api/3.0/mlflow/workspaces/new-project":
+				if gets.Add(1) == 1 {
+					w.WriteHeader(http.StatusNotFound)
+					_, _ = fmt.Fprint(w, `{"error_code":"RESOURCE_DOES_NOT_EXIST","message":"not found"}`)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(GetWorkspaceResponse{Workspace: Workspace{Name: "new-project"}})
+			case r.Method == http.MethodPost && r.URL.Path == "/api/3.0/mlflow/workspaces":
+				posts.Add(1)
+				w.WriteHeader(http.StatusConflict)
+				_, _ = fmt.Fprint(w, `{"error_code":"RESOURCE_ALREADY_EXISTS","message":"workspace exists"}`)
+			default:
+				t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+		}))
+		t.Cleanup(srv.Close)
+
+		client := NewClient(srv.URL).WithWorkspacesSupport(true).WithWorkspace("new-project")
+		if err := client.EnsureWorkspace(); err != nil {
+			t.Fatalf("EnsureWorkspace() = %v, want recovery after the conflict", err)
+		}
+		if posts.Load() != 1 {
+			t.Fatalf("create calls = %d, want 1", posts.Load())
+		}
+		if gets.Load() != 2 {
+			t.Fatalf("lookup calls = %d, want 2 (initial miss + confirmation)", gets.Load())
+		}
+	})
+
+	// If the confirming lookup fails there is no evidence the workspace exists,
+	// and the create error is the only one carrying the provider's details.
+	t.Run("conflict without a confirming lookup keeps the create error", func(t *testing.T) {
+		t.Parallel()
+		const conflictMessage = "workspace new-project exists in the provider"
+		var gets atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case r.Method == http.MethodGet && r.URL.Path == "/api/3.0/mlflow/workspaces/new-project":
+				if gets.Add(1) == 1 {
+					w.WriteHeader(http.StatusNotFound)
+					_, _ = fmt.Fprint(w, `{"error_code":"RESOURCE_DOES_NOT_EXIST","message":"not found"}`)
+					return
+				}
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = fmt.Fprint(w, `{"error_code":"PERMISSION_DENIED","message":"lookup denied"}`)
+			case r.Method == http.MethodPost && r.URL.Path == "/api/3.0/mlflow/workspaces":
+				w.WriteHeader(http.StatusConflict)
+				_, _ = fmt.Fprintf(w, `{"error_code":"RESOURCE_ALREADY_EXISTS","message":%q}`, conflictMessage)
+			default:
+				t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+		}))
+		t.Cleanup(srv.Close)
+
+		client := NewClient(srv.URL).WithWorkspacesSupport(true).WithWorkspace("new-project")
+		err := client.EnsureWorkspace()
+		if err == nil {
+			t.Fatal("expected EnsureWorkspace to fail")
+		}
+		var apiErr *APIError
+		if !errors.As(err, &apiErr) {
+			t.Fatalf("EnsureWorkspace() = %T %v, want *APIError from the create", err, err)
+		}
+		if apiErr.StatusCode != http.StatusConflict {
+			t.Fatalf("StatusCode = %d, want %d (the create status, not the lookup status)", apiErr.StatusCode, http.StatusConflict)
+		}
+		if apiErr.MLFlowError == nil || apiErr.MLFlowError.ErrorCode != "RESOURCE_ALREADY_EXISTS" {
+			t.Fatalf("MLFlowError = %+v, want the create error code preserved", apiErr.MLFlowError)
+		}
+		if !strings.Contains(err.Error(), conflictMessage) {
+			t.Fatalf("Error() = %q, want it to contain %q", err.Error(), conflictMessage)
+		}
+		if !IsResourceAlreadyExistsError(err) {
+			t.Fatal("expected the returned error to stay classified as already-exists")
+		}
+		if gets.Load() != 2 {
+			t.Fatalf("lookup calls = %d, want 2 (initial miss + confirmation)", gets.Load())
 		}
 	})
 }
