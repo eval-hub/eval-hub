@@ -349,7 +349,13 @@ func positiveDuration(value string) (time.Duration, error) {
 
 func (f fixture) jobConfig(provider, benchmark string, model api.ModelRef) api.EvaluationJobConfig {
 	if f.Model != nil {
+		auth := model.Auth
 		model = *f.Model
+		// ATIF and MTEB override model selection while still needing the
+		// runner's model-auth Secret. An explicit fixture Secret takes precedence.
+		if model.Auth == nil {
+			model.Auth = auth
+		}
 	}
 	name := "benchmark-smoke-" + uuid.NewString()
 	job := api.EvaluationJobConfig{
