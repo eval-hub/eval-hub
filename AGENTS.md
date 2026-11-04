@@ -128,8 +128,11 @@ copies under `.claude/skills/`; change the external skill instead.
 **Claude Code:** the committed `.claude/settings.json` declares the `evalhub`
 marketplace and enables the four skills as plugins, so `/evalhub-bug-review`,
 `/fix-fvt-test`, `/golang-toolchain-update` and `/release-notes` are available in
-this repository. Enabling is not installing: the plugin files live on each
-machine, so run each skill's install once after cloning, with project scope:
+this repository. Claude Code also clones the declared marketplace and downloads
+the enabled plugins in the background once a session starts; run the install
+explicitly when you want the skill immediately after cloning, when you are
+offline, or when you want to review what a plugin adds before it runs, using
+project scope:
 
 ```shell
 claude plugin install evalhub-bug-review@evalhub --scope project
@@ -138,7 +141,7 @@ claude plugin install evalhub-bug-review@evalhub --scope project
 In a session, `/plugin install <skill>@evalhub` opens the panel where you can
 choose **Install for all collaborators on this repository (project scope)**. In
 another repository, copy the `extraKnownMarketplaces` / `enabledPlugins` block
-from `.claude/settings.json` and install the same way.
+from `.claude/settings.json`.
 
 **Other harnesses** (Cursor, Codex CLI, …) do not read Claude Code plugins. Keep
 a shallow clone current and symlink the skills into `~/.claude/skills`:

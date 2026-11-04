@@ -7,10 +7,11 @@ Repo-specific architecture notes live in `.claude/rules/`. Maintainer workflows
 `release-notes`) are **not** kept in this repository — they come from the
 external [`eval-hub/eval-hub-skills`](https://github.com/eval-hub/eval-hub-skills)
 repository (`dev-skills/`), are published as opt-in plugins, and are enabled for
-Claude Code by the committed `.claude/settings.json`; install each one once with
-`claude plugin install <skill>@evalhub --scope project`
-(`make install-dev-skills` links them into `~/.claude/skills` for other
-harnesses). See `AGENTS.md` → Development Skills.
+Claude Code by the committed `.claude/settings.json`, which also clones the
+marketplace and fetches the plugins in the background; install one explicitly with
+`claude plugin install <skill>@evalhub --scope project` when you need it
+immediately or offline (`make install-dev-skills` links them into
+`~/.claude/skills` for other harnesses). See `AGENTS.md` → Development Skills.
 
 ## Release notes
 
@@ -77,11 +78,11 @@ Pick the mode:
 #### Run the Go toolchain update
 
 - **Claude Code:** `/golang-toolchain-update` — the committed
-  `.claude/settings.json` enables it from the `evalhub` marketplace. Install it
-  once per machine with
-  `claude plugin install golang-toolchain-update@evalhub --scope project`; in
-  another repository, add the marketplace first with
-  `/plugin marketplace add eval-hub/eval-hub-skills`.
+  `.claude/settings.json` enables it from the `evalhub` marketplace, and Claude
+  Code fetches it in the background. Install it explicitly with
+  `claude plugin install golang-toolchain-update@evalhub --scope project` when you
+  need it immediately or offline; in another repository, add the marketplace first
+  with `/plugin marketplace add eval-hub/eval-hub-skills`.
 
 - **Cursor / Codex CLI / other harnesses:** ask naturally, e.g. “Bump the Go
   version using the golang-toolchain-update skill” / “Check whether we can
