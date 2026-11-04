@@ -49,6 +49,8 @@ for repo, config, revision, required_split in DATASETS:
     if required_split not in dataset or len(dataset[required_split]) == 0:
         raise RuntimeError(f"{repo} has no non-empty {required_split!r} split")
 
+# Match eval-hub-contrib/adapters/inspect/_preflight.py's cache-file helper:
+# both the pinned URL and the first 32 SHA-256 hex characters are part of the path.
 url_hash = hashlib.sha256(CYBERSECEVAL_URL.encode("utf-8")).hexdigest()[:32]
 cyber_path = ROOT / "cyberseceval_2" / f"prompt_injection_{url_hash}.json"
 cyber_path.parent.mkdir(parents=True, exist_ok=True)

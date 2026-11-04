@@ -28,8 +28,13 @@ FollowBench image set. Select any supported subset explicitly, or use
 The supported names are `inspect`, `lm-evaluation-harness`, `lighteval`,
 `ruler`, `ifbench`, and `followbench`. Only selected images are built and
 published to the kind-local registry. The deployment records the selection,
-image references and local image IDs, source revisions, and air-gap setting in
-`system/evalhub-dev-deploy-manifest`. It contains no credentials.
+image references, source revisions, and air-gap setting in
+`system/evalhub-dev-deploy-manifest`. The test checks the resolved image ID from
+each completed adapter Pod. The manifest contains no credentials.
+For `ADAPTERS=all`, leave at least 4 GiB available for LightEval's pod memory
+request in addition to the running service, operator, mocks, and Kubernetes
+components. Increase the container VM's memory if the LightEval pod remains
+Pending due to insufficient memory.
 
 `make test-e2e` takes no adapter arguments. When this manifest is present, tests
 run only for selected adapters. A deployment-level check verifies that every
@@ -62,6 +67,10 @@ The test creates one temporary PVC per data-backed adapter, stages assets with
 that adapter's deployed image, runs its curated cases against the bundle, then
 removes its staging pod and PVC before staging the next adapter. Inspect's BFCL
 cache uses a separate PVC. This keeps bundles from accumulating on the cluster.
+Staging Pods retain the mock Pod's non-root and read-only-root-filesystem
+settings; all six supported adapter images declare a non-root final user. The
+stagers write to `/test_data` and `/tmp`. LightEval also writes an installed
+task-registry asset, so its staging Pod has a writable root filesystem.
 Every data-backed job request points to its staged PVC through benchmark-level
 `test_data_ref`; the evaluation pod remains subject to the restrictive egress
 policy. Jobs use the local mock target and judge services, assert successful

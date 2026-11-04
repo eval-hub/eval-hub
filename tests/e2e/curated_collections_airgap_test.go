@@ -7,7 +7,9 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -18,6 +20,7 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -28,6 +31,8 @@ const curatedAssetStagerLabel = "evalhub.io/e2e-asset-stager"
 const inspectHLEBenchmarkID = "inspect/hle"
 const lightEvalGPQABenchmarkID = "gpqa:diamond"
 const terminalAdapterPodGracePeriod = time.Minute
+const curatedAssetStageTimeout = 35 * time.Minute
+const curatedAssetPodDeadline = curatedAssetStageTimeout + 5*time.Minute
 
 func evaluationJobStatusDetails(status *api.EvaluationJobStatus) (api.OverallState, string) {
 	if status == nil {
@@ -98,6 +103,19 @@ func TestCuratedBenchmarkMatrixComplete(t *testing.T) {
 	}
 	if len(collections) != 9 {
 		t.Errorf("matrix covers %d collections, want 9", len(collections))
+	}
+}
+
+func TestAdapterIDsForCasesCoversEverySelectedProvider(t *testing.T) {
+	cases := []curatedBenchmarkCase{
+		{providerID: "inspect"},
+		{providerID: "lm_evaluation_harness"},
+		{providerID: "inspect"},
+		{providerID: "followbench"},
+	}
+	want := []string{"inspect", "lm-evaluation-harness", "followbench"}
+	if got := adapterIDsForCases(cases); !slices.Equal(got, want) {
+		t.Fatalf("selected adapter IDs = %v, want %v", got, want)
 	}
 }
 
@@ -230,6 +248,42 @@ func TestCuratedBenchmarkMatrixMatchesRepositoryConfigs(t *testing.T) {
 	if len(matched) != len(curatedBenchmarkMatrix) {
 		t.Fatalf("matched %d benchmark rows, want %d", len(matched), len(curatedBenchmarkMatrix))
 	}
+	first := curatedBenchmarkCase{collectionID: "tool-use-v1", providerID: "inspect", benchmarkID: bfclBenchmarkID}
+	second := first
+	second.occurrence = 1
+	firstCategories, err := bfclCategories(matched[curatedBenchmarkCaseKey(first)].Parameters)
+	if err != nil {
+		t.Fatalf("first BFCL row: %v", err)
+	}
+	secondCategories, err := bfclCategories(matched[curatedBenchmarkCaseKey(second)].Parameters)
+	if err != nil {
+		t.Fatalf("second BFCL row: %v", err)
+	}
+	if slices.Equal(firstCategories, secondCategories) {
+		t.Fatalf("the two BFCL rows have identical categories: %v", firstCategories)
+	}
+}
+
+func TestCuratedEvaluationBenchmarkDoesNotMutateCatalog(t *testing.T) {
+	collectionBenchmark := api.CollectionBenchmarkConfig{Parameters: map[string]any{
+		"num_examples": 50,
+		"task_args":    map[string]any{"categories": []string{"simple_python"}},
+	}}
+	testCase := curatedBenchmarkCase{providerID: "inspect", benchmarkID: bfclBenchmarkID}
+	benchmark := curatedEvaluationBenchmark(testCase, collectionBenchmark, nil)
+	if benchmark.Parameters["num_examples"] != 1 {
+		t.Fatalf("smoke-test num_examples = %v, want 1", benchmark.Parameters["num_examples"])
+	}
+	if collectionBenchmark.Parameters["num_examples"] != 50 {
+		t.Fatalf("catalog num_examples was changed to %v", collectionBenchmark.Parameters["num_examples"])
+	}
+	if _, changed := collectionBenchmark.Parameters["model_args"]; changed {
+		t.Fatal("smoke-test model_args leaked into the catalog parameters")
+	}
+	categories, err := bfclCategories(benchmark.Parameters)
+	if err != nil || !slices.Equal(categories, []string{"simple_python"}) {
+		t.Fatalf("BFCL categories = %v, error %v", categories, err)
+	}
 }
 
 func TestFilterCuratedCasesForHFToken(t *testing.T) {
@@ -359,6 +413,9 @@ func runCuratedCollectionsAirgap(
 	selectedCases := make([]curatedBenchmarkCase, 0, len(curatedBenchmarkMatrix))
 	for _, testCase := range curatedBenchmarkMatrix {
 		adapterID := adapterIDForProvider(testCase.providerID)
+		if adapterID == "" {
+			t.Fatalf("curated benchmark %s/%s uses unmapped provider %q", testCase.collectionID, testCase.benchmarkID, testCase.providerID)
+		}
 		if manifest.managed && !manifest.adapterSelected(adapterID) {
 			continue
 		}
@@ -476,7 +533,7 @@ func runCuratedCollectionsAirgap(
 	// Stage one narrow bundle per adapter, then run that adapter's cases before
 	// moving to the next bundle. This bounds temporary PVC use and ensures each
 	// data-backed benchmark request carries its own test_data_ref.
-	for _, adapterID := range []string{"inspect", "lm-evaluation-harness", "lighteval", "ruler", "ifbench", "followbench"} {
+	for _, adapterID := range adapterIDsForCases(selectedCases) {
 		adapterCases := casesForAdapter(selectedCases, adapterID)
 		if len(adapterCases) == 0 {
 			continue
@@ -487,7 +544,7 @@ func runCuratedCollectionsAirgap(
 		func() {
 			var refs curatedAssetRefs
 			if adapterRequiresStagedAssets(adapterID) {
-				stageCtx, cancel := context.WithTimeout(parentCtx, 35*time.Minute)
+				stageCtx, cancel := context.WithTimeout(parentCtx, curatedAssetStageTimeout)
 				refs, err = stageCuratedAssets(stageCtx, kube, contextName, instance, adapterID, provider.Runtime.K8s.Image, provider.Runtime.K8s.ImagePullPolicy, hfTokenSecretName)
 				cancel()
 				if err != nil {
@@ -623,7 +680,9 @@ func stagePythonAssetBundle(
 	}
 	pvcCreated = true
 	automountToken := false
-	deadline := int64((30 * time.Minute).Seconds())
+	// The caller's timeout reports staging failures first; the Pod deadline is
+	// a safety net if the test process exits without deleting the Pod.
+	deadline := int64(curatedAssetPodDeadline.Seconds())
 	pullPolicy := corev1.PullIfNotPresent
 	if imagePullPolicy == "always" {
 		pullPolicy = corev1.PullAlways
@@ -802,6 +861,20 @@ func adapterIDForProvider(providerID string) string {
 	return ""
 }
 
+func adapterIDsForCases(cases []curatedBenchmarkCase) []string {
+	seen := make(map[string]struct{}, len(cases))
+	result := make([]string, 0, len(cases))
+	for _, testCase := range cases {
+		adapterID := adapterIDForProvider(testCase.providerID)
+		if _, exists := seen[adapterID]; exists {
+			continue
+		}
+		seen[adapterID] = struct{}{}
+		result = append(result, adapterID)
+	}
+	return result
+}
+
 func casesForAdapter(cases []curatedBenchmarkCase, adapterID string) []curatedBenchmarkCase {
 	result := make([]curatedBenchmarkCase, 0)
 	for _, testCase := range cases {
@@ -941,6 +1014,7 @@ func discoverCuratedMockService(ctx context.Context, kube kubernetes.Interface, 
 	if err != nil {
 		return nil, err
 	}
+	var unready []string
 	for i := range services.Items {
 		service := &services.Items[i]
 		if service.Spec.Selector["app"] != app {
@@ -950,6 +1024,10 @@ func discoverCuratedMockService(ctx context.Context, kube kubernetes.Interface, 
 			continue
 		}
 		endpoints, err := kube.CoreV1().Endpoints(namespace).Get(ctx, service.Name, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			unready = append(unready, service.Name)
+			continue
+		}
 		if err != nil {
 			return nil, fmt.Errorf("get Endpoints for Service/%s: %w", service.Name, err)
 		}
@@ -958,9 +1036,72 @@ func discoverCuratedMockService(ctx context.Context, kube kubernetes.Interface, 
 				return service, nil
 			}
 		}
-		return nil, fmt.Errorf("Service/%s has no ready endpoints", service.Name)
+		unready = append(unready, service.Name)
+	}
+	if len(unready) > 0 {
+		return nil, fmt.Errorf("matching Services have no ready endpoints: %s", strings.Join(unready, ", "))
 	}
 	return nil, nil
+}
+
+func curatedEvaluationBenchmark(testCase curatedBenchmarkCase, collectionBenchmark api.CollectionBenchmarkConfig, testDataRef *api.TestDataRef) api.EvaluationBenchmarkConfig {
+	benchmark := collectionBenchmark.ToEvaluationBenchmark()
+	parameters := maps.Clone(benchmark.Parameters)
+	if parameters == nil {
+		parameters = make(map[string]any)
+	}
+	benchmark.Parameters = parameters
+	parameters["num_examples"] = 1
+	switch testCase.providerID {
+	case "inspect":
+		if testCase.benchmarkID == bfclBenchmarkID {
+			parameters["model_args"] = map[string]any{"responses_api": false}
+		}
+		if testCase.benchmarkID == "inspect/hle" || testCase.benchmarkID == "inspect/cyberseceval-2-pi" {
+			parameters["judge_model"] = "kind-judge-model"
+		}
+	case "lm_evaluation_harness", "lighteval":
+		parameters["tokenizer"] = "/test_data/tokenizer"
+	case "ruler":
+		parameters["num_samples"] = 1
+		parameters["context_lengths"] = []int{4096}
+		parameters["tokenizer_path"] = "/test_data/tokenizer"
+	case "ifbench":
+		parameters["max_concurrent"] = 1
+	case "followbench":
+		parameters["judge_model"] = "kind-judge-model"
+	}
+	benchmark.TestDataRef = testDataRef
+	return benchmark
+}
+
+func bfclCategories(parameters map[string]any) ([]string, error) {
+	taskArgs, ok := parameters["task_args"].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("BFCL task_args is missing or not an object")
+	}
+	switch values := taskArgs["categories"].(type) {
+	case []string:
+		if len(values) == 0 {
+			return nil, fmt.Errorf("BFCL categories is empty")
+		}
+		return values, nil
+	case []any:
+		if len(values) == 0 {
+			return nil, fmt.Errorf("BFCL categories is empty")
+		}
+		categories := make([]string, 0, len(values))
+		for _, value := range values {
+			category, ok := value.(string)
+			if !ok {
+				return nil, fmt.Errorf("BFCL category %v is not a string", value)
+			}
+			categories = append(categories, category)
+		}
+		return categories, nil
+	default:
+		return nil, fmt.Errorf("BFCL categories is missing or not an array")
+	}
 }
 
 func runCuratedBenchmarkCase(
@@ -978,35 +1119,7 @@ func runCuratedBenchmarkCase(
 	testDataRef *api.TestDataRef,
 ) {
 	t.Helper()
-	benchmark := collectionBenchmark.ToEvaluationBenchmark()
-	parameters := benchmark.Parameters
-	if parameters == nil {
-		parameters = make(map[string]any)
-	}
-	benchmark.Parameters = parameters
-	parameters["num_examples"] = 1
-	switch testCase.providerID {
-	case "inspect":
-		if testCase.benchmarkID == bfclBenchmarkID {
-			parameters["model_args"] = map[string]any{"responses_api": false}
-		}
-		if testCase.benchmarkID == "inspect/hle" || testCase.benchmarkID == "inspect/cyberseceval-2-pi" {
-			parameters["judge_model"] = "kind-judge-model"
-		}
-	case "lm_evaluation_harness":
-		parameters["tokenizer"] = "/test_data/tokenizer"
-	case "lighteval":
-		parameters["tokenizer"] = "/test_data/tokenizer"
-	case "ruler":
-		parameters["num_samples"] = 1
-		parameters["context_lengths"] = []int{4096}
-		parameters["tokenizer_path"] = "/test_data/tokenizer"
-	case "ifbench":
-		parameters["max_concurrent"] = 1
-	case "followbench":
-		parameters["judge_model"] = "kind-judge-model"
-	}
-	benchmark.TestDataRef = testDataRef
+	benchmark := curatedEvaluationBenchmark(testCase, collectionBenchmark, testDataRef)
 	jobName := "e2e-curated-" + mustRandomResourceSuffix(t)
 	jobConfig := api.EvaluationJobConfig{
 		Name: jobName,
@@ -1061,6 +1174,22 @@ func runCuratedBenchmarkCase(
 					"disconnected job %s ended in state %q: %v\nadapter image=%q imageID=%q pod lookup error=%v\nadapter log tail:\n%s",
 					jobID, job.Status.State, job.Status.Message, image, imageID, podErr, logs,
 				)
+			}
+			if testCase.benchmarkID == bfclBenchmarkID {
+				if len(job.Benchmarks) != 1 {
+					t.Fatalf("BFCL job %s persisted %d benchmarks, want 1", jobID, len(job.Benchmarks))
+				}
+				expected, err := bfclCategories(benchmark.Parameters)
+				if err != nil {
+					t.Fatalf("BFCL request %s: %v", jobID, err)
+				}
+				actual, err := bfclCategories(job.Benchmarks[0].Parameters)
+				if err != nil {
+					t.Fatalf("BFCL persisted job %s: %v", jobID, err)
+				}
+				if !slices.Equal(actual, expected) {
+					t.Fatalf("BFCL job %s persisted categories %v, want %v for occurrence %d", jobID, actual, expected, testCase.occurrence)
+				}
 			}
 			if manifest.managed {
 				logDeployedAdapter(t, manifest, adapterIDForProvider(testCase.providerID))
