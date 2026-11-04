@@ -1,4 +1,4 @@
-"""Prepare LightEval's selected dataset caches and eager registry file."""
+"""Prepare LightEval's selected datasets and eager registry dependencies."""
 
 import importlib.util
 import os
@@ -6,17 +6,31 @@ import shutil
 from pathlib import Path
 from urllib.request import urlopen
 
+import nltk
 from datasets import load_dataset
 from transformers import AutoTokenizer
 
 ROOT = Path("/test_data")
 DATA_CACHE = ROOT / "datasets"
+NLTK_DATA = ROOT / "nltk_data"
 HF_TOKEN = os.environ.get("HF_TOKEN", "").strip()
 TINY_BENCHMARKS_URL = (
     "https://raw.githubusercontent.com/felipemaiapolo/tinyBenchmarks/"
     "e9a8b1031b0340571beb6c9ca3a27891be09a8fd/tinyBenchmarks/tinyBenchmarks.pkl"
 )
 DATA_CACHE.mkdir(parents=True, exist_ok=True)
+
+# LightEval imports IFEval while discovering tasks. IFEval loads these NLTK
+# resources at import time, so stage them before importing the task registry.
+# This staging pod has egress; evaluation-job pods do not.
+NLTK_DATA.mkdir(parents=True, exist_ok=True)
+os.environ["NLTK_DATA"] = str(NLTK_DATA)
+nltk.data.path.insert(0, str(NLTK_DATA))
+for resource in ("punkt", "punkt_tab"):
+    print(f"Staging NLTK {resource} for LightEval", flush=True)
+    nltk.download(resource, download_dir=str(NLTK_DATA), raise_on_error=True)
+    nltk.data.find(f"tokenizers/{resource}", paths=[str(NLTK_DATA)])
+nltk.sent_tokenize("First sentence. Second sentence.")
 
 tiny_path = ROOT / "lighteval" / "tinyBenchmarks.pkl"
 tiny_path.parent.mkdir(parents=True, exist_ok=True)

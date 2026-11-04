@@ -58,7 +58,7 @@ because their category lists differ.
 | --- | ---: | --- |
 | Inspect | 5 | HLE (requires optional Hugging Face authentication), DocVQA, CyberSecEval 2, and the full BFCL cache |
 | LM Evaluation Harness | 8 | The exact eight dataset bundles and a local tokenizer |
-| LightEval | 3 | The three task datasets, `tinyBenchmarks.pkl`, and a local tokenizer |
+| LightEval | 3 | The three task datasets, `tinyBenchmarks.pkl`, staged NLTK `punkt` and `punkt_tab`, and a local tokenizer |
 | RULER | 6 | The selected task inputs and a local tokenizer |
 | IFBench | 1 | Packaged with the adapter image |
 | FollowBench | 1 | Packaged with the adapter image; uses the mock judge endpoint |
@@ -71,6 +71,9 @@ Staging Pods retain the mock Pod's non-root and read-only-root-filesystem
 settings; all six supported adapter images declare a non-root final user. The
 stagers write to `/test_data` and `/tmp`. LightEval also writes an installed
 task-registry asset, so its staging Pod has a writable root filesystem.
+The LightEval staging Pod downloads `punkt` and `punkt_tab` into
+`/test_data/nltk_data` before importing the task registry. The evaluation Pod
+uses that PVC through `test_data_ref` and does not download NLTK resources.
 Every data-backed job request points to its staged PVC through benchmark-level
 `test_data_ref`; the evaluation pod remains subject to the restrictive egress
 policy. Jobs use the local mock target and judge services, assert successful
