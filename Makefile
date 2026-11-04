@@ -2,7 +2,22 @@
 .PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint govulncheck validate-configs test test-fuzz test-fvt-server test-fvt-server-local test-fvt-server-local-mlflow test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build clean-container-storage clean-container-storage-help
 
 GOPATH := $(shell go env GOPATH)
-GOBIN := $(shell go env GOPATH)/bin
+# Honour a configured GOBIN, falling back to GOPATH/bin when it is unset, so
+# installs and lookups below always agree on where `go install` puts binaries.
+GOBIN := $(or $(shell go env GOBIN),$(GOPATH)/bin)
+
+# Toolchain used for static analysis: vet, golangci-lint, govulncheck.
+# Derived from go.mod so every contributor and CI type-check against the same
+# standard library, whatever Go version is installed locally. This matters
+# because golangci-lint's bundled export-data importer only understands standard
+# library data up to the Go release it shipped with; linting with a newer local
+# Go fails with:
+#   cannot decode "internal/goarch", export data version N is greater than
+#   maximum supported version M
+# Do not hardcode a Go version here; go.mod is the source of truth (see
+# AGENTS.md -> Go Version and Code Quality).
+GO_VERSION := $(shell awk '/^go /{print $$2}' go.mod)
+GO_TOOLCHAIN := go$(GO_VERSION)
 
 # Variables
 BINARY_NAME = eval-hub
@@ -245,32 +260,46 @@ start-inspector-mcp:
 lint: vet golangci-lint ## Lint the code (go vet + golangci-lint)
 
 GOLANGCI_LINT_VERSION ?= v2.12.2
-GOLANGCI_LINT_STAMP  := $(BIN_DIR)/.golangci-lint-$(GOLANGCI_LINT_VERSION)
+# Tool binaries live under bin/tools, keyed on the tool version *and* the go.mod
+# toolchain (the same pattern as GOTESTSUM below). An install into a shared
+# GOPATH/bin would be overwritten by another checkout with a different go.mod
+# while its stamp still claimed ownership, which is what produced
+# "export data version ... greater than maximum supported version".
+GOLANGCI_LINT := $(abspath $(BIN_DIR)/tools/golangci-lint-$(GOLANGCI_LINT_VERSION)-$(GO_TOOLCHAIN))/golangci-lint$(shell go env GOEXE)
 
-golangci-lint: $(GOLANGCI_LINT_STAMP) ## Run golangci-lint (uses .golangci.yml)
-	@echo "Running golangci-lint..."
-	@$(GOBIN)/golangci-lint run ./...
+golangci-lint: $(GOLANGCI_LINT) ## Run golangci-lint (uses .golangci.yml, go.mod toolchain)
+	@echo "Running golangci-lint $(GOLANGCI_LINT_VERSION) with $(GO_TOOLCHAIN)..."
+	@GOTOOLCHAIN=$(GO_TOOLCHAIN) '$(GOLANGCI_LINT)' run ./... || { \
+		echo ""; \
+		echo "golangci-lint failed."; \
+		echo "If the error mentions 'export data version ... is greater than maximum supported"; \
+		echo "version', the type checker is reading a standard library newer than the linter"; \
+		echo "understands. Run lint through this target (it pins GOTOOLCHAIN to go.mod) rather"; \
+		echo "than a globally installed golangci-lint, and bump GOLANGCI_LINT_VERSION together"; \
+		echo "with .github/workflows/golangci-lint.yml when go.mod is bumped."; \
+		exit 1; }
 	@echo "golangci-lint complete"
 
-$(GOLANGCI_LINT_STAMP): | $(BIN_DIR)
-	@echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION)..."
-	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
-	@rm -f $(BIN_DIR)/.golangci-lint-*
-	@touch $@
+$(GOLANGCI_LINT):
+	@mkdir -p '$(dir $(GOLANGCI_LINT))'
+	@echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION) with $(GO_TOOLCHAIN) into $(dir $(GOLANGCI_LINT))..."
+	GOBIN='$(dir $(GOLANGCI_LINT))' GOTOOLCHAIN=$(GO_TOOLCHAIN) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
 GOVULNCHECK_VERSION ?= v1.1.4
-GOVULNCHECK_STAMP   := $(BIN_DIR)/.govulncheck-$(GOVULNCHECK_VERSION)
+# Checkout-local and keyed on version + toolchain for the same reason as the
+# linter above: a toolchain bump installs a fresh binary instead of reusing one
+# built for another Go version.
+GOVULNCHECK := $(abspath $(BIN_DIR)/tools/govulncheck-$(GOVULNCHECK_VERSION)-$(GO_TOOLCHAIN))/govulncheck$(shell go env GOEXE)
 
-govulncheck: $(GOVULNCHECK_STAMP) ## Run govulncheck in verbose mode (uses .go.mod)
-	@echo "Running govulncheck (verbose)..."
-	@$(GOBIN)/govulncheck -show verbose ./...
+govulncheck: $(GOVULNCHECK) ## Run govulncheck in verbose mode (uses .go.mod, go.mod toolchain)
+	@echo "Running govulncheck (verbose) with $(GO_TOOLCHAIN)..."
+	@GOTOOLCHAIN=$(GO_TOOLCHAIN) '$(GOVULNCHECK)' -show verbose ./...
 	@echo "govulncheck complete"
 
-$(GOVULNCHECK_STAMP): | $(BIN_DIR)
-	@echo "Installing govulncheck $(GOVULNCHECK_VERSION)..."
-	@go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
-	@rm -f $(BIN_DIR)/.govulncheck-*
-	@touch $@
+$(GOVULNCHECK):
+	@mkdir -p '$(dir $(GOVULNCHECK))'
+	@echo "Installing govulncheck $(GOVULNCHECK_VERSION) with $(GO_TOOLCHAIN) into $(dir $(GOVULNCHECK))..."
+	GOBIN='$(dir $(GOVULNCHECK))' GOTOOLCHAIN=$(GO_TOOLCHAIN) go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
 
 validate-configs: ## Validate bundled provider and collection YAML (standalone CLI, not part of build)
 	@go run ./cmd/validate_configs
@@ -280,9 +309,9 @@ fmt: ## Format the code with go fmt
 	@go fmt ./...
 	@echo "Format complete"
 
-vet: ## Run go vet
-	@echo "Running go vet..."
-	@go vet ./...
+vet: ## Run go vet (go.mod toolchain)
+	@echo "Running go vet with $(GO_TOOLCHAIN)..."
+	@GOTOOLCHAIN=$(GO_TOOLCHAIN) go vet ./...
 	@echo "Vet complete"
 
 # Iterations (Nx) or duration for mutational fuzzing during make test / make test-fuzz.
@@ -375,7 +404,8 @@ test-benchmarks: $(GOTESTSUM) ## Run live benchmark smoke tests (requires SERVER
 # to run a provider's full catalog.
 #
 # The kind cluster also runs mock judge and target OpenAI-compatible endpoints.
-# Judge-based benchmarks need JUDGE_MODEL_NAME/JUDGE_BASE_URL/JUDGE_API_KEY, and
+# Judge and grader credentials/URLs are provisioned in the model auth Secret;
+# fixtures use JUDGE_MODEL_NAME/JUDGE_BASE_URL for model selection. In addition,
 # lm-evaluation-harness resolves its tokenizer from HuggingFace separately from
 # the model endpoint, so the target supplies LM_EVAL_TOKENIZER for fixtures that
 # do not pin one.
@@ -415,8 +445,10 @@ test-benchmarks-kind: dev-deploy ## Run benchmark smoke tests against the local 
 		'  api-key: target-test-token' \
 		'  judge_api-key: $(KIND_BENCHMARK_JUDGE_API_KEY)' \
 		'  judge_url: $(KIND_BENCHMARK_JUDGE_URL)' \
+		'  grader_api-key: $(KIND_BENCHMARK_JUDGE_API_KEY)' \
+		'  grader_url: $(KIND_BENCHMARK_JUDGE_URL)' \
 		| kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" apply -f - >/dev/null; \
-	echo "Applied the dev-deploy-owned mock-auth Secret $(KIND_BENCHMARK_MODEL_SECRET) with the mock target and judge keys."; \
+	echo "Applied the dev-deploy-owned mock-auth Secret $(KIND_BENCHMARK_MODEL_SECRET) with the mock target, judge, and grader keys."; \
 	token="$$(kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" create token evalhub-local-service --duration=$(KIND_BENCHMARK_TOKEN_DURATION))"; \
 	echo "Running benchmark smoke tests against $(KIND_BENCHMARK_SERVER_URL) with model $(KIND_BENCHMARK_MODEL_NAME)."; \
 	SERVER_URL="$(KIND_BENCHMARK_SERVER_URL)" \
@@ -427,7 +459,6 @@ test-benchmarks-kind: dev-deploy ## Run benchmark smoke tests against the local 
 	MODEL_AUTH_SECRET_REF="$(KIND_BENCHMARK_MODEL_SECRET)" \
 	JUDGE_MODEL_NAME="$(KIND_BENCHMARK_JUDGE_MODEL_NAME)" \
 	JUDGE_BASE_URL="$(KIND_BENCHMARK_JUDGE_URL)" \
-	JUDGE_API_KEY="$(KIND_BENCHMARK_JUDGE_API_KEY)" \
 	LM_EVAL_TOKENIZER="$(KIND_BENCHMARK_LM_EVAL_TOKENIZER)" \
 	BENCHMARK_TIMEOUT="$(KIND_BENCHMARK_TIMEOUT)" \
 	BENCHMARK_RUN="$(KIND_BENCHMARK_RUN)" \
@@ -494,8 +525,6 @@ install-deps: ## Install dependencies
 	@go mod download
 	@go mod tidy
 	@echo "Dependencies installed"
-
-GO_VERSION = $(shell awk '/^go /{print $$2}' go.mod)
 
 update-deps: ## Update all dependencies to latest versions
 	@echo "Updating dependencies to latest versions..."

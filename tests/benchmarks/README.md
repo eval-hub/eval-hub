@@ -78,9 +78,14 @@ environment variable and explaining how to enable the benchmark. Subtest names c
 and runs the suite against the kind mock target and mock judge. It mints a
 short-lived service-account token, creates or refreshes the dev-deploy-owned
 mock-auth Secret (failing if a same-named Secret belongs to something else), and
-exports `JUDGE_MODEL_NAME`, `JUDGE_BASE_URL`, `JUDGE_API_KEY`, and
+exports `JUDGE_MODEL_NAME`, `JUDGE_BASE_URL`, and
 `LM_EVAL_TOKENIZER` so judge-based and LM Evaluation Harness benchmarks execute
-instead of skipping or failing. The default `KIND_BENCHMARK_RUN` is a
+instead of skipping or failing. The Secret contains the primary `api-key` and
+both `judge_api-key`/`judge_url` and `grader_api-key`/`grader_url`. The judge and
+grader pairs share `KIND_BENCHMARK_JUDGE_API_KEY` and `KIND_BENCHMARK_JUDGE_URL`,
+so both roles use the mock judge endpoint. The key is provisioned in the Secret;
+fixtures do not need a `JUDGE_API_KEY` environment variable.
+The default `KIND_BENCHMARK_RUN` is a
 representative set for each adapter image dev-deploy builds; widen it with
 `BENCHMARK_RUN` (see the `Makefile` comment) to run a provider's full catalog,
 which also selects benchmarks whose fixtures require a sandbox, external
@@ -229,43 +234,51 @@ fallback for `EVALHUB_TOKEN`; an explicit nonempty `EVALHUB_TOKEN` takes precede
 when invoking the smoke suite. The smoke runner temporarily disables TLS
 certificate verification for cluster routes with untrusted certificates.
 
-Judge fixtures require nonempty `${JUDGE_MODEL_NAME}` and, where the adapter
-supports an inline endpoint, `${JUDGE_BASE_URL}`. The runner accepts `JUDGE_MODEL`
-as a fallback for `JUDGE_MODEL_NAME`, and `JUDGE_API_BASE` then `JUDGE_PROXY_URL`
-as fallbacks for `JUDGE_BASE_URL`. The primary nonempty name always wins.
-Petri/Bloom and CyberSecEval interpreter abuse additionally require `${JUDGE_API_KEY}`. Jenkins sets this
-to `local` for its judge proxy in the collection stage; supply it explicitly when
-running these smoke fixtures elsewhere. Missing referenced inputs skip the
-benchmark with an actionable message.
+Judge fixtures require nonempty `${JUDGE_MODEL_NAME}`. The runner accepts
+`JUDGE_MODEL` as its fallback; a nonempty primary name takes precedence.
+Missing referenced inputs skip the benchmark with an actionable message.
+Inspect, DeepEval, FollowBench, and Ragas fixtures
+select model IDs in parameters; their auxiliary connections come from the model
+auth Secret, not URL/key environment placeholders.
 
-Generated fixtures use the adapter's field names:
-
-- Inspect Petri/Bloom: `judge_model`, `judge_base_url`, `judge_api_key`. Auditor
-  inputs continue to use the evaluated model's `MODEL_NAME` and `MODEL_URL`.
-- Inspect StrongREJECT: `grader_model`, `grader_base_url`; provision
-  `OPENAI_JUDGE_API_KEY` in the adapter environment through a Secret.
-- ATIF: the fixture `model` selects `JUDGE_MODEL_NAME` and `JUDGE_BASE_URL`,
-  because its model scores staged trajectories rather than generating them.
-- RAGAS: `judge_model` and `embedding_model` select model IDs. Configure
-  `judge_api-key`/`judge_url` and `embedding_api-key`/`embedding_url` in
-  `MODEL_AUTH_SECRET_REF` for independent sidecar connections; the fixtures do
-  not pass upstream URLs or API keys as parameters.
-- DeepEval: `eval_model_name`, `eval_model_url`; authentication comes from the
-  adapter's model credentials.
-- Garak/Garak KFP intents: `intents_models.judge.name` and `.url`. Synthetic data
-  generation uses `openai/${MODEL_NAME}` and `MODEL_URL`; LiteLLM requires the
-  provider prefix for an OpenAI-compatible endpoint.
-- Inspect CyberSecEval interpreter abuse: an explicit JSON `model_roles.grader`
-  binds `JUDGE_MODEL_NAME`, `JUDGE_BASE_URL`, and `JUDGE_API_KEY`.
+- Inspect Petri/Bloom: `auditor_model` and `judge_model`; optional independent
+  connections use `auditor_api-key`/`auditor_url` and `judge_api-key`/`judge_url`
+  in `MODEL_AUTH_SECRET_REF`. Bloom scenario generation uses the `scenarios` pair.
+- Inspect StrongREJECT: `grader_model`, using the `judge` Secret pair.
+  `OPENAI_JUDGE_API_KEY` is no longer an adapter configuration input.
+- Inspect HLE/CyberSecEval prompt injection and FollowBench: `judge_model`, using
+  the `judge` pair.
+- Inspect CyberSecEval interpreter abuse: `model_roles.grader` selects the judge
+  model and uses the `grader_api-key`/`grader_url` Secret pair.
   `task_args.judge_llm=null` selects this role instead of the task default.
-- FollowBench and Inspect HLE/CyberSecEval prompt injection: `judge_model`. These adapters reject
-  inline judge URL/key parameters with this field. Configure `judge_url` and
-  `judge_api-key` in `MODEL_AUTH_SECRET_REF` for a separate judge connection.
+- DeepEval: `eval_model_name`, using the `judge` pair.
+- Ragas: `judge_model` and `embedding_model`, using the `judge` and `embedding`
+  pairs. Set `RAGAS_EMBEDDING_MODEL` to an embedding-capable model ID.
+- ATIF: its primary `model` selects `JUDGE_MODEL_NAME` and `JUDGE_BASE_URL`, since
+  that primary model scores staged trajectories. This is a primary model override,
+  not an auxiliary connection parameter.
+- Garak/Garak KFP intents are outside this contrib change: their existing
+  `intents_models.judge.name`/`.url` bindings remain. `JUDGE_BASE_URL` aliases
+  (`JUDGE_API_BASE`, then `JUDGE_PROXY_URL`) remain for these primary/legacy inputs.
 
-Proxy deployment settings such as `JUDGE_PROXY_UPSTREAM_URL` and
-`JUDGE_PROXY_SECRET_REF` configure Jenkins infrastructure, not evaluation inputs.
-Changing the generator preserves existing JSON files; update reviewed fixtures
-on the separate fixture branch when changing these bindings.
+Role URLs require matching `<role>_api-key` entries, even when copying the same
+real credential. Roles with no separate entries reuse the primary connection.
+The adapter selects that fallback by sending the primary credential reference;
+the sidecar does not repair a missing role reference. An explicit role reference
+with a missing or empty key returns HTTP 400 without reaching any upstream.
+The API request retains `model.auth.secret_ref`; credentials never enter benchmark
+parameters. The sidecar resolves projected references and selects each upstream.
+Use compatible adapter images when deploying the updated provider catalogs.
+
+For Petri/Bloom, select auditor and judge models served by the configured
+OpenAI-compatible endpoints. The catalog retains the adapter's legacy Claude
+model defaults; these work only with an OpenAI-compatible gateway exposing
+those models. Direct Anthropic Messages endpoints and their `x-api-key`
+authentication are not supported by this Secret-routing contract.
+
+The generator preserves existing JSON files. This change updates both the generator
+and reviewed fixtures, with regression coverage of serialized API request bodies.
+Proxy deployment settings configure infrastructure separately from these inputs.
 
 ## Provider prerequisites and workload limits
 
