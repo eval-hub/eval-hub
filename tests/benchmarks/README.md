@@ -78,9 +78,14 @@ environment variable and explaining how to enable the benchmark. Subtest names c
 and runs the suite against the kind mock target and mock judge. It mints a
 short-lived service-account token, creates or refreshes the dev-deploy-owned
 mock-auth Secret (failing if a same-named Secret belongs to something else), and
-exports `JUDGE_MODEL_NAME`, `JUDGE_BASE_URL`, `JUDGE_API_KEY`, and
+exports `JUDGE_MODEL_NAME`, `JUDGE_BASE_URL`, and
 `LM_EVAL_TOKENIZER` so judge-based and LM Evaluation Harness benchmarks execute
-instead of skipping or failing. The default `KIND_BENCHMARK_RUN` is a
+instead of skipping or failing. The Secret contains the primary `api-key` and
+both `judge_api-key`/`judge_url` and `grader_api-key`/`grader_url`. The judge and
+grader pairs share `KIND_BENCHMARK_JUDGE_API_KEY` and `KIND_BENCHMARK_JUDGE_URL`,
+so both roles use the mock judge endpoint. The key is provisioned in the Secret;
+fixtures do not need a `JUDGE_API_KEY` environment variable.
+The default `KIND_BENCHMARK_RUN` is a
 representative set for each adapter image dev-deploy builds; widen it with
 `BENCHMARK_RUN` (see the `Makefile` comment) to run a provider's full catalog,
 which also selects benchmarks whose fixtures require a sandbox, external

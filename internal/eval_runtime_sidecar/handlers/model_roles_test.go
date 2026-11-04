@@ -93,7 +93,9 @@ func TestModelRoleRoutingFallbacks(t *testing.T) {
 				name: "key alone uses primary endpoint with role credential", keyPresent: true, keyValue: "test-role",
 				wantStatus: http.StatusOK, wantAuth: "Bearer test-role", wantCalls: 1,
 			},
-			{name: "URL without key is rejected", urlPresent: true, wantStatus: http.StatusBadRequest},
+			// Adapters validate URL/key pairing before making requests. This case checks
+			// that the sidecar rejects an unresolved role reference even when its URL exists.
+			{name: "missing role credential reference is rejected when URL exists", urlPresent: true, wantStatus: http.StatusBadRequest},
 			{name: "empty key is rejected", keyPresent: true, urlPresent: true, wantStatus: http.StatusBadRequest},
 			{name: "missing role reference never falls back", wantStatus: http.StatusBadRequest},
 		} {

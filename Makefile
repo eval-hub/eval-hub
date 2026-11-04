@@ -375,7 +375,8 @@ test-benchmarks: $(GOTESTSUM) ## Run live benchmark smoke tests (requires SERVER
 # to run a provider's full catalog.
 #
 # The kind cluster also runs mock judge and target OpenAI-compatible endpoints.
-# Judge-based benchmarks need JUDGE_MODEL_NAME/JUDGE_BASE_URL/JUDGE_API_KEY, and
+# Judge and grader credentials/URLs are provisioned in the model auth Secret;
+# fixtures use JUDGE_MODEL_NAME/JUDGE_BASE_URL for model selection. In addition,
 # lm-evaluation-harness resolves its tokenizer from HuggingFace separately from
 # the model endpoint, so the target supplies LM_EVAL_TOKENIZER for fixtures that
 # do not pin one.
@@ -415,8 +416,10 @@ test-benchmarks-kind: dev-deploy ## Run benchmark smoke tests against the local 
 		'  api-key: target-test-token' \
 		'  judge_api-key: $(KIND_BENCHMARK_JUDGE_API_KEY)' \
 		'  judge_url: $(KIND_BENCHMARK_JUDGE_URL)' \
+		'  grader_api-key: $(KIND_BENCHMARK_JUDGE_API_KEY)' \
+		'  grader_url: $(KIND_BENCHMARK_JUDGE_URL)' \
 		| kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" apply -f - >/dev/null; \
-	echo "Applied the dev-deploy-owned mock-auth Secret $(KIND_BENCHMARK_MODEL_SECRET) with the mock target and judge keys."; \
+	echo "Applied the dev-deploy-owned mock-auth Secret $(KIND_BENCHMARK_MODEL_SECRET) with the mock target, judge, and grader keys."; \
 	token="$$(kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" create token evalhub-local-service --duration=$(KIND_BENCHMARK_TOKEN_DURATION))"; \
 	echo "Running benchmark smoke tests against $(KIND_BENCHMARK_SERVER_URL) with model $(KIND_BENCHMARK_MODEL_NAME)."; \
 	SERVER_URL="$(KIND_BENCHMARK_SERVER_URL)" \
@@ -427,7 +430,6 @@ test-benchmarks-kind: dev-deploy ## Run benchmark smoke tests against the local 
 	MODEL_AUTH_SECRET_REF="$(KIND_BENCHMARK_MODEL_SECRET)" \
 	JUDGE_MODEL_NAME="$(KIND_BENCHMARK_JUDGE_MODEL_NAME)" \
 	JUDGE_BASE_URL="$(KIND_BENCHMARK_JUDGE_URL)" \
-	JUDGE_API_KEY="$(KIND_BENCHMARK_JUDGE_API_KEY)" \
 	LM_EVAL_TOKENIZER="$(KIND_BENCHMARK_LM_EVAL_TOKENIZER)" \
 	BENCHMARK_TIMEOUT="$(KIND_BENCHMARK_TIMEOUT)" \
 	BENCHMARK_RUN="$(KIND_BENCHMARK_RUN)" \
