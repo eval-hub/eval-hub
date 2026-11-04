@@ -180,6 +180,38 @@ func TestBuildJobSpecJSONHappyPath(t *testing.T) {
 	}
 }
 
+func TestBuildJobSpec_ForwardsTestDataRef(t *testing.T) {
+	eval := baseEvaluation()
+	eval.Benchmarks[0].TestDataRef = &api.TestDataRef{
+		PVC: &api.PVCTestDataRef{ClaimName: "docvqa-assets", SubPath: "dataset"},
+	}
+
+	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil, nil)
+	if err != nil {
+		t.Fatalf("BuildJobSpec() error = %v", err)
+	}
+	if spec.TestDataRef == nil || spec.TestDataRef.PVC == nil {
+		t.Fatalf("TestDataRef = %+v, want the benchmark PVC reference", spec.TestDataRef)
+	}
+	if got := *spec.TestDataRef.PVC; got != (api.PVCTestDataRef{ClaimName: "docvqa-assets", SubPath: "dataset"}) {
+		t.Fatalf("TestDataRef.PVC = %+v, want docvqa-assets/dataset", got)
+	}
+
+	serialized, err := json.Marshal(spec)
+	if err != nil {
+		t.Fatalf("marshal JobSpec: %v", err)
+	}
+	var decoded struct {
+		TestDataRef *api.TestDataRef `json:"test_data_ref"`
+	}
+	if err := json.Unmarshal(serialized, &decoded); err != nil {
+		t.Fatalf("unmarshal serialized JobSpec: %v", err)
+	}
+	if decoded.TestDataRef == nil || decoded.TestDataRef.PVC == nil || decoded.TestDataRef.PVC.ClaimName != "docvqa-assets" {
+		t.Fatalf("serialized test_data_ref = %+v, want PVC claim docvqa-assets", decoded.TestDataRef)
+	}
+}
+
 func TestBuildJobSpec_ModelNotAliasedToEvaluation(t *testing.T) {
 	eval := baseEvaluation()
 	spec, err := shared.BuildJobSpec(eval, "provider-1", &eval.Benchmarks[0], 0, nil, nil)
