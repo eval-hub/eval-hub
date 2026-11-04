@@ -18,7 +18,7 @@
 #   EVALHUB_SKILLS_DIR       shallow clone location (default: ~/.cache/eval-hub-skills)
 #   CLAUDE_SKILLS_DIR        symlink target (default: ~/.claude/skills; set this
 #                            or pass --target to install for another harness,
-#                            for example Codex CLI's ~/.codex/skills)
+#                            for example Codex CLI's ~/.agents/skills)
 set -Eeuo pipefail
 
 REPO_URL="${EVALHUB_SKILLS_REPO_URL:-https://github.com/eval-hub/eval-hub-skills.git}"
@@ -48,12 +48,13 @@ skills directory, keeping a shallow clone of that repository up to date.
 
 Options:
   --uninstall      remove the skill symlinks instead of creating them
-  --force          replace an existing directory at a link target and discard
-                   uncommitted changes in an existing clone
+  --force          replace a pre-existing skill entry (a directory, or a symlink
+                   to another checkout) and discard uncommitted changes in an
+                   existing clone
   --ref <ref>      branch, tag, or commit to check out (default: main)
   --dir <path>     shallow clone location (default: ~/.cache/eval-hub-skills)
   --target <path>  harness skills directory (default: ~/.claude/skills; for
-                   Codex CLI pass ~/.codex/skills)
+                   Codex CLI pass ~/.agents/skills)
   -h, --help       show this help
 
 Environment: EVALHUB_SKILLS_REPO_URL, EVALHUB_SKILLS_REF, EVALHUB_SKILLS_DIR,
@@ -94,12 +95,40 @@ done
 
 # Resolve a path to an absolute one without requiring it to exist yet. Symlink
 # targets are stored verbatim, so a relative --dir / EVALHUB_SKILLS_DIR would
-# otherwise be resolved against the skills directory instead of the CWD.
+# otherwise be resolved against the skills directory instead of the CWD. A
+# leading tilde is expanded here too: make passes variable values through
+# quoted (--target "~/.agents/skills"), so the shell never expands it.
 abspath() {
   case "$1" in
+    "~") printf '%s\n' "$HOME" ;;
+    "~/"*) printf '%s\n' "$HOME/${1#"~/"}" ;;
     /*) printf '%s\n' "$1" ;;
     *) printf '%s\n' "$PWD/$1" ;;
   esac
+}
+
+# Follow the target stored in a symlink. Relative targets are resolved against
+# the directory holding the link and "." / ".." segments are collapsed, so the
+# result compares equal to $CHECKOUT_DIR/dev-skills/<skill> even for a link that
+# was created by hand instead of by this script.
+resolved_link_target() {
+  local link="$1" target part out=""
+  local -a parts
+  target="$(readlink "$link" || true)"
+  [ -n "$target" ] || return 0
+  case "$target" in
+    /*) ;;
+    *) target="$(dirname "$link")/$target" ;;
+  esac
+  IFS=/ read -r -a parts <<<"$target"
+  for part in "${parts[@]}"; do
+    case "$part" in
+      '' | .) ;;
+      ..) out="${out%/*}" ;;
+      *) out="$out/$part" ;;
+    esac
+  done
+  printf '%s\n' "${out:-/}"
 }
 
 # Normalise a git remote URL (https://host/path.git, ssh://git@host/path,
@@ -117,6 +146,7 @@ normalize_remote_url() {
 }
 
 CHECKOUT_DIR="$(abspath "$CHECKOUT_DIR")"
+SKILLS_DIR="$(abspath "$SKILLS_DIR")"
 
 # Switching refs updates the working tree, so refuse to throw away local work
 # unless --force explicitly authorises it.
@@ -180,11 +210,20 @@ install_skills() {
 
   local installed=0
   local skipped=0
-  local skill src dst
+  local skill src dst current
   for skill in "${SKILLS[@]}"; do
     src="$CHECKOUT_DIR/dev-skills/$skill"
     dst="$SKILLS_DIR/$skill"
     if [ -L "$dst" ]; then
+      # Only refresh a link this install owns. A link into another checkout, or
+      # one created by hand, may belong to someone else, so leave it in place
+      # unless --force explicitly authorises replacing it.
+      current="$(resolved_link_target "$dst")"
+      if [ "$FORCE" != true ] && [ "$current" != "$src" ]; then
+        log SKIP "$dst points at ${current:-an unresolvable target}; rerun with --force to replace it"
+        skipped=$((skipped + 1))
+        continue
+      fi
       rm -f "$dst"
     elif [ -e "$dst" ]; then
       if [ "$FORCE" != true ]; then

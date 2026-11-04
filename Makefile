@@ -63,13 +63,15 @@ assisted-by-trailer: ## Print the Assisted-by trailer for the current AI session
 #   DEV_SKILLS_REF        branch, tag, or commit to check out (default: main)
 #   DEV_SKILLS_CLONE_DIR  shallow clone location (default: ~/.cache/eval-hub-skills)
 #   DEV_SKILLS_TARGET_DIR harness skills directory to link into (default:
-#                         ~/.claude/skills; use ~/.codex/skills for Codex CLI)
+#                         ~/.claude/skills). Codex CLI loads user skills from
+#                         ~/.agents/skills, so install for it with:
+#                           make install-dev-skills DEV_SKILLS_TARGET_DIR=~/.agents/skills
 DEV_SKILLS_REF ?=
 DEV_SKILLS_CLONE_DIR ?=
 DEV_SKILLS_TARGET_DIR ?=
 
 .PHONY: install-dev-skills uninstall-dev-skills
-install-dev-skills: ## Install dev skills from eval-hub/eval-hub-skills (into ~/.claude/skills; override with DEV_SKILLS_TARGET_DIR=~/.codex/skills)
+install-dev-skills: ## Install dev skills from eval-hub/eval-hub-skills (into ~/.claude/skills; Codex CLI: DEV_SKILLS_TARGET_DIR=~/.agents/skills)
 	@bash scripts/install-dev-skills.sh $(if $(DEV_SKILLS_REF),--ref "$(DEV_SKILLS_REF)",) $(if $(DEV_SKILLS_CLONE_DIR),--dir "$(DEV_SKILLS_CLONE_DIR)",) $(if $(DEV_SKILLS_TARGET_DIR),--target "$(DEV_SKILLS_TARGET_DIR)",)
 
 uninstall-dev-skills: ## Remove the dev skill symlinks installed by install-dev-skills (honours DEV_SKILLS_TARGET_DIR)

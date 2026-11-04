@@ -127,14 +127,19 @@ copies under `.claude/skills/`; change the external skill instead.
 | `golang-toolchain-update` | Auditing Go CVEs and bumping the Go toolchain, gated on the go-toolset image publishing the target tag. Modes: `cve` (default) and `latest`. |
 | `release-notes` | Drafting OpenSSF-compliant, human-readable GitHub release notes for a tag or version. |
 
+The human review workflow — the `ready-for-review` label, the requested-reviewer
+approval gate and the reviewer checklist — is documented in `CONTRIBUTING.md` →
+[Review Process](./CONTRIBUTING.md#review-process).
+
 **Claude Code:** the committed `.claude/settings.json` declares the `evalhub`
 marketplace and enables the four skills as plugins, so `/evalhub-bug-review`,
 `/fix-fvt-test`, `/golang-toolchain-update` and `/release-notes` are available in
 this repository. Claude Code also clones the declared marketplace and downloads
-the enabled plugins in the background once a session starts; run the install
-explicitly when you want the skill immediately after cloning, when you are
-offline, or when you want to review what a plugin adds before it runs, using
-project scope:
+the enabled plugins in the background once a session starts, which needs network
+access: install a plugin explicitly, while you are connected, when you want the
+skill immediately after cloning, when you want to review what a plugin adds
+before it runs, or when you will need it in a later offline session — offline
+work can only use plugins that are already installed. Use project scope:
 
 ```shell
 claude plugin install evalhub-bug-review@evalhub --scope project
@@ -146,12 +151,17 @@ another repository, copy the `extraKnownMarketplaces` / `enabledPlugins` block
 from `.claude/settings.json`.
 
 **Other harnesses** (Cursor, Codex CLI, …) do not read Claude Code plugins. Keep
-a shallow clone current and symlink the skills into `~/.claude/skills`:
+a shallow clone current and symlink the skills into your harness's skills
+directory (`~/.claude/skills` by default; Codex CLI loads user skills from
+`~/.agents/skills`):
 
 ```bash
 make install-dev-skills     # optional: DEV_SKILLS_REF=<ref> DEV_SKILLS_CLONE_DIR=<path> DEV_SKILLS_TARGET_DIR=<path>
 make uninstall-dev-skills   # honours DEV_SKILLS_TARGET_DIR
 ```
+
+For Codex CLI, point the target at its global skills directory, for example
+`make install-dev-skills DEV_SKILLS_TARGET_DIR=~/.agents/skills`.
 
 Then attach the skill file from the clone, for example
 `@~/.cache/eval-hub-skills/dev-skills/release-notes/SKILL.md`, or from any

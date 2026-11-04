@@ -9,8 +9,9 @@ external [`eval-hub/eval-hub-skills`](https://github.com/eval-hub/eval-hub-skill
 repository (`dev-skills/`), are published as opt-in plugins, and are enabled for
 Claude Code by the committed `.claude/settings.json`, which also clones the
 marketplace and fetches the plugins in the background; install one explicitly with
-`claude plugin install <skill>@evalhub --scope project` when you need it
-immediately or offline (`make install-dev-skills` links them into
+`claude plugin install <skill>@evalhub --scope project` while connected when you
+need it immediately or want it available in a later offline session
+(`make install-dev-skills` links them into
 `~/.claude/skills` for other harnesses). See `AGENTS.md` → Development Skills.
 
 ## Release notes
