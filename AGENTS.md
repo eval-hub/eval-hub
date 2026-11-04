@@ -149,8 +149,8 @@ from `.claude/settings.json`.
 a shallow clone current and symlink the skills into `~/.claude/skills`:
 
 ```bash
-make install-dev-skills     # optional: DEV_SKILLS_REF=<ref> DEV_SKILLS_CLONE_DIR=<path>
-make uninstall-dev-skills
+make install-dev-skills     # optional: DEV_SKILLS_REF=<ref> DEV_SKILLS_CLONE_DIR=<path> DEV_SKILLS_TARGET_DIR=<path>
+make uninstall-dev-skills   # honours DEV_SKILLS_TARGET_DIR
 ```
 
 Then attach the skill file from the clone, for example

@@ -58,15 +58,22 @@ assisted-by-trailer: ## Print the Assisted-by trailer for the current AI session
 # they can be shared by every eval-hub repository. This clones that repository
 # into a cache directory and symlinks the skills into ~/.claude/skills, where
 # agent harnesses load them by name. See AGENTS.md -> Development Skills.
+#
+# Overrides:
+#   DEV_SKILLS_REF        branch, tag, or commit to check out (default: main)
+#   DEV_SKILLS_CLONE_DIR  shallow clone location (default: ~/.cache/eval-hub-skills)
+#   DEV_SKILLS_TARGET_DIR harness skills directory to link into (default:
+#                         ~/.claude/skills; use ~/.codex/skills for Codex CLI)
 DEV_SKILLS_REF ?=
 DEV_SKILLS_CLONE_DIR ?=
+DEV_SKILLS_TARGET_DIR ?=
 
 .PHONY: install-dev-skills uninstall-dev-skills
-install-dev-skills: ## Install dev skills from eval-hub/eval-hub-skills (symlinks into ~/.claude/skills)
-	@bash scripts/install-dev-skills.sh $(if $(DEV_SKILLS_REF),--ref "$(DEV_SKILLS_REF)",) $(if $(DEV_SKILLS_CLONE_DIR),--dir "$(DEV_SKILLS_CLONE_DIR)",)
+install-dev-skills: ## Install dev skills from eval-hub/eval-hub-skills (into ~/.claude/skills; override with DEV_SKILLS_TARGET_DIR=~/.codex/skills)
+	@bash scripts/install-dev-skills.sh $(if $(DEV_SKILLS_REF),--ref "$(DEV_SKILLS_REF)",) $(if $(DEV_SKILLS_CLONE_DIR),--dir "$(DEV_SKILLS_CLONE_DIR)",) $(if $(DEV_SKILLS_TARGET_DIR),--target "$(DEV_SKILLS_TARGET_DIR)",)
 
-uninstall-dev-skills: ## Remove the dev skill symlinks installed by install-dev-skills
-	@bash scripts/install-dev-skills.sh --uninstall
+uninstall-dev-skills: ## Remove the dev skill symlinks installed by install-dev-skills (honours DEV_SKILLS_TARGET_DIR)
+	@bash scripts/install-dev-skills.sh --uninstall $(if $(DEV_SKILLS_TARGET_DIR),--target "$(DEV_SKILLS_TARGET_DIR)",)
 
 
 KIND_CLUSTER_NAME ?= evalhub-dev
