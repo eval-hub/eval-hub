@@ -136,13 +136,17 @@ marketplace and enables the four skills as plugins, so `/evalhub-bug-review`,
 `/fix-fvt-test`, `/golang-toolchain-update` and `/release-notes` are available in
 this repository. Claude Code also clones the declared marketplace and downloads
 the enabled plugins in the background once a session starts, which needs network
-access: install a plugin explicitly, while you are connected, when you want the
-skill immediately after cloning, when you want to review what a plugin adds
-before it runs, or when you will need it in a later offline session — offline
-work can only use plugins that are already installed. Use project scope:
+access. A fresh machine therefore starts with **none** of the four skills
+installed, so install the ones you rely on explicitly before you need them — when
+you need the skill immediately after cloning, when you want to review what a
+plugin adds before it runs, or when you will need it in a later offline session.
+An install only helps that later offline session once its download has finished:
+offline work can use only the plugins that are already downloaded, and the
+background fetch cannot run without network. Use project scope:
 
 ```shell
 claude plugin install evalhub-bug-review@evalhub --scope project
+# repeat for fix-fvt-test, golang-toolchain-update and release-notes
 ```
 
 In a session, `/plugin install <skill>@evalhub` opens the panel where you can
@@ -157,7 +161,7 @@ directory (`~/.claude/skills` by default; Codex CLI loads user skills from
 
 ```bash
 make install-dev-skills     # optional: DEV_SKILLS_REF=<ref> DEV_SKILLS_CLONE_DIR=<path> DEV_SKILLS_TARGET_DIR=<path>
-make uninstall-dev-skills   # honours DEV_SKILLS_TARGET_DIR
+make uninstall-dev-skills   # honours DEV_SKILLS_TARGET_DIR and DEV_SKILLS_CLONE_DIR
 ```
 
 For Codex CLI, point the target at its global skills directory, for example

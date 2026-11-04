@@ -48,11 +48,13 @@ skills directory, keeping a shallow clone of that repository up to date.
 
 Options:
   --uninstall      remove the skill symlinks instead of creating them
+                   (only links into the configured clone are removed)
   --force          replace a pre-existing skill entry (a directory, or a symlink
                    to another checkout) and discard uncommitted changes in an
                    existing clone
   --ref <ref>      branch, tag, or commit to check out (default: main)
-  --dir <path>     shallow clone location (default: ~/.cache/eval-hub-skills)
+  --dir <path>     shallow clone location (default: ~/.cache/eval-hub-skills);
+                   with --uninstall it selects the clone whose links are removed
   --target <path>  harness skills directory (default: ~/.claude/skills; for
                    Codex CLI pass ~/.agents/skills)
   -h, --help       show this help
@@ -244,21 +246,23 @@ install_skills() {
 
 uninstall_skills() {
   local removed=0
-  local skill dst target
+  local skill dst src current
   for skill in "${SKILLS[@]}"; do
     dst="$SKILLS_DIR/$skill"
     if [ -L "$dst" ]; then
-      target="$(readlink "$dst" || true)"
-      case "$target" in
-        */dev-skills/"$skill")
-          rm -f "$dst"
-          log OK "removed $dst"
-          removed=$((removed + 1))
-          ;;
-        *)
-          log SKIP "$dst points at $target; leaving it alone"
-          ;;
-      esac
+      src="$CHECKOUT_DIR/dev-skills/$skill"
+      current="$(resolved_link_target "$dst")"
+      # Only remove a link this install owns, matching install_skills: a link
+      # into another checkout, or one created by hand, may belong to someone
+      # else. Point --dir / EVALHUB_SKILLS_DIR at the clone the link was
+      # installed from to remove it.
+      if [ "$current" = "$src" ]; then
+        rm -f "$dst"
+        log OK "removed $dst"
+        removed=$((removed + 1))
+      else
+        log SKIP "$dst points at ${current:-an unresolvable target}, not $src; leaving it alone (pass --dir / EVALHUB_SKILLS_DIR matching the clone it was installed from)"
+      fi
     elif [ -d "$dst" ]; then
       log SKIP "$dst is a directory (plugin or manual install); remove it manually"
     fi

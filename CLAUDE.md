@@ -8,11 +8,14 @@ Repo-specific architecture notes live in `.claude/rules/`. Maintainer workflows
 external [`eval-hub/eval-hub-skills`](https://github.com/eval-hub/eval-hub-skills)
 repository (`dev-skills/`), are published as opt-in plugins, and are enabled for
 Claude Code by the committed `.claude/settings.json`, which also clones the
-marketplace and fetches the plugins in the background; install one explicitly with
-`claude plugin install <skill>@evalhub --scope project` while connected when you
-need it immediately or want it available in a later offline session
-(`make install-dev-skills` links them into
-`~/.claude/skills` for other harnesses). See `AGENTS.md` → Development Skills.
+marketplace and fetches the plugins in the background. That fetch needs network
+access, so a fresh machine has **none** of the four skills installed until it
+completes: install the ones you rely on before you need them, with
+`claude plugin install <skill>@evalhub --scope project`. An install only helps a
+later offline session once its download has finished — offline work can use just
+the plugins that are already downloaded, and nothing new is fetched without
+network. (`make install-dev-skills` links the same skills into `~/.claude/skills`
+from a local clone for other harnesses.) See `AGENTS.md` → Development Skills.
 
 ## Release notes
 
@@ -82,7 +85,8 @@ Pick the mode:
   `.claude/settings.json` enables it from the `evalhub` marketplace, and Claude
   Code fetches it in the background. Install it explicitly with
   `claude plugin install golang-toolchain-update@evalhub --scope project` when you
-  need it immediately or offline; in another repository, add the marketplace first
+  need it immediately or before a session that runs offline; in another
+  repository, add the marketplace first
   with `/plugin marketplace add eval-hub/eval-hub-skills`.
 
 - **Cursor / Codex CLI / other harnesses:** ask naturally, e.g. “Bump the Go
