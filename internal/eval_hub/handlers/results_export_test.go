@@ -41,7 +41,7 @@ func TestExportEvaluationResultsEligibleStates(t *testing.T) {
 			job.Status.State = tc.state
 			exporter := &stubResultsExporter{}
 			h := &Handlers{resultsExporter: exporter}
-			h.exportEvaluationResults(context.Background(), job, nil)
+			h.exportEvaluationResults(context.Background(), nil, job, nil)
 			if got := exporter.card != nil; got != tc.want {
 				t.Fatalf("card exported = %v, want %v", got, tc.want)
 			}
@@ -52,7 +52,7 @@ func TestExportEvaluationResultsEligibleStates(t *testing.T) {
 		job.Status = nil
 		exporter := &stubResultsExporter{}
 		h := &Handlers{resultsExporter: exporter}
-		h.exportEvaluationResults(context.Background(), job, nil)
+		h.exportEvaluationResults(context.Background(), nil, job, nil)
 		if exporter.card != nil {
 			t.Fatal("card exported without job status")
 		}

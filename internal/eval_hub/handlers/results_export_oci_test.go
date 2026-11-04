@@ -230,7 +230,11 @@ func TestOCIReportingEligibility(t *testing.T) {
 			storage := &ociReportingStorage{job: job}
 			exporter := &ociOutcomeExporter{}
 			(&Handlers{resultsExporter: exporter}).exportEvaluationResults(context.Background(), storage, job, nil)
-			if len(storage.calls) != 0 || job.Results.OCI != nil || exporter.calls != 1 {
+			wantCalls := 0
+			if state == api.OverallStateCompleted || state == api.OverallStatePartiallyFailed {
+				wantCalls = 1
+			}
+			if len(storage.calls) != 0 || job.Results.OCI != nil || exporter.calls != wantCalls {
 				t.Fatal("changed export eligibility or added synthetic OCI output")
 			}
 		})
