@@ -125,23 +125,30 @@ copies under `.claude/skills/`; change the external skill instead.
 | `golang-toolchain-update` | Auditing Go CVEs and bumping the Go toolchain, gated on the go-toolset image publishing the target tag. Modes: `cve` (default) and `latest`. |
 | `release-notes` | Drafting OpenSSF-compliant, human-readable GitHub release notes for a tag or version. |
 
-Install them once (keeps a shallow clone current and symlinks each skill into
-`~/.claude/skills`):
+**Claude Code:** the committed `.claude/settings.json` declares the `evalhub`
+marketplace and enables the four skills as plugins, so `/evalhub-bug-review`,
+`/fix-fvt-test`, `/golang-toolchain-update` and `/release-notes` are available in
+this repository. Enabling is not installing: the plugin files live on each
+machine, so run each skill's install once after cloning, with project scope:
+
+```shell
+claude plugin install evalhub-bug-review@evalhub --scope project
+```
+
+In a session, `/plugin install <skill>@evalhub` opens the panel where you can
+choose **Install for all collaborators on this repository (project scope)**. In
+another repository, copy the `extraKnownMarketplaces` / `enabledPlugins` block
+from `.claude/settings.json` and install the same way.
+
+**Other harnesses** (Cursor, Codex CLI, …) do not read Claude Code plugins. Keep
+a shallow clone current and symlink the skills into `~/.claude/skills`:
 
 ```bash
 make install-dev-skills     # optional: DEV_SKILLS_REF=<ref> DEV_SKILLS_CLONE_DIR=<path>
 make uninstall-dev-skills
 ```
 
-Claude Code can instead install the Go toolchain skill as a plugin:
-
-```text
-/plugin marketplace add eval-hub/eval-hub-skills
-/plugin install golang-toolchain-update@evalhub
-```
-
-Harnesses without a skills directory (Cursor, Codex CLI, …) attach the skill file
-from the clone, for example
+Then attach the skill file from the clone, for example
 `@~/.cache/eval-hub-skills/dev-skills/release-notes/SKILL.md`, or from any
 checkout of `eval-hub/eval-hub-skills` as
 `@dev-skills/release-notes/SKILL.md`.
