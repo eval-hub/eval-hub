@@ -9,7 +9,7 @@ readonly MAX_PAGES=50
 readonly CURL_CONNECT_TIMEOUT=10
 readonly CURL_MAX_TIME=30
 
-url="${REGISTRY_ORIGIN}/v2/ubi9/go-toolset/tags/list?n=100"
+url="${REGISTRY_ORIGIN}/v2/ubi10/go-toolset/tags/list?n=100"
 headers_file=$(mktemp)
 trap 'rm -f "$headers_file"' EXIT
 

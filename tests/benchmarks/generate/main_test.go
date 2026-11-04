@@ -7,6 +7,21 @@ import (
 	"testing"
 )
 
+func TestFileID(t *testing.T) {
+	for _, tc := range []struct{ id, want string }{
+		{"arc:challenge", "arc%3Achallenge"},
+		{"arc%3Achallenge", "arc%253Achallenge"},
+		{"inspect/petri-sycophancy", "inspect%2Fpetri-sycophancy"},
+		{"..", "%2E%2E"},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			if got := fileID(tc.id); got != tc.want {
+				t.Fatalf("fileID(%q) = %q; want %q", tc.id, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestJudgeProfiles(t *testing.T) {
 	for _, tc := range []struct {
 		provider, benchmark string

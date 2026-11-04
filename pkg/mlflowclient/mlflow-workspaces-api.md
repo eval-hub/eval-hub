@@ -247,6 +247,38 @@ handles the wire-level MLflow protocol.
    `WithWorkspacesSupport(true)` is set. Does **not** probe capability; callers
    must resolve first (`WorkspaceSupport.PrepareClient` or startup
    `NewMLFlowClient`). Skips creation for the reserved `default` workspace.
-   Handles the `RESOURCE_ALREADY_EXISTS` race from concurrent creators.
+   Handles the `RESOURCE_ALREADY_EXISTS` race from concurrent creators: a conflict
+   is confirmed with a second lookup, and if that lookup fails the create error
+   (with the provider's details) is returned rather than the lookup failure.
    Workspace **names** are per client copy (tenant isolation); capability state
    lives on the shared `WorkspaceSupport` instance.
+
+## Error handling
+
+`pkg/mlflowclient` maps every API failure onto its own `*APIError`
+(`StatusCode`, `ResponseBody`, `MLFlowError`), which `IsResourceAlreadyExistsError`
+and `IsResourceDoesNotExistError` classify. Behaviour that callers and operators
+depend on (see RHAI-17156):
+
+- **Details are never dropped.** mlflow-go decodes `error_code` and `message`
+  independently, and when a workspace provider or proxy answers outside MLflow's
+  schema (for example `{"detail": "..."}`) it keeps the HTTP status and builds a
+  message from the status text plus a bounded (4 KiB) excerpt of the response
+  body. That message is copied through verbatim, so a failed create reports the
+  provider's reason instead of empty error fields.
+- **No fabricated empty error code.** A body without `error_code` yields
+  `MLFlowError.ErrorCode == ""` and `ResponseBody` set to the plain message, not a
+  `{"error_code":"",...}` envelope.
+- **Never an empty diagnostic.** If an error carries no message at all, the HTTP
+  status text is used.
+- **Classification follows the SDK.** `RESOURCE_ALREADY_EXISTS` matches on HTTP
+  409 (mlflow-go's `IsAlreadyExists` treats any conflict as already-exists) or on
+  the MLflow error code. An explicit code wins over a message that merely quotes
+  the `RESOURCE_ALREADY_EXISTS` substring, so a `PERMISSION_DENIED` rejection is
+  never mistaken for an existing resource. A 404 matches on
+  `RESOURCE_DOES_NOT_EXIST` — from the decoded error or from MLflow's JSON error
+  shape in the body — or, when no code is available at all, on the status alone. A
+  404 with a *different* explicit code is not treated as a missing workspace, so a
+  missing endpoint is never mistaken for a missing resource.
+- **No retries.** A failed workspace create is returned to the caller; the client
+  never retries it or infers provider capabilities from a generic 403.

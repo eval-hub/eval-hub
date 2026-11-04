@@ -109,13 +109,9 @@ benchmarks:
     evaluation_targets: [rag_system]
     metrics:
       - answer_relevancy
-      - answer_similarity
       - context_precision
       - faithfulness
       - context_recall
-      - context_entity_recall
-      - factual_correctness
-      - noise_sensitivity
     tags:
       - ragas
       - rag

@@ -26,7 +26,9 @@ func main() {
 	}
 }
 
-func fileID(id string) string { return strings.ReplaceAll(url.PathEscape(id), ".", "%2E") }
+func fileID(id string) string {
+	return strings.NewReplacer(".", "%2E", ":", "%3A").Replace(url.PathEscape(id))
+}
 
 func generate(providersDir, outputDir string) error {
 	files, err := filepath.Glob(filepath.Join(providersDir, "*.yaml"))
@@ -116,6 +118,13 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 			p["loglikelihood_context_overflow"] = "truncate"
 			f["max_length_env"] = "MODEL_MAX_LENGTH"
 			f["notes"] = "One LongBench example with a 4096-token smoke context budget. Set MODEL_MAX_LENGTH to the served model's context limit (integer >= 2); the budget must not exceed that limit. This short default does not validate full long-context accuracy."
+		}
+		if _, pinned := p["tokenizer"]; !pinned {
+			// The adapter resolves a HuggingFace tokenizer separately from the
+			// model name. Smoke endpoints with a non-Hub model name (such as the
+			// kind mock target) supply one through LM_EVAL_TOKENIZER; when the
+			// variable is unset the adapter keeps its model-name fallback.
+			f["tokenizer_env"] = "LM_EVAL_TOKENIZER"
 		}
 	case "lighteval":
 		p["num_examples"], p["num_few_shot"], p["batch_size"] = 1, 0, 1

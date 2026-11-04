@@ -72,6 +72,20 @@ required fixture inputs produce explicit subtest skips naming the missing field 
 environment variable and explaining how to enable the benchmark. Subtest names contain provider and benchmark IDs; Go's
 `-run` treats slash-separated portions as regular expressions.
 
+## Kind cluster
+
+`make test-benchmarks-kind` deploys the local dev stack with `make dev-deploy`
+and runs the suite against the kind mock target and mock judge. It mints a
+short-lived service-account token, creates or refreshes the dev-deploy-owned
+mock-auth Secret (failing if a same-named Secret belongs to something else), and
+exports `JUDGE_MODEL_NAME`, `JUDGE_BASE_URL`, `JUDGE_API_KEY`, and
+`LM_EVAL_TOKENIZER` so judge-based and LM Evaluation Harness benchmarks execute
+instead of skipping or failing. The default `KIND_BENCHMARK_RUN` is a
+representative set for each adapter image dev-deploy builds; widen it with
+`BENCHMARK_RUN` (see the `Makefile` comment) to run a provider's full catalog,
+which also selects benchmarks whose fixtures require a sandbox, external
+services, or a capable judge model.
+
 ## Fixtures
 
 The runner and JSON fixtures are delivered in separate stacked PRs. The runner
@@ -84,7 +98,9 @@ Each checked-in provider benchmark has one file under
 `testdata/<provider-id>/<benchmark-id>.json`. Runtime discovery uses the live API
 catalog, so a newly discovered benchmark without a file fails with the expected
 path and instructions to generate or add the fixture. Filenames
-use Go's `url.PathEscape`, additionally encoding dots as `%2E`. For example,
+use Go's `url.PathEscape`, additionally encoding dots as `%2E` and colons as
+`%3A` for Windows compatibility. For example, `arc:challenge` becomes
+`arc%3Achallenge.json` under the `lighteval` provider directory, and
 `inspect/petri-sycophancy` becomes `inspect%2Fpetri-sycophancy.json` under the
 `inspect` provider directory. Encoding `%` prevents collisions with escaped IDs.
 
@@ -111,6 +127,13 @@ Supported fixture fields:
   `parameters.max_length`. Unset or empty values keep the fixture's fallback;
   supplied values must be integers greater than one. Values are sent as JSON
   numbers, not strings.
+- `tokenizer_env`: optional environment variable supplying `parameters.tokenizer`
+  for providers that resolve a HuggingFace tokenizer separately from the model
+  name, such as LM Evaluation Harness. Unset or empty values keep the fixture's
+  fallback, and a `parameters.tokenizer` the fixture pins itself (for example a
+  staged `/test_data/tokenizer` bundle) always wins. The
+  `test-benchmarks-kind` target sets `LM_EVAL_TOKENIZER` because the kind mock
+  target model name does not resolve on the Hub.
 - `test_data_ref`: optional API `TestDataRef` object for staged test input.
 - `test_data_ref_env`: alternatively, the name of an environment variable containing
   a complete JSON `TestDataRef` object. It must be set when the fixture is used.
