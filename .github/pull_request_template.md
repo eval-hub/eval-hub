@@ -1,3 +1,7 @@
+<!-- Maintainers apply the `ready-for-review` label once the PR is ready for
+     review: it opts the PR into CodeRabbit and the requested-reviewer approval
+     check. See CONTRIBUTING.md → Review Process. -->
+
 ## What and why
 
 <!-- What does this PR do and why? Link to related issues. -->
