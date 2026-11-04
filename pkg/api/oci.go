@@ -1,5 +1,16 @@
 package api
 
+// IsOCIExportEnabled reports whether a job has OCI exports configured.
+func IsOCIExportEnabled(job *EvaluationJobResource) bool {
+	return job != nil && job.Exports != nil && job.Exports.OCI != nil
+}
+
+// IsEvaluationCardProcessingEligible reports whether a job completed with full or partial results.
+func IsEvaluationCardProcessingEligible(job *EvaluationJobResource) bool {
+	return job != nil && job.Status != nil &&
+		(job.Status.State == OverallStateCompleted || job.Status.State == OverallStatePartiallyFailed)
+}
+
 // OCISigningConfig selects the signing method and optionally references a key Secret.
 // It retains configuration only; it does not resolve keys or schedule signing.
 type OCISigningConfig struct {
@@ -23,6 +34,11 @@ const (
 	OCIProcessingCompleted OCIProcessingState = "completed"
 )
 
+// IsOCIProcessingTerminalState reports whether an OCI workflow state is a terminal outcome.
+func IsOCIProcessingTerminalState(state OCIProcessingState) bool {
+	return state == OCIProcessingFailed || state == OCIProcessingCompleted
+}
+
 // OCIProcessingStatus reports actual card, bundle, and signing workflow information.
 // It has no default state or message.
 // Workflow reporting uses running followed by completed or failed.
@@ -45,16 +61,24 @@ type EvaluationOCIResults struct {
 }
 
 // UpdateOCIResults updates workflow status and, when supplied, the card reference.
-// It initializes missing results and preserves all other fields. A nil card means
-// no change to the existing reference; this function does not reset OCI results.
+// A non-nil card intentionally replaces the existing reference (last-write-wins),
+// which supports future evaluation-card regeneration; the current workflow has no
+// regeneration path yet. It initializes missing results and preserves all other
+// fields. A nil status or card means no change to the existing value; if both are
+// nil, results are returned unchanged.
 func UpdateOCIResults(results *EvaluationJobResults, status *OCIProcessingStatus, card *OCIArtifactReference) *EvaluationJobResults {
+	if status == nil && card == nil {
+		return results
+	}
 	if results == nil {
 		results = &EvaluationJobResults{}
 	}
 	if results.OCI == nil {
 		results.OCI = &EvaluationOCIResults{}
 	}
-	results.OCI.Status = status
+	if status != nil {
+		results.OCI.Status = status
+	}
 	if card != nil {
 		results.OCI.EvaluationCard = card
 	}

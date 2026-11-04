@@ -5,6 +5,84 @@ import (
 	"testing"
 )
 
+func TestIsOCIExportEnabled(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		job  *EvaluationJobResource
+		want bool
+	}{
+		{name: "nil job"},
+		{name: "missing exports", job: &EvaluationJobResource{}},
+		{name: "missing OCI exports", job: &EvaluationJobResource{EvaluationJobConfig: EvaluationJobConfig{Exports: &EvaluationExports{}}}},
+		{name: "enabled without status", job: &EvaluationJobResource{EvaluationJobConfig: EvaluationJobConfig{Exports: &EvaluationExports{OCI: &EvaluationExportsOCI{}}}}, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsOCIExportEnabled(tc.job); got != tc.want {
+				t.Fatalf("IsOCIExportEnabled() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsEvaluationCardProcessingEligible(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		job  *EvaluationJobResource
+		want bool
+	}{
+		{name: "nil job"},
+		{name: "missing status", job: &EvaluationJobResource{}},
+		{name: "completed without exports", job: &EvaluationJobResource{Status: &EvaluationJobStatus{EvaluationJobState: EvaluationJobState{State: OverallStateCompleted}}}, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsEvaluationCardProcessingEligible(tc.job); got != tc.want {
+				t.Fatalf("IsEvaluationCardProcessingEligible() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+	for _, tc := range []struct {
+		state OverallState
+		want  bool
+	}{
+		{OverallStateCompleted, true},
+		{OverallStatePartiallyFailed, true},
+		{OverallStateFailed, false},
+		{OverallStateCancelled, false},
+		{OverallStatePending, false},
+		{OverallStateRunning, false},
+		{"", false},
+		{"unknown", false},
+	} {
+		t.Run(string(tc.state), func(t *testing.T) {
+			job := &EvaluationJobResource{
+				Status: &EvaluationJobStatus{EvaluationJobState: EvaluationJobState{State: tc.state}},
+			}
+			if got := IsEvaluationCardProcessingEligible(job); got != tc.want {
+				t.Fatalf("IsEvaluationCardProcessingEligible() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsOCIProcessingTerminalState(t *testing.T) {
+	for _, tc := range []struct {
+		state OCIProcessingState
+		want  bool
+	}{
+		{OCIProcessingRunning, false},
+		{OCIProcessingCompleted, true},
+		{OCIProcessingFailed, true},
+		{"", false},
+		{"unknown", false},
+	} {
+		t.Run(string(tc.state), func(t *testing.T) {
+			if got := IsOCIProcessingTerminalState(tc.state); got != tc.want {
+				t.Fatalf("IsOCIProcessingTerminalState(%q) = %v, want %v", tc.state, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestUpdateOCIResultsInitializesMissingResults(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -26,6 +104,35 @@ func TestUpdateOCIResultsInitializesMissingResults(t *testing.T) {
 				t.Fatal("existing results were replaced")
 			}
 		})
+	}
+}
+
+func TestUpdateOCIResultsPreservesNilUpdates(t *testing.T) {
+	status := &OCIProcessingStatus{State: OCIProcessingRunning}
+	card := &OCIArtifactReference{OCIDigest: "sha256:card", OCIReference: "registry.example/card@sha256:card"}
+	for _, tc := range []struct {
+		name    string
+		results *EvaluationJobResults
+	}{
+		{name: "nil results"},
+		{name: "missing OCI", results: &EvaluationJobResults{MLFlowExperimentURL: "https://mlflow.example/experiments/1"}},
+		{name: "existing OCI", results: &EvaluationJobResults{OCI: &EvaluationOCIResults{Status: status, EvaluationCard: card}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := UpdateOCIResults(tc.results, nil, nil)
+			if got != tc.results {
+				t.Fatal("nil update replaced results")
+			}
+			if tc.results != nil && tc.results.OCI == nil && got.OCI != nil {
+				t.Fatal("nil update allocated OCI results")
+			}
+		})
+	}
+
+	results := &EvaluationJobResults{OCI: &EvaluationOCIResults{Status: status}}
+	got := UpdateOCIResults(results, nil, card)
+	if got != results || got.OCI.Status != status || got.OCI.EvaluationCard != card {
+		t.Fatal("card-only update did not preserve the existing status")
 	}
 }
 

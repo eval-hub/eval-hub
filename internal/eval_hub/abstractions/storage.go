@@ -85,6 +85,7 @@ type Storage interface {
 	UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error
 	// UpdateEvaluationJobOCI merges service-owned OCI progress and an optional published card
 	// without replacing benchmark results or the evaluation completion status.
+	// Callers must provide a non-nil, validated status and validate any supplied card.
 	UpdateEvaluationJobOCI(id string, status *api.OCIProcessingStatus, card *api.OCIArtifactReference) error
 	// UpdateEvaluationJobResolvedSHA records the resolved test-data identity (e.g. git commit SHA)
 	// on the benchmark at benchmarkIndex as TestDataRef.ResolvedSHA. Idempotent: if already set, no-op.

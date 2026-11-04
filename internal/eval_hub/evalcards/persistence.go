@@ -200,7 +200,7 @@ func (t *ociTarget) Target() Target {
 }
 
 func (t *ociTarget) Enabled(job *api.EvaluationJobResource) bool {
-	return job.Exports != nil && job.Exports.OCI != nil
+	return api.IsOCIExportEnabled(job)
 }
 
 func (t *ociTarget) Export(ctx context.Context, job *api.EvaluationJobResource, card *cards.EvaluationCard) (*ExportResult, error) {
