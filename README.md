@@ -272,9 +272,10 @@ lm-evaluation-harness checkout is the fork at
 alongside EvalHub on its `incubation` (or `stable`) branch, since only those
 branches provide the `Dockerfile.lmes-job` used for the LMES adapter image,
 not the default `main` branch. The operator
-checkout is always required; the contrib and lm-evaluation-harness checkouts
-are needed for the adapter images selected by the default `ADAPTERS=all` —
-narrow `ADAPTERS` to skip either. Each repository is searched as a sibling of
+checkout is always required. By default, `ADAPTERS` selects Inspect, LM
+Evaluation Harness, and FollowBench; their contrib and lm-evaluation-harness
+checkouts are needed. Set `ADAPTERS=all` to build all six curated adapters, or
+select a smaller list. Each repository is searched as a sibling of
 the EvalHub checkout first and then as `<parent>/<repo>` under each
 colon-separated `DEV_REPO_PARENT_PATHS` entry (default `~/code`); set that
 variable when the repositories live elsewhere. The command

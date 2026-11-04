@@ -72,6 +72,11 @@ jobs:
     - name: Check benchmark provider fixture counts
       run: go test ./tests/features -run '^TestBenchmarkProviderFixtureCounts$'
 
+    - name: Check disconnected e2e unit tests
+      run: >-
+        go test ./tests/e2e -run
+        '^(TestCuratedBenchmarkMatrixComplete|TestCuratedBenchmarkMatrixMatchesRepositoryConfigs|TestCasesWithCatalogEntriesSeparatesMissingRows|TestRefreshDeploymentTestAPIClientRenewsToken|TestDiscoverDeploymentManifest|TestDeploymentManifestAdapterSelection|TestDeploymentManifestVerifiesProviderImage|TestSelectedAdapterProviderMappingsCoverSupportedAdapters|TestLightEvalStagerCanWriteItsRegistryAsset|TestIsTerminalEvaluationPod|TestFilterCuratedCasesForHFToken|TestHFStagerEnvUsesOptionalSecretReference|TestEvaluationJobStatusDetailsHandlesMissingStatus|TestDiscoverManagedDeploymentNamespaces|TestAdapterImageDetails|TestAdapterIDsForCasesCoversEverySelectedProvider|TestCuratedEvaluationBenchmarkDoesNotMutateCatalog)$'
+
     - name: Run all tests (unit and integration) with coverage
       run: |
         make clean build test-all-coverage
