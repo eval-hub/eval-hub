@@ -132,14 +132,16 @@ and the reviewer checklist — is documented in `CONTRIBUTING.md` →
 [Review Process](./CONTRIBUTING.md#review-process).
 
 **Claude Code:** the committed `.claude/settings.json` declares the `evalhub`
-marketplace and enables the four skills as plugins, so `/evalhub-bug-review`,
-`/fix-fvt-test`, `/golang-toolchain-update` and `/release-notes` are available in
-this repository. Claude Code also clones the declared marketplace and downloads
-the enabled plugins in the background once a session starts, which needs network
-access. A fresh machine therefore starts with **none** of the four skills
-installed, so install the ones you rely on explicitly before you need them — when
-you need the skill immediately after cloning, when you want to review what a
-plugin adds before it runs, or when you will need it in a later offline session.
+marketplace (`extraKnownMarketplaces`) and enables the four skills as plugins
+(`enabledPlugins`), but declaring and enabling a plugin does not download or
+install it: on a fresh machine `/evalhub-bug-review`, `/fix-fvt-test`,
+`/golang-toolchain-update` and `/release-notes` are **not** available until each
+collaborator installs them. Claude Code can also fetch enabled plugins in the
+background once a session starts, which needs network access, but a fresh clone
+starts with **none** of the four skills installed, so install the ones you rely
+on explicitly before you need them — when you need the skill immediately after
+cloning, when you want to review what a plugin adds before it runs, or when you
+will need it in a later offline session.
 An install only helps that later offline session once its download has finished:
 offline work can use only the plugins that are already downloaded, and the
 background fetch cannot run without network. Use project scope:

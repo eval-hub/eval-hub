@@ -6,16 +6,18 @@ Repo-specific architecture notes live in `.claude/rules/`. Maintainer workflows
 (`evalhub-bug-review`, `fix-fvt-test`, `golang-toolchain-update`,
 `release-notes`) are **not** kept in this repository — they come from the
 external [`eval-hub/eval-hub-skills`](https://github.com/eval-hub/eval-hub-skills)
-repository (`dev-skills/`), are published as opt-in plugins, and are enabled for
-Claude Code by the committed `.claude/settings.json`, which also clones the
-marketplace and fetches the plugins in the background. That fetch needs network
-access, so a fresh machine has **none** of the four skills installed until it
-completes: install the ones you rely on before you need them, with
-`claude plugin install <skill>@evalhub --scope project`. An install only helps a
-later offline session once its download has finished — offline work can use just
-the plugins that are already downloaded, and nothing new is fetched without
-network. (`make install-dev-skills` links the same skills into `~/.claude/skills`
-from a local clone for other harnesses.) See `AGENTS.md` → Development Skills.
+repository (`dev-skills/`), and are published as opt-in plugins. The committed
+`.claude/settings.json` declares the `evalhub` marketplace and marks the four
+plugins as enabled, but it does not download or install them: a fresh clone has
+**none** of the four skills available until each collaborator installs them
+explicitly with `claude plugin install <skill>@evalhub --scope project`. Claude
+Code may also fetch the enabled plugins in the background once a session starts,
+and that fetch needs network access, so install the ones you rely on before you
+need them. An install only helps a later offline session once its download has
+finished — offline work can use just the plugins that are already downloaded, and
+nothing new is fetched without network. (`make install-dev-skills` links the same
+skills into `~/.claude/skills` from a local clone for other harnesses.) See
+`AGENTS.md` → Development Skills.
 
 ## Release notes
 

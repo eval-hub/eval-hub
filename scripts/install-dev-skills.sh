@@ -95,34 +95,14 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
-# Resolve a path to an absolute one without requiring it to exist yet. Symlink
-# targets are stored verbatim, so a relative --dir / EVALHUB_SKILLS_DIR would
-# otherwise be resolved against the skills directory instead of the CWD. A
-# leading tilde is expanded here too: make passes variable values through
-# quoted (--target "~/.agents/skills"), so the shell never expands it.
-abspath() {
-  case "$1" in
-    "~") printf '%s\n' "$HOME" ;;
-    "~/"*) printf '%s\n' "$HOME/${1#"~/"}" ;;
-    /*) printf '%s\n' "$1" ;;
-    *) printf '%s\n' "$PWD/$1" ;;
-  esac
-}
-
-# Follow the target stored in a symlink. Relative targets are resolved against
-# the directory holding the link and "." / ".." segments are collapsed, so the
-# result compares equal to $CHECKOUT_DIR/dev-skills/<skill> even for a link that
-# was created by hand instead of by this script.
-resolved_link_target() {
-  local link="$1" target part out=""
+# Collapse duplicate slashes and "." / ".." segments without requiring the path
+# to exist. $CHECKOUT_DIR (from --dir / EVALHUB_SKILLS_DIR) and the targets
+# stored in existing symlinks both pass through this, so the two compare equal
+# even when a caller-supplied path contains "..".
+canonical_path() {
+  local part out=""
   local -a parts
-  target="$(readlink "$link" || true)"
-  [ -n "$target" ] || return 0
-  case "$target" in
-    /*) ;;
-    *) target="$(dirname "$link")/$target" ;;
-  esac
-  IFS=/ read -r -a parts <<<"$target"
+  IFS=/ read -r -a parts <<<"$1"
   for part in "${parts[@]}"; do
     case "$part" in
       '' | .) ;;
@@ -131,6 +111,35 @@ resolved_link_target() {
     esac
   done
   printf '%s\n' "${out:-/}"
+}
+
+# Resolve a path to an absolute one without requiring it to exist yet. Symlink
+# targets are stored verbatim, so a relative --dir / EVALHUB_SKILLS_DIR would
+# otherwise be resolved against the skills directory instead of the CWD. A
+# leading tilde is expanded here too: make passes variable values through
+# quoted (--target "~/.agents/skills"), so the shell never expands it.
+abspath() {
+  case "$1" in
+    "~") canonical_path "$HOME" ;;
+    "~/"*) canonical_path "$HOME/${1#"~/"}" ;;
+    /*) canonical_path "$1" ;;
+    *) canonical_path "$PWD/$1" ;;
+  esac
+}
+
+# Follow the target stored in a symlink. Relative targets are resolved against
+# the directory holding the link and "." / ".." segments are collapsed, so the
+# result compares equal to $CHECKOUT_DIR/dev-skills/<skill> even for a link that
+# was created by hand instead of by this script.
+resolved_link_target() {
+  local link="$1" target
+  target="$(readlink "$link" || true)"
+  [ -n "$target" ] || return 0
+  case "$target" in
+    /*) ;;
+    *) target="$(dirname "$link")/$target" ;;
+  esac
+  canonical_path "$target"
 }
 
 # Normalise a git remote URL (https://host/path.git, ssh://git@host/path,
