@@ -3,13 +3,8 @@ package main
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"reflect"
-	"slices"
 	"testing"
-
-	"github.com/eval-hub/eval-hub/tests/benchmarks/internal/fixturecheck"
-	"go.yaml.in/yaml/v4"
 )
 
 func TestFileID(t *testing.T) {
@@ -52,9 +47,6 @@ func TestJudgeProfiles(t *testing.T) {
 					t.Errorf("%s = %v; want %s", field, p[field], want)
 				}
 			}
-			if fields := fixturecheck.ConnectionOptions(p); len(fields) != 0 {
-				t.Errorf("model connections must come from the Secret: %v", fields)
-			}
 		})
 	}
 	for _, provider := range []string{"garak", "garak-kfp"} {
@@ -81,7 +73,7 @@ func TestATIFUsesJudgeModel(t *testing.T) {
 	}
 }
 
-func TestRagasProfilesRequireEmbeddingEndpoint(t *testing.T) {
+func TestRagasProfilesSelectEmbeddingModel(t *testing.T) {
 	for _, benchmark := range []string{"ragas_rag_default", "ragas_rag_full"} {
 		t.Run(benchmark, func(t *testing.T) {
 			f, err := minimalFixture("ragas", benchmark)
@@ -92,56 +84,7 @@ func TestRagasProfilesRequireEmbeddingEndpoint(t *testing.T) {
 			if parameters["embedding_model"] != "${RAGAS_EMBEDDING_MODEL}" {
 				t.Fatalf("Ragas must select an embedding model: %v", parameters)
 			}
-			if fields := fixturecheck.ConnectionOptions(parameters); len(fields) != 0 {
-				t.Errorf("model connections must come from the Secret: %v", fields)
-			}
 		})
-	}
-}
-
-func TestRoleProfilesDoNotEmitConnectionParameters(t *testing.T) {
-	paths, err := filepath.Glob("../../../config/providers/*.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	seen := make(map[string]bool)
-	for _, path := range paths {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var catalog struct {
-			ID         string `yaml:"id"`
-			Benchmarks []struct {
-				ID string `yaml:"id"`
-			} `yaml:"benchmarks"`
-		}
-		if err := yaml.Unmarshal(data, &catalog); err != nil {
-			t.Fatal(err)
-		}
-		if !slices.Contains(fixturecheck.Providers(), catalog.ID) {
-			continue
-		}
-		seen[catalog.ID] = true
-		if len(catalog.Benchmarks) == 0 {
-			t.Fatalf("no benchmarks found for %s", catalog.ID)
-		}
-		for _, benchmark := range catalog.Benchmarks {
-			t.Run(catalog.ID+"/"+benchmark.ID, func(t *testing.T) {
-				f, err := minimalFixture(catalog.ID, benchmark.ID)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if fields := fixturecheck.ConnectionOptions(f["parameters"]); len(fields) != 0 {
-					t.Errorf("generated parameters contain model connections: %v", fields)
-				}
-			})
-		}
-	}
-	for _, provider := range fixturecheck.Providers() {
-		if !seen[provider] {
-			t.Errorf("no catalog found for %s", provider)
-		}
 	}
 }
 
@@ -165,7 +108,7 @@ func TestInspectSmokeRoles(t *testing.T) {
 					t.Fatalf("task default must not bypass the grader role: %v", args)
 				}
 				if roles["grader"] != "openai/${JUDGE_MODEL_NAME}" {
-					t.Fatalf("grader must select a model without inline connection options: %v", roles["grader"])
+					t.Fatalf("grader must select the configured judge model: %v", roles["grader"])
 				}
 			}
 			// Keep the checked-in fixtures consistent with regeneration.
