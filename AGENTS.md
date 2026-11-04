@@ -56,6 +56,8 @@ make vet                # Run go vet (same as lint)
 
 **Always run `make fmt lint` after file changes and before committing.** This ensures consistent formatting and catches issues early.
 
+`make lint` and `make vet` static-analyse with the Go toolchain declared in `go.mod` (`GOTOOLCHAIN=go<version>`, `GO_TOOLCHAIN` in the Makefile), not the Go installed on the machine, so every contributor and CI type-check against the same standard library. Always lint through `make lint` (pre-commit does the same) rather than a globally installed `golangci-lint` from Homebrew or a distro package: the linter bundles an export-data importer that only understands standard-library data up to the Go release it shipped with, so a newer local Go fails with `cannot decode "internal/goarch", export data version N is greater than maximum supported version M`. When `go.mod` is bumped (see **Go Version**), bump `GOLANGCI_LINT_VERSION` in the Makefile and `version` in `.github/workflows/golangci-lint.yml` together.
+
 If a `.pre-commit-config.yaml` file exists, run `pre-commit install && pre-commit install --hook-type commit-msg` before making any commits. This automatically enforces formatting, linting, and commit message conventions on every commit.
 
 **Do not use `#nosec` or `//gosec:disable` annotations in Go files.** CI rejects any PR that contains either inline suppression form. Fix the underlying code instead (e.g. use `os.OpenInRoot` for path-traversal-safe file access). If a gosec finding cannot be structurally fixed, add a path-scoped `--exclude-rules` entry in the Gosec Security Scanner step of `.github/workflows/ci.yml`.
