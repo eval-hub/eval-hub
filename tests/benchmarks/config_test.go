@@ -34,6 +34,41 @@ func fixtureEnv(key string) (string, bool) {
 	return "smoke-model", true
 }
 
+func TestFixtureModelOverridePreservesAuth(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		runnerAuth  *api.ModelAuth
+		fixtureAuth *api.ModelAuth
+		want        string
+	}{
+		{"inherits runner Secret", &api.ModelAuth{SecretRef: "model-auth"}, nil, "model-auth"},
+		{"explicit fixture Secret wins", &api.ModelAuth{SecretRef: "model-auth"}, &api.ModelAuth{SecretRef: "judge-auth"}, "judge-auth"},
+		{"no Secret supplied", nil, nil, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := fixture{
+				Model: &api.ModelRef{Name: "judge", URL: "https://judge.example/v1", Auth: tc.fixtureAuth},
+			}
+			job := f.jobConfig("atif", "atif_trajectory_default", api.ModelRef{
+				Name: "target", URL: "https://target.example/v1", Auth: tc.runnerAuth,
+			})
+			if job.Model.Name != f.Model.Name || job.Model.URL != f.Model.URL {
+				t.Fatal("fixture model selection was lost")
+			}
+			if tc.want == "" {
+				if job.Model.Auth != nil {
+					t.Fatal("unexpected model auth")
+				}
+			} else if job.Model.Auth == nil || job.Model.Auth.SecretRef != tc.want {
+				t.Fatalf("model auth = %v; want Secret %s", job.Model.Auth, tc.want)
+			}
+			if f.Model.Auth != tc.fixtureAuth {
+				t.Fatal("job submission mutated the fixture model")
+			}
+		})
+	}
+}
+
 func TestMaxLengthEnvironmentOverride(t *testing.T) {
 	for _, tc := range []struct {
 		name, value string

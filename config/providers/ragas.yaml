@@ -26,34 +26,18 @@ parameters:
   - name: embedding_model
     type: string
     default: null
-    description: Embedding model name; defaults to the evaluated model.
-  - name: embedding_url
-    type: string
-    default: null
     description: >
-      Standalone embedding endpoint override. In Kubernetes, configure
-      embedding_url and embedding_api-key in model.auth.secret_ref; the adapter
-      uses the projected sidecar URL and credential reference.
+      Embedding model name; defaults to the evaluated model. The selected
+      endpoint must serve embeddings. Configure embedding_url and
+      embedding_api-key in model.auth.secret_ref for a separate connection.
   - name: judge_model
     type: string
     default: null
     description: >
       Model used for LLM-based RAGAS metrics; defaults to the evaluated model.
       Use a capable structured-output model for smaller evaluated models.
-  - name: judge_url
-    type: string
-    default: null
-    description: >
-      Standalone judge endpoint override. In Kubernetes, configure judge_url
-      and judge_api-key in model.auth.secret_ref; the adapter uses the projected
-      sidecar URL and credential reference.
-  - name: judge_api_key
-    type: string
-    default: null
-    description: >
-      Standalone judge key override or explicit sidecar credential reference.
-      In Kubernetes, use judge_api-key in model.auth.secret_ref. Do not put
-      real keys in a JobSpec.
+      Configure judge_api-key and judge_url in model.auth.secret_ref for a
+      separate connection. Connection URLs and keys do not belong in parameters.
   - name: max_tokens
     type: integer
     default: null
