@@ -2,12 +2,19 @@ package e2e
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/evalhubclient"
+	authnv1 "k8s.io/api/authentication/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -143,20 +150,77 @@ func newDeploymentTestAPIConnection(
 		cleanup()
 		t.Fatalf("EvalHub API %s/%s did not become healthy through the temporary port-forward: %v", instance.namespace, instance.serviceName, err)
 	}
+	if err := refreshDeploymentTestAPIClient(ctx, kube, instance, connection); err != nil {
+		cleanup()
+		t.Fatalf("configure EvalHub API authentication for service account %s/%s: %v", instance.namespace, instance.serviceAccount, err)
+	}
+	return connection, cleanup
+}
+
+// Refresh the short-lived token for each benchmark job. The curated matrix can
+// run for several hours, while Kubernetes may cap TokenRequest lifetimes at one
+// hour. Rebuilding the client also ensures each request uses the fresh token.
+func refreshDeploymentTestAPIClient(
+	ctx context.Context,
+	kube kubernetes.Interface,
+	instance evalHubInstance,
+	connection *apiConnection,
+) error {
 	token, err := mintServiceAccountToken(ctx, kube, instance.namespace, instance.serviceAccount)
 	if err != nil {
-		cleanup()
-		t.Fatalf("mint a short-lived token for EvalHub service account %s/%s: %v", instance.namespace, instance.serviceAccount, err)
+		return fmt.Errorf("mint service-account token: %w", err)
 	}
 	connection.token = token
-	connection.client = evalhubclient.NewClient(baseURL).
+	connection.client = evalhubclient.NewClient(connection.baseURL).
 		WithToken(token).
-		WithTenant(instance.namespace).
-		WithHTTPClient(httpClient).
+		WithTenant(connection.tenant).
+		WithHTTPClient(connection.httpClient).
 		WithTimeout(5 * time.Second).
-		WithMaxRetries(0).
 		WithContext(ctx)
-	return connection, cleanup
+	return nil
+}
+
+func TestRefreshDeploymentTestAPIClientRenewsToken(t *testing.T) {
+	authorization := make(chan string, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authorization <- r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer server.Close()
+
+	tokens := []string{"first-token", "renewed-token"}
+	issued := 0
+	kube := fake.NewSimpleClientset()
+	kube.PrependReactor("create", "serviceaccounts", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if action.GetSubresource() != "token" {
+			return false, nil, nil
+		}
+		if issued >= len(tokens) {
+			t.Fatalf("unexpected token request %d", issued+1)
+		}
+		token := tokens[issued]
+		issued++
+		return true, &authnv1.TokenRequest{Status: authnv1.TokenRequestStatus{Token: token}}, nil
+	})
+
+	ctx := context.Background()
+	instance := evalHubInstance{namespace: "system", serviceAccount: "evalhub-local-service"}
+	connection := &apiConnection{baseURL: server.URL, tenant: instance.namespace, httpClient: server.Client()}
+	for _, wantToken := range tokens {
+		if err := refreshDeploymentTestAPIClient(ctx, kube, instance, connection); err != nil {
+			t.Fatalf("refresh API client: %v", err)
+		}
+		if _, err := connection.client.GetHealth(); err != nil {
+			t.Fatalf("health request with refreshed token: %v", err)
+		}
+		if got, want := <-authorization, "Bearer "+wantToken; got != want {
+			t.Fatalf("Authorization = %q, want %q", got, want)
+		}
+	}
+	if issued != len(tokens) {
+		t.Fatalf("token requests = %d, want %d", issued, len(tokens))
+	}
 }
 
 func listDeploymentTestProviders(t *testing.T, ctx context.Context, client *evalhubclient.Client) []api.ProviderResource {

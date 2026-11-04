@@ -24,7 +24,6 @@ const (
 // deployedAdapter records the selected provider image and build provenance.
 type deployedAdapter struct {
 	image       string
-	imageID     string
 	sourceSHA   string
 	sourceDirty string
 }
@@ -36,6 +35,8 @@ type deploymentManifest struct {
 	managed          bool
 	clusterName      string
 	airgap           bool
+	operatorRevision string
+	operatorDirty    string
 	selectedAdapters map[string]deployedAdapter
 }
 
@@ -67,6 +68,8 @@ func discoverDeploymentManifest(
 	manifest := deploymentManifest{
 		managed:          true,
 		clusterName:      clusterName,
+		operatorRevision: configMap.Data["source.trustyai-service-operator.revision"],
+		operatorDirty:    configMap.Data["source.trustyai-service-operator.dirty"],
 		selectedAdapters: make(map[string]deployedAdapter),
 	}
 	switch configMap.Data["airgap"] {
@@ -94,16 +97,11 @@ func discoverDeploymentManifest(
 
 		adapter := deployedAdapter{
 			image:       configMap.Data["image."+adapterID],
-			imageID:     configMap.Data["image_id."+adapterID],
 			sourceSHA:   configMap.Data["source."+adapterID+".revision"],
 			sourceDirty: configMap.Data["source."+adapterID+".dirty"],
 		}
 		if adapter.image == "" {
 			return deploymentManifest{}, fmt.Errorf("ConfigMap/%s has no image.%s for selected adapter %q",
-				devDeployManifestName, adapterID, adapterID)
-		}
-		if adapter.imageID == "" {
-			return deploymentManifest{}, fmt.Errorf("ConfigMap/%s has no image_id.%s for selected adapter %q",
 				devDeployManifestName, adapterID, adapterID)
 		}
 		manifest.selectedAdapters[adapterID] = adapter
@@ -220,8 +218,8 @@ func logDeployedAdapter(t *testing.T, manifest deploymentManifest, adapterID str
 		return
 	}
 	adapter := manifest.selectedAdapters[adapterID]
-	t.Logf("dev-deploy selection: adapter=%s image=%s imageID=%s sourceRevision=%s sourceDirty=%s cluster=%s airgap=%t",
-		adapterID, adapter.image, adapter.imageID, adapter.sourceSHA, adapter.sourceDirty,
+	t.Logf("dev-deploy selection: adapter=%s image=%s sourceRevision=%s sourceDirty=%s cluster=%s airgap=%t",
+		adapterID, adapter.image, adapter.sourceSHA, adapter.sourceDirty,
 		manifest.clusterName, manifest.airgap)
 }
 

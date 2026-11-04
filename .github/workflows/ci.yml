@@ -72,6 +72,11 @@ jobs:
     - name: Check benchmark provider fixture counts
       run: go test ./tests/features -run '^TestBenchmarkProviderFixtureCounts$'
 
+    - name: Check disconnected e2e matrix and deployment manifest
+      run: >-
+        go test ./tests/e2e -run
+        '^(TestCuratedBenchmarkMatrixComplete|TestCuratedBenchmarkMatrixMatchesRepositoryConfigs|TestCasesWithCatalogEntriesSeparatesMissingRows|TestRefreshDeploymentTestAPIClientRenewsToken|TestDiscoverDeploymentManifest|TestDeploymentManifestAdapterSelection|TestDeploymentManifestVerifiesProviderImage|TestSelectedAdapterProviderMappingsCoverSupportedAdapters)$'
+
     - name: Run all tests (unit and integration) with coverage
       run: |
         make clean build test-all-coverage

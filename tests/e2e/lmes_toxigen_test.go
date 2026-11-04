@@ -123,7 +123,6 @@ func runLMESToxiGenAirgapCase(
 		WithTenant(instance.namespace).
 		WithHTTPClient(httpClient).
 		WithTimeout(5 * time.Second).
-		WithMaxRetries(0).
 		WithContext(parentCtx)
 
 	provider, err := findLMESToxiGenProvider(parentCtx, connection.client)

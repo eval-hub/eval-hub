@@ -13,18 +13,18 @@ import (
 func TestDiscoverDeploymentManifest(t *testing.T) {
 	const namespace = "system"
 	validData := map[string]string{
-		"schema_version":                        devDeployManifestVersion,
-		"cluster_name":                          "evalhub-dev",
-		"airgap":                                "true",
-		"selected_adapters":                     "inspect,lm-evaluation-harness",
-		"image.inspect":                         "localhost:32769/evalhub/community-inspect:kind-local",
-		"image_id.inspect":                      "sha256:inspect-image-config",
-		"source.inspect.revision":               "abc123",
-		"source.inspect.dirty":                  "false",
-		"image.lm-evaluation-harness":           "localhost:32769/evalhub/community-lmes:kind-local",
-		"image_id.lm-evaluation-harness":        "sha256:lmes-image-config",
-		"source.lm-evaluation-harness.revision": "def456",
-		"source.lm-evaluation-harness.dirty":    "true",
+		"schema_version":                            devDeployManifestVersion,
+		"cluster_name":                              "evalhub-dev",
+		"airgap":                                    "true",
+		"selected_adapters":                         "inspect,lm-evaluation-harness",
+		"image.inspect":                             "localhost:32769/evalhub/community-inspect:kind-local",
+		"source.inspect.revision":                   "abc123",
+		"source.inspect.dirty":                      "false",
+		"image.lm-evaluation-harness":               "localhost:32769/evalhub/community-lmes:kind-local",
+		"source.lm-evaluation-harness.revision":     "def456",
+		"source.lm-evaluation-harness.dirty":        "true",
+		"source.trustyai-service-operator.revision": "operator123",
+		"source.trustyai-service-operator.dirty":    "false",
 	}
 
 	tests := []struct {
@@ -65,7 +65,7 @@ func TestDiscoverDeploymentManifest(t *testing.T) {
 			wantError: true,
 		},
 		{
-			name: "selected adapter requires image and image ID",
+			name: "selected adapter requires image reference",
 			configMap: devDeployManifestForTest(namespace, map[string]string{
 				"schema_version":    devDeployManifestVersion,
 				"cluster_name":      "evalhub-dev",
@@ -112,9 +112,12 @@ func TestDiscoverDeploymentManifest(t *testing.T) {
 				t.Fatalf("selected adapter count = %d, want 2", len(got.selectedAdapters))
 			}
 			inspect := got.selectedAdapters["inspect"]
-			if inspect.image != validData["image.inspect"] || inspect.imageID != validData["image_id.inspect"] ||
+			if inspect.image != validData["image.inspect"] ||
 				inspect.sourceSHA != validData["source.inspect.revision"] || inspect.sourceDirty != "false" {
 				t.Fatalf("Inspect provenance = %+v", inspect)
+			}
+			if got.operatorRevision != "operator123" || got.operatorDirty != "false" {
+				t.Fatalf("operator provenance = revision %q dirty %q", got.operatorRevision, got.operatorDirty)
 			}
 		})
 	}
@@ -122,7 +125,7 @@ func TestDiscoverDeploymentManifest(t *testing.T) {
 
 func TestDeploymentManifestAdapterSelection(t *testing.T) {
 	managed := deploymentManifest{managed: true, selectedAdapters: map[string]deployedAdapter{
-		"inspect": {image: "inspect:local", imageID: "sha256:inspect"},
+		"inspect": {image: "inspect:local"},
 	}}
 	if !managed.adapterSelected("inspect") {
 		t.Fatal("selected Inspect image was not recognized")

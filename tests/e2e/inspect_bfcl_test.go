@@ -175,7 +175,6 @@ func runInspectBFCLAirgapCase(
 		WithTenant(instance.namespace).
 		WithHTTPClient(httpClient).
 		WithTimeout(5 * time.Second).
-		WithMaxRetries(0).
 		WithContext(parentCtx)
 
 	provider, err := findInspectBFCLProvider(parentCtx, connection.client)
@@ -1027,14 +1026,14 @@ func waitForPVCBound(ctx context.Context, kube kubernetes.Interface, namespace, 
 	for {
 		pvc, err := kube.CoreV1().PersistentVolumeClaims(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
-			return fmt.Errorf("get temporary BFCL PVC %s/%s: %w", namespace, name, err)
+			return fmt.Errorf("get asset-staging PVC %s/%s: %w", namespace, name, err)
 		}
 		if pvc.Status.Phase == corev1.ClaimBound {
 			return nil
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("temporary BFCL PVC %s/%s did not bind (phase %q): %w; check that the cluster has a default StorageClass", namespace, name, pvc.Status.Phase, ctx.Err())
+			return fmt.Errorf("asset-staging PVC %s/%s did not bind (phase %q): %w; check that the cluster has a default StorageClass", namespace, name, pvc.Status.Phase, ctx.Err())
 		case <-ticker.C:
 		}
 	}

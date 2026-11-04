@@ -1127,7 +1127,16 @@ git_source_revision() {
 }
 
 git_source_dirty() {
-  if [[ -n "$(git -C "$1" status --porcelain 2>/dev/null || true)" ]]; then
+  local status
+  if ! command -v git >/dev/null 2>&1 || ! git -C "$1" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    printf 'unknown'
+    return 0
+  fi
+  if ! status="$(git -C "$1" status --porcelain 2>/dev/null)"; then
+    printf 'unknown'
+    return 0
+  fi
+  if [[ -n "$status" ]]; then
     printf 'true'
   else
     printf 'false'
@@ -1162,7 +1171,6 @@ record_deployment_manifest() {
     esac
     data_args+=(
       --from-literal="image.$adapter=$(registry_image "$image_name")"
-      --from-literal="image_id.$adapter=$("$CONTAINER_RUNTIME" image inspect --format '{{.Id}}' "$(image_ref "$image_name")")"
       --from-literal="source.$adapter.revision=$(git_source_revision "$repo")"
       --from-literal="source.$adapter.dirty=$(git_source_dirty "$repo")"
     )

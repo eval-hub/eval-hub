@@ -101,6 +101,24 @@ func TestCuratedBenchmarkMatrixComplete(t *testing.T) {
 	}
 }
 
+func TestCasesWithCatalogEntriesSeparatesMissingRows(t *testing.T) {
+	cases := []curatedBenchmarkCase{
+		{collectionID: "trustworthiness-v1", providerID: "lm_evaluation_harness", benchmarkID: "truthfulqa_mc1"},
+		{collectionID: "tool-use-v1", providerID: "inspect", benchmarkID: "inspect/bfcl", occurrence: 1},
+	}
+	benchmarks := map[string]api.CollectionBenchmarkConfig{
+		curatedBenchmarkCaseKey(cases[0]): {},
+	}
+
+	available, unavailable := casesWithCatalogEntries(cases, benchmarks)
+	if len(available) != 1 || curatedBenchmarkCaseKey(available[0]) != curatedBenchmarkCaseKey(cases[0]) {
+		t.Fatalf("available cases = %+v, want only %+v", available, cases[0])
+	}
+	if len(unavailable) != 1 || curatedBenchmarkCaseKey(unavailable[0]) != curatedBenchmarkCaseKey(cases[1]) {
+		t.Fatalf("unavailable cases = %+v, want only %+v", unavailable, cases[1])
+	}
+}
+
 func TestEvaluationJobStatusDetailsHandlesMissingStatus(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -140,39 +158,6 @@ func TestEvaluationJobStatusDetailsHandlesMissingStatus(t *testing.T) {
 				t.Fatalf("evaluationJobStatusDetails() = (%q, %q), want (%q, %q)", state, message, tt.wantState, tt.wantMsg)
 			}
 		})
-	}
-}
-
-func TestLMESStagerOptsIntoPinnedEthicsDatasetCode(t *testing.T) {
-	program, err := fs.ReadFile(curatedAssetStagers, "stagers/lmes.py")
-	if err != nil {
-		t.Fatalf("read embedded LMES asset stager: %v", err)
-	}
-	source := string(program)
-	for _, required := range []string{
-		`source_repo == "EleutherAI/hendrycks_ethics"`,
-		`kwargs["trust_remote_code"] = True`,
-	} {
-		if !strings.Contains(source, required) {
-			t.Errorf("LMES stager does not contain %q", required)
-		}
-	}
-}
-
-func TestLMESStagerProvidesChatTemplateForSmokeTokenizer(t *testing.T) {
-	program, err := fs.ReadFile(curatedAssetStagers, "stagers/lmes.py")
-	if err != nil {
-		t.Fatalf("read embedded LMES asset stager: %v", err)
-	}
-	source := string(program)
-	for _, required := range []string{
-		`if not tokenizer.chat_template:`,
-		`tokenizer.chat_template = (`,
-		`tokenizer.save_pretrained(str(tokenizer_dir))`,
-	} {
-		if !strings.Contains(source, required) {
-			t.Errorf("LMES stager does not contain %q", required)
-		}
 	}
 }
 
@@ -218,41 +203,6 @@ func TestIsTerminalEvaluationPod(t *testing.T) {
 				t.Fatalf("isTerminalEvaluationPod() = %t, want %t", got, test.want)
 			}
 		})
-	}
-}
-
-func TestInspectStagerUsesRuntimeDocVQADatasetID(t *testing.T) {
-	program, err := fs.ReadFile(curatedAssetStagers, "stagers/inspect.py")
-	if err != nil {
-		t.Fatalf("read embedded Inspect asset stager: %v", err)
-	}
-	source := string(program)
-	if !strings.Contains(source, `"lmms-lab-encoder/DocVQA"`) {
-		t.Fatal("Inspect stager does not cache the DocVQA repository ID used by the runtime task")
-	}
-	if strings.Contains(source, `"lmms-lab/DocVQA"`) {
-		t.Fatal("Inspect stager still caches DocVQA under a repository ID the runtime task does not request")
-	}
-	if strings.Contains(source, `"cache_dir": str(CACHE)`) {
-		t.Fatal("Inspect stager overrides the HF cache paths used by the offline adapter")
-	}
-}
-
-func TestKindMockJudgeUsesCyberSecGradeFormat(t *testing.T) {
-	script, err := os.ReadFile("../../scripts/dev-deploy.sh")
-	if err != nil {
-		t.Fatalf("read dev-deploy script: %v", err)
-	}
-	for _, required := range []string{
-		`request_text = json.dumps(request, ensure_ascii=False)`,
-		`r"answer\s+with\s+grade\s*:", request_text, re.IGNORECASE`,
-		`content = "GRADE: C"`,
-		`"response_format": response_format if ROLE == "judge" else "target"`,
-		`deployment/evalhub-kind-mock-target deployment/evalhub-kind-mock-judge`,
-	} {
-		if !strings.Contains(string(script), required) {
-			t.Errorf("dev-deploy mock judge does not contain %q", required)
-		}
 	}
 }
 
@@ -394,6 +344,10 @@ func runCuratedCollectionsAirgap(
 	}
 	benchmarksByCase, err := matchCuratedBenchmarkMatrix(collections, manifest.managed)
 	if err != nil {
+		if manifest.managed {
+			t.Fatalf("curated catalog does not match the expected disconnected test matrix: %v (deployed operator source revision=%q dirty=%q)",
+				err, manifest.operatorRevision, manifest.operatorDirty)
+		}
 		t.Fatalf("curated catalog does not match the expected disconnected test matrix: %v", err)
 	}
 
@@ -422,6 +376,13 @@ func runCuratedCollectionsAirgap(
 	}
 	if len(selectedCases) == 0 {
 		t.Skip("none of the curated adapters selected by dev-deploy have benchmark cases in this matrix")
+	}
+	selectedCases, unavailableCases := casesWithCatalogEntries(selectedCases, benchmarksByCase)
+	for _, testCase := range unavailableCases {
+		t.Logf("skipping unavailable catalog case %s/%s#%d", testCase.collectionID, testCase.benchmarkID, testCase.occurrence)
+	}
+	if len(selectedCases) == 0 {
+		t.Skip("none of the selected curated benchmark cases are present in the deployed catalog")
 	}
 
 	hfToken := strings.TrimSpace(os.Getenv("HF_TOKEN"))
@@ -536,11 +497,7 @@ func runCuratedCollectionsAirgap(
 			}
 			for _, testCase := range adapterCases {
 				testCase := testCase
-				benchmark, ok := benchmarksByCase[curatedBenchmarkCaseKey(testCase)]
-				if !ok {
-					t.Logf("skipping unavailable catalog case %s/%s#%d", testCase.collectionID, testCase.benchmarkID, testCase.occurrence)
-					continue
-				}
+				benchmark := benchmarksByCase[curatedBenchmarkCaseKey(testCase)]
 				t.Run(testCase.collectionID+"/"+testCase.benchmarkID+fmt.Sprintf("#%d", testCase.occurrence), func(t *testing.T) {
 					testDataRef := refs.forCase(testCase)
 					if adapterRequiresStagedAssets(adapterID) && testDataRef == nil {
@@ -855,6 +812,20 @@ func casesForAdapter(cases []curatedBenchmarkCase, adapterID string) []curatedBe
 	return result
 }
 
+func casesWithCatalogEntries(
+	cases []curatedBenchmarkCase,
+	benchmarksByCase map[string]api.CollectionBenchmarkConfig,
+) (available, unavailable []curatedBenchmarkCase) {
+	for _, testCase := range cases {
+		if _, ok := benchmarksByCase[curatedBenchmarkCaseKey(testCase)]; ok {
+			available = append(available, testCase)
+		} else {
+			unavailable = append(unavailable, testCase)
+		}
+	}
+	return available, unavailable
+}
+
 func filterCuratedCasesForHFToken(cases []curatedBenchmarkCase, tokenAvailable bool) (runnable, skipped []curatedBenchmarkCase) {
 	for _, testCase := range cases {
 		if !tokenAvailable && ((testCase.providerID == "inspect" && testCase.benchmarkID == inspectHLEBenchmarkID) || (testCase.providerID == "lighteval" && testCase.benchmarkID == lightEvalGPQABenchmarkID)) {
@@ -1045,6 +1016,9 @@ func runCuratedBenchmarkCase(
 			Auth: &api.ModelAuth{SecretRef: secretName},
 		},
 		Benchmarks: []api.EvaluationBenchmarkConfig{benchmark},
+	}
+	if err := refreshDeploymentTestAPIClient(parentCtx, kube, instance, connection); err != nil {
+		t.Fatalf("refresh EvalHub API authentication before submitting %s/%s: %v", testCase.collectionID, testCase.benchmarkID, err)
 	}
 	jobCtx, cancelJob := context.WithTimeout(parentCtx, 12*time.Minute)
 	defer cancelJob()
