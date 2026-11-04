@@ -40,8 +40,10 @@ and reports runtime image provenance.
 
 ## Full curated-collection disconnected run
 
-`TestCuratedCollectionsAirgap` contains one job case for each of the 24 benchmark
-entries in the nine currently curated collections. It checks the matrix against
+`TestCuratedCollectionsAirgap` defines 24 matrix cases for benchmark entries in
+the nine currently curated collections. The number of cases run depends on the
+deployed adapter selection, available catalog entries, and required credentials.
+It checks the matrix against
 this repository's collection YAMLs, discovers curated collections and providers
 through the deployed API, verifies selected image wiring, and submits each
 selected case serially. Duplicate BFCL entries in Tool Use v1 are separate cases
@@ -76,8 +78,9 @@ is not passed to evaluation jobs or printed. The Secret is deleted when the
 test finishes. If `HF_TOKEN` is unset, the HLE and GPQA rows are skipped, while
 the remaining selected matrix cases still run.
 
-Automatic asset preparation requires staging pods to reach Hugging Face and the
-pinned upstream data sources. The policy installed by
+Automatic asset preparation requires staging pods to reach Hugging Face and
+other upstream sources; only sources with a configured revision are pinned.
+The policy installed by
 `make dev-deploy AIRGAP=true` selects evaluation-job pods, not staging pods. This
 verifies that benchmark jobs consume staged assets without external network
 access; it cannot perform first-time staging in a physically isolated cluster.

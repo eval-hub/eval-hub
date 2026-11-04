@@ -29,6 +29,16 @@ const inspectHLEBenchmarkID = "inspect/hle"
 const lightEvalGPQABenchmarkID = "gpqa:diamond"
 const terminalAdapterPodGracePeriod = time.Minute
 
+func evaluationJobStatusDetails(status *api.EvaluationJobStatus) (api.OverallState, string) {
+	if status == nil {
+		return api.OverallState("unknown"), "EvalHub returned no job status"
+	}
+	if status.Message == nil {
+		return status.State, "EvalHub returned a job status without a message"
+	}
+	return status.State, status.Message.Message
+}
+
 //go:embed stagers/*.py
 var curatedAssetStagers embed.FS
 
@@ -88,6 +98,48 @@ func TestCuratedBenchmarkMatrixComplete(t *testing.T) {
 	}
 	if len(collections) != 9 {
 		t.Errorf("matrix covers %d collections, want 9", len(collections))
+	}
+}
+
+func TestEvaluationJobStatusDetailsHandlesMissingStatus(t *testing.T) {
+	tests := []struct {
+		name      string
+		status    *api.EvaluationJobStatus
+		wantState api.OverallState
+		wantMsg   string
+	}{
+		{
+			name:      "missing status",
+			wantState: api.OverallState("unknown"),
+			wantMsg:   "EvalHub returned no job status",
+		},
+		{
+			name: "missing status message",
+			status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{State: api.OverallStateRunning},
+			},
+			wantState: api.OverallStateRunning,
+			wantMsg:   "EvalHub returned a job status without a message",
+		},
+		{
+			name: "status and message present",
+			status: &api.EvaluationJobStatus{
+				EvaluationJobState: api.EvaluationJobState{
+					State:   api.OverallStateRunning,
+					Message: &api.MessageInfo{Message: "still running"},
+				},
+			},
+			wantState: api.OverallStateRunning,
+			wantMsg:   "still running",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			state, message := evaluationJobStatusDetails(tt.status)
+			if state != tt.wantState || message != tt.wantMsg {
+				t.Fatalf("evaluationJobStatusDetails() = (%q, %q), want (%q, %q)", state, message, tt.wantState, tt.wantMsg)
+			}
+		})
 	}
 }
 
@@ -1071,10 +1123,11 @@ func runCuratedBenchmarkCase(
 				terminalPodSince = time.Now()
 			} else if time.Since(terminalPodSince) >= terminalAdapterPodGracePeriod {
 				logs := getBenchmarkLogs(parentCtx, connection, jobID, 40)
+				jobState, jobMessage := evaluationJobStatusDetails(job.Status)
 				t.Fatalf(
-					"Kubernetes adapter pod %s reached terminal phase %q, but EvalHub job %s remained %q for %s: %v\nadapter pod termination details: %s\nadapter log tail:\n%s",
-					pod.Name, pod.Status.Phase, jobID, job.Status.State,
-					terminalAdapterPodGracePeriod, job.Status.Message,
+					"Kubernetes adapter pod %s reached terminal phase %q, but EvalHub job %s remained %q for %s: %s\nadapter pod termination details: %s\nadapter log tail:\n%s",
+					pod.Name, pod.Status.Phase, jobID, jobState,
+					terminalAdapterPodGracePeriod, jobMessage,
 					evaluationPodFailureDetails(pod), logs,
 				)
 			}
