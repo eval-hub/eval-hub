@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Verifies every reviewer requested on the PR (users and teams) has approved.
 # Uses only GitHub PR review-request data, not CODEOWNERS or repository owner files.
+# Team membership is read from the organisation when the token allows it; with a
+# repository-scoped GITHUB_TOKEN, which cannot read organisation members, an
+# approving organisation member or collaborator counts as the team's approval.
 set -euo pipefail
 
 pr_number="${PR_NUMBER:-${1:-}}"
@@ -33,6 +36,22 @@ latest_review_states() {
       | from_entries'
 }
 
+# Logins whose latest review is an approval, limited to users who can approve on
+# the repository's behalf (organisation members, owners and outside
+# collaborators). Listing the members of an organisation team needs the
+# organisation's members permission, which the repository-scoped GITHUB_TOKEN
+# does not have, so a requested team is matched against these approvers instead.
+associated_approvers() {
+	gh api "repos/${repo}/pulls/${pr_number}/reviews" --paginate |
+		jq -sr 'flatten
+      | group_by(.user.login)
+      | map(max_by(.submitted_at))
+      | map(select(.state == "APPROVED"))
+      | map(select(.author_association == "MEMBER" or .author_association == "OWNER" or .author_association == "COLLABORATOR"))
+      | map(.user.login)
+      | join(" ")'
+}
+
 check_user() {
 	local login="$1"
 	local state
@@ -50,9 +69,14 @@ check_user() {
 
 check_team() {
 	local slug="$1"
-	local members
+	local members approvers
 	if ! members=$(gh api "orgs/${owner}/teams/${slug}/members" --paginate -q '.[].login' 2>/dev/null); then
-		echo "- team @${owner}/${slug}: could not list members (workflow may need members: read permission)" >&2
+		approvers=$(associated_approvers || true)
+		if [[ -n "$approvers" ]]; then
+			echo "- team @${owner}/${slug}: membership is not readable with this token; accepting the approval from ${approvers}"
+			return 0
+		fi
+		echo "- team @${owner}/${slug}: could not list members (workflow may need members: read permission) and no organisation member or collaborator has approved"
 		return 1
 	fi
 	if [[ -z "$members" ]]; then
