@@ -1,0 +1,59 @@
+# Verifies that every reviewer (user or team) still requested on a pull request
+# has approved it. The check passes while the PR does not carry the
+# `ready-for-review` label, so it only gates PRs that are actually under review.
+# See CONTRIBUTING.md -> Review Process.
+name: Required reviewer approvals
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+      - review_requested
+      - review_request_removed
+      - labeled
+      - unlabeled
+    branches: [main, develop]
+  pull_request_review:
+    types: [submitted, dismissed]
+
+concurrency:
+  group: required-reviewer-approvals-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:  # added using https://github.com/step-security/secure-repo
+  contents: read
+
+jobs:
+  required-reviewer-approvals:
+    name: Verify requested reviewer approvals
+    if: |
+      github.event.pull_request.draft == false &&
+      (github.event.pull_request.base.ref == 'main' || github.event.pull_request.base.ref == 'develop')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      # Check out the base branch rather than the pull request merge ref: the
+      # check only reads PR metadata through the API, and running the base
+      # branch's copy of the script stops a fork PR from weakening it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          persist-credentials: false
+
+      - name: Verify all requested reviewers have approved
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+          REQUIRED_LABEL: ready-for-review
+        run: bash .github/scripts/verify-requested-reviewer-approvals.sh
