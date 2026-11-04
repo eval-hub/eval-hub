@@ -1072,9 +1072,10 @@ func runCuratedBenchmarkCase(
 			} else if time.Since(terminalPodSince) >= terminalAdapterPodGracePeriod {
 				logs := getBenchmarkLogs(parentCtx, connection, jobID, 40)
 				t.Fatalf(
-					"Kubernetes adapter pod %s reached terminal phase %q, but EvalHub job %s remained %q for %s: %v\nadapter log tail:\n%s",
+					"Kubernetes adapter pod %s reached terminal phase %q, but EvalHub job %s remained %q for %s: %v\nadapter pod termination details: %s\nadapter log tail:\n%s",
 					pod.Name, pod.Status.Phase, jobID, job.Status.State,
-					terminalAdapterPodGracePeriod, job.Status.Message, logs,
+					terminalAdapterPodGracePeriod, job.Status.Message,
+					evaluationPodFailureDetails(pod), logs,
 				)
 			}
 		} else {
@@ -1091,6 +1092,42 @@ func runCuratedBenchmarkCase(
 
 func isTerminalEvaluationPod(pod *corev1.Pod) bool {
 	return pod != nil && (pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed)
+}
+
+func evaluationPodFailureDetails(pod *corev1.Pod) string {
+	if pod == nil {
+		return "pod not found"
+	}
+	details := []string{
+		fmt.Sprintf("phase=%s reason=%q message=%q", pod.Status.Phase, pod.Status.Reason, pod.Status.Message),
+	}
+	appendStatuses := func(kind string, statuses []corev1.ContainerStatus) {
+		for _, status := range statuses {
+			state := "unknown"
+			switch {
+			case status.State.Terminated != nil:
+				terminated := status.State.Terminated
+				state = fmt.Sprintf("terminated reason=%q exitCode=%d signal=%d message=%q", terminated.Reason, terminated.ExitCode, terminated.Signal, terminated.Message)
+			case status.State.Waiting != nil:
+				waiting := status.State.Waiting
+				state = fmt.Sprintf("waiting reason=%q message=%q", waiting.Reason, waiting.Message)
+			case status.State.Running != nil:
+				state = "running"
+			}
+			if previous := status.LastTerminationState.Terminated; previous != nil {
+				state += fmt.Sprintf(" lastTermination=(reason=%q exitCode=%d message=%q)", previous.Reason, previous.ExitCode, previous.Message)
+			}
+			details = append(details, fmt.Sprintf("%s/%s: %s", kind, status.Name, state))
+		}
+	}
+	appendStatuses("container", pod.Status.ContainerStatuses)
+	appendStatuses("init", pod.Status.InitContainerStatuses)
+	for _, condition := range pod.Status.Conditions {
+		if condition.Reason != "" || condition.Message != "" {
+			details = append(details, fmt.Sprintf("condition/%s=%s reason=%q message=%q", condition.Type, condition.Status, condition.Reason, condition.Message))
+		}
+	}
+	return strings.Join(details, "; ")
 }
 
 func providerImageForCase(manifest deploymentManifest, testCase curatedBenchmarkCase) string {
