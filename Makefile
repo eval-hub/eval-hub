@@ -38,6 +38,21 @@ help: ## Display this help message
 assisted-by-trailer: ## Print the Assisted-by trailer for the current AI session
 	@bash scripts/assisted-by-trailer.sh
 
+# Development skills (evalhub-bug-review, fix-fvt-test, golang-toolchain-update,
+# release-notes) are maintained in https://github.com/eval-hub/eval-hub-skills so
+# they can be shared by every eval-hub repository. This clones that repository
+# into a cache directory and symlinks the skills into ~/.claude/skills, where
+# agent harnesses load them by name. See AGENTS.md -> Development Skills.
+DEV_SKILLS_REF ?=
+DEV_SKILLS_CLONE_DIR ?=
+
+.PHONY: install-dev-skills uninstall-dev-skills
+install-dev-skills: ## Install dev skills from eval-hub/eval-hub-skills (symlinks into ~/.claude/skills)
+	@bash scripts/install-dev-skills.sh $(if $(DEV_SKILLS_REF),--ref "$(DEV_SKILLS_REF)",) $(if $(DEV_SKILLS_CLONE_DIR),--dir "$(DEV_SKILLS_CLONE_DIR)",)
+
+uninstall-dev-skills: ## Remove the dev skill symlinks installed by install-dev-skills
+	@bash scripts/install-dev-skills.sh --uninstall
+
 
 KIND_CLUSTER_NAME ?= evalhub-dev
 IMAGE_TAG ?= kind-$(KIND_CLUSTER_NAME)

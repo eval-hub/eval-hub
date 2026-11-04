@@ -66,7 +66,7 @@ The version in `go.mod` is the source of truth for local development. If your lo
 
 `GOTOOLCHAIN=auto` requires an installed Go 1.21+ binary. Contributors on older Go versions should upgrade to Go 1.21 or newer, or use the project container (`podman build` / `podman run` with the repo `Containerfile`; see README), before relying on automatic toolchain switching.
 
-For intentional Go upgrades, follow `CLAUDE.md` (CVE fixing → Updating the golang version) and the `golang-version-update` skill at `.claude/skills/golang-version-update/SKILL.md`. The target version must exist in `registry.access.redhat.com/ubi10/go-toolset` before updating `go.mod`.
+For intentional Go upgrades, follow `CLAUDE.md` (CVE fixing → Updating the golang version) and the `golang-toolchain-update` dev skill (see [Development Skills](#development-skills)). The target version must exist in the `go-toolset` image referenced by the `Containerfile` (`registry.access.redhat.com/ubi10/go-toolset`) before updating `go.mod`.
 
 ### Version Bumps
 
@@ -80,8 +80,8 @@ When updating the project version, edit these four source files:
 Then run `make documentation` to regenerate the bundled docs. Do **not** hand-edit the generated files under `docs/` (`openapi.yaml`, `openapi.json`, `openapi-internal.yaml`, `openapi-internal.json`, `index*.html`).
 
 For each GitHub release, publish curated release notes (human-readable summary and
-upgrade impact — not raw `git log`). Use the `release-notes` skill at
-`.claude/skills/release-notes/SKILL.md` (see also `CLAUDE.md`).
+upgrade impact — not raw `git log`). Use the `release-notes` dev skill (see
+[Development Skills](#development-skills) and `CLAUDE.md`).
 
 ### Dependencies
 
@@ -110,6 +110,44 @@ make create-database
 make create-user
 make grant-permissions
 ```
+
+## Development Skills
+
+Maintainer workflows live in the external skills repository
+[`eval-hub/eval-hub-skills`](https://github.com/eval-hub/eval-hub-skills)
+(`dev-skills/`), which is shared by every eval-hub repository. Do **not** add
+copies under `.claude/skills/`; change the external skill instead.
+
+| Skill | Use it when |
+| --- | --- |
+| `evalhub-bug-review` | Reviewing an eval-hub PR, branch, commit range, or working-tree change for bugs. Returns a severity-ranked findings table and never edits code. |
+| `fix-fvt-test` | Diagnosing a failing FVT (godog) scenario on an OpenShift AI cluster from the JUnit report, test log, and pod logs. |
+| `golang-toolchain-update` | Auditing Go CVEs and bumping the Go toolchain, gated on the go-toolset image publishing the target tag. Modes: `cve` (default) and `latest`. |
+| `release-notes` | Drafting OpenSSF-compliant, human-readable GitHub release notes for a tag or version. |
+
+Install them once (keeps a shallow clone current and symlinks each skill into
+`~/.claude/skills`):
+
+```bash
+make install-dev-skills     # optional: DEV_SKILLS_REF=<ref> DEV_SKILLS_CLONE_DIR=<path>
+make uninstall-dev-skills
+```
+
+Claude Code can instead install the Go toolchain skill as a plugin:
+
+```text
+/plugin marketplace add eval-hub/eval-hub-skills
+/plugin install golang-toolchain-update@evalhub
+```
+
+Harnesses without a skills directory (Cursor, Codex CLI, …) attach the skill file
+from the clone, for example
+`@~/.cache/eval-hub-skills/dev-skills/release-notes/SKILL.md`, or from any
+checkout of `eval-hub/eval-hub-skills` as
+`@dev-skills/release-notes/SKILL.md`.
+
+Invoke a skill by name once installed (for example `/release-notes` in Claude
+Code) or ask for it naturally; each `SKILL.md` documents its own steps.
 
 ## Git commits
 
