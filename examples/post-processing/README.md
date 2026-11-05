@@ -1,5 +1,39 @@
 # Standalone post-processing
 
+## Data preparation in Kubernetes
+
+Post-processing reuses the same `/app/eval-runtime-init` executable and configured
+init image as evaluation jobs. For S3, Git and Hugging Face references, eval-hub
+mounts the existing `job.json` into one container named `init`, which runs
+before the computation adapter. Init reads the results and calibration references
+from `parameters.operations.confidence_interval` and calls the existing downloaders
+directly, using separate configuration and destinations for each input. Source credentials are mounted
+only in init, while the adapter receives read-only staged data.
+
+PVC references use direct read-only mounts with Kubernetes applying `sub_path`.
+References sharing a claim share its volume but retain independent mounts.
+
+The internal `EVALHUB_POST_PROCESSOR_DATA_PATHS` JSON environment variable maps
+`results` and zero-based `calibration-N` names to their local paths. For example:
+
+```json
+{
+  "results": "/mnt/evalhub/post-processing/staged/results",
+  "calibration-0": "/mnt/evalhub/post-processing/pvc/calibration-0"
+}
+```
+
+This is an internal runtime contract, not a new public API field. Existing
+source references and data-format mappings remain unchanged. Git/HF revision
+metadata and HF caches are kept outside the consumed dataset directories.
+MLflow/OCI results continue to download on demand through the sidecar, including
+artifacts resolved from `eval_job` references; they are not init-staged.
+
+Deploy the corresponding contrib post-processor together with the enhanced
+eval-hub service/init image. Local post-processor execution retains its existing
+source download fallback. Normal evaluation jobs continue using the existing
+single-source init interface.
+
 Post-processing jobs use these APIs:
 
 | Method | Path | Purpose |
