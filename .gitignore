@@ -245,19 +245,17 @@ mlflow.log
 .idea/
 .serena/
 
-# Claude - for now everything is ignored except certain skills.
+# Claude - local harness state is ignored; repo-owned rules and the shared
+# project settings stay tracked.
+# Development skills are not copied into this repository: they live in
+# https://github.com/eval-hub/eval-hub-skills, are published as opt-in plugins,
+# and are enabled for everyone by the committed .claude/settings.json (see
+# AGENTS.md -> Development Skills). `make install-dev-skills` links them into
+# ~/.claude/skills for harnesses that do not read Claude Code plugins.
 # Ignore contents (not the directory itself) so negation can re-include paths.
 .claude/*
-!.claude/skills/
-.claude/skills/*
-!.claude/skills/golang-version-update/
-.claude/skills/golang-version-update/*
-!.claude/skills/golang-version-update/SKILL.md
-!.claude/skills/release-notes/
-.claude/skills/release-notes/*
-!.claude/skills/release-notes/SKILL.md
-!.claude/skills/golang-version-update/fetch-go-toolset-tags.sh
-!.claude/skills/release-notes/template.md
+!.claude/rules/
+!.claude/settings.json
 
 .agentready/
 

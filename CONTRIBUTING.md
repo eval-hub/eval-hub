@@ -459,11 +459,45 @@ If yes, describe migration path. Otherwise delete this section.
 
 ### Review Process
 
+Reviewers follow the same three steps: opt the PR into review, work through the
+checklist, then record a clear verdict.
+
+#### 1. Start the review
+
 1. **Automated Checks**: CI must pass (format check, `go vet`, tests with coverage, API doc generation). For `python-server/`, pre-commit may run mypy when Python files change; Go types are checked by the compiler during build and tests
-2. **Reviewer assignment**: Path-specific owners are defined in `.github/CODEOWNERS`. Update that file when ownership of a code area changes. GitHub uses it to request reviews from the relevant owners.
-3. **Code Review**: Component experts and maintainer approval required
-4. **Testing**: Reviewers may test functionality manually
-5. **Documentation**: Ensure documentation is clear and complete
+2. **Apply the `ready-for-review` label** once the PR is ready for human review. It is this repository's opt-in signal: `.coderabbit.yaml` turns automatic CodeRabbit review off, so automated review only runs on PRs carrying the label (#879). Apply it when you actually intend to review — not on a draft, and not on a PR that still needs author changes.
+3. **Reviewer assignment**: Path-specific owners are defined in `.github/CODEOWNERS`; anything unowned falls back to `@eval-hub/maintainers`. GitHub requests the owning team automatically — update `CODEOWNERS` when ownership of a code area changes.
+4. **Approval requirements**: the `main` ruleset enforces them, so the merge box is the source of truth — there is no separate approval workflow to interpret. A PR needs at least one approving review, and it must come from a code owner: `.github/CODEOWNERS` assigns every path to `@eval-hub/maintainers`, and GitHub counts only approvals from people with write access to the repository. Approvals are dismissed when a code-modifying commit is pushed, the most recent push must be approved, and every review thread must be resolved before merging. An author cannot approve their own pull request, and a maintainer can dismiss a review that no longer applies.
+5. **Review requests are advisory**: GitHub does not block a merge because a requested reviewer has not responded, and a comment review is not an approval. Submit a review with "request changes" when you mean to block, and re-request the people you still need rather than waiting on a silent request.
+
+#### 2. What reviewers check
+
+Beyond "does it work", check the invariants CI cannot see:
+
+- **Behaviour and tests**: the change does what the description claims, tests cover the new path and would fail without it, and no unrelated refactors are smuggled in.
+- **Request identity and tenant scoping**: in cluster mode handlers trust the `X-Tenant` / `X-User` headers forwarded by kube-rbac-proxy, so new handlers, storage queries and job paths must scope by tenant and user, and `GET /api/v1/health` must stay unauthenticated (`AGENTS.md` → Request identity).
+- **Generated files stay generated**: `docs/openapi*.yaml|json` and `docs/index*.html` come from `docs/src/openapi.yaml` — ask for `make documentation` rather than hand edits. A version bump touches exactly `VERSION`, `cmd/eval_hub/main.go`, both `BUILD_NUMBER` ARGs in `Containerfile`, and `docs/src/openapi.yaml` (`AGENTS.md` → Version Bumps).
+- **Toolchain-pinned quality gates**: `make fmt lint` is the standard, because it uses the `go.mod` toolchain; a globally installed `golangci-lint` is not equivalent. `#nosec` and `//gosec:disable` annotations must never appear — CI rejects them (`AGENTS.md` → Code Quality).
+- **Catalogs**: provider and collection YAML changes are validated with `make validate-configs`.
+- **Tests actually exercised**: default `make test-fvt` excludes `@local_runtime`, `@cluster`, `@mlflow` and `@benchmark_providers` via `FVT_TAGS`, so a green CI run does not prove those paths. For runtime, job-execution or MLflow changes, ask for the tagged run; for changes on benchmark-provider paths (provider catalog entries, benchmark fixtures, `evaluation_jobs_for_benchmark_providers.feature`), ask for an explicit `@benchmark_providers` run (those scenarios also carry `@cluster`, so it needs a cluster; see `tests/features/README.md`).
+- **Commit hygiene**: Conventional Commit subject (commitlint enforces it), exactly one `Assisted-by` trailer naming the model and the harness, DCO sign-off from `git commit -s`, and a rebased branch rather than a merge-heavy history.
+- **Documentation**: user-visible behaviour changes update `README.md`, `docs/` or `MCP.md`; maintainer skills stay in the external `eval-hub-skills` repository, never under `.claude/skills/`.
+
+Pull the branch and run the suites yourself when the change is risky:
+
+```bash
+gh pr checkout <number>
+make clean test-all          # unit tests, FVT, and FVT against a started server
+pre-commit run --all-files
+```
+
+#### 3. Record a verdict
+
+- **Blocking vs non-blocking**: mark style preferences as "nit, non-blocking" so a PR does not stall on taste. Reserve "request changes" for correctness, security, tenancy, data loss or missing tests.
+- **Approve only what you verified**: state what you read or ran; an approval on an unreviewed diff is not a review.
+- **Automated and AI review is advisory**: CodeRabbit and the `evalhub-bug-review` dev skill (`AGENTS.md` → Development Skills) produce findings, never approvals. Verify each finding against the current code before acting on it — it can be wrong or already fixed.
+- **Keep the PR in scope**: unrelated improvements belong in a follow-up issue; say so instead of expanding the review.
+- **Re-requesting**: when you ask for changes, state the condition that clears it, and re-review after the author pushes rather than leaving an approval standing on older commits.
 
 ## Issue Reporting
 
