@@ -116,7 +116,7 @@ func TestOnEvaluationJobUpdatedSkipsExportWhenTerminalStateUnchanged(t *testing.
 	}
 }
 
-func TestOnEvaluationJobUpdatedExportsOnFailedTransition(t *testing.T) {
+func TestOnEvaluationJobUpdatedSkipsExportOnFailedTransition(t *testing.T) {
 	t.Parallel()
 	exporter := &terminalTestExporter{}
 	storage := &terminalTestStorage{
@@ -137,8 +137,8 @@ func TestOnEvaluationJobUpdatedExportsOnFailedTransition(t *testing.T) {
 		nil,
 	)
 
-	if !exporter.called {
-		t.Fatal("expected export when job transitions to failed")
+	if exporter.called {
+		t.Fatal("expected export to be skipped when job transitions to failed")
 	}
 }
 
