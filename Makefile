@@ -457,8 +457,11 @@ KIND_BENCHMARK_MODEL_URL ?= http://evalhub-kind-mock-target.system.svc.cluster.l
 KIND_BENCHMARK_MODEL_SECRET ?= evalhub-kind-demo-auth
 KIND_BENCHMARK_OWNERSHIP_ANNOTATION ?= io.evalhub.kind-smoke.cluster
 KIND_BENCHMARK_TOKEN_DURATION ?= 1h
-KIND_BENCHMARK_PARALLEL ?= 8
-KIND_BENCHMARK_TIMEOUT ?= 4h
+# An explicit BENCHMARK_PARALLEL/BENCHMARK_TIMEOUT (command line or environment)
+# sizes a kind run as well, as documented; the larger kind defaults below apply
+# while those shared settings keep their standalone defaults.
+KIND_BENCHMARK_PARALLEL ?= $(if $(filter command line environment,$(origin BENCHMARK_PARALLEL)),$(BENCHMARK_PARALLEL),8)
+KIND_BENCHMARK_TIMEOUT ?= $(if $(filter command line environment,$(origin BENCHMARK_TIMEOUT)),$(BENCHMARK_TIMEOUT),4h)
 KIND_BENCHMARK_JUDGE_MODEL_NAME ?= kind-judge-model
 KIND_BENCHMARK_JUDGE_URL ?= http://evalhub-kind-mock-judge.system.svc.cluster.local:8000/v1
 KIND_BENCHMARK_JUDGE_API_KEY ?= judge-test-token
