@@ -1,0 +1,38 @@
+flowchart TB
+    U["Client / SDK"] --> API["EvalHub API + tenant authorization<br/>trusted provider / benchmark dispatch"]
+    API -->|ordinary benchmark| JOB["Existing Kubernetes Job + sidecar"]
+    API -->|sandbox required| REC["SandboxedEvaluation + TrustyAI reconciler<br/>durable lifecycle, status and finalizer"]
+    subgraph P["Trusted platform module: gateway, identity, policy, recovery"]
+        PS["Platform sandbox service<br/>workspace setup and attempt identity"]
+        GW["OpenShell gateway + Kubernetes driver<br/>authenticated TLS and workspace RBAC"]
+        ADM["Admission and namespace guardrails<br/>profile, ownership, quota, policy, storage, Kueue"]
+        PS -->|workspace and primary creation| GW
+        GW -->|validate effective requests| ADM
+    end
+    REC --> PS
+    subgraph T["Trusted per-attempt services: outside evaluated code"]
+        BR["Compatibility broker<br/>Kubernetes subset to OpenShell<br/>identity for this workspace only"]
+        REL["Integration relay<br/>job-bound callbacks, credentials and results"]
+    end
+    PS -.->|issue attempt identity| BR
+    BR -->|child and streaming operations| GW
+    subgraph W["One ephemeral workspace / managed namespace per evaluation attempt"]
+        SUP["Trusted OpenShell supervisors<br/>policy and credential mediation"]
+        PRI["Untrusted primary evaluator<br/>one per sandbox-required benchmark"]
+        CH["Untrusted child sandboxes<br/>bounded fan-out and lifetime"]
+        RES["Enforced SCC / PSA, quota and network<br/>short-lived PVCs with verified deletion"]
+        SUP <-->|authenticated sandbox protocol| PRI
+        SUP <-->|authenticated sandbox protocol| CH
+        PRI --- RES
+        CH --- RES
+    end
+    GW -->|provision via Agent Sandbox controller| SUP
+    ADM -.->|readiness before execution| RES
+    PRI -->|attempt-authenticated requests| BR
+    PRI -->|scoped events and artifacts| REL
+    SUP -->|approved endpoint-bound requests| EXT["Model, judge and data endpoints"]
+    REL --> STORE[("Tenant results / MLflow / OCI<br/>EvalHub callbacks")]
+    classDef trusted fill:#edf3f7,stroke:#3d586b,color:#132c3b
+    classDef untrusted fill:#fff3df,stroke:#8d6429,color:#453213
+    class PS,GW,ADM,BR,REL,SUP trusted
+    class PRI,CH untrusted
