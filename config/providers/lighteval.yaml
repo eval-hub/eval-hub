@@ -112,15 +112,15 @@ benchmarks:
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - exact_match
-      - acc
+      - all.maj@4
+      - math:_average.maj@4
     tags:
       - math
       - reasoning
       - lighteval
       - suite
     primary_score:
-      metric: acc
+      metric: all.maj@4
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
@@ -370,14 +370,15 @@ benchmarks:
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - acc
+      - math:algebra.maj@4
+      - all.maj@4
     num_few_shot: 0
     tags:
       - math
       - algebra
       - lighteval
     primary_score:
-      metric: acc
+      metric: math:algebra.maj@4
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
@@ -390,14 +391,15 @@ benchmarks:
     modalities: [text]
     evaluation_targets: [model]
     metrics:
-      - acc
+      - math:counting_and_probability.maj@4
+      - all.maj@4
     num_few_shot: 0
     tags:
       - math
       - probability
       - lighteval
     primary_score:
-      metric: acc
+      metric: math:counting_and_probability.maj@4
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
