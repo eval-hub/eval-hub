@@ -75,16 +75,21 @@ environment variable and explaining how to enable the benchmark. Subtest names c
 ## Kind cluster
 
 `make test-benchmarks-kind` deploys the local dev stack with `make dev-deploy`
-and runs the suite against the kind mock target and mock judge. It mints a
-short-lived service-account token, creates or refreshes the dev-deploy-owned
-mock-auth Secret (failing if a same-named Secret belongs to something else), and
-exports `JUDGE_MODEL_NAME`, `JUDGE_BASE_URL`, and
-`LM_EVAL_TOKENIZER` so judge-based and LM Evaluation Harness benchmarks execute
-instead of skipping or failing. The Secret contains the primary `api-key` and
-both `judge_api-key`/`judge_url` and `grader_api-key`/`grader_url`. The judge and
-grader pairs share `KIND_BENCHMARK_JUDGE_API_KEY` and `KIND_BENCHMARK_JUDGE_URL`,
-so both roles use the mock judge endpoint. The key is provisioned in the Secret;
-fixtures do not need a `JUDGE_API_KEY` environment variable.
+and runs the suite against the kind mock target and mock judge. It builds every
+curated adapter image (`ADAPTERS=all`) unless `ADAPTERS` is set, so the
+discovered providers run images from this checkout rather than
+operator-packaged ones; pass `SKIP_BUILD=true` to reuse images that are already
+built. garak and garak-kfp are not curated adapters, so they keep their
+operator-packaged image. It also mints a short-lived service-account token,
+creates or refreshes the dev-deploy-owned mock-auth Secret (failing if a
+same-named Secret belongs to something else), and exports `JUDGE_MODEL_NAME`,
+`JUDGE_BASE_URL`, and `LM_EVAL_TOKENIZER` so judge-based and LM Evaluation
+Harness benchmarks execute instead of skipping or failing. The Secret contains
+the primary `api-key` and both `judge_api-key`/`judge_url` and
+`grader_api-key`/`grader_url`. The judge and grader pairs share
+`KIND_BENCHMARK_JUDGE_API_KEY` and `KIND_BENCHMARK_JUDGE_URL`, so both roles use
+the mock judge endpoint. The key is provisioned in the Secret; fixtures do not
+need a `JUDGE_API_KEY` environment variable.
 
 The default `KIND_BENCHMARK_RUN` selects the
 whole catalog the deployed EvalHub discovers, so every configured provider's

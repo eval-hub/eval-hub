@@ -403,7 +403,7 @@ FVT_OUTPUT ?= --godog.format=junit:${PWD}/$(BIN_DIR)/junit-fvt-report.xml,pretty
 FVT_TAGS ?= --godog.tags=~@ignore && ~@mlflow && ~@cluster && ~@local_runtime && ~@benchmark_providers
 FVT_CONCURRENCY ?= 1
 
-.PHONY: test-benchmarks test-benchmarks-kind generate-benchmark-configs
+.PHONY: test-benchmarks test-benchmarks-kind test-benchmarks-kind-deploy generate-benchmark-configs
 BENCHMARK_PARALLEL ?= 2
 BENCHMARK_TIMEOUT ?= 30m
 BENCHMARK_RUN ?= TestBenchmarkSmoke
@@ -438,6 +438,12 @@ test-benchmarks: $(GOTESTSUM) ## Run live benchmark smoke tests (requires SERVER
 #   KIND_BENCHMARK_RUN='TestBenchmarkSmoke/(followbench|lm_evaluation_harness|inspect)/'
 # for the providers whose adapter images dev-deploy builds.
 #
+# A run builds every curated adapter image (ADAPTERS=all) unless ADAPTERS is
+# set, so the catalogs it exercises come from this checkout instead of from
+# operator-packaged images; SKIP_BUILD=true reuses images that are already
+# built. garak and garak-kfp are not curated adapters, so they keep their
+# operator-packaged image either way.
+#
 # A full run is large, so KIND_BENCHMARK_PARALLEL bounds how many evaluation
 # jobs run at once and KIND_BENCHMARK_TIMEOUT bounds total wall time; lower the
 # concurrency and raise the deadline on a small kind cluster. The token that
@@ -471,12 +477,21 @@ KIND_BENCHMARK_TOKEN_DURATION ?= $(shell bash scripts/go-duration.sh add $(KIND_
 # while those shared settings keep their standalone defaults.
 KIND_BENCHMARK_PARALLEL ?= $(if $(filter command line environment,$(origin BENCHMARK_PARALLEL)),$(BENCHMARK_PARALLEL),8)
 KIND_BENCHMARK_TIMEOUT ?= $(if $(filter command line environment,$(origin BENCHMARK_TIMEOUT)),$(BENCHMARK_TIMEOUT),4h)
+# dev-deploy's own ADAPTERS default is the small set used for manual work; a
+# benchmark run needs every curated adapter, so default the deployment to
+# ADAPTERS=all and keep an explicit ADAPTERS (command line or environment).
+KIND_BENCHMARK_ADAPTERS ?= $(if $(filter command line environment,$(origin ADAPTERS)),$(ADAPTERS),all)
 KIND_BENCHMARK_JUDGE_MODEL_NAME ?= kind-judge-model
 KIND_BENCHMARK_JUDGE_URL ?= http://evalhub-kind-mock-judge.system.svc.cluster.local:8000/v1
 KIND_BENCHMARK_JUDGE_API_KEY ?= judge-test-token
 KIND_BENCHMARK_LM_EVAL_TOKENIZER ?= hf-internal-testing/llama-tokenizer
 
-test-benchmarks-kind: dev-deploy ## Run benchmark smoke tests against the local kind cluster (deploys it first; SKIP_BUILD=true reuses built images)
+# Deploy (or reuse) the kind cluster with the adapter set the benchmark run
+# needs; `make dev-deploy` on its own keeps its smaller ADAPTERS default.
+test-benchmarks-kind-deploy:
+	@ADAPTERS="$(KIND_BENCHMARK_ADAPTERS)" $(MAKE) dev-deploy
+
+test-benchmarks-kind: test-benchmarks-kind-deploy ## Run benchmark smoke tests against the local kind cluster (deploys it first; SKIP_BUILD=true reuses built images)
 	@set -eu; \
 	if [ ! -f "$(KIND_KUBECONFIG)" ]; then \
 		echo "FAIL: private dev-deploy kubeconfig not found: $(KIND_KUBECONFIG). Run make dev-deploy first."; exit 1; \
