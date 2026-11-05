@@ -35,7 +35,10 @@ for a given tag/version:
 
 ### Run release notes
 
-- **Claude Code:** `/release-notes`
+- **Claude Code (installed `release-notes@evalhub` plugin):**
+  `/release-notes:release-notes` — plugin skills are namespaced
+  `<plugin>:<skill>`.
+- **Claude Code (local skill from `make install-dev-skills`):** `/release-notes`
 - **Cursor / Codex CLI / other harnesses:** ask naturally, e.g. “Generate release
   notes for v1.0.0 using the release-notes skill”, or attach the skill file from
   the clone made by `make install-dev-skills`
