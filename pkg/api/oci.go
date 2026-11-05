@@ -60,7 +60,9 @@ type EvaluationOCIResults struct {
 // and validation of any supplied card, even though this helper permits card-only updates.
 // A non-nil card intentionally replaces the existing reference (last-write-wins),
 // which supports future evaluation-card regeneration; the current workflow has no
-// regeneration path yet. It initializes missing results and preserves all other
+// regeneration path yet. Replacement updates the stored digest and reference,
+// not the previously published immutable artifact.
+// It initializes missing results and preserves all other
 // fields. A nil status or card means no change to the existing value; if both are
 // nil, results are returned unchanged.
 func UpdateOCIResults(results *EvaluationJobResults, status *OCIProcessingStatus, card *OCIArtifactReference) *EvaluationJobResults {
