@@ -440,7 +440,10 @@ test-benchmarks: $(GOTESTSUM) ## Run live benchmark smoke tests (requires SERVER
 #
 # A full run is large, so KIND_BENCHMARK_PARALLEL bounds how many evaluation
 # jobs run at once and KIND_BENCHMARK_TIMEOUT bounds total wall time; lower the
-# concurrency and raise the deadline on a small kind cluster.
+# concurrency and raise the deadline on a small kind cluster. The token that
+# authenticates the run is minted once and reused for every request, so
+# KIND_BENCHMARK_TOKEN_DURATION follows the deadline (plus
+# KIND_BENCHMARK_TOKEN_MARGIN) instead of expiring while the suite is running.
 #
 # The kind cluster also runs mock judge and target OpenAI-compatible endpoints.
 # Judge and grader credentials/URLs are provisioned in the model auth Secret;
@@ -456,7 +459,13 @@ KIND_BENCHMARK_MODEL_NAME ?= kind-target-model
 KIND_BENCHMARK_MODEL_URL ?= http://evalhub-kind-mock-target.system.svc.cluster.local:8000/v1
 KIND_BENCHMARK_MODEL_SECRET ?= evalhub-kind-demo-auth
 KIND_BENCHMARK_OWNERSHIP_ANNOTATION ?= io.evalhub.kind-smoke.cluster
-KIND_BENCHMARK_TOKEN_DURATION ?= 1h
+# One token is minted for the whole run and every request in the sub-make reuses
+# it, so the token has to outlive the suite: derive its lifetime from the
+# deadline plus a cleanup margin instead of pinning an hour that a longer
+# deadline outlasts. An explicit value still wins, but the recipe rejects one
+# shorter than the deadline rather than letting the run fail with HTTP 401s.
+KIND_BENCHMARK_TOKEN_MARGIN ?= 1h
+KIND_BENCHMARK_TOKEN_DURATION ?= $(shell bash scripts/go-duration.sh add $(KIND_BENCHMARK_TIMEOUT) $(KIND_BENCHMARK_TOKEN_MARGIN))
 # An explicit BENCHMARK_PARALLEL/BENCHMARK_TIMEOUT (command line or environment)
 # sizes a kind run as well, as documented; the larger kind defaults below apply
 # while those shared settings keep their standalone defaults.
@@ -492,8 +501,11 @@ test-benchmarks-kind: dev-deploy ## Run benchmark smoke tests against the local 
 		'  grader_url: $(KIND_BENCHMARK_JUDGE_URL)' \
 		| kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" apply -f - >/dev/null; \
 	echo "Applied the dev-deploy-owned mock-auth Secret $(KIND_BENCHMARK_MODEL_SECRET) with the mock target, judge, and grader keys."; \
-	token="$$(kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" create token evalhub-local-service --duration=$(KIND_BENCHMARK_TOKEN_DURATION))"; \
-	echo "Running benchmark smoke tests against $(KIND_BENCHMARK_SERVER_URL) with model $(KIND_BENCHMARK_MODEL_NAME)."; \
+	token_duration="$(KIND_BENCHMARK_TOKEN_DURATION)"; \
+	bash scripts/go-duration.sh at-least "$$token_duration" "$(KIND_BENCHMARK_TIMEOUT)" || \
+		{ echo "FAIL: KIND_BENCHMARK_TOKEN_DURATION=$$token_duration must be a Go duration at least as long as KIND_BENCHMARK_TIMEOUT=$(KIND_BENCHMARK_TIMEOUT); the minted token would expire before the suite ends and requests would start failing with HTTP 401."; exit 1; }; \
+	token="$$(kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" create token evalhub-local-service --duration="$$token_duration")"; \
+	echo "Running benchmark smoke tests against $(KIND_BENCHMARK_SERVER_URL) with model $(KIND_BENCHMARK_MODEL_NAME) and a $$token_duration token for the $(KIND_BENCHMARK_TIMEOUT) deadline."; \
 	SERVER_URL="$(KIND_BENCHMARK_SERVER_URL)" \
 	EVALHUB_TOKEN="$$token" \
 	X_TENANT="$(KIND_BENCHMARK_TENANT)" \

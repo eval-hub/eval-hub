@@ -94,7 +94,11 @@ sandbox, external services, or a capable judge model report failures or
 prerequisite skips in a full run rather than being excluded from it.
 `KIND_BENCHMARK_PARALLEL` (evaluation jobs in flight, default 8) and
 `KIND_BENCHMARK_TIMEOUT` (suite deadline, default 4h) size a full run to the
-kind cluster.
+kind cluster. The run mints one ServiceAccount token and reuses it for every
+request, so `KIND_BENCHMARK_TOKEN_DURATION` defaults to
+`KIND_BENCHMARK_TIMEOUT` plus `KIND_BENCHMARK_TOKEN_MARGIN` (1h) rather than a
+fixed hour a long run outlives; an explicit token duration shorter than the
+deadline fails before the run starts.
 
 ## Fixtures
 
