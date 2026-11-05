@@ -9,7 +9,7 @@ import (
 )
 
 func (h *Handlers) exportEvaluationResults(ctx context.Context, job *api.EvaluationJobResource, logger *slog.Logger) {
-	if h.resultsExporter == nil || !api.IsEvaluationCardProcessingEligible(job) {
+	if h.resultsExporter == nil || !api.IsResultsExportEligible(job) {
 		return
 	}
 	if logger == nil {

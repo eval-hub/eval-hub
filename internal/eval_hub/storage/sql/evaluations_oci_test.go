@@ -157,7 +157,8 @@ func TestUpdateEvaluationJobOCIAcceptsCompletedAndPartiallyFailed(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got.Status.State != state || got.Results == nil || got.Results.OCI == nil || !reflect.DeepEqual(got.Results.OCI.Status, status) {
+			want := &api.OCIProcessingStatus{State: api.OCIProcessingRunning, Message: &api.MessageInfo{Message: "Running", MessageCode: "OCI_RUNNING", MessageOrigin: api.MessageOriginServer}}
+			if got.Status.State != state || got.Results == nil || got.Results.OCI == nil || !reflect.DeepEqual(got.Results.OCI.Status, want) {
 				t.Fatal("OCI progress was not saved independently of evaluation state")
 			}
 		})
@@ -188,6 +189,9 @@ func TestUpdateEvaluationJobOCINormalizesMessageOrigin(t *testing.T) {
 	if err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, status, nil); err != nil {
 		t.Fatal(err)
 	}
+	if status.Message.MessageOrigin != api.MessageOriginRuntime {
+		t.Fatalf("accepted update changed caller origin to %q", status.Message.MessageOrigin)
+	}
 
 	got, err := scoped.GetEvaluationJob(job.Resource.ID)
 	if err != nil {
@@ -197,20 +201,20 @@ func TestUpdateEvaluationJobOCINormalizesMessageOrigin(t *testing.T) {
 		t.Fatalf("expected server origin, got %q", got.Results.OCI.Status.Message.MessageOrigin)
 	}
 
-	// A retry that omits the origin normalizes to the persisted value and is
+	// A duplicate update that omits the origin normalizes to the persisted value and is
 	// therefore treated as an idempotent no-op.
-	retry := &api.OCIProcessingStatus{
+	duplicate := &api.OCIProcessingStatus{
 		State: api.OCIProcessingRunning,
 		Message: &api.MessageInfo{
 			Message:     "Generating evaluation card",
 			MessageCode: "OCI_RUNNING",
 		},
 	}
-	if err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, retry, nil); err != nil {
+	if err := scoped.UpdateEvaluationJobOCI(job.Resource.ID, duplicate, nil); err != nil {
 		t.Fatal(err)
 	}
-	if retry.Message.MessageOrigin != api.MessageOriginServer {
-		t.Fatalf("expected retry origin to be normalized, got %q", retry.Message.MessageOrigin)
+	if duplicate.Message.MessageOrigin != "" {
+		t.Fatalf("duplicate update changed caller origin to %q", duplicate.Message.MessageOrigin)
 	}
 }
 
@@ -262,8 +266,12 @@ func TestUpdateEvaluationJobOCIRejectsIneligibleJob(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = scoped.UpdateEvaluationJobOCI(job.Resource.ID, &api.OCIProcessingStatus{State: api.OCIProcessingRunning, Message: &api.MessageInfo{Message: "Running", MessageCode: "OCI_RUNNING"}}, nil)
-			_ = assertOCIServiceError(t, err, messages.InternalServerError, http.StatusInternalServerError)
+			status := &api.OCIProcessingStatus{State: api.OCIProcessingRunning, Message: &api.MessageInfo{Message: "Running", MessageCode: "OCI_RUNNING"}}
+			err = scoped.UpdateEvaluationJobOCI(job.Resource.ID, status, nil)
+			_ = assertOCIServiceError(t, err, messages.JobCanNotBeUpdated, http.StatusConflict)
+			if status.Message.MessageOrigin != "" {
+				t.Fatalf("rejected update changed caller origin to %q", status.Message.MessageOrigin)
+			}
 			after, err := scoped.GetEvaluationJob(job.Resource.ID)
 			if err != nil {
 				t.Fatal(err)

@@ -5,12 +5,6 @@ func IsOCIExportEnabled(job *EvaluationJobResource) bool {
 	return job != nil && job.Exports != nil && job.Exports.OCI != nil
 }
 
-// IsEvaluationCardProcessingEligible reports whether a job completed with full or partial results.
-func IsEvaluationCardProcessingEligible(job *EvaluationJobResource) bool {
-	return job != nil && job.Status != nil &&
-		(job.Status.State == OverallStateCompleted || job.Status.State == OverallStatePartiallyFailed)
-}
-
 // OCISigningConfig selects the signing method and optionally references a key Secret.
 // It retains configuration only; it does not resolve keys or schedule signing.
 type OCISigningConfig struct {
@@ -60,7 +54,10 @@ type EvaluationOCIResults struct {
 	Signing          *OCISigningResult     `json:"signing,omitempty"`
 }
 
-// UpdateOCIResults updates workflow status and, when supplied, the card reference.
+// UpdateOCIResults partially merges OCI workflow status and the card reference in memory.
+// It performs no field validation or workflow enforcement. Storage updates have a
+// stricter contract: UpdateEvaluationJobOCI requires a non-nil, validated status
+// and validation of any supplied card, even though this helper permits card-only updates.
 // A non-nil card intentionally replaces the existing reference (last-write-wins),
 // which supports future evaluation-card regeneration; the current workflow has no
 // regeneration path yet. It initializes missing results and preserves all other
