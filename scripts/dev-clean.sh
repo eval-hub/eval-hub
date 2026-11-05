@@ -151,8 +151,27 @@ ensure_forced_runtime_matches_owner() {
     docker) other=podman ;;
     *) return 0 ;;
   esac
+  # A cluster of this name under the forced engine is the one being cleaned up,
+  # so the other engine owning one too changes nothing: this run targets the
+  # forced engine's cluster and kubeconfig only.
+  kind_cluster_in_runtime "$CONTAINER_RUNTIME" && return 0
   kind_cluster_in_runtime "$other" || return 0
   fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $other, not $CONTAINER_RUNTIME. Unset CONTAINER_RUNTIME to reuse the engine that owns the cluster, or set CONTAINER_RUNTIME=$other."
+}
+
+# Resolve a runtime name to the engine that actually runs it. The podman-docker
+# package installs a `docker` wrapper that execs podman, so both names reach one
+# engine and that wrapper reports itself through --version. Cleanup removes kind
+# cluster and registry containers by name, so it has to use the engine that owns
+# them rather than the wrapper's name (see canonical_runtime in dev-deploy.sh).
+canonical_runtime() {
+  local runtime="$1"
+  if [[ "$runtime" == docker ]] && command -v docker >/dev/null 2>&1 &&
+    docker --version 2>/dev/null | grep -qi podman; then
+    printf 'podman\n'
+  else
+    printf '%s\n' "$runtime"
+  fi
 }
 
 # Return 0 when any container engine still has a cluster named KIND_CLUSTER_NAME.
@@ -177,7 +196,7 @@ any_runtime_owns_cluster() {
 # A forced runtime must own an existing KIND_CLUSTER_NAME (see
 # ensure_forced_runtime_matches_owner).
 detect_container_runtime() {
-  local runtime
+  local runtime canonical
   local -a preferred_runtimes=()
   if uname -r | grep -qiE 'microsoft|wsl'; then
     preferred_runtimes=(docker podman)
@@ -186,6 +205,11 @@ detect_container_runtime() {
   fi
   case "$CONTAINER_RUNTIME" in
     podman|docker)
+      canonical="$(canonical_runtime "$CONTAINER_RUNTIME")"
+      if [[ "$canonical" != "$CONTAINER_RUNTIME" ]]; then
+        log WARN "$CONTAINER_RUNTIME on this machine is the podman CLI shim; cleaning up with podman."
+        CONTAINER_RUNTIME="$canonical"
+      fi
       command -v "$CONTAINER_RUNTIME" >/dev/null 2>&1 ||
         fail "Required command not found: $CONTAINER_RUNTIME"
       "$CONTAINER_RUNTIME" info >/dev/null 2>&1 ||
