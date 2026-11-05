@@ -216,10 +216,6 @@ documentation:
     supports: >-
       Executable benchmark selection, weights, thresholds, parameters, and current curation_order;
       documentation mirrors those settings.
-  - path: config/collections/open-telco-v1.yaml
-    supports: >-
-      Existing num_examples=50 precedent used for the approved screening budget, not a reference full-evaluation
-      protocol.
   - source: Collection review summarized in the pull request description
     supports: >-
       Scoring limitations and review-reported adapter/task concerns; deployed-image equivalence was

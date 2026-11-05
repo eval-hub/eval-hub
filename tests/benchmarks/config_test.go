@@ -34,6 +34,41 @@ func fixtureEnv(key string) (string, bool) {
 	return "smoke-model", true
 }
 
+func TestFixtureModelOverridePreservesAuth(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		runnerAuth  *api.ModelAuth
+		fixtureAuth *api.ModelAuth
+		want        string
+	}{
+		{"inherits runner Secret", &api.ModelAuth{SecretRef: "model-auth"}, nil, "model-auth"},
+		{"explicit fixture Secret wins", &api.ModelAuth{SecretRef: "model-auth"}, &api.ModelAuth{SecretRef: "judge-auth"}, "judge-auth"},
+		{"no Secret supplied", nil, nil, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := fixture{
+				Model: &api.ModelRef{Name: "judge", URL: "https://judge.example/v1", Auth: tc.fixtureAuth},
+			}
+			job := f.jobConfig("atif", "atif_trajectory_default", api.ModelRef{
+				Name: "target", URL: "https://target.example/v1", Auth: tc.runnerAuth,
+			})
+			if job.Model.Name != f.Model.Name || job.Model.URL != f.Model.URL {
+				t.Fatal("fixture model selection was lost")
+			}
+			if tc.want == "" {
+				if job.Model.Auth != nil {
+					t.Fatal("unexpected model auth")
+				}
+			} else if job.Model.Auth == nil || job.Model.Auth.SecretRef != tc.want {
+				t.Fatalf("model auth = %v; want Secret %s", job.Model.Auth, tc.want)
+			}
+			if f.Model.Auth != tc.fixtureAuth {
+				t.Fatal("job submission mutated the fixture model")
+			}
+		})
+	}
+}
+
 func TestMaxLengthEnvironmentOverride(t *testing.T) {
 	for _, tc := range []struct {
 		name, value string
@@ -81,6 +116,47 @@ func TestMaxLengthEnvironmentOverride(t *testing.T) {
 				`{"parameters":{"max_length":`+fallback+`},"max_length_env":"MODEL_MAX_LENGTH","timeout":"5m"}`)
 			if _, err := loadFixture(path, func(string) (string, bool) { return "", false }); err == nil {
 				t.Fatal("expected invalid context fallback to fail")
+			}
+		})
+	}
+}
+
+func TestTokenizerEnvironmentOverride(t *testing.T) {
+	for _, tc := range []struct {
+		name, parameters, value string
+		set                     bool
+		want                    any
+	}{
+		{name: "environment supplies the tokenizer", parameters: `{}`,
+			value: "hf-internal-testing/llama-tokenizer", set: true, want: "hf-internal-testing/llama-tokenizer"},
+		{name: "surrounding whitespace is trimmed", parameters: `{}`,
+			value: "  org/tokenizer  ", set: true, want: "org/tokenizer"},
+		{name: "unset keeps the model name fallback", parameters: `{}`},
+		{name: "blank keeps the model name fallback", parameters: `{}`, value: "   ", set: true},
+		{name: "pinned fixture tokenizer wins", parameters: `{"tokenizer":"/test_data/tokenizer"}`,
+			value: "org/other", set: true, want: "/test_data/tokenizer"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeFixture(t, t.TempDir(), "lm_evaluation_harness", "arc_easy",
+				`{"parameters":`+tc.parameters+`,"tokenizer_env":"LM_EVAL_TOKENIZER","timeout":"5m"}`)
+			f, err := loadFixture(path, func(key string) (string, bool) {
+				if key != "LM_EVAL_TOKENIZER" {
+					t.Fatalf("unexpected environment lookup: %s", key)
+				}
+				return tc.value, tc.set && tc.value != ""
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, ok := f.Parameters["tokenizer"]
+			if tc.want == nil {
+				if ok {
+					t.Fatalf("tokenizer = %v, want no override", got)
+				}
+				return
+			}
+			if got != tc.want {
+				t.Fatalf("tokenizer = %v, want %q", got, tc.want)
 			}
 		})
 	}
@@ -263,8 +339,11 @@ func TestExperimentName(t *testing.T) {
 }
 
 func TestFixturePaths(t *testing.T) {
+	if got, want := fixturePath("testdata", "provider:name", "arc:challenge"), filepath.Join("testdata", "provider%3Aname", "arc%3Achallenge.json"); got != want {
+		t.Fatalf("fixture path = %q; want %q", got, want)
+	}
 	seen := make(map[string]bool)
-	for _, id := range []string{"../escape", "..", ".", "a/b", "a%2Fb", "a:b", "a.b", "a%2Eb"} {
+	for _, id := range []string{"../escape", "..", ".", "a/b", "a%2Fb", "a:b", "a%3Ab", "a.b", "a%2Eb"} {
 		path := fixturePath("testdata", id, id)
 		rel, err := filepath.Rel("testdata", path)
 		if err != nil || strings.HasPrefix(rel, "..") || len(strings.Split(rel, string(filepath.Separator))) != 2 {

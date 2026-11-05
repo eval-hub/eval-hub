@@ -56,6 +56,8 @@ make vet                # Run go vet (same as lint)
 
 **Always run `make fmt lint` after file changes and before committing.** This ensures consistent formatting and catches issues early.
 
+`make lint` and `make vet` static-analyse with the Go toolchain declared in `go.mod` (`GOTOOLCHAIN=go<version>`, `GO_TOOLCHAIN` in the Makefile), not the Go installed on the machine, so every contributor and CI type-check against the same standard library. Always lint through `make lint` (pre-commit does the same) rather than a globally installed `golangci-lint` from Homebrew or a distro package: the linter bundles an export-data importer that only understands standard-library data up to the Go release it shipped with, so a newer local Go fails with `cannot decode "internal/goarch", export data version N is greater than maximum supported version M`. When `go.mod` is bumped (see **Go Version**), bump `GOLANGCI_LINT_VERSION` in the Makefile and `version` in `.github/workflows/golangci-lint.yml` together.
+
 If a `.pre-commit-config.yaml` file exists, run `pre-commit install && pre-commit install --hook-type commit-msg` before making any commits. This automatically enforces formatting, linting, and commit message conventions on every commit.
 
 **Do not use `#nosec` or `//gosec:disable` annotations in Go files.** CI rejects any PR that contains either inline suppression form. Fix the underlying code instead (e.g. use `os.OpenInRoot` for path-traversal-safe file access). If a gosec finding cannot be structurally fixed, add a path-scoped `--exclude-rules` entry in the Gosec Security Scanner step of `.github/workflows/ci.yml`.
@@ -66,7 +68,7 @@ The version in `go.mod` is the source of truth for local development. If your lo
 
 `GOTOOLCHAIN=auto` requires an installed Go 1.21+ binary. Contributors on older Go versions should upgrade to Go 1.21 or newer, or use the project container (`podman build` / `podman run` with the repo `Containerfile`; see README), before relying on automatic toolchain switching.
 
-For intentional Go upgrades, follow `CLAUDE.md` (CVE fixing → Updating the golang version) and the `golang-version-update` skill at `.claude/skills/golang-version-update/SKILL.md`. The target version must exist in `registry.access.redhat.com/ubi9/go-toolset` before updating `go.mod`.
+For intentional Go upgrades, follow `CLAUDE.md` (CVE fixing → Updating the golang version) and the `golang-version-update` skill at `.claude/skills/golang-version-update/SKILL.md`. The target version must exist in `registry.access.redhat.com/ubi10/go-toolset` before updating `go.mod`.
 
 ### Version Bumps
 
@@ -116,14 +118,23 @@ make grant-permissions
 Use [Conventional Commits](https://www.conventionalcommits.org/) with an optional scope (e.g. `feat(http): …`).
 Accepted type prefixes: `build`, `bump`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`.
 
-When a change is assisted by AI, add one of these lines, as appropriate, to the **end** of the commit message body (after the subject and any description), as Git trailers:
+When a change is assisted by AI, add an `Assisted-by` trailer at the **end** of the commit message body (after the subject and any description). Name both the model that produced the change and the harness that ran it, using the full model identifier rather than a generic product name:
 
 ```text
-Assisted-by: Cursor
-Made-with: Cursor
-Generated with: Claude Code
-Assisted-by: Codex
+Assisted-by: <full model name> (<harness>)
 ```
+
+This file guides every agent harness used on the repository (Cline, Codex CLI, Claude Code, Cursor, …), so the trailer is generated in the harness that is running the change rather than hard-coded per tool. No harness lets an agent read its own deployment name, and an agent must not guess it or ask the author for it:
+
+```bash
+make -s assisted-by-trailer        # prints the trailer for the harness running the command
+```
+
+For example `Assisted-by: DeepSeek-V4.1-Flash-1017 (Cline)` from Cline, or `Assisted-by: gpt-6.1-sol (Codex CLI)` from Codex CLI.
+
+`scripts/assisted-by-trailer.sh` resolves the harness first, then reads that harness's model: `AI_MODEL` (any harness), else the harness environment (`CLINE_MODEL`, `CODEX_MODEL`, `CLAUDE_MODEL`, `ANTHROPIC_MODEL`, `OPENAI_MODEL`, `GEMINI_MODEL`, `CURSOR_MODEL`), else that harness's metadata (Cline `~/.cline/data`, Codex CLI `~/.codex/config.toml`, Claude Code `~/.claude/settings.json`). The harness name comes from `AI_HARNESS` or the harness environment (`CLINE_ACTIVE`, `CODEX_HOME`, `CLAUDECODE`, `CURSOR_*`, `COPILOT_AGENT`); when several harnesses are installed and none is hinted, it refuses to guess and asks for `AI_HARNESS`. It prints the last path segment of the model id by default (pass `--keep-prefix` to the script for the full routing id) and exits non-zero when either value cannot be determined — only then set `AI_MODEL='<full model name>'` (and `AI_HARNESS='<harness>'`) or ask the author. Add the printed line verbatim.
+
+Add exactly one attribution trailer per commit and do not stack several.
 
 For DCO sign-off, use `git commit -s` (or `git commit --signoff`). Do **not** include a `Signed-off-by` line in the commit message body; `-s` appends it from the author's configured `user.name` and `user.email`.
 

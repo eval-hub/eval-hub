@@ -3,7 +3,6 @@
   "parameters": {
     "dataset_format": "jsonl",
     "eval_model_name": "${JUDGE_MODEL_NAME}",
-    "eval_model_url": "${JUDGE_BASE_URL}",
     "max_concurrent": 1,
     "retry_max_attempts": 1
   },

@@ -1,7 +1,23 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint govulncheck validate-configs test test-fuzz test-fvt-server test-fvt-server-local test-fvt-server-local-mlflow test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint validate-configs test test-e2e test-fuzz test-fvt-server test-fvt-server-local test-fvt-server-local-mlflow test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build clean-container-storage clean-container-storage-help
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint govulncheck validate-configs test test-fuzz test-fvt-server test-fvt-server-local test-fvt-server-local-mlflow test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build clean-container-storage clean-container-storage-help
 
 GOPATH := $(shell go env GOPATH)
-GOBIN := $(shell go env GOPATH)/bin
+# Honour a configured GOBIN, falling back to GOPATH/bin when it is unset, so
+# installs and lookups below always agree on where `go install` puts binaries.
+GOBIN := $(or $(shell go env GOBIN),$(GOPATH)/bin)
+
+# Toolchain used for static analysis: vet, golangci-lint, govulncheck.
+# Derived from go.mod so every contributor and CI type-check against the same
+# standard library, whatever Go version is installed locally. This matters
+# because golangci-lint's bundled export-data importer only understands standard
+# library data up to the Go release it shipped with; linting with a newer local
+# Go fails with:
+#   cannot decode "internal/goarch", export data version N is greater than
+#   maximum supported version M
+# Do not hardcode a Go version here; go.mod is the source of truth (see
+# AGENTS.md -> Go Version and Code Quality).
+GO_VERSION := $(shell awk '/^go /{print $$2}' go.mod)
+GO_TOOLCHAIN := go$(GO_VERSION)
 
 # Variables
 BINARY_NAME = eval-hub
@@ -29,6 +45,101 @@ GIT_HASH ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 help: ## Display this help message
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+
+# Print the Assisted-by trailer for the current AI session (see AGENTS.md). The
+# model is read from the harness that runs the change, so an agent does not have
+# to guess its own deployment name or ask the author.
+.PHONY: assisted-by-trailer
+assisted-by-trailer: ## Print the Assisted-by trailer for the current AI session
+	@bash scripts/assisted-by-trailer.sh
+
+
+KIND_CLUSTER_NAME ?= evalhub-dev
+IMAGE_TAG ?= kind-$(KIND_CLUSTER_NAME)
+SKIP_BUILD ?= false
+AIRGAP ?= false
+# Keep the default comparable to the existing small local workflow. Use
+# ADAPTERS=all when you explicitly want the full curated-adapter image set.
+ADAPTERS ?= inspect,lm-evaluation-harness,followbench
+EVALHUB_HOST_PORT ?= 18443
+EVALHUB_NODE_PORT ?= 30443
+EVALHUB_HOST_BIND_ADDRESS ?= 127.0.0.1
+DEMO_SOURCE_COLLECTION_ID ?= instruction-output-v1
+DEMO_JOB_TIMEOUT_SECONDS ?= 900
+EVALHUB_API_BASE_URL ?=
+EVALHUB_KUBECONFIG_FILE ?=
+# The dev targets (dev-deploy, and test-benchmarks-kind which depends on it)
+# build images from sibling source checkouts. Each repository is located as a
+# sibling of this eval-hub checkout first, then as <parent>/<repo> under each
+# colon-separated DEV_REPO_PARENT_PATHS entry (default: ~/code):
+#
+#   trustyai-service-operator  requires Dockerfile                         always required
+#   eval-hub-contrib           requires the Containerfile for each selected adapter:
+#                              inspect, followbench, lighteval, ruler, or ifbench
+#   lm-evaluation-harness      requires Dockerfile.lmes-job                ADAPTERS includes lm-evaluation-harness
+#
+# ADAPTERS=all builds all six curated adapter images. The default builds the
+# existing Inspect, LMES, and FollowBench set. Narrow ADAPTERS (comma-separated)
+# to build only what you need. Nothing is cloned automatically; the
+# lm-evaluation-harness checkout is the fork at
+# https://github.com/opendatahub-io/lm-evaluation-harness.git, checked out on
+# its incubation (or stable) branch — the default main branch does not contain
+# the required Dockerfile.lmes-job.
+DEV_REPO_PARENT_PATHS ?= $(HOME)/code
+CONTAINER_RUNTIME ?=
+
+.PHONY: dev-deploy dev-deploy-help dev-clean dev-clean-help dev-demo dev-demo-help
+dev-deploy: ## Build and deploy the local EvalHub stack to podman/Docker-backed kind (optional air-gap mode)
+	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" IMAGE_TAG="$(IMAGE_TAG)" \
+		SKIP_BUILD="$(SKIP_BUILD)" AIRGAP="$(AIRGAP)" ADAPTERS="$(ADAPTERS)" \
+		CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" \
+		EVALHUB_HOST_PORT="$(EVALHUB_HOST_PORT)" EVALHUB_NODE_PORT="$(EVALHUB_NODE_PORT)" \
+		EVALHUB_HOST_BIND_ADDRESS="$(EVALHUB_HOST_BIND_ADDRESS)" \
+		DEV_REPO_PARENT_PATHS="$(DEV_REPO_PARENT_PATHS)" bash scripts/dev-deploy.sh
+
+dev-deploy-help: ## Show dev-deploy inputs and usage
+	@bash scripts/dev-deploy.sh --help
+
+DELETE_CLUSTER ?= false
+
+dev-clean: ## Remove the local EvalHub deployment; optionally delete its kind cluster
+	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" IMAGE_TAG="$(IMAGE_TAG)" DELETE_CLUSTER="$(DELETE_CLUSTER)" \
+		CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" bash scripts/dev-clean.sh
+
+dev-clean-help: ## Show dev-clean inputs and usage
+	@bash scripts/dev-clean.sh --help
+
+# Repeated dev-deploy/test-benchmarks-kind runs accumulate image layers, build
+# containers, and volumes until an image build fails with "no space left on
+# device". ALL=true also removes unused images (cached base images and previous
+# dev tags), VOLUMES=true also removes unused volumes, and DRY_RUN=true only
+# prints the commands. Images and volumes used by running containers (kind node,
+# local registry) are never removed; use `make dev-clean DELETE_CLUSTER=true` to
+# release those.
+ALL ?= false
+VOLUMES ?= false
+DRY_RUN ?= false
+MIN_FREE_GB ?= 15
+
+clean-container-storage: ## Reclaim unused podman/Docker images, build containers, and volumes from dev builds
+	@CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" \
+		ALL="$(ALL)" VOLUMES="$(VOLUMES)" DRY_RUN="$(DRY_RUN)" \
+		MIN_FREE_GB="$(MIN_FREE_GB)" bash scripts/clean-container-storage.sh
+
+clean-container-storage-help: ## Show clean-container-storage inputs and usage
+	@bash scripts/clean-container-storage.sh --help
+
+dev-demo: ## List collections, clone one, and run a mock-backed evaluation on kind
+	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" EVALHUB_HOST_PORT="$(EVALHUB_HOST_PORT)" \
+		DEMO_SOURCE_COLLECTION_ID="$(DEMO_SOURCE_COLLECTION_ID)" \
+		DEMO_JOB_TIMEOUT_SECONDS="$(DEMO_JOB_TIMEOUT_SECONDS)" \
+		CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" \
+		EVALHUB_API_BASE_URL="$(EVALHUB_API_BASE_URL)" \
+		EVALHUB_KUBECONFIG_FILE="$(EVALHUB_KUBECONFIG_FILE)" \
+		bash scripts/dev-demo.sh
+
+dev-demo-help: ## Show dev-demo inputs and usage
+	@bash scripts/dev-demo.sh --help
 
 PRE_COMMIT ?= .git/hooks/pre-commit
 
@@ -152,32 +263,46 @@ start-inspector-mcp:
 lint: vet golangci-lint ## Lint the code (go vet + golangci-lint)
 
 GOLANGCI_LINT_VERSION ?= v2.12.2
-GOLANGCI_LINT_STAMP  := $(BIN_DIR)/.golangci-lint-$(GOLANGCI_LINT_VERSION)
+# Tool binaries live under bin/tools, keyed on the tool version *and* the go.mod
+# toolchain (the same pattern as GOTESTSUM below). An install into a shared
+# GOPATH/bin would be overwritten by another checkout with a different go.mod
+# while its stamp still claimed ownership, which is what produced
+# "export data version ... greater than maximum supported version".
+GOLANGCI_LINT := $(abspath $(BIN_DIR)/tools/golangci-lint-$(GOLANGCI_LINT_VERSION)-$(GO_TOOLCHAIN))/golangci-lint$(shell go env GOEXE)
 
-golangci-lint: $(GOLANGCI_LINT_STAMP) ## Run golangci-lint (uses .golangci.yml)
-	@echo "Running golangci-lint..."
-	@$(GOBIN)/golangci-lint run ./...
+golangci-lint: $(GOLANGCI_LINT) ## Run golangci-lint (uses .golangci.yml, go.mod toolchain)
+	@echo "Running golangci-lint $(GOLANGCI_LINT_VERSION) with $(GO_TOOLCHAIN)..."
+	@GOTOOLCHAIN=$(GO_TOOLCHAIN) '$(GOLANGCI_LINT)' run ./... || { \
+		echo ""; \
+		echo "golangci-lint failed."; \
+		echo "If the error mentions 'export data version ... is greater than maximum supported"; \
+		echo "version', the type checker is reading a standard library newer than the linter"; \
+		echo "understands. Run lint through this target (it pins GOTOOLCHAIN to go.mod) rather"; \
+		echo "than a globally installed golangci-lint, and bump GOLANGCI_LINT_VERSION together"; \
+		echo "with .github/workflows/golangci-lint.yml when go.mod is bumped."; \
+		exit 1; }
 	@echo "golangci-lint complete"
 
-$(GOLANGCI_LINT_STAMP): | $(BIN_DIR)
-	@echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION)..."
-	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
-	@rm -f $(BIN_DIR)/.golangci-lint-*
-	@touch $@
+$(GOLANGCI_LINT):
+	@mkdir -p '$(dir $(GOLANGCI_LINT))'
+	@echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION) with $(GO_TOOLCHAIN) into $(dir $(GOLANGCI_LINT))..."
+	GOBIN='$(dir $(GOLANGCI_LINT))' GOTOOLCHAIN=$(GO_TOOLCHAIN) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
 GOVULNCHECK_VERSION ?= v1.1.4
-GOVULNCHECK_STAMP   := $(BIN_DIR)/.govulncheck-$(GOVULNCHECK_VERSION)
+# Checkout-local and keyed on version + toolchain for the same reason as the
+# linter above: a toolchain bump installs a fresh binary instead of reusing one
+# built for another Go version.
+GOVULNCHECK := $(abspath $(BIN_DIR)/tools/govulncheck-$(GOVULNCHECK_VERSION)-$(GO_TOOLCHAIN))/govulncheck$(shell go env GOEXE)
 
-govulncheck: $(GOVULNCHECK_STAMP) ## Run govulncheck in verbose mode (uses .go.mod)
-	@echo "Running govulncheck (verbose)..."
-	@$(GOBIN)/govulncheck -show verbose ./...
+govulncheck: $(GOVULNCHECK) ## Run govulncheck in verbose mode (uses .go.mod, go.mod toolchain)
+	@echo "Running govulncheck (verbose) with $(GO_TOOLCHAIN)..."
+	@GOTOOLCHAIN=$(GO_TOOLCHAIN) '$(GOVULNCHECK)' -show verbose ./...
 	@echo "govulncheck complete"
 
-$(GOVULNCHECK_STAMP): | $(BIN_DIR)
-	@echo "Installing govulncheck $(GOVULNCHECK_VERSION)..."
-	@go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
-	@rm -f $(BIN_DIR)/.govulncheck-*
-	@touch $@
+$(GOVULNCHECK):
+	@mkdir -p '$(dir $(GOVULNCHECK))'
+	@echo "Installing govulncheck $(GOVULNCHECK_VERSION) with $(GO_TOOLCHAIN) into $(dir $(GOVULNCHECK))..."
+	GOBIN='$(dir $(GOVULNCHECK))' GOTOOLCHAIN=$(GO_TOOLCHAIN) go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
 
 validate-configs: ## Validate bundled provider and collection YAML (standalone CLI, not part of build)
 	@go run ./cmd/validate_configs
@@ -187,15 +312,18 @@ fmt: ## Format the code with go fmt
 	@go fmt ./...
 	@echo "Format complete"
 
-vet: ## Run go vet
-	@echo "Running go vet..."
-	@go vet ./...
+vet: ## Run go vet (go.mod toolchain)
+	@echo "Running go vet with $(GO_TOOLCHAIN)..."
+	@GOTOOLCHAIN=$(GO_TOOLCHAIN) go vet ./...
 	@echo "Vet complete"
 
 # Iterations (Nx) or duration for mutational fuzzing during make test / make test-fuzz.
 # Prefer Nx so CI finishes deterministically; seed corpora also run under plain go test.
 FUZZTIME ?= 10000x
 GO_TEST_TIMEOUT ?= 10m
+# The full disconnected curated-collection suite stages four adapter bundles
+# and submits benchmark jobs serially; allow enough time for all 24 smoke cases.
+E2E_TEST_TIMEOUT ?= 480m
 # Packages that define Fuzz* tests. Keep in sync when adding new fuzz targets.
 FUZZ_PACKAGES ?= ./internal/eval_hub/runtimes/k8s ./pkg/ociclient ./pkg/mlflowclient ./pkg/api ./internal/eval_hub/handlers ./internal/eval_hub/storage/sql/shared ./internal/eval_hub/config ./internal/eval_runtime_sidecar/handlers ./internal/eval_runtime_sidecar/proxy ./internal/evalhub_mcp/server ./internal/safefile ./cmd/eval_runtime_init
 
@@ -204,6 +332,9 @@ test: ## Run unit tests (including fuzz seed corpora and a short fuzzing pass)
 	@bash -c 'set -o pipefail; go test -timeout=$(GO_TEST_TIMEOUT) -v ./internal/... ./cmd/... ./pkg/... | ${PWD}/scripts/grcat ${PWD}/.conf.go-test'
 	@$(MAKE) test-fuzz
 	@echo "Unit tests complete"
+
+test-e2e: ## Auto-discover and run applicable end-to-end tests against the current Kubernetes context
+	@go test -v -count=1 -timeout=$(E2E_TEST_TIMEOUT) ./tests/e2e/...
 
 test-fuzz: ## Run mutational fuzzing briefly for each Fuzz* test
 	@echo "Running fuzz tests (fuzztime=$(FUZZTIME))..."
@@ -247,7 +378,7 @@ FVT_OUTPUT ?= --godog.format=junit:${PWD}/$(BIN_DIR)/junit-fvt-report.xml,pretty
 FVT_TAGS ?= --godog.tags=~@ignore && ~@mlflow && ~@cluster && ~@local_runtime && ~@benchmark_providers
 FVT_CONCURRENCY ?= 1
 
-.PHONY: test-benchmarks generate-benchmark-configs
+.PHONY: test-benchmarks test-benchmarks-kind generate-benchmark-configs
 BENCHMARK_PARALLEL ?= 2
 BENCHMARK_TIMEOUT ?= 30m
 BENCHMARK_RUN ?= TestBenchmarkSmoke
@@ -264,6 +395,80 @@ test-benchmarks: export MLFLOW_EXPERIMENT_NAME =
 test-benchmarks: $(GOTESTSUM) ## Run live benchmark smoke tests (requires SERVER_URL, MODEL_NAME, MODEL_URL)
 	@mkdir -p '$(dir $(BENCHMARK_JUNIT))'
 	BENCHMARK_SMOKE=1 '$(GOTESTSUM)' --format standard-verbose --junitfile '$(BENCHMARK_JUNIT)' -- ./tests/benchmarks -run='$(BENCHMARK_RUN)' -count=1 -parallel=$(BENCHMARK_PARALLEL) -timeout=$(BENCHMARK_TIMEOUT) -v
+
+# Benchmark smoke tests against the local dev-deploy kind cluster. The cluster
+# API is reached through the loopback NodePort using a short-lived token minted
+# for the local EvalHub service account, and evaluation jobs use the in-cluster
+# mock target model.
+#
+# The default selection is one representative benchmark set per adapter that
+# dev-deploy builds: every provider here runs against mock OpenAI-compatible
+# endpoints, so benchmarks whose fixtures require a sandbox, external services,
+# or a capable judge/auditor model are excluded. Set BENCHMARK_RUN (or
+# KIND_BENCHMARK_RUN) to widen or narrow it, for example
+#   KIND_BENCHMARK_RUN='TestBenchmarkSmoke/(inspect|followbench|lm_evaluation_harness)/'
+# to run a provider's full catalog.
+#
+# The kind cluster also runs mock judge and target OpenAI-compatible endpoints.
+# Judge and grader credentials/URLs are provisioned in the model auth Secret;
+# fixtures use JUDGE_MODEL_NAME/JUDGE_BASE_URL for model selection. In addition,
+# lm-evaluation-harness resolves its tokenizer from HuggingFace separately from
+# the model endpoint, so the target supplies LM_EVAL_TOKENIZER for fixtures that
+# do not pin one.
+KIND_KUBECONFIG ?= $(if $(XDG_CONFIG_HOME),$(XDG_CONFIG_HOME),$(HOME)/.config)/evalhub/kubeconfigs/$(KIND_CLUSTER_NAME).yaml
+KIND_BENCHMARK_RUN ?= TestBenchmarkSmoke/(followbench|lm_evaluation_harness|inspect)\z/(followbench|arc_easy|lambada_openai|leaderboard_mmlu_pro|inspect)\z/(gsm8k|arc|mmlu|hellaswag|winogrande|truthfulqa)\z
+KIND_BENCHMARK_SERVER_URL ?= https://127.0.0.1:$(EVALHUB_HOST_PORT)
+KIND_BENCHMARK_TENANT ?= system
+KIND_BENCHMARK_MODEL_NAME ?= kind-target-model
+KIND_BENCHMARK_MODEL_URL ?= http://evalhub-kind-mock-target.system.svc.cluster.local:8000/v1
+KIND_BENCHMARK_MODEL_SECRET ?= evalhub-kind-demo-auth
+KIND_BENCHMARK_OWNERSHIP_ANNOTATION ?= io.evalhub.kind-smoke.cluster
+KIND_BENCHMARK_TOKEN_DURATION ?= 1h
+KIND_BENCHMARK_TIMEOUT ?= 2h
+KIND_BENCHMARK_JUDGE_MODEL_NAME ?= kind-judge-model
+KIND_BENCHMARK_JUDGE_URL ?= http://evalhub-kind-mock-judge.system.svc.cluster.local:8000/v1
+KIND_BENCHMARK_JUDGE_API_KEY ?= judge-test-token
+KIND_BENCHMARK_LM_EVAL_TOKENIZER ?= hf-internal-testing/llama-tokenizer
+
+test-benchmarks-kind: dev-deploy ## Run benchmark smoke tests against the local kind cluster (deploys it first; SKIP_BUILD=true reuses built images)
+	@set -eu; \
+	if [ ! -f "$(KIND_KUBECONFIG)" ]; then \
+		echo "FAIL: private dev-deploy kubeconfig not found: $(KIND_KUBECONFIG). Run make dev-deploy first."; exit 1; \
+	fi; \
+	if [ -n "$$(kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" get secret "$(KIND_BENCHMARK_MODEL_SECRET)" --ignore-not-found -o name)" ]; then \
+		owner="$$(kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" get secret "$(KIND_BENCHMARK_MODEL_SECRET)" \
+			-o 'go-template={{if .metadata.annotations}}{{index .metadata.annotations "$(KIND_BENCHMARK_OWNERSHIP_ANNOTATION)"}}{{end}}')"; \
+		if [ "$$owner" != "$(KIND_CLUSTER_NAME)" ]; then \
+			echo "FAIL: Secret/$(KIND_BENCHMARK_MODEL_SECRET) in namespace $(KIND_BENCHMARK_TENANT) already exists but is not owned by dev-deploy for kind cluster $(KIND_CLUSTER_NAME) (owner '$$owner'). Delete it or set KIND_BENCHMARK_MODEL_SECRET to an unused name."; \
+			exit 1; \
+		fi; \
+	fi; \
+	printf '%s\n' \
+		'apiVersion: v1' 'kind: Secret' \
+		'metadata:' '  name: $(KIND_BENCHMARK_MODEL_SECRET)' '  namespace: $(KIND_BENCHMARK_TENANT)' \
+		'  annotations:' '    $(KIND_BENCHMARK_OWNERSHIP_ANNOTATION): $(KIND_CLUSTER_NAME)' \
+		'type: Opaque' 'stringData:' \
+		'  api-key: target-test-token' \
+		'  judge_api-key: $(KIND_BENCHMARK_JUDGE_API_KEY)' \
+		'  judge_url: $(KIND_BENCHMARK_JUDGE_URL)' \
+		'  grader_api-key: $(KIND_BENCHMARK_JUDGE_API_KEY)' \
+		'  grader_url: $(KIND_BENCHMARK_JUDGE_URL)' \
+		| kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" apply -f - >/dev/null; \
+	echo "Applied the dev-deploy-owned mock-auth Secret $(KIND_BENCHMARK_MODEL_SECRET) with the mock target, judge, and grader keys."; \
+	token="$$(kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" create token evalhub-local-service --duration=$(KIND_BENCHMARK_TOKEN_DURATION))"; \
+	echo "Running benchmark smoke tests against $(KIND_BENCHMARK_SERVER_URL) with model $(KIND_BENCHMARK_MODEL_NAME)."; \
+	SERVER_URL="$(KIND_BENCHMARK_SERVER_URL)" \
+	EVALHUB_TOKEN="$$token" \
+	X_TENANT="$(KIND_BENCHMARK_TENANT)" \
+	MODEL_NAME="$(KIND_BENCHMARK_MODEL_NAME)" \
+	MODEL_URL="$(KIND_BENCHMARK_MODEL_URL)" \
+	MODEL_AUTH_SECRET_REF="$(KIND_BENCHMARK_MODEL_SECRET)" \
+	JUDGE_MODEL_NAME="$(KIND_BENCHMARK_JUDGE_MODEL_NAME)" \
+	JUDGE_BASE_URL="$(KIND_BENCHMARK_JUDGE_URL)" \
+	LM_EVAL_TOKENIZER="$(KIND_BENCHMARK_LM_EVAL_TOKENIZER)" \
+	BENCHMARK_TIMEOUT="$(KIND_BENCHMARK_TIMEOUT)" \
+	BENCHMARK_RUN="$(KIND_BENCHMARK_RUN)" \
+	$(MAKE) test-benchmarks
 
 generate-benchmark-configs: ## Create missing per-benchmark smoke fixtures from config/providers
 	go run ./tests/benchmarks/generate
@@ -326,8 +531,6 @@ install-deps: ## Install dependencies
 	@go mod download
 	@go mod tidy
 	@echo "Dependencies installed"
-
-GO_VERSION = $(shell awk '/^go /{print $$2}' go.mod)
 
 update-deps: ## Update all dependencies to latest versions
 	@echo "Updating dependencies to latest versions..."
