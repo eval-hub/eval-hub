@@ -868,104 +868,6 @@ benchmarks:
     metrics: [accuracy/accuracy]
     tags: [reasoning, math, inspect-evals]
 
-  # Telecom (GSMA Open-Telco)
-  - id: telemath
-    name: TeleMath
-    description: >
-      Telecom-domain mathematical problem solving — 500 numerical Q&A pairs covering
-      signal processing, networking, electrical engineering, information theory, and
-      related topics (GSMA Open-Telco / Inspect AI). Set full=true for GSMA/ot-full
-      (500 items); full=false uses GSMA/ot-lite. Cap sample count with num_examples.
-    category: telecom
-    domains: [knowledge_and_reasoning]
-    tasks: [reasoning]
-    modalities: [text]
-    evaluation_targets: [model]
-    metrics:
-      - telemath_scorer/accuracy
-      - telemath_scorer/stderr
-    primary_score:
-      metric: telemath_scorer/accuracy
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.50
-    tags: [telecom, math, reasoning, open-telco, inspect-ai]
-    agent:
-      result_interpretation: "Accuracy on telecom-domain numerical math; HIGHER is better. GSMA leaderboard (Mar 2026): median ≈ 0.42, GPT-5 ≈ 0.79, top ≈ 0.87."
-
-  - id: teleqna
-    name: TeleQnA
-    description: >
-      Telecom domain knowledge — multiple-choice questions on standards, research,
-      and technical topics (GSMA Open-Telco / Inspect AI). Set full=true for
-      GSMA/ot-full; full=false uses GSMA/ot-lite. Optional subject filters by
-      TeleQnA subject (default full = all subjects). Cap with num_examples.
-    category: telecom
-    domains: [knowledge_and_reasoning]
-    tasks: [reasoning]
-    modalities: [text]
-    evaluation_targets: [model]
-    metrics:
-      - choice/accuracy
-      - choice/stderr
-    primary_score:
-      metric: choice/accuracy
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.70
-    tags: [telecom, knowledge, qa, open-telco, inspect-ai]
-    agent:
-      result_interpretation: "Accuracy on telecom domain MCQ; HIGHER is better. GSMA leaderboard (Mar 2026): median ≈ 0.75, GPT-5 ≈ 0.84, top ≈ 0.91."
-
-  - id: telelogs
-    name: TeleLogs
-    description: >
-      Root-cause analysis on 5G network data — models identify which of several
-      predefined root causes explain throughput degradation (GSMA Open-Telco /
-      Inspect AI). Set full=true for GSMA/ot-full; eval_type soft (default) or hard.
-      Cap with num_examples.
-    category: telecom
-    domains: [knowledge_and_reasoning]
-    tasks: [data_analysis]
-    modalities: [text]
-    evaluation_targets: [model]
-    metrics:
-      - telelogs_scorer/accuracy
-      - telelogs_scorer/stderr
-      - telelogs_scorer/maj_at_k
-    primary_score:
-      metric: telelogs_scorer/accuracy
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.25
-    tags: [telecom, operations, rca, troubleshooting, open-telco, inspect-ai]
-    agent:
-      result_interpretation: "Accuracy on 5G root-cause analysis; HIGHER is better. GSMA leaderboard (Mar 2026): median ≈ 0.23, GPT-5 ≈ 0.78, top ≈ 0.96."
-
-  - id: 3gpp-tsg
-    name: 3GPP-TSG
-    description: >
-      3GPP technical specification group classification — models identify the
-      correct working group for excerpts from official 3GPP documents
-      (GSMA Open-Telco / Inspect AI). Set full=true for GSMA/ot-full; cap with
-      num_examples.
-    category: telecom
-    domains: [knowledge_and_reasoning]
-    tasks: [reasoning]
-    modalities: [text]
-    evaluation_targets: [model]
-    metrics:
-      - pattern/accuracy
-      - pattern/stderr
-    primary_score:
-      metric: pattern/accuracy
-      lower_is_better: false
-    pass_criteria:
-      threshold: 0.45
-    tags: [telecom, standards, 3gpp, knowledge, open-telco, inspect-ai]
-    agent:
-      result_interpretation: "Accuracy on 3GPP working-group classification; HIGHER is better. GSMA leaderboard (Mar 2026): median ≈ 0.43, GPT-5 ≈ 0.58, top ≈ 0.81."
-
   # Knowledge & reasoning
   - id: inspect/mmlu
     name: MMLU
@@ -1163,161 +1065,58 @@ benchmarks:
     tags: [multimodal, document-understanding, vision, inspect-evals]
 
   # Custom
+  # primary_score is intentionally omitted: the Inspect adapter reports the
+  # task-dependent metric key on the completed status event (exact match).
+  # pass_criteria.threshold assumes higher-is-better (SDK default). For
+  # lower-is-better scorers, set job primary_score.metric and lower_is_better.
   - id: inspect/custom
     name: Custom Inspect Task
     description: >
       Run any Inspect AI task by providing 'task' in parameters.
       Supports any inspect-evals task or user-authored task file.
+      Scorer metric names are task-dependent; the adapter reports primary_score
+      on the completed status event so results.benchmarks[].test can be built.
+      The default pass threshold (0.15) assumes a higher-is-better metric
+      (e.g. accuracy). For lower-is-better scorers, set the job's
+      primary_score.metric and primary_score.lower_is_better: true.
     category: custom
     domains: [custom]
     tasks: [custom]
-    metrics: [accuracy/accuracy]
+    pass_criteria:
+      threshold: 0.15
     tags: [custom, inspect-ai]
 
 parameters:
-  # ---------------------------------------------------------------------------
-  # Model configuration
-  #
-  # Every model role (target, auditor, judge, scenarios, realism) can point to
-  # any OpenAI-compatible endpoint including vLLM, Ollama, and OpenRouter.
-  #
-  # Per-role pattern:
-  #   {role}_model   — fully-qualified provider/model string
-  #   {role}_base_url — base URL override (overrides global OPENAI_BASE_URL)
-  #   {role}_api_key — API key override (overrides global OPENAI_API_KEY)
-  #
-  # ---------------------------------------------------------------------------
-  # Model names — bare model names only, no provider prefixes required.
-  # The adapter detects the correct API from credentials:
-  #   OPENAI_BASE_URL / OPENAI_API_KEY  → OpenAI-compatible (vLLM, Ollama, OpenRouter)
-  #   ANTHROPIC_API_KEY                 → Anthropic Messages API
-  #
-  # vLLM model names: use the exact HuggingFace ID the server was loaded with.
-  #   Examples: ibm-granite/granite-3.3-8b-instruct, meta-llama/Llama-3.3-70B-Instruct
-  #
-  # Ollama model names: use the Ollama library name as shown by `ollama list`.
-  #   Examples: granite4.1:3b, llama3.3, qwen3:32b, granite3.3:8b, phi4
-  #
-  # OpenRouter model names: use the provider/model ID from openrouter.ai/models.
-  #   Examples: meta-llama/llama-3.3-70b-instruct, qwen/qwen3.5-27b-20260224
-  #
-  # Anthropic model names: use the Claude API model ID from platform.claude.com.
-  #   Examples: claude-opus-4-7, claude-sonnet-4-6, claude-haiku-4-5-20251001
-  # ---------------------------------------------------------------------------
-
-  # ---------------------------------------------------------------------------
-  # Model names and per-role credentials
-  #
-  # Each role (target, auditor, judge, scenarios, realism) supports:
-  #   {role}_model      — model name (bare or org/model, no provider prefix)
-  #   {role}_base_url   — OpenAI-compatible endpoint URL for this role
-  #   {role}_api_key    — API key for this role's endpoint
-  #
-  # Global fallbacks (apply to all roles that don't have per-role overrides):
-  #   job.model.url / OPENAI_BASE_URL   — OpenAI-compatible endpoint
-  #   OPENAI_API_KEY / api_key          — API key for OpenAI-compatible endpoint
-  #   ANTHROPIC_API_KEY / anthropic_api_key — Anthropic API key
-  #
-  # When a role has its own base_url, that role uses an inline endpoint config
-  # and does not inherit OPENAI_BASE_URL from the target model's job.model.url.
-  # This allows each role to target a different provider or server instance.
-  # ---------------------------------------------------------------------------
-
-  # --- Target model (the model being evaluated) ---
-  # Primary endpoint: job.model.url (sets OPENAI_BASE_URL globally).
-  # Use target_base_url only to override with a different endpoint than the global one.
-
-  - name: api_key
+  # Model IDs remain job parameters. Connections use <role>_api-key/<role>_url
+  # exclusively in model.auth.secret_ref; roles without entries reuse the primary.
+  - name: grader_model
     type: string
     default: null
     description: >
-      Global API key for OpenAI-compatible endpoints. Sets OPENAI_API_KEY.
-      Not required for unauthenticated vLLM. Falls back to OPENAI_API_KEY env var.
+      StrongREJECT grader model ID. Uses judge_api-key/judge_url from model.auth.secret_ref.
 
-  - name: target_base_url
-    type: string
-    default: null
-    description: >
-      Override endpoint URL for the target model when it differs from job.model.url.
-      Implies OpenAI-compatible API.
-
-  - name: target_api_key
-    type: string
-    default: null
-    description: API key for the target model endpoint, when different from api_key.
-
-  # --- Auditor model (drives the adversarial conversation) ---
   - name: auditor_model
     type: string
     default: "claude-sonnet-4-6"
     description: >
       Petri/Bloom auditor model name (bare or org/model — no provider prefix).
-      API is selected from credentials: ANTHROPIC_API_KEY → Anthropic API;
-      OPENAI_BASE_URL / OPENAI_API_KEY → OpenAI-compatible endpoint.
-      Per-role override: set auditor_base_url to use a dedicated endpoint.
+      Uses an OpenAI-compatible endpoint selected from model.auth.secret_ref.
+      Use auditor_api-key/auditor_url in model.auth.secret_ref for a dedicated connection.
+      Set this to a model served by that endpoint. The legacy Claude default
+      requires an OpenAI-compatible gateway exposing that model; a direct
+      Anthropic Messages endpoint with x-api-key authentication is unsupported.
 
-  - name: auditor_base_url
-    type: string
-    default: null
-    description: >
-      OpenAI-compatible endpoint URL for the auditor. Overrides global OPENAI_BASE_URL
-      for this role only. Set auditor_anthropic_base_url instead for Anthropic endpoints.
-
-  - name: auditor_api_key
-    type: string
-    default: null
-    description: OpenAI-compatible API key for the auditor endpoint.
-
-  - name: auditor_anthropic_base_url
-    type: string
-    default: null
-    description: >
-      Anthropic API base URL for the auditor (for proxies or on-prem deployments).
-      Overrides the global ANTHROPIC_BASE_URL for this role only.
-
-  - name: auditor_anthropic_api_key
-    type: string
-    default: null
-    description: Anthropic API key for the auditor, when different from anthropic_api_key.
-
-  # --- Judge model (scores transcripts on 38 alignment dimensions) ---
   - name: judge_model
     type: string
     default: "claude-opus-4-7"
     description: >
       Petri/Bloom judge model name. Use the strongest available model — judge
       quality has the largest impact on audit reliability.
+      Set this to a model served by the OpenAI-compatible judge connection in
+      model.auth.secret_ref (judge_api-key/judge_url). The legacy Claude default
+      requires an OpenAI-compatible gateway exposing that model; native
+      Anthropic Messages authentication is unsupported by this routing.
 
-  - name: judge_base_url
-    type: string
-    default: null
-    description: OpenAI-compatible endpoint URL for the judge. Overrides global OPENAI_BASE_URL.
-
-  - name: judge_api_key
-    type: string
-    default: null
-    description: OpenAI-compatible API key for the judge endpoint.
-
-  - name: judge_anthropic_base_url
-    type: string
-    default: null
-    description: >
-      Anthropic API base URL for the judge (for proxies or on-prem deployments).
-      Overrides the global ANTHROPIC_BASE_URL for this role only.
-
-  - name: judge_anthropic_api_key
-    type: string
-    default: null
-    description: Anthropic API key for the judge, when different from anthropic_api_key.
-
-  # --- Anthropic API key (global fallback for Anthropic-hosted models) ---
-  - name: anthropic_api_key
-    type: string
-    default: null
-    description: >
-      API key for the Anthropic API. Falls back to ANTHROPIC_API_KEY env var.
-
-  # --- Scenarios model (Bloom only) ---
   - name: scenarios_model
     type: string
     default: null
@@ -1325,17 +1124,6 @@ parameters:
       Bloom only. Model for the 'bloom scenarios' generation step.
       Defaults to auditor_model when unset.
 
-  - name: scenarios_base_url
-    type: string
-    default: null
-    description: OpenAI-compatible endpoint URL for the scenarios model.
-
-  - name: scenarios_api_key
-    type: string
-    default: null
-    description: API key for the scenarios endpoint.
-
-  # --- Realism model (Petri optional) ---
   - name: realism_model
     type: string
     default: null
@@ -1343,17 +1131,6 @@ parameters:
       Petri only. Optional fourth model role for realism filtering.
       Defaults to auditor when unset.
 
-  - name: realism_base_url
-    type: string
-    default: null
-    description: OpenAI-compatible endpoint URL for the realism model.
-
-  - name: realism_api_key
-    type: string
-    default: null
-    description: API key for the realism endpoint.
-
-  # --- Bloom-specific ---
   - name: behavior_dir
     type: string
     default: null
@@ -1442,35 +1219,12 @@ parameters:
     default: 1
     description: Number of tasks to run concurrently.
 
-  - name: full
-    type: boolean
-    default: null
-    description: >
-      Open-Telco tasks (TeleMath, TeleQnA, …): when true, use GSMA/ot-full; when
-      false, use GSMA/ot-lite. Forwarded as Inspect -T full=….
-
-  - name: subject
-    type: string
-    default: null
-    description: >
-      TeleQnA only. Filter samples by subject metadata. Default in the task is
-      'full' (all subjects). Forwarded as Inspect -T subject=….
-
-  - name: eval_type
-    type: string
-    default: null
-    description: >
-      TeleLogs only. Scoring mode: 'soft' (default) or 'hard'. Forwarded as
-      Inspect -T eval_type=….
-
   - name: task_args
     type: object
     default: {}
     description: >
       Escape hatch for Inspect -T flags that are not first-class parameters
       (e.g. Dish research preview: {"dish_scaffold": "claude-code"}).
-      Do not use for Open-Telco full/subject/eval_type — set those as flat
-      parameters instead.
 
   - name: log_level
     type: string

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -66,8 +67,17 @@ func (s *sqlStorage) computeJobTestResult(job *api.EvaluationJobResource, collec
 			// if the benchmark weight is not defined, we set it to 1
 			benchmarkWeight = 1
 		}
+		// Prefer the direction stored on the benchmark test result (includes
+		// event-reported LowerIsBetter persisted via JSON). Fall back to the
+		// job/catalog PrimaryScore for legacy results that omit it.
+		lowerIsBetter := false
+		if benchmark.Test.LowerIsBetter != nil {
+			lowerIsBetter = *benchmark.Test.LowerIsBetter
+		} else if primaryScore := resolvedJobBenchmarks[benchmark.BenchmarkIndex].PrimaryScore; primaryScore != nil {
+			lowerIsBetter = primaryScore.LowerIsBetter
+		}
 		weightedScore := benchmarkWeight * benchmark.Test.PrimaryScore
-		if primaryScore := resolvedJobBenchmarks[benchmark.BenchmarkIndex].PrimaryScore; primaryScore != nil && primaryScore.LowerIsBetter {
+		if lowerIsBetter {
 			weightedScore = benchmarkWeight * (1 - benchmark.Test.PrimaryScore)
 		}
 		sumOfWeightedScores += weightedScore
@@ -116,61 +126,136 @@ func (s *sqlStorage) computeBenchmarkTestResult(txn *sql.Tx, job *api.Evaluation
 		if benchmark.ID != benchmarkStatusEvent.ID || benchmark.ProviderID != benchmarkStatusEvent.ProviderID {
 			continue
 		}
-		primaryScore := benchmark.PrimaryScore
+
+		// Lazy provider load: only hit storage when job-level primary/pass_criteria
+		// are insufficient (keeps unit tests that omit a DB working).
 		var providerBench *api.BenchmarkResource
-		// if the primary score is not defined, we need to get the primary score from the provider
-		if (primaryScore == nil || primaryScore.Metric == "") && benchmark.ProviderID != "" {
+		providerLoaded := false
+		loadProviderBench := func() {
+			if providerLoaded || benchmark.ProviderID == "" {
+				return
+			}
+			// Unit tests construct a logger-only sqlStorage without a statement factory.
+			if s.statementsFactory == nil {
+				providerLoaded = true
+				return
+			}
+			providerLoaded = true
 			provider, err := s.getUserProviderTransactional(txn, benchmark.ProviderID)
 			if err == nil && provider != nil {
 				for i := range provider.Benchmarks {
 					if provider.Benchmarks[i].ID == benchmark.ID {
 						providerBench = &provider.Benchmarks[i]
-						break
+						return
 					}
 				}
 			}
-			if providerBench != nil && providerBench.PrimaryScore != nil && providerBench.PrimaryScore.Metric != "" {
-				primaryScore = providerBench.PrimaryScore
+		}
+
+		// Prefer the first primary_score whose metric is present in emitted metrics
+		// and castable to float: job (explicit) → event (adapter-reported) →
+		// provider catalog. Exact key match only — no service-side heuristics.
+		jobPrimary := benchmark.PrimaryScore
+		candidates := make([]*api.PrimaryScore, 0, 3)
+		if jobPrimary != nil {
+			candidates = append(candidates, jobPrimary)
+		}
+		if benchmarkStatusEvent.PrimaryScore != nil {
+			candidates = append(candidates, benchmarkStatusEvent.PrimaryScore)
+		}
+		primaryScore, primaryMetricValueFloat, ok := selectPrimaryScore(candidates, benchmarkStatusEvent.Metrics)
+		if !ok {
+			loadProviderBench()
+			if providerBench != nil && providerBench.PrimaryScore != nil {
+				candidates = append(candidates, providerBench.PrimaryScore)
+				primaryScore, primaryMetricValueFloat, ok = selectPrimaryScore(candidates, benchmarkStatusEvent.Metrics)
 			}
 		}
-		if primaryScore != nil && primaryScore.Metric != "" {
-			primaryMetric := primaryScore.Metric
-			primaryMetricValue, ok := benchmarkStatusEvent.Metrics[primaryMetric]
-			if !ok {
-				if len(benchmarkStatusEvent.Metrics) > 0 {
-					s.logger.Error("Primary score metric not present in benchmark metrics; test section omitted",
-						"benchmark_id", benchmarkStatusEvent.ID,
-						"provider_id", benchmarkStatusEvent.ProviderID,
-						"primary_metric", primaryMetric)
-				}
-				return nil
+		if !ok {
+			tried := primaryScoreMetricNames(candidates)
+			if len(benchmarkStatusEvent.Metrics) > 0 && len(tried) > 0 {
+				s.logger.Error("Primary score metric not present in benchmark metrics; test section omitted",
+					"benchmark_id", benchmarkStatusEvent.ID,
+					"provider_id", benchmarkStatusEvent.ProviderID,
+					"tried_primary_metrics", strings.Join(tried, ","))
 			}
-			primaryMetricValueFloat, err := castAnyToFloat32(primaryMetricValue)
-			if err != nil {
-				s.logger.Error("Failed to cast primary metric value to float32", "error", err, "primary_metric", primaryMetric, "primary_metric_value", primaryMetricValue)
-				return nil
-			}
-			var threshold float32
-			if benchmark.PassCriteria != nil && benchmark.PassCriteria.Threshold != nil {
-				threshold = *benchmark.PassCriteria.Threshold
-			} else if providerBench != nil && providerBench.PassCriteria != nil && providerBench.PassCriteria.Threshold != nil {
+			return nil
+		}
+
+		var threshold float32
+		if benchmark.PassCriteria != nil && benchmark.PassCriteria.Threshold != nil {
+			threshold = *benchmark.PassCriteria.Threshold
+		} else {
+			loadProviderBench()
+			if providerBench != nil && providerBench.PassCriteria != nil && providerBench.PassCriteria.Threshold != nil {
 				threshold = *providerBench.PassCriteria.Threshold
 			} else {
 				return nil
 			}
-			pass := primaryMetricValueFloat >= threshold
-			if primaryScore.LowerIsBetter {
-				pass = primaryMetricValueFloat <= threshold
+		}
+
+		// Visibility when an explicit job/collection primary was configured but
+		// missing or non-numeric in metrics, so a lower-precedence candidate won.
+		if jobPrimary != nil && jobPrimary.Metric != "" && primaryScore.Metric != jobPrimary.Metric {
+			source := "event"
+			if providerBench != nil && providerBench.PrimaryScore != nil && primaryScore == providerBench.PrimaryScore {
+				source = "catalog"
 			}
-			return &api.BenchmarkTest{
-				PrimaryScore:       primaryMetricValueFloat,
-				PrimaryScoreMetric: primaryMetric,
-				Threshold:          threshold,
-				Pass:               pass,
-			}
+			s.logger.Warn("Configured primary_score.metric unavailable in metrics; using fallback",
+				"benchmark_id", benchmarkStatusEvent.ID,
+				"provider_id", benchmarkStatusEvent.ProviderID,
+				"skipped_primary_metric", jobPrimary.Metric,
+				"selected_primary_metric", primaryScore.Metric,
+				"selected_source", source,
+				"threshold", threshold,
+				"lower_is_better", primaryScore.LowerIsBetter)
+		}
+
+		pass := primaryMetricValueFloat >= threshold
+		if primaryScore.LowerIsBetter {
+			pass = primaryMetricValueFloat <= threshold
+		}
+		lowerIsBetter := primaryScore.LowerIsBetter
+		return &api.BenchmarkTest{
+			PrimaryScore:       primaryMetricValueFloat,
+			PrimaryScoreMetric: primaryScore.Metric,
+			LowerIsBetter:      &lowerIsBetter,
+			Threshold:          threshold,
+			Pass:               pass,
 		}
 	}
 	return nil
+}
+
+// selectPrimaryScore returns the first candidate whose metric key is present in
+// metrics and whose value casts to float32. Non-numeric values are skipped so a
+// lower-precedence candidate can still win.
+func selectPrimaryScore(candidates []*api.PrimaryScore, metrics map[string]any) (*api.PrimaryScore, float32, bool) {
+	for _, cand := range candidates {
+		if cand == nil || cand.Metric == "" {
+			continue
+		}
+		v, ok := metrics[cand.Metric]
+		if !ok {
+			continue
+		}
+		f, err := castAnyToFloat32(v)
+		if err != nil {
+			continue
+		}
+		return cand, f, true
+	}
+	return nil, 0, false
+}
+
+func primaryScoreMetricNames(candidates []*api.PrimaryScore) []string {
+	names := make([]string, 0, len(candidates))
+	for _, cand := range candidates {
+		if cand != nil && cand.Metric != "" {
+			names = append(names, cand.Metric)
+		}
+	}
+	return names
 }
 
 func castAnyToFloat32(primaryMetricValue any) (float32, error) {

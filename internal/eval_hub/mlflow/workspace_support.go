@@ -151,7 +151,10 @@ func (w *WorkspaceSupport) runProbe(ctx context.Context, client *mlflowclient.Cl
 	enabled, err := client.WithContext(ctx).ProbeWorkspacesEnabled()
 	if err != nil {
 		client.GetLogger().Info("MLflow workspace support probe failed", "error", err.Error())
-		return fmt.Errorf("%w: %v", ErrWorkspaceSupportUnresolved, err)
+		// Wrap both so callers can match ErrWorkspaceSupportUnresolved with
+		// errors.Is and still inspect the underlying *mlflowclient.APIError
+		// (status, error code, server message) with errors.As.
+		return fmt.Errorf("%w: %w", ErrWorkspaceSupportUnresolved, err)
 	}
 
 	if enabled {

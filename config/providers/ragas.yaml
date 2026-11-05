@@ -26,28 +26,18 @@ parameters:
   - name: embedding_model
     type: string
     default: null
-    description: Embedding model name; defaults to the evaluated model.
-  - name: embedding_url
-    type: string
-    default: null
-    description: OpenAI-compatible embedding endpoint; defaults to the evaluated model URL.
+    description: >
+      Embedding model name; defaults to the evaluated model. The selected
+      endpoint must serve embeddings. Configure embedding_url and
+      embedding_api-key in model.auth.secret_ref for a separate connection.
   - name: judge_model
     type: string
     default: null
     description: >
       Model used for LLM-based RAGAS metrics; defaults to the evaluated model.
       Use a capable structured-output model for smaller evaluated models.
-  - name: judge_url
-    type: string
-    default: null
-    description: >
-      OpenAI-compatible judge endpoint; defaults to the evaluated model URL.
-  - name: judge_api_key
-    type: string
-    default: null
-    description: >
-      Optional judge API key. Prefer injecting OPENAI_API_KEY from a Secret or
-      runtime environment rather than putting a key in a JobSpec.
+      Configure judge_api-key and judge_url in model.auth.secret_ref for a
+      separate connection. Connection URLs and keys do not belong in parameters.
   - name: max_tokens
     type: integer
     default: null
@@ -103,13 +93,9 @@ benchmarks:
     evaluation_targets: [rag_system]
     metrics:
       - answer_relevancy
-      - answer_similarity
       - context_precision
       - faithfulness
       - context_recall
-      - context_entity_recall
-      - factual_correctness
-      - noise_sensitivity
     tags:
       - ragas
       - rag

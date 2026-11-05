@@ -1,6 +1,11 @@
 {
-  "notes": "One example per probe; broad probe groups still invoke multiple probes. garak-kfp additionally requires Data Science Pipelines.",
+  "notes": "Requires KFP_ENDPOINT, KFP_NAMESPACE, and KFP_S3_SECRET_NAME for a working Data Science Pipelines deployment and Data Connection Secret. Configure KFP authentication through the model auth Secret. One example per probe; broad groups still invoke multiple probes.",
   "parameters": {
+    "kfp_config": {
+      "endpoint": "${KFP_ENDPOINT}",
+      "namespace": "${KFP_NAMESPACE}",
+      "s3_secret_name": "${KFP_S3_SECRET_NAME}"
+    },
     "num_examples": 1
   },
   "timeout": "5m"

@@ -18,13 +18,29 @@ export X_USER=my-user           # required when calling the service directly in 
 export MODEL_NAME=org/model
 export MODEL_URL=https://model.example/v1
 export MODEL_AUTH_SECRET_REF=model-credentials  # if the model requires authentication
-export EVALHUB_CA_CERT_PATH=/path/to/ca.pem      # optional private CA
 make test-benchmarks
 ```
 
+The target automatically installs the pinned gotestsum version into `bin/tools`
+using Go on the first run (requires network access), then reuses it. Override
+the pinned version with `GOTESTSUM_VERSION` if needed. It writes a JUnit XML report to
+`bin/junit-benchmarks-report.xml`, with a separate test case for each benchmark
+subtest, including passes, failures, skips, and diagnostic output. Console output
+is streamed during the run, and test failures still fail the command. Override
+the report path with `BENCHMARK_JUNIT=/path/to/report.xml`; parent directories
+are created automatically. Setup failures are also included in the report.
+
+The report also includes the parent `TestBenchmarkSmoke` test case. Three
+benchmark subtests therefore produce four cases, and one failing benchmark can
+produce two failures because the parent also fails. When calculating per-benchmark
+pass rates, count only cases named `TestBenchmarkSmoke/<provider>/<benchmark>`.
+Inspect the parent separately for setup or cleanup failures, which can occur
+independently of benchmark outcomes.
+
 The service's authentication proxy determines the forwarded identity when used.
 Model credentials belong in the referenced Kubernetes Secret, not in JSON fixtures.
-TLS verification remains enabled. Identity headers are not forwarded to redirects.
+TLS certificate verification is temporarily disabled in this test suite to allow
+cluster routes with untrusted certificates. Identity headers are not forwarded to redirects.
 
 Default concurrency is **2 evaluation jobs across all providers**. Each job uses
 its fixture deadline (initially five minutes), and the suite has a 30-minute
@@ -56,6 +72,25 @@ required fixture inputs produce explicit subtest skips naming the missing field 
 environment variable and explaining how to enable the benchmark. Subtest names contain provider and benchmark IDs; Go's
 `-run` treats slash-separated portions as regular expressions.
 
+## Kind cluster
+
+`make test-benchmarks-kind` deploys the local dev stack with `make dev-deploy`
+and runs the suite against the kind mock target and mock judge. It mints a
+short-lived service-account token, creates or refreshes the dev-deploy-owned
+mock-auth Secret (failing if a same-named Secret belongs to something else), and
+exports `JUDGE_MODEL_NAME`, `JUDGE_BASE_URL`, and
+`LM_EVAL_TOKENIZER` so judge-based and LM Evaluation Harness benchmarks execute
+instead of skipping or failing. The Secret contains the primary `api-key` and
+both `judge_api-key`/`judge_url` and `grader_api-key`/`grader_url`. The judge and
+grader pairs share `KIND_BENCHMARK_JUDGE_API_KEY` and `KIND_BENCHMARK_JUDGE_URL`,
+so both roles use the mock judge endpoint. The key is provisioned in the Secret;
+fixtures do not need a `JUDGE_API_KEY` environment variable.
+The default `KIND_BENCHMARK_RUN` is a
+representative set for each adapter image dev-deploy builds; widen it with
+`BENCHMARK_RUN` (see the `Makefile` comment) to run a provider's full catalog,
+which also selects benchmarks whose fixtures require a sandbox, external
+services, or a capable judge model.
+
 ## Fixtures
 
 The runner and JSON fixtures are delivered in separate stacked PRs. The runner
@@ -68,7 +103,9 @@ Each checked-in provider benchmark has one file under
 `testdata/<provider-id>/<benchmark-id>.json`. Runtime discovery uses the live API
 catalog, so a newly discovered benchmark without a file fails with the expected
 path and instructions to generate or add the fixture. Filenames
-use Go's `url.PathEscape`, additionally encoding dots as `%2E`. For example,
+use Go's `url.PathEscape`, additionally encoding dots as `%2E` and colons as
+`%3A` for Windows compatibility. For example, `arc:challenge` becomes
+`arc%3Achallenge.json` under the `lighteval` provider directory, and
 `inspect/petri-sycophancy` becomes `inspect%2Fpetri-sycophancy.json` under the
 `inspect` provider directory. Encoding `%` prevents collisions with escaped IDs.
 
@@ -91,6 +128,17 @@ Supported fixture fields:
 
 - `parameters`: required object of adapter-specific options.
 - `timeout`: required positive Go duration, including submission and polling.
+- `max_length_env`: optional environment variable overriding the integer
+  `parameters.max_length`. Unset or empty values keep the fixture's fallback;
+  supplied values must be integers greater than one. Values are sent as JSON
+  numbers, not strings.
+- `tokenizer_env`: optional environment variable supplying `parameters.tokenizer`
+  for providers that resolve a HuggingFace tokenizer separately from the model
+  name, such as LM Evaluation Harness. Unset or empty values keep the fixture's
+  fallback, and a `parameters.tokenizer` the fixture pins itself (for example a
+  staged `/test_data/tokenizer` bundle) always wins. The
+  `test-benchmarks-kind` target sets `LM_EVAL_TOKENIZER` because the kind mock
+  target model name does not resolve on the Hub.
 - `test_data_ref`: optional API `TestDataRef` object for staged test input.
 - `test_data_ref_env`: alternatively, the name of an environment variable containing
   a complete JSON `TestDataRef` object. It must be set when the fixture is used.
@@ -183,39 +231,54 @@ fallback for `EVALHUB_TOKEN`; an explicit nonempty `EVALHUB_TOKEN` takes precede
 `WAIT_DEADLINE`, `FVT_CONCURRENCY`, `FVT_TEST_FILTER`, and
 `FVT_BENCHMARK_TOKENIZER` are FVT settings, not smoke-runner settings. Configure
 `BENCHMARK_TIMEOUT`, `BENCHMARK_PARALLEL`, `BENCHMARK_RUN`, and fixture parameters
-when invoking the smoke suite. The smoke runner keeps TLS verification enabled;
-provide `EVALHUB_CA_CERT_PATH` for a private service CA.
+when invoking the smoke suite. The smoke runner temporarily disables TLS
+certificate verification for cluster routes with untrusted certificates.
 
-Judge fixtures require nonempty `${JUDGE_MODEL_NAME}` and, where the adapter
-supports an inline endpoint, `${JUDGE_BASE_URL}`. The runner accepts `JUDGE_MODEL`
-as a fallback for `JUDGE_MODEL_NAME`, and `JUDGE_API_BASE` then `JUDGE_PROXY_URL`
-as fallbacks for `JUDGE_BASE_URL`. The primary nonempty name always wins.
-Petri/Bloom and RAGAS additionally require `${JUDGE_API_KEY}`. Jenkins sets this
-to `local` for its judge proxy in the collection stage; supply it explicitly when
-running these smoke fixtures elsewhere. Missing referenced inputs skip the
-benchmark with an actionable message.
+Judge fixtures require nonempty `${JUDGE_MODEL_NAME}`. The runner accepts
+`JUDGE_MODEL` as its fallback; a nonempty primary name takes precedence.
+Missing referenced inputs skip the benchmark with an actionable message.
+Inspect, DeepEval, FollowBench, and Ragas fixtures
+select model IDs in parameters; their auxiliary connections come from the model
+auth Secret, not URL/key environment placeholders.
 
-Generated fixtures use the adapter's field names:
+- Inspect Petri/Bloom: `auditor_model` and `judge_model`; optional independent
+  connections use `auditor_api-key`/`auditor_url` and `judge_api-key`/`judge_url`
+  in `MODEL_AUTH_SECRET_REF`. Bloom scenario generation uses the `scenarios` pair.
+- Inspect StrongREJECT: `grader_model`, using the `judge` Secret pair.
+  `OPENAI_JUDGE_API_KEY` is no longer an adapter configuration input.
+- Inspect HLE/CyberSecEval prompt injection and FollowBench: `judge_model`, using
+  the `judge` pair.
+- Inspect CyberSecEval interpreter abuse: `model_roles.grader` selects the judge
+  model and uses the `grader_api-key`/`grader_url` Secret pair.
+  `task_args.judge_llm=null` selects this role instead of the task default.
+- DeepEval: `eval_model_name`, using the `judge` pair.
+- Ragas: `judge_model` and `embedding_model`, using the `judge` and `embedding`
+  pairs. Set `RAGAS_EMBEDDING_MODEL` to an embedding-capable model ID.
+- ATIF: its primary `model` selects `JUDGE_MODEL_NAME` and `JUDGE_BASE_URL`, since
+  that primary model scores staged trajectories. This is a primary model override,
+  not an auxiliary connection parameter.
+- Garak/Garak KFP intents are outside this contrib change: their existing
+  `intents_models.judge.name`/`.url` bindings remain. `JUDGE_BASE_URL` aliases
+  (`JUDGE_API_BASE`, then `JUDGE_PROXY_URL`) remain for these primary/legacy inputs.
 
-- Inspect Petri/Bloom: `judge_model`, `judge_base_url`, `judge_api_key`. Auditor
-  inputs continue to use the evaluated model's `MODEL_NAME` and `MODEL_URL`.
-- Inspect StrongREJECT: `grader_model`, `grader_base_url`; provision
-  `OPENAI_JUDGE_API_KEY` in the adapter environment through a Secret.
-- ATIF: the fixture `model` selects `JUDGE_MODEL_NAME` and `JUDGE_BASE_URL`,
-  because its model scores staged trajectories rather than generating them.
-- RAGAS: `judge_model`, `judge_url`, `judge_api_key`.
-- DeepEval: `eval_model_name`, `eval_model_url`; authentication comes from the
-  adapter's model credentials.
-- Garak/Garak KFP intents: `intents_models.judge.name` and `.url`. Synthetic data
-  generation continues to use `MODEL_NAME` and `MODEL_URL`.
-- FollowBench and Inspect HLE/CyberSecEval: `judge_model`. These adapters reject
-  inline judge URL/key parameters with this field. Configure `judge_url` and
-  `judge_api-key` in `MODEL_AUTH_SECRET_REF` for a separate judge connection.
+Role URLs require matching `<role>_api-key` entries, even when copying the same
+real credential. Roles with no separate entries reuse the primary connection.
+The adapter selects that fallback by sending the primary credential reference;
+the sidecar does not repair a missing role reference. An explicit role reference
+with a missing or empty key returns HTTP 400 without reaching any upstream.
+The API request retains `model.auth.secret_ref`; credentials never enter benchmark
+parameters. The sidecar resolves projected references and selects each upstream.
+Use compatible adapter images when deploying the updated provider catalogs.
 
-Proxy deployment settings such as `JUDGE_PROXY_UPSTREAM_URL` and
-`JUDGE_PROXY_SECRET_REF` configure Jenkins infrastructure, not evaluation inputs.
-Changing the generator preserves existing JSON files; update reviewed fixtures
-on the separate fixture branch when changing these bindings.
+For Petri/Bloom, select auditor and judge models served by the configured
+OpenAI-compatible endpoints. The catalog retains the adapter's legacy Claude
+model defaults; these work only with an OpenAI-compatible gateway exposing
+those models. Direct Anthropic Messages endpoints and their `x-api-key`
+authentication are not supported by this Secret-routing contract.
+
+The generator preserves existing JSON files. This change updates both the generator
+and reviewed fixtures, with regression coverage of serialized API request bodies.
+Proxy deployment settings configure infrastructure separately from these inputs.
 
 ## Provider prerequisites and workload limits
 
@@ -244,7 +307,12 @@ Use an S3, PVC, Git, or Hugging Face data reference supported by EvalHub. Refere
 point to data in the runtime environment, not this test process's filesystem.
 
 - RAGAS: one complete RAG record in `dataset.jsonl`, including metric-required
-  fields; the full suite also needs embeddings support.
+  fields. Both suites require `RAGAS_EMBEDDING_MODEL` (for example,
+  `granite-embedding`). Put `embedding_api-key` and `embedding_url` in the Secret
+  named by `MODEL_AUTH_SECRET_REF`. The URL must serve `/v1/embeddings`; a
+  chat-only endpoint cannot serve these calls. An unauthenticated service can
+  use a nonempty dummy embedding key if it ignores Authorization. Use an
+  adapter image that resolves the projected role-specific credential references.
 - DeepEval: one JSONL record containing `input`, `actual_output`, `expected_output`,
   `context`, and `retrieval_context`. It loads the staged dataset without a sample
   cap, so input size bounds the work.
@@ -286,3 +354,59 @@ environment substitution, terminal failures, missing results, timeouts, and
 cleanup. Subprocess tests execute the live suite against an HTTP fake to verify
 parallel execution across providers, missing-fixture failures, missing-input skips, zero-submission
 failure, authenticated requests, and cleanup on success/failure/timeout.
+
+## Fixture execution profiles
+
+LongBench uses a **4096-token** context budget by default. Override it for the
+selected model with an integer context limit, including when running through
+Make:
+
+```bash
+MODEL_MAX_LENGTH=32768 make test-benchmarks BENCHMARK_RUN='TestBenchmarkSmoke/lm_evaluation_harness/longbenchv2$'
+```
+
+The budget must not exceed the endpoint's configured context limit. Unset or
+empty `MODEL_MAX_LENGTH` keeps 4096; malformed values fail before submission.
+LongBench permits truncating loglikelihood contexts to this budget. The short
+default exercises the runtime, rather than measuring full long-context accuracy.
+
+LightEval math fixtures set `generation_parameters.temperature=0.1`: their
+sampling metrics generate multiple answers even for a single question, so zero
+temperature is invalid.
+
+Inspect family fixtures select one registered representative task with
+`parameters.task`, preserving the catalog benchmark ID. These names were checked
+against inspect-evals v0.26.0. Agent tasks still require their sandbox and external
+services, and GPQA requires dataset access. MakeMeSay is capped at one game turn;
+Make Me Pay runs one experiment with `turn_cap=2` so the mark can respond. MASK,
+InstrumentalEval, and Agentic Misalignment use the target model as their smoke
+grader; Make Me Pay uses it for the mark role. These auxiliary models inherit the
+target's OpenAI-compatible endpoint and credentials. These are execution checks,
+not independent judge accuracy measurements. Existing independently configured
+Petri/Bloom, HLE, and StrongREJECT judges are unchanged. CyberSecEval interpreter
+abuse explicitly binds its grader role to the independent judge connection.
+
+Garak KFP fixtures forward `KFP_ENDPOINT`, `KFP_NAMESPACE`, and
+`KFP_S3_SECRET_NAME` through `parameters.kfp_config`. Missing inputs produce
+explicit prerequisite skips, not passing evaluations. The Data Connection Secret
+must exist in the pipeline namespace. For sidecar authentication, use the
+sidecar endpoint (normally `http://localhost:8080`) as `KFP_ENDPOINT` and configure
+`kfp_url` and `kfp_sa_token` in the model auth Secret; a direct pipeline endpoint
+needs its own adapter authentication configuration. Pipeline and adapter service
+accounts also need the required access to jobs, Secrets, and artifacts.
+
+Some failures cannot be repaired in these fixtures. In particular, the downstream
+LM adapter does not forward arbitrary `trust_remote_code` or
+`confirm_run_unsafe_code` parameters to the framework, and Petri's role JSON
+compatibility, LightEval's missing loglikelihood implementation, dataset schema
+bugs, missing image dependencies, and unknown custom provider IDs need adapter,
+image, dataset, or environment changes. Adding ignored flags, increasing all
+deadlines, or removing benchmarks would not validate those fixes.
+
+For 11 of the 12 dataset-loader failures, the fixtures now use prepared offline data
+and a matching local tokenizer through `test_data_ref.hf`. See
+[offline preparation](offline/README.md) for the build command, runtime
+requirements, and `LM_EVAL_OFFLINE_HF_REPO_ID` / `LM_EVAL_OFFLINE_HF_REVISION`
+inputs. Point these at the prepared bundle, not the original dataset repository.
+Qasper data is included in the bundle, but its job remains unchanged because the
+SCROLLS adapter also needs to handle its metric cache on a read-only data mount.

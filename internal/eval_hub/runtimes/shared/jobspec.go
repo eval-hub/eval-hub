@@ -15,6 +15,7 @@ type JobSpec struct {
 	Model          *api.ModelRef       `json:"model,omitempty"`
 	NumExamples    *int                `json:"num_examples,omitempty"`
 	Parameters     map[string]any      `json:"parameters"`
+	TestDataRef    *api.TestDataRef    `json:"test_data_ref,omitempty"`
 	ExperimentName string              `json:"experiment_name,omitempty"`
 	Tags           []api.ExperimentTag `json:"tags,omitempty"`
 	CallbackURL    *string             `json:"callback_url"`
@@ -56,6 +57,7 @@ func BuildJobSpec(
 		Model:          cloneModelRef(evaluation.Model),
 		NumExamples:    numExamples,
 		Parameters:     benchmarkParams,
+		TestDataRef:    benchmarkConfig.TestDataRef,
 		CallbackURL:    callbackURL,
 		PrimaryScore:   resolvePrimaryScore(benchmarkConfig, provider),
 	}

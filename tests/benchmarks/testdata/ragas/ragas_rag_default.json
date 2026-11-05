@@ -1,9 +1,8 @@
 {
-  "notes": "Stage a single complete RAG record as dataset.jsonl. Full-suite metrics additionally require an embeddings-capable endpoint.",
+  "notes": "Stage a single complete RAG record as dataset.jsonl. Set RAGAS_EMBEDDING_MODEL. Configure embedding_api-key/embedding_url and optional judge_api-key/judge_url in MODEL_AUTH_SECRET_REF for sidecar routing.",
   "parameters": {
-    "judge_api_key": "${JUDGE_API_KEY}",
+    "embedding_model": "${RAGAS_EMBEDDING_MODEL}",
     "judge_model": "${JUDGE_MODEL_NAME}",
-    "judge_url": "${JUDGE_BASE_URL}",
     "max_workers": 1,
     "num_examples": 1
   },
