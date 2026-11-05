@@ -1870,3 +1870,7 @@ func TestRunEvaluationJobOTELEnvironment(t *testing.T) {
 		})
 	}
 }
+
+func (*fakeStorage) UpdateEvaluationJobOCI(_ string, _ *api.OCIProcessingStatus, _ *api.OCIArtifactReference) error {
+	return nil
+}

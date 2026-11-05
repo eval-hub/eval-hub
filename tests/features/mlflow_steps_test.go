@@ -262,7 +262,7 @@ func (tc *scenarioConfig) theMLflowArtifactShouldNotExistForExperimentAndJob(art
 		return err
 	}
 	if exists {
-		return tc.logError(fmt.Errorf("expected MLflow artifact %q to be absent for pending job %s in experiment %s, but it exists", artifactName, jobIDResolved, experimentIDResolved))
+		return tc.logError(fmt.Errorf("expected MLflow artifact %q to be absent for job %s in experiment %s, but it exists", artifactName, jobIDResolved, experimentIDResolved))
 	}
 	tc.logDebug("MLflow artifact %q absent for job %s as expected\n", artifactName, jobIDResolved)
 	return nil
