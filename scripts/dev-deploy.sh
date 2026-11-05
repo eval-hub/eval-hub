@@ -1361,170 +1361,18 @@ install_mock_services() {
   local mock_image
   mock_image="$(registry_image kind-openai-mock)"
   log INFO "Deploying mock OpenAI-compatible target and judge endpoints."
+  # The mock source stays a plain, lintable, testable Python file in
+  # scripts/kind-openai-mock.py. Loading it through --from-file avoids the
+  # YAML block-scalar indentation and unquoted-heredoc expansion constraints
+  # on its content. dev-clean selects resources by the ownership annotation,
+  # so it must be part of every applied manifest; inject it before apply.
+  kubectl --kubeconfig "$KUBECONFIG_FILE" -n system create configmap evalhub-kind-openai-mock-code \
+    --from-file=mock.py="${EVALHUB_REPO}/scripts/kind-openai-mock.py" \
+    --dry-run=client -o yaml \
+    | kubectl --kubeconfig "$KUBECONFIG_FILE" annotate --local -f - -n system \
+      --overwrite "io.evalhub.kind-smoke.cluster=${KIND_CLUSTER_NAME}" -o yaml \
+    | kubectl --kubeconfig "$KUBECONFIG_FILE" apply -f -
   kubectl --kubeconfig "$KUBECONFIG_FILE" apply -f - <<YAML
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: evalhub-kind-openai-mock-code
-  namespace: system
-  annotations:
-    io.evalhub.kind-smoke.cluster: $KIND_CLUSTER_NAME
-data:
-  mock.py: |
-    import json
-    import os
-    import re
-    from http.server import BaseHTTPRequestHandler, HTTPServer
-
-    ROLE = os.environ["MOCK_ROLE"]
-    MODEL = os.environ["MOCK_MODEL"]
-    API_KEYS = {item.strip() for item in os.environ["MOCK_API_KEYS"].split(",") if item.strip()}
-
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, _format, *_args):
-            pass
-
-        def reply(self, status, value):
-            body = json.dumps(value).encode()
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-        def do_GET(self):
-            if self.path.rstrip("/").endswith("/models"):
-                self.reply(200, {"object": "list", "data": [{"id": MODEL, "object": "model"}]})
-            else:
-                self.reply(404, {"error": {"message": "not found"}})
-
-        def do_POST(self):
-            token = self.headers.get("Authorization", "")
-            if token not in {"Bearer " + key for key in API_KEYS}:
-                self.reply(401, {"error": {"message": "mock rejected credential"}})
-                print(json.dumps({"role": ROLE, "auth": "rejected"}), flush=True)
-                return
-
-            raw = self.rfile.read(int(self.headers.get("Content-Length", "0")))
-            request = json.loads(raw or b"{}")
-            endpoint = self.path.split("?", 1)[0]
-            if ROLE == "target" and endpoint.endswith("/v1/completions"):
-                prompts = request.get("prompt", "")
-                if not isinstance(prompts, list):
-                    prompts = [prompts]
-                choices = []
-                prompt_tokens = 0
-                for index, prompt_value in enumerate(prompts):
-                    prompt = prompt_value if isinstance(prompt_value, str) else str(prompt_value)
-                    # local-completions uses echo/logprobs for multiple-choice
-                    # likelihood scoring. Return enough deterministic mock token
-                    # scores for the client tokenizer; test scores are not meaningful.
-                    token_count = max(2, len(prompt.encode("utf-8")) + 1)
-                    prompt_tokens += token_count
-                    choices.append({
-                        "index": index,
-                        "text": prompt + " ",
-                        "logprobs": {
-                            "tokens": ["mock"] * token_count,
-                            "token_logprobs": [-0.1] * token_count,
-                            "top_logprobs": [{"mock": -0.1}] * token_count,
-                            "text_offset": list(range(token_count)),
-                        },
-                        "finish_reason": "stop",
-                    })
-                self.reply(200, {
-                    "id": "cmpl-kind-mock",
-                    "object": "text_completion",
-                    "created": 0,
-                    "model": request.get("model", MODEL),
-                    "choices": choices,
-                    "usage": {"prompt_tokens": prompt_tokens, "completion_tokens": 1, "total_tokens": prompt_tokens + 1},
-                })
-                print(json.dumps({"role": ROLE, "endpoint": "completions", "auth": "accepted"}), flush=True)
-                return
-
-            # Inspect AI's OpenAI-compatible provider calls the Responses API by
-            # default, so emulate the subset of it that a chat completion needs.
-            # Without this, inspect fails with
-            # TypeError("'NoneType' object is not iterable") on response.output.
-            if ROLE == "target" and endpoint.endswith("/responses/input_tokens"):
-                self.reply(200, {"object": "response.input_tokens", "input_tokens": 1})
-                print(json.dumps({"role": ROLE, "endpoint": "responses.input_tokens", "auth": "accepted"}), flush=True)
-                return
-
-            if ROLE == "target" and endpoint.endswith("/v1/responses"):
-                text = "I will follow the requested constraints."
-                self.reply(200, {
-                    "id": "resp-kind-mock",
-                    "object": "response",
-                    "created_at": 0,
-                    "status": "completed",
-                    "model": request.get("model", MODEL),
-                    "output": [{
-                        "type": "message",
-                        "id": "msg-kind-mock",
-                        "status": "completed",
-                        "role": "assistant",
-                        "content": [{"type": "output_text", "text": text, "annotations": []}],
-                    }],
-                    "parallel_tool_calls": False,
-                    "tool_choice": "auto",
-                    "tools": [],
-                    "error": None,
-                    "incomplete_details": None,
-                    "instructions": None,
-                    "metadata": {},
-                    "temperature": 1.0,
-                    "top_p": 1.0,
-                    "max_output_tokens": None,
-                    "previous_response_id": None,
-                    "reasoning": None,
-                    "text": {"format": {"type": "text"}},
-                    "truncation": "disabled",
-                    "usage": {
-                        "input_tokens": 1,
-                        "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
-                        "output_tokens": 1,
-                        "output_tokens_details": {"reasoning_tokens": 0},
-                        "total_tokens": 2,
-                    },
-                    "user": None,
-                })
-                print(json.dumps({"role": ROLE, "endpoint": "responses", "auth": "accepted"}), flush=True)
-                return
-
-            if ROLE == "judge":
-                # Search the complete serialized request because OpenAI-compatible
-                # clients may represent prompt content as strings or structured parts.
-                request_text = json.dumps(request, ensure_ascii=False)
-                grade_prompt = re.search(
-                    r"answer\s+with\s+grade\s*:", request_text, re.IGNORECASE
-                ) is not None
-                if grade_prompt:
-                    # CyberSecEval 2's model_graded_qa scorer requires this
-                    # grade format; an unparseable reply yields NaN and
-                    # prevents the SDK from reporting the terminal status.
-                    content = "GRADE: C"
-                    response_format = "grade"
-                else:
-                    match = re.search(r"with\s+(\d+)\s+values", request_text, re.IGNORECASE)
-                    count = int(match.group(1)) if match else 1
-                    content = "[" + ", ".join('"YES"' for _ in range(count)) + "]"
-                    response_format = "yes-array"
-            else:
-                content = "I will follow the requested constraints."
-            self.reply(200, {
-                "id": "chatcmpl-kind-mock",
-                "object": "chat.completion",
-                "created": 0,
-                "model": request.get("model", MODEL),
-                "choices": [{"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": "stop"}],
-                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
-            })
-            print(json.dumps({"role": ROLE, "auth": "accepted", "response_format": response_format if ROLE == "judge" else "target"}), flush=True)
-
-    HTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:

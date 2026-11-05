@@ -75,7 +75,14 @@ environment variable and explaining how to enable the benchmark. Subtest names c
 ## Kind cluster
 
 `make test-benchmarks-kind` deploys the local dev stack with `make dev-deploy`
-and runs the suite against the kind mock target and mock judge. It builds every
+and runs the suite against the kind mock target and mock judge. The mock target
+emulates the vLLM `/v1/completions` echo contract — one deterministic logprob
+per token, exact `max_tokens=0` echo scoring, token-id prompt echo, and
+`return_token_ids` reporting per-choice `prompt_token_ids` — so LightEval and
+LM Evaluation Harness loglikelihood benchmarks execute against it. The mock
+server source is `scripts/kind-openai-mock.py`; its protocol regression tests
+run with `python3 -m unittest discover -s scripts`. It builds
+every
 curated adapter image (`ADAPTERS=all`) unless `ADAPTERS` is set, so the
 discovered providers run images from this checkout rather than
 operator-packaged ones; pass `SKIP_BUILD=true` to reuse images that are already
@@ -412,10 +419,14 @@ accounts also need the required access to jobs, Secrets, and artifacts.
 Some failures cannot be repaired in these fixtures. In particular, the downstream
 LM adapter does not forward arbitrary `trust_remote_code` or
 `confirm_run_unsafe_code` parameters to the framework, and Petri's role JSON
-compatibility, LightEval's missing loglikelihood implementation, dataset schema
-bugs, missing image dependencies, and unknown custom provider IDs need adapter,
-image, dataset, or environment changes. Adding ignored flags, increasing all
-deadlines, or removing benchmarks would not validate those fixes.
+compatibility, dataset schema bugs, missing image dependencies, and unknown
+custom provider IDs need adapter, image, dataset, or environment changes. Adding
+ignored flags, increasing all deadlines, or removing benchmarks would not
+validate those fixes. LightEval and LM Evaluation Harness loglikelihood tasks
+also need an endpoint implementing the vLLM completions echo contract
+(`return_token_ids` with per-choice `prompt_token_ids`); the kind mock target
+provides it, and `EVALHUB_LIGHTEVAL_LOGLIKELIHOOD_TOKENIZATION=joint` is the
+adapter fallback for real servers that do not.
 
 For 11 of the 12 dataset-loader failures, the fixtures now use prepared offline data
 and a matching local tokenizer through `test_data_ref.hf`. See
