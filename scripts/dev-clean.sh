@@ -37,8 +37,9 @@ Usage:
   scripts/dev-clean.sh [--delete-cluster]
 
 By default, removes the EvalHub development resources and local image registry
-owned by this script, plus evaluation workloads labeled for evalhub-local, while
-keeping the kind cluster and its private kubeconfig.
+owned by this script, plus evaluation workloads labeled for evalhub-local and
+test-created staging Pods/PVCs/Secrets labeled evalhub-test-e2e, while keeping
+the kind cluster and its private kubeconfig.
 Pass DELETE_CLUSTER=true (or --delete-cluster) to remove the named kind cluster
 as well. Keeping the cluster still deletes active and completed evaluation-job
 workloads belonging to the evalhub-local service. Host images and container
@@ -247,7 +248,7 @@ remove_temporary_registry_tags() {
     [[ "$port" =~ ^[0-9]+$ ]] || continue
     suffix="${suffix#*/}"
     case "$suffix" in
-      evalhub/eval-hub|evalhub/community-inspect|evalhub/community-followbench|evalhub/trustyai-service-operator|evalhub/kind-openai-mock)
+      evalhub/eval-hub|evalhub/community-inspect|evalhub/community-lmes|evalhub/community-lighteval|evalhub/community-ruler|evalhub/community-ifbench|evalhub/community-followbench|evalhub/trustyai-service-operator|evalhub/kind-openai-mock)
         [[ "$tag" == "$IMAGE_TAG" ]] || continue
         ;;
       opendatahub/odh-kube-rbac-proxy)
@@ -407,6 +408,24 @@ delete_evalhub_workloads() {
   done
 }
 
+delete_e2e_test_resources() {
+  local resource names name selector
+  selector='app.kubernetes.io/managed-by=evalhub-test-e2e'
+  for resource in pod pvc secret; do
+    names="$(kubectl --kubeconfig "$KUBECONFIG_FILE" -n "$NAMESPACE" get "$resource" \
+      --selector="$selector" --ignore-not-found \
+      -o 'go-template={{range .items}}{{.metadata.name}}{{"\n"}}{{end}}')" ||
+      fail "Could not list EvalHub e2e test $resource resources in namespace $NAMESPACE."
+    while IFS= read -r name; do
+      [[ -n "$name" ]] || continue
+      log INFO "Deleting interrupted e2e test resource $resource/$name in namespace $NAMESPACE."
+      kubectl --kubeconfig "$KUBECONFIG_FILE" -n "$NAMESPACE" delete "$resource" "$name" \
+        --wait=true --timeout=180s >/dev/null ||
+        fail "Could not delete EvalHub e2e test $resource/$name in namespace $NAMESPACE."
+    done <<<"$names"
+  done
+}
+
 remove_registry_mirror_config() {
   local node nodes
   nodes="$(kind_cmd get nodes --name "$KIND_CLUSTER_NAME")" || fail "Could not list kind nodes for registry mirror cleanup."
@@ -446,6 +465,8 @@ clean_deployment_keep_cluster() {
     log PASS "Removed the EvalHub development resources. Kind cluster '$KIND_CLUSTER_NAME' is retained."
     return
   fi
+
+  delete_e2e_test_resources
 
   # These fixed-name resources were created before the deployment script added
   # ownership annotations. They are safe to recognize only when the namespace,
