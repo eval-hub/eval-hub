@@ -220,6 +220,23 @@ ensure_forced_runtime_matches_owner() {
   fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $other, not $CONTAINER_RUNTIME. Unset CONTAINER_RUNTIME to reuse the engine that owns the cluster, or set CONTAINER_RUNTIME=$other."
 }
 
+# Resolve a runtime name to the engine that actually runs it. The podman-docker
+# package installs a `docker` wrapper that execs podman, so both names reach one
+# engine and that wrapper reports itself through --version. The provider
+# environment, the registry push flags, and the ownership guard all depend on
+# knowing it is really podman, and treating the shim as docker would run kind
+# with the docker provider and push to the plain-HTTP local registry without
+# --tls-verify=false.
+canonical_runtime() {
+  local runtime="$1"
+  if [[ "$runtime" == docker ]] && command -v docker >/dev/null 2>&1 &&
+    docker --version 2>/dev/null | grep -qi podman; then
+    printf 'podman\n'
+  else
+    printf '%s\n' "$runtime"
+  fi
+}
+
 # Select the container runtime used for image builds, the local registry, and
 # the kind nodes. Set CONTAINER_RUNTIME to force a specific runtime. Otherwise an
 # existing KIND_CLUSTER_NAME decides the runtime: kind only lists the clusters
@@ -232,7 +249,7 @@ ensure_forced_runtime_matches_owner() {
 # when the preferred one is not reachable. A forced runtime must own an existing
 # KIND_CLUSTER_NAME (see ensure_forced_runtime_matches_owner).
 detect_container_runtime() {
-  local runtime
+  local runtime canonical
   local -a preferred_runtimes=()
   if uname -r | grep -qiE 'microsoft|wsl'; then
     preferred_runtimes=(docker podman)
@@ -241,6 +258,11 @@ detect_container_runtime() {
   fi
   case "$CONTAINER_RUNTIME" in
     podman|docker)
+      canonical="$(canonical_runtime "$CONTAINER_RUNTIME")"
+      if [[ "$canonical" != "$CONTAINER_RUNTIME" ]]; then
+        log WARN "$CONTAINER_RUNTIME on this machine is the podman CLI shim; using podman for builds, the local registry, and kind."
+        CONTAINER_RUNTIME="$canonical"
+      fi
       need_command "$CONTAINER_RUNTIME"
       "$CONTAINER_RUNTIME" info >/dev/null 2>&1 ||
         fail "$CONTAINER_RUNTIME is installed but not reachable. Start the $CONTAINER_RUNTIME daemon (or podman machine) and retry."
