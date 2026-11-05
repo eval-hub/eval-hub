@@ -212,6 +212,10 @@ ensure_forced_runtime_matches_owner() {
     docker) other=podman ;;
     *) return 0 ;;
   esac
+  # A cluster of this name under the forced engine is reused as-is, so the other
+  # engine owning one too changes nothing: this run creates no cluster and
+  # rewrites no kubeconfig for a cluster it is not using.
+  kind_cluster_in_runtime "$CONTAINER_RUNTIME" && return 0
   kind_cluster_in_runtime "$other" || return 0
   fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $other, not $CONTAINER_RUNTIME. Unset CONTAINER_RUNTIME to reuse the engine that owns the cluster, or set CONTAINER_RUNTIME=$other."
 }
