@@ -174,6 +174,11 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 		}
 	case "ruler":
 		p["num_samples"], p["context_lengths"], p["batch_size"], p["tokens_to_generate"] = 1, []int{4096}, 1, 32
+		// The adapter resolves the synthetic-data tokenizer from parameters.tokenizer_path,
+		// falling back to the model name. Smoke endpoints with a non-Hub model name (such
+		// as the kind mock target) supply one through RULER_TOKENIZER; when the variable
+		// is unset the adapter keeps its model-name fallback.
+		f["tokenizer_path_env"] = "RULER_TOKENIZER"
 	case "tooleval":
 		p["num_tasks"], p["tool_server_url"] = 1, "${TOOL_SERVER_URL}"
 		f["notes"] = "Requires a reachable ToolBench tool server and a model supporting tool calls; preserves the benchmark's default step count."

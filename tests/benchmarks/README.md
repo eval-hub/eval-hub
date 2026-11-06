@@ -89,13 +89,40 @@ built. garak and garak-kfp are not curated adapters, so they keep their
 operator-packaged image. It also mints a short-lived service-account token,
 creates or refreshes the dev-deploy-owned mock-auth Secret (failing if a
 same-named Secret belongs to something else), and exports `JUDGE_MODEL_NAME`,
-`JUDGE_BASE_URL`, and `LM_EVAL_TOKENIZER` so judge-based and LM Evaluation
-Harness benchmarks execute instead of skipping or failing. The Secret contains
+`JUDGE_BASE_URL`, `LM_EVAL_TOKENIZER`, and `RULER_TOKENIZER` so judge-based,
+LM Evaluation Harness, and RULER benchmarks execute instead of skipping or
+failing. The Secret contains
 the primary `api-key` and both `judge_api-key`/`judge_url` and
 `grader_api-key`/`grader_url`. The judge and grader pairs share
 `KIND_BENCHMARK_JUDGE_API_KEY` and `KIND_BENCHMARK_JUDGE_URL`, so both roles use
 the mock judge endpoint. The key is provisioned in the Secret; fixtures do not
 need a `JUDGE_API_KEY` environment variable.
+
+The mock also answers the tool and text contracts that strict scorers parse,
+on both the chat-completions and Responses API endpoints: the structured
+`answer` tool that inspect_scout's `generate_answer` declares (Petri/Bloom
+judges), the tool a request forces through `tool_choice` (inspect_evals'
+`schema_tool_graded_scorer`, for example simpleqa's `submit`), and the text
+shapes CyberSecEval 2 (`GRADE:`), MASK (`Final Answer:`, JSON bounds) and
+agentic-misalignment (`<answer>` tags) require. Arguments and replies are
+synthesized from each request's own declared schema. A plain reply to any of
+these leaves the sample unscored; the resulting `NaN` or `inf` metrics then
+break JSON serialization of the results event, the adapter never reports the
+terminal job status, and the job hangs in `post_processing` until its fixture
+deadline. Requests that declare other tools (agent scaffolds such as
+`submit_understanding`) keep the plain-text reply. Both mock Deployments serve
+requests concurrently (a threaded HTTP server), so one slow or stuck client
+cannot stall the rest of a parallel run.
+
+The single-node kind cluster has roughly 8 GiB of allocatable memory, and
+`dev-deploy` lowers the rendered inspect (8Gi→2Gi) and lighteval (4Gi→2Gi)
+adapter memory requests for that reason; with the default
+`KIND_BENCHMARK_PARALLEL=8`, only about three 2Gi job pods schedule at once
+next to the system pods, and the rest queue until earlier jobs finish. garak
+keeps its packaged 4Gi request and its operator-packaged quay.io image, which
+is not pullable without credentials in the dev cluster, so garak smoke
+benchmarks stay `pending` until their deadline; they need a curated adapter
+image before they can pass in kind.
 
 The default `KIND_BENCHMARK_RUN` selects the
 whole catalog the deployed EvalHub discovers, so every configured provider's
@@ -150,6 +177,12 @@ Supported fixture fields:
 
 - `parameters`: required object of adapter-specific options.
 - `timeout`: required positive Go duration, including submission and polling.
+  The default is `5m`; benchmarks whose datasets are large downloads or whose
+  evaluations are known to exceed that budget carry wider fixture timeouts of
+  15m-20m so a slow-but-working run is not cut off at the deadline. That covers
+  lighteval datasets such as `triviaqa`, inspect `docvqa`, and the RULER
+  variants whose essay haystack downloads 218 Paul Graham essays before data
+  generation starts.
 - `max_length_env`: optional environment variable overriding the integer
   `parameters.max_length`. Unset or empty values keep the fixture's fallback;
   supplied values must be integers greater than one. Values are sent as JSON
@@ -161,6 +194,13 @@ Supported fixture fields:
   staged `/test_data/tokenizer` bundle) always wins. The
   `test-benchmarks-kind` target sets `LM_EVAL_TOKENIZER` because the kind mock
   target model name does not resolve on the Hub.
+- `tokenizer_path_env`: optional environment variable supplying
+  `parameters.tokenizer_path` for providers that generate synthetic data with a
+  tokenizer resolved from that parameter and fall back to the model name, such
+  as RULER. Unset or empty values keep the fixture's fallback, and a
+  `parameters.tokenizer_path` the fixture pins itself always wins. The
+  `test-benchmarks-kind` target sets `RULER_TOKENIZER` for the same
+  non-Hub-model-name reason as `LM_EVAL_TOKENIZER`.
 - `test_data_ref`: optional API `TestDataRef` object for staged test input.
 - `test_data_ref_env`: alternatively, the name of an environment variable containing
   a complete JSON `TestDataRef` object. It must be set when the fixture is used.

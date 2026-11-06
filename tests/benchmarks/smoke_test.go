@@ -173,18 +173,19 @@ func requiredEnv(t *testing.T, key string) string {
 }
 
 type fixture struct {
-	Parameters     map[string]any               `json:"parameters"`
-	MaxLengthEnv   string                       `json:"max_length_env,omitempty"`
-	TokenizerEnv   string                       `json:"tokenizer_env,omitempty"`
-	Timeout        string                       `json:"timeout"`
-	TestDataRef    *api.TestDataRef             `json:"test_data_ref,omitempty"`
-	TestDataRefEnv string                       `json:"test_data_ref_env,omitempty"`
-	HardwareConfig *api.BenchmarkHardwareConfig `json:"hardware_config,omitempty"`
-	Model          *api.ModelRef                `json:"model,omitempty"`
-	Experiment     bool                         `json:"experiment,omitempty"`
-	ExperimentName string                       `json:"experiment_name,omitempty"`
-	Unbounded      bool                         `json:"unbounded,omitempty"`
-	Notes          string                       `json:"notes,omitempty"`
+	Parameters       map[string]any               `json:"parameters"`
+	MaxLengthEnv     string                       `json:"max_length_env,omitempty"`
+	TokenizerEnv     string                       `json:"tokenizer_env,omitempty"`
+	TokenizerPathEnv string                       `json:"tokenizer_path_env,omitempty"`
+	Timeout          string                       `json:"timeout"`
+	TestDataRef      *api.TestDataRef             `json:"test_data_ref,omitempty"`
+	TestDataRefEnv   string                       `json:"test_data_ref_env,omitempty"`
+	HardwareConfig   *api.BenchmarkHardwareConfig `json:"hardware_config,omitempty"`
+	Model            *api.ModelRef                `json:"model,omitempty"`
+	Experiment       bool                         `json:"experiment,omitempty"`
+	ExperimentName   string                       `json:"experiment_name,omitempty"`
+	Unbounded        bool                         `json:"unbounded,omitempty"`
+	Notes            string                       `json:"notes,omitempty"`
 }
 
 // PathEscape encodes '/' and '%' so IDs cannot create directory traversals.
@@ -312,6 +313,17 @@ func loadFixture(path string, lookup func(string) (string, bool)) (fixture, erro
 		if value, ok := lookup(f.TokenizerEnv); ok && strings.TrimSpace(value) != "" {
 			if _, pinned := f.Parameters["tokenizer"]; !pinned {
 				f.Parameters["tokenizer"] = strings.TrimSpace(value)
+			}
+		}
+	}
+	if f.TokenizerPathEnv != "" {
+		// RULER generates its synthetic datasets with a tokenizer resolved from
+		// parameters.tokenizer_path, falling back to the model name. The same
+		// non-Hub model name caveat applies, so let the environment supply a
+		// real tokenizer; a tokenizer the fixture pins always wins.
+		if value, ok := lookup(f.TokenizerPathEnv); ok && strings.TrimSpace(value) != "" {
+			if _, pinned := f.Parameters["tokenizer_path"]; !pinned {
+				f.Parameters["tokenizer_path"] = strings.TrimSpace(value)
 			}
 		}
 	}
