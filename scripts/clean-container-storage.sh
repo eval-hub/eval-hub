@@ -11,6 +11,9 @@ set -Eeuo pipefail
 
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-}"
 KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-evalhub-dev}"
+# The engine dev-deploy recorded for KIND_CLUSTER_NAME (see record_runtime in
+# dev-deploy.sh), so pruning targets the engine that backs the dev stack.
+RUNTIME_STATE_FILE="${XDG_CONFIG_HOME:-${HOME}/.config}/evalhub/kubeconfigs/${KIND_CLUSTER_NAME}.runtime"
 ALL="${ALL:-false}"
 VOLUMES="${VOLUMES:-false}"
 DRY_RUN="${DRY_RUN:-false}"
@@ -40,8 +43,9 @@ so a running kind cluster keeps working.
 
 Inputs (also accepted as environment variables):
   CONTAINER_RUNTIME  container engine to clean (podman or docker; default: the
-                     engine that already owns KIND_CLUSTER_NAME, otherwise podman
-                     when reachable, or docker under WSL)
+                     engine dev-deploy recorded for KIND_CLUSTER_NAME, otherwise
+                     the engine that owns it, otherwise the first reachable
+                     engine, podman before docker)
   KIND_CLUSTER_NAME  cluster used to select that engine (default: evalhub-dev)
   ALL                true to also remove unused (non-dangling) images such as
                      cached base images and previous dev image tags (default:
@@ -93,50 +97,55 @@ kind_cluster_in_runtime() {
   grep -Fqx -- "$KIND_CLUSTER_NAME" <<<"$clusters"
 }
 
-# Select the runtime to clean. Set CONTAINER_RUNTIME to force a specific engine.
-# Otherwise an existing KIND_CLUSTER_NAME decides the runtime, so cleanup targets
-# the engine that backed the deployment even when CONTAINER_RUNTIME was only
-# passed to dev-deploy. With no existing cluster, podman is preferred whenever
-# it is installed and reachable, except under WSL where docker is preferred
-# instead (matching detect_container_runtime in dev-deploy.sh).
+# recorded_runtime prints the engine dev-deploy recorded for KIND_CLUSTER_NAME, if
+# any (see record_runtime in dev-deploy.sh).
+recorded_runtime() {
+  local recorded
+  [[ -f "$RUNTIME_STATE_FILE" ]] || return 1
+  recorded="$(head -n 1 "$RUNTIME_STATE_FILE" 2>/dev/null | tr -d '[:space:]')"
+  case "$recorded" in
+    podman|docker) printf '%s\n' "$recorded" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Select the runtime to clean, in order of authority: an explicit
+# CONTAINER_RUNTIME, the engine dev-deploy recorded for KIND_CLUSTER_NAME (see
+# recorded_runtime), the engine that owns the cluster, and finally the first
+# reachable engine, podman before docker.
 detect_container_runtime() {
-  local runtime
-  local -a preferred_runtimes=()
-  if uname -r | grep -qiE 'microsoft|wsl'; then
-    preferred_runtimes=(docker podman)
+  local runtime recorded
+  if [[ -n "$CONTAINER_RUNTIME" ]]; then
+    case "$CONTAINER_RUNTIME" in
+      podman|docker) ;;
+      *) fail "CONTAINER_RUNTIME must be 'podman' or 'docker'." ;;
+    esac
+    command -v "$CONTAINER_RUNTIME" >/dev/null 2>&1 ||
+      fail "Required command not found: $CONTAINER_RUNTIME"
+    "$CONTAINER_RUNTIME" info >/dev/null 2>&1 ||
+      fail "$CONTAINER_RUNTIME is installed but not reachable. Start the $CONTAINER_RUNTIME daemon (or podman machine) and retry."
+  elif recorded="$(recorded_runtime)"; then
+    CONTAINER_RUNTIME="$recorded"
+    log INFO "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE); pruning $recorded."
   else
-    preferred_runtimes=(podman docker)
-  fi
-  case "$CONTAINER_RUNTIME" in
-    podman|docker)
-      command -v "$CONTAINER_RUNTIME" >/dev/null 2>&1 ||
-        fail "Required command not found: $CONTAINER_RUNTIME"
-      "$CONTAINER_RUNTIME" info >/dev/null 2>&1 ||
-        fail "$CONTAINER_RUNTIME is installed but not reachable. Start the $CONTAINER_RUNTIME daemon (or podman machine) and retry."
-      ;;
-    "")
-      for runtime in "${preferred_runtimes[@]}"; do
-        if kind_cluster_in_runtime "$runtime"; then
+    for runtime in podman docker; do
+      if kind_cluster_in_runtime "$runtime"; then
+        CONTAINER_RUNTIME="$runtime"
+        log INFO "Kind cluster '$KIND_CLUSTER_NAME' exists under $runtime; pruning $runtime."
+        break
+      fi
+    done
+    if [[ -z "$CONTAINER_RUNTIME" ]]; then
+      for runtime in podman docker; do
+        if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
           CONTAINER_RUNTIME="$runtime"
-          log INFO "Kind cluster '$KIND_CLUSTER_NAME' exists under $runtime; cleaning up with $runtime."
           break
         fi
       done
-      if [[ -z "$CONTAINER_RUNTIME" ]]; then
-        for runtime in "${preferred_runtimes[@]}"; do
-          if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
-            CONTAINER_RUNTIME="$runtime"
-            break
-          fi
-        done
-      fi
-      [[ -n "$CONTAINER_RUNTIME" ]] ||
-        fail "Neither podman nor docker is reachable. Install podman (preferred; docker under WSL) and make sure it is running."
-      ;;
-    *)
-      fail "CONTAINER_RUNTIME must be 'podman' or 'docker'."
-      ;;
-  esac
+    fi
+    [[ -n "$CONTAINER_RUNTIME" ]] ||
+      fail "Neither podman nor docker is reachable. Install podman (or docker) and make sure it is running."
+  fi
   log INFO "Using $CONTAINER_RUNTIME as the container runtime."
 }
 

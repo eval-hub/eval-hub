@@ -11,6 +11,9 @@ DELETE_CLUSTER="${DELETE_CLUSTER:-false}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-}"
 KUBECONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/evalhub/kubeconfigs"
 PRIVATE_KUBECONFIG="${KUBECONFIG_DIR}/${KIND_CLUSTER_NAME}.yaml"
+# The engine dev-deploy used for KIND_CLUSTER_NAME, recorded next to the private
+# kubeconfig so cleanup reuses it instead of probing both engines.
+RUNTIME_STATE_FILE="${KUBECONFIG_DIR}/${KIND_CLUSTER_NAME}.runtime"
 KUBECONFIG_FILE=""
 EXPORTED_KUBECONFIG=""
 WORK_DIR=""
@@ -52,14 +55,15 @@ Inputs (also accepted as environment variables):
   IMAGE_TAG          matching dev-deploy image tag (default: kind-<cluster>)
   DELETE_CLUSTER     true to delete that cluster too (default: false)
   CONTAINER_RUNTIME  container engine that owns the registry container and the
-                     temporary image tags (podman or docker; default: the engine
-                     that already owns KIND_CLUSTER_NAME, otherwise podman when
-                     reachable, or docker under WSL). A forced engine must own
-                     KIND_CLUSTER_NAME; otherwise the script fails instead of
+                     temporary image tags (podman or docker). Default: the engine
+                     recorded for KIND_CLUSTER_NAME in
+                     evalhub/kubeconfigs/<cluster>.runtime, otherwise the engine
+                     that owns the cluster, otherwise the first reachable engine
+                     (podman before docker). An explicit value must match the
+                     recorded engine; otherwise the script fails instead of
                      skipping the cluster and removing its kubeconfig. The
                      private kubeconfig is used only when it targets the
                      selected engine's cluster; one pointing at another cluster
-                     (for example the other engine's same-named kind cluster)
                      is preserved, and cleanup uses a temporary exported
                      kubeconfig instead.
 
@@ -144,28 +148,6 @@ kind_cluster_in_runtime() {
   grep -Fqx -- "$KIND_CLUSTER_NAME" <<<"$clusters"
 }
 
-# Fail when a forced CONTAINER_RUNTIME does not own KIND_CLUSTER_NAME while the
-# other container engine does. kind only lists the clusters of the engine it is
-# pointed at, so continuing would report "no cluster", leave the running cluster
-# (and its registry) untouched, and still remove its private kubeconfig.
-# Auto-detection already selects the owning engine, so this guard only applies
-# when CONTAINER_RUNTIME is set explicitly.
-ensure_forced_runtime_matches_owner() {
-  local other
-  case "$CONTAINER_RUNTIME" in
-    podman) other=docker ;;
-    docker) other=podman ;;
-    *) return 0 ;;
-  esac
-  # A cluster of this name under the forced engine is the one being cleaned up,
-  # so the other engine owning one too changes nothing: this run targets the
-  # forced engine's cluster only, and a private kubeconfig that belongs to the
-  # other engine's cluster is preserved rather than used or removed.
-  kind_cluster_in_runtime "$CONTAINER_RUNTIME" && return 0
-  kind_cluster_in_runtime "$other" || return 0
-  fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $other, not $CONTAINER_RUNTIME. Unset CONTAINER_RUNTIME to reuse the engine that owns the cluster, or set CONTAINER_RUNTIME=$other."
-}
-
 # Resolve a runtime name to the engine that actually runs it. The podman-docker
 # package installs a `docker` wrapper that execs podman, so both names reach one
 # engine and that wrapper reports itself through --version. Cleanup removes kind
@@ -181,76 +163,73 @@ canonical_runtime() {
   fi
 }
 
-# Return 0 when any container engine still has a cluster named KIND_CLUSTER_NAME.
-any_runtime_owns_cluster() {
-  local runtime
-  for runtime in podman docker; do
-    if kind_cluster_in_runtime "$runtime"; then
-      return 0
-    fi
-  done
-  return 1
+# recorded_runtime prints the engine dev-deploy recorded for KIND_CLUSTER_NAME, if
+# any (see record_runtime in dev-deploy.sh).
+recorded_runtime() {
+  local recorded
+  [[ -f "$RUNTIME_STATE_FILE" ]] || return 1
+  recorded="$(head -n 1 "$RUNTIME_STATE_FILE" 2>/dev/null | tr -d '[:space:]')"
+  case "$recorded" in
+    podman|docker) printf '%s\n' "$recorded" ;;
+    *) return 1 ;;
+  esac
 }
 
-# Select the container runtime that owns the registry container and the
-# temporary image tags. Set CONTAINER_RUNTIME to force a specific runtime.
-# Otherwise an existing KIND_CLUSTER_NAME decides the runtime, so cleanup always
-# targets the engine that backed the deployment even when CONTAINER_RUNTIME was
-# only passed to dev-deploy. With no existing cluster, Podman is preferred
-# whenever it is installed and reachable, except under WSL where Docker is
-# preferred instead (see detect_container_runtime in dev-deploy.sh). The
-# non-preferred runtime is the fallback when the preferred one is not reachable.
-# A forced runtime must own an existing KIND_CLUSTER_NAME (see
-# ensure_forced_runtime_matches_owner).
+# use_runtime makes ENGINE the selected runtime after checking that it exists and
+# is reachable.
+use_runtime() {
+  local engine
+  engine="$(canonical_runtime "$1")"
+  command -v "$engine" >/dev/null 2>&1 || fail "Required command not found: $engine"
+  "$engine" info >/dev/null 2>&1 ||
+    fail "$engine is installed but not reachable. Start the $engine daemon (or podman machine) and retry."
+  CONTAINER_RUNTIME="$engine"
+}
+
+# Select the container runtime that owns the registry container and the temporary
+# image tags, in order of authority:
+#   1. an explicit CONTAINER_RUNTIME, which has to match the engine dev-deploy
+#      recorded: cleaning the other engine would skip the running cluster and
+#      still remove its kubeconfig;
+#   2. the engine recorded for KIND_CLUSTER_NAME (see recorded_runtime), so
+#      `make dev-clean` after `make dev-deploy` needs no second input;
+#   3. the engine that owns KIND_CLUSTER_NAME, for deployments made before that
+#      record existed;
+#   4. the first reachable engine, podman before docker, so leftover registry
+#      containers and image tags are still removed when no cluster is left.
 detect_container_runtime() {
-  local runtime canonical
-  # Resolve each preferred name to the engine that actually runs it before
-  # probing: under WSL docker is preferred, and a docker that is the
-  # podman-docker shim would otherwise leave cleanup on the docker name, which
-  # owns neither the registry container nor the temporary image tags (see
-  # canonical_runtime).
-  local -a preferred_runtimes=()
-  if uname -r | grep -qiE 'microsoft|wsl'; then
-    preferred_runtimes=("$(canonical_runtime docker)" "$(canonical_runtime podman)")
+  local runtime recorded
+  if [[ -n "$CONTAINER_RUNTIME" ]]; then
+    case "$CONTAINER_RUNTIME" in
+      podman|docker) ;;
+      *) fail "CONTAINER_RUNTIME must be 'podman' or 'docker'." ;;
+    esac
+    if recorded="$(recorded_runtime)" && [[ "$recorded" != "$(canonical_runtime "$CONTAINER_RUNTIME")" ]]; then
+      fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE). Unset CONTAINER_RUNTIME to reuse $recorded, or delete that cluster and its state file before switching to $CONTAINER_RUNTIME."
+    fi
+    use_runtime "$CONTAINER_RUNTIME"
+  elif recorded="$(recorded_runtime)"; then
+    log INFO "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE); cleaning up with $recorded."
+    use_runtime "$recorded"
   else
-    preferred_runtimes=("$(canonical_runtime podman)" "$(canonical_runtime docker)")
-  fi
-  case "$CONTAINER_RUNTIME" in
-    podman|docker)
-      canonical="$(canonical_runtime "$CONTAINER_RUNTIME")"
-      if [[ "$canonical" != "$CONTAINER_RUNTIME" ]]; then
-        log WARN "$CONTAINER_RUNTIME on this machine is the podman CLI shim; cleaning up with podman."
-        CONTAINER_RUNTIME="$canonical"
+    for runtime in podman docker; do
+      if kind_cluster_in_runtime "$runtime"; then
+        CONTAINER_RUNTIME="$runtime"
+        log INFO "Kind cluster '$KIND_CLUSTER_NAME' exists under $runtime; cleaning up with $runtime."
+        break
       fi
-      command -v "$CONTAINER_RUNTIME" >/dev/null 2>&1 ||
-        fail "Required command not found: $CONTAINER_RUNTIME"
-      "$CONTAINER_RUNTIME" info >/dev/null 2>&1 ||
-        fail "$CONTAINER_RUNTIME is installed but not reachable. Start the $CONTAINER_RUNTIME daemon (or podman machine) and retry."
-      ensure_forced_runtime_matches_owner
-      ;;
-    "")
-      for runtime in "${preferred_runtimes[@]}"; do
-        if kind_cluster_in_runtime "$runtime"; then
+    done
+    if [[ -z "$CONTAINER_RUNTIME" ]]; then
+      for runtime in podman docker; do
+        if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
           CONTAINER_RUNTIME="$runtime"
-          log INFO "Kind cluster '$KIND_CLUSTER_NAME' exists under $runtime; cleaning up with $runtime."
           break
         fi
       done
-      if [[ -z "$CONTAINER_RUNTIME" ]]; then
-        for runtime in "${preferred_runtimes[@]}"; do
-          if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
-            CONTAINER_RUNTIME="$runtime"
-            break
-          fi
-        done
-      fi
-      [[ -n "$CONTAINER_RUNTIME" ]] ||
-        fail "Neither podman nor docker is reachable. Install podman (preferred; docker under WSL) and make sure it is running."
-      ;;
-    *)
-      fail "CONTAINER_RUNTIME must be 'podman' or 'docker'."
-      ;;
-  esac
+    fi
+    [[ -n "$CONTAINER_RUNTIME" ]] ||
+      fail "Neither podman nor docker is reachable. Install podman (or docker) and make sure it is running."
+  fi
   log INFO "Using $CONTAINER_RUNTIME as the container runtime."
 }
 
@@ -598,7 +577,7 @@ clean_deployment_keep_cluster() {
 }
 
 delete_cluster() {
-  local remove_kubeconfig=false deleted=false context
+  local remove_kubeconfig=false context
   if [[ -e "$PRIVATE_KUBECONFIG" ]]; then
     if [[ -L "$PRIVATE_KUBECONFIG" ]]; then
       log WARN "The private kubeconfig path is a symlink; it will be preserved."
@@ -607,10 +586,16 @@ delete_cluster() {
       if [[ "$context" != "kind-$KIND_CLUSTER_NAME" ]]; then
         log WARN "The kubeconfig at $PRIVATE_KUBECONFIG has a different context and will be preserved."
       elif ! cluster_exists; then
-        # The selected runtime no longer runs this cluster, so the private
-        # kubeconfig cannot be verified against a freshly exported one. Keep
-        # its removal gated below on no runtime still owning the cluster name.
-        remove_kubeconfig=true
+        # The selected runtime, which the record says deployed this cluster, no
+        # longer runs it, so it cannot come back under this name. Still, only
+        # remove the kubeconfig when its API server is unreachable: a file that
+        # still reaches a live cluster (for example the other engine's same-named
+        # one) belongs to that cluster and is preserved.
+        if kubectl --kubeconfig "$PRIVATE_KUBECONFIG" --request-timeout=5s get --raw /healthz >/dev/null 2>&1; then
+          log WARN "Kind cluster '$KIND_CLUSTER_NAME' is gone from $CONTAINER_RUNTIME, but $PRIVATE_KUBECONFIG still reaches a cluster; preserving it."
+        else
+          remove_kubeconfig=true
+        fi
       else
         # A matching context does not establish kubeconfig ownership either
         # (both runtimes can run same-named kind clusters), so verify the
@@ -638,19 +623,16 @@ delete_cluster() {
   if cluster_exists; then
     log INFO "Deleting the explicitly selected kind cluster '$KIND_CLUSTER_NAME'."
     kind_cmd delete cluster --name "$KIND_CLUSTER_NAME"
-    deleted=true
     log PASS "Deleted kind cluster '$KIND_CLUSTER_NAME'."
   else
     log INFO "Kind cluster '$KIND_CLUSTER_NAME' does not exist under $CONTAINER_RUNTIME; nothing to delete."
   fi
 
   if [[ "$remove_kubeconfig" == true ]]; then
-    if [[ "$deleted" == true ]] || ! any_runtime_owns_cluster; then
-      rm -f -- "$PRIVATE_KUBECONFIG"
-      log INFO "Removed this cluster's private kubeconfig."
-    else
-      log WARN "Kind cluster '$KIND_CLUSTER_NAME' still exists under another container runtime; preserving $PRIVATE_KUBECONFIG."
-    fi
+    # The private kubeconfig and the runtime record describe this cluster under
+    # the selected engine, which no longer exists, so both go with it.
+    rm -f -- "$PRIVATE_KUBECONFIG" "$RUNTIME_STATE_FILE"
+    log INFO "Removed this cluster's private kubeconfig and runtime record."
   fi
   remove_registry
   log PASS "Cluster deletion is complete. Host images and the container runtime build cache are retained."
