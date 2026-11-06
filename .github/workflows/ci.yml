@@ -60,12 +60,10 @@ jobs:
           exit 1
         fi
 
-    - name: Run linter
-      run: make lint
-
-    - name: Run vet
-      run: make vet
-
+    # Linting (`make lint` = go vet + golangci-lint) runs once, in the dedicated
+    # `lint` workflow (.github/workflows/golangci-lint.yml), which lints the
+    # whole repository and fails on any finding. Repeating it here cost ~4.5
+    # minutes of this job's critical path and produced the same verdict.
     - name: Run govulncheck
       run: make govulncheck
 
