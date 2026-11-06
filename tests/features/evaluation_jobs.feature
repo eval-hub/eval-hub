@@ -2124,7 +2124,6 @@ Feature: Evaluation Jobs
   @negative
   @connected
   @hf
-  @ignore # https://gitlab.cee.redhat.com/atris/shepard/-/work_items/274 and requires Jenkins variables TEST_DATA_HF_GATED_REPO_ID, TEST_DATA_HF_REVISION, and TEST_DATA_HF_SUB_PATH
   Scenario:  Evaluation job fails for Gated repository without credentials
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_hf_no_cred.json"
@@ -2134,6 +2133,7 @@ Feature: Evaluation Jobs
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "failed" at path "$.status.state"
+    And the response should contain the value "provide secret_ref with a Hugging Face token" at path "$.status.message.message"
 
   @connected
   @hf
@@ -2158,9 +2158,8 @@ Feature: Evaluation Jobs
 
   @connected
   @hf
-  @ignore  #https://redhat.atlassian.net/browse/RHOAIENG-96323
   @negative
-  # https://gitlab.cee.redhat.com/atris/shepard/-/work_items/274 and requires Jenkins variables TEST_DATA_HF_GATED_REPO_ID, TEST_DATA_HF_REVISION, and TEST_DATA_HF_SUB_PATH
+
   Scenario: Evaluation job fails when the Hugging Face secret reference points to a missing Secret
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_invalid_hf_token.json"
@@ -2170,6 +2169,7 @@ Feature: Evaluation Jobs
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "failed" at path "$.status.state"
+    And the response should contain the value "missing-hf-token" at path "$.status.message.message"
 
   @connected
   @hf
