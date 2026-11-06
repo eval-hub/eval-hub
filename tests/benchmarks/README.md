@@ -44,8 +44,10 @@ cluster routes with untrusted certificates. Identity headers are not forwarded t
 
 Default concurrency is **2 evaluation jobs across all providers**. Each job uses
 its fixture deadline (initially five minutes), and the suite has a 30-minute
-deadline. All 341 benchmarks can take longer than 30 minutes even with tiny inputs:
-select a provider or benchmark first, or increase the suite deadline deliberately.
+deadline. The catalog this checkout deploys is 307 benchmarks, 285 of which
+submit a job (the rest skip for a missing fixture or a missing input), and a full
+sweep can take longer than 30 minutes even with tiny inputs: select a provider or
+benchmark first, or increase the suite deadline deliberately.
 
 ```bash
 make test-benchmarks BENCHMARK_RUN='TestBenchmarkSmoke/lm_evaluation_harness/arc_easy$'
@@ -125,6 +127,31 @@ not a curated adapter, so it runs the operator-packaged
 the whole budget. With its packaged 4Gi request no garak job pod is ever
 admitted alongside the other providers, so every garak benchmark stays
 `pending` until its deadline; that is why `dev-deploy` lowers it too.
+
+Container storage is the other hard bound on this cluster, and unlike memory it
+fails in ways that look like adapter bugs. Every `dev-deploy` run rebuilds the
+curated adapter images and pushes copies into the local registry and the kind
+node, so repeated runs fill the node's 100GB overlay. Past that point image
+unpacking and dataset downloads fail with `no space left on device`: LightEval's
+dataset builder surfaces `OSError: [Errno 28] No space left on device` (observed
+for `lighteval/mmlu` and `lighteval/knowledge`), and job pods report
+`Failed to pull image … no space left on device`. Check free space before a full
+run and reclaim it when it is low:
+
+```bash
+make clean-container-storage DRY_RUN=true            # print the commands only
+make clean-container-storage ALL=true VOLUMES=true   # also drop unused images and volumes
+```
+
+Images and volumes used by the running kind node and the local registry are
+never removed; `make dev-clean DELETE_CLUSTER=true` releases those.
+
+A fixture deadline also counts the time a job spends queued. On this node a job
+that never gets a scheduling slot fails with
+`context deadline exceeded; last status: {"state":"pending"}` instead of running,
+so a full run at the default `KIND_BENCHMARK_PARALLEL=8` reports benchmarks that
+never started. Size the run (see below) rather than widening every fixture
+deadline, which hides the queueing instead of fixing it.
 
 The default `KIND_BENCHMARK_RUN` selects the
 whole catalog the deployed EvalHub discovers, so every configured provider's
@@ -483,10 +510,12 @@ SCROLLS adapter also needs to handle its metric cache on a read-only data mount.
 
 A full-catalog run also exercises benchmarks whose prerequisites this suite
 cannot supply, so its residual failures are expected and are not fixture
-regressions. Each entry needs a change outside `testdata/`; recording them here
-is what lets a later run be read at a glance. Adding ignored flags, widening
-every deadline, or dropping the benchmark would hide the defect rather than
-track it.
+regressions. Each entry in the first table needs a change outside `testdata/`;
+recording them here is what lets a later run be read at a glance. Adding ignored
+flags, widening every deadline, or dropping the benchmark would hide the defect
+rather than track it. Environment failures are not defects and are not listed
+here: a full node disk, and a job that exhausts its fixture deadline while still
+queued, are described under **Run** above.
 
 | Benchmarks | Observed failure | Needs |
 | --- | --- | --- |
@@ -495,10 +524,24 @@ track it.
 | LM `humaneval_instruct` | `Evaluation failed: 'humaneval_instruct'` (unregistered task name) | LM Evaluation Harness task/alias resolution |
 | LM `tinyTruthfulQA` | `index 1 is out of bounds for axis 0 with size 1` | LM Evaluation Harness metric that assumes more than the one sample this fixture requests |
 | LM `scrolls_qasper`, `cruxeval_output` | SCROLLS metric cache on a read-only `/test_data`; `confirm_run_unsafe_code` not forwarded | Adapter support (see the Qasper note in `offline/README.md`) |
-| LM `paloma_wikitext_103`, `leaderboard_gpqa`; Inspect `gaia`, `hle` | gated HuggingFace dataset | Dataset access plus an `hf-token` key in the model auth Secret |
+| LM `paloma_wikitext_103`, `leaderboard_gpqa`; LightEval `gpqa:diamond`; Inspect `gaia`, `hle` | gated HuggingFace dataset (`Idavidrein/gpqa`, `cais/hle`, …) | Dataset access plus an `hf-token` key in the model auth Secret |
 | Inspect `swe-bench`, `bigcodebench` | missing `swebench` optional dependency; no `docker` binary | Inspect adapter image |
-| Inspect `cybench`, `cybergym`, `theagentcompany` | `ModuleNotFoundError: No module named 'inspect_cyber'` | Inspect adapter image |
+| Inspect `cybench`, `theagentcompany` | `ModuleNotFoundError: No module named 'inspect_cyber'` | Inspect adapter image |
 | Inspect `agentdojo` | `ImportError: email-validator is not installed` | Inspect adapter image |
 | Inspect `strong-reject` | `parameters.grader_model requires OPENAI_JUDGE_API_KEY in the adapter environment` | Inspect adapter image that routes `grader_model` through the judge Secret pair |
 | Inspect `gdm-stealth` | sample setup script cannot create `/home/agent` (permission denied) | Task-specific sandbox user or image |
 | Inspect `gdm-self-proliferation` | upstream `secrets.zip` returns HTTP 404 from GitHub | Network access and an inspect-evals release that ships the fixture |
+
+`cybergym` imports the same `inspect_cyber` module as `cybench` and
+`theagentcompany`, but the last full run only observed it `pending` until its
+fixture deadline, so its failure mode on this cluster is inferred from that
+module rather than reproduced. Re-check it once the queueing above is fixed.
+
+Two failures are recorded separately because they may be fixture-level rather
+than adapter, image, or dataset defects, and neither has been checked against the
+task list shipped in inspect-evals v0.26.0:
+
+| Benchmarks | Observed failure | Suspected cause |
+| --- | --- | --- |
+| Inspect `mbpp` | `Error: No inspect tasks were found at the specified paths` | No task resolves for this benchmark ID. Most `inspect/*` fixtures carry no `parameters.task` and rely on the adapter mapping the ID to an inspect-evals task, so compare with a fixture that pins one (`inspect/arc` pins `inspect_evals/arc_easy`) and pin the MBPP task name before treating this as an image defect. |
+| Inspect `bloom-sycophancy` | `ValueError: The specified dataset is empty (has no samples)` | The Bloom pipeline generated no scenarios. This fixture sets neither `behavior_dir` nor the `bloom_template` its catalog description names (`delusion_sycophancy`); pin the template first. |
