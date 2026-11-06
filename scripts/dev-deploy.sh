@@ -826,6 +826,27 @@ set_inspect_provider_memory_for_kind() {
   mv -- "$output" "$file"
 }
 
+# The lighteval adapter's packaged 4Gi request has the same single-node kind
+# problem: next to the system pods it allows only one lighteval job pod at a
+# time, so queued smoke jobs sit Pending until their fixture deadline expires
+# while inspect jobs (already lowered to 2Gi) hold the memory. Lower the
+# request and limit in the rendered provider ConfigMap so lighteval smoke jobs
+# schedule alongside inspect jobs; the packaged catalog keeps its production
+# values.
+set_lighteval_provider_memory_for_kind() {
+  local file="$1" output="$WORK_DIR/provider-lighteval.yaml.tmp"
+  local requests limits
+  requests="$(grep -Ec '^[[:space:]]*memory_request: 4Gi[[:space:]]*$' "$file" || true)"
+  limits="$(grep -Ec '^[[:space:]]*memory_limit: 8Gi[[:space:]]*$' "$file" || true)"
+  [[ "$requests" == 1 && "$limits" == 1 ]] ||
+    fail "Expected one lighteval memory_request of 4Gi and one memory_limit of 8Gi in $file."
+  sed -E \
+    -e 's/^([[:space:]]*)memory_request: 4Gi[[:space:]]*$/\1memory_request: 2Gi/' \
+    -e 's/^([[:space:]]*)memory_limit: 8Gi[[:space:]]*$/\1memory_limit: 4Gi/' \
+    "$file" >"$output"
+  mv -- "$output" "$file"
+}
+
 make_certificate() {
   local directory="$1" name="$2" common_name="$3" sans="$4" config
   config="$directory/$name.cnf"
@@ -965,6 +986,9 @@ render_operator_overlay() {
     set_provider_image_pull_policy "$config_root/configmaps/evalhub/$provider_config" "$image_parameter"
     if [[ "$adapter" == inspect ]]; then
       set_inspect_provider_memory_for_kind "$config_root/configmaps/evalhub/$provider_config"
+    fi
+    if [[ "$adapter" == lighteval ]]; then
+      set_lighteval_provider_memory_for_kind "$config_root/configmaps/evalhub/$provider_config"
     fi
   done
   replace_env_value "$params" kube-rbac-proxy "localhost:${REGISTRY_PORT}/opendatahub/odh-kube-rbac-proxy:odh-stable"
