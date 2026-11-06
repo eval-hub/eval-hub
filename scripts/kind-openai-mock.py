@@ -16,10 +16,11 @@ for example simpleqa's ``submit``), are answered with a single tool call whose
 arguments conform to the tool's own JSON schema. Text-graded prompts get the
 reply shape their scorer parses (CyberSecEval 2's ``GRADE:`` letters, MASK's
 ``Final Answer:`` letters and JSON bounds, agentic-misalignment's <answer>
-tags). A plain-text reply to any of these leaves the sample unscored, the NaN
-metrics that follow break JSON serialization of the results event, and the job
-then never reports its terminal status and hangs in post_processing until its
-deadline.
+tags, both for its blackmail yes/no classifier and its three-category
+deliberation classifier). A plain-text reply to any of these leaves the sample
+unscored, the NaN metrics that follow break JSON serialization of the results
+event, and the job then never reports its terminal status and hangs in
+post_processing until its deadline.
 
 Protocol regression tests: scripts/test_kind_openai_mock.py, run with
 `make test-scripts` from the repository root.
@@ -87,22 +88,31 @@ def graded_text_response(request_text):
     break JSON serialization of the results event, so the adapter never reports
     the terminal job status and the job hangs in post_processing until its
     fixture deadline. Order matters: each pattern is more specific than the
-    next (MASK's prompts mention both "Final Answer" and <answer> tags).
+    next, and several prompts share the "final answer" and <answer> wording
+    of the benchmarks below.
     """
+    if re.search(r"deliberates_thinks_(?:eval|real)|no_deliberation", request_text, re.IGNORECASE):
+        # agentic-misalignment's eval_awareness_scorer (the DeliberationClassifier)
+        # asks for one of three categories inside <answer> tags and raises
+        # ValueError on anything else, including the yes/no reply its blackmail
+        # scorer wants. Answer with the category that claims no deliberation.
+        return "<answer>no_deliberation</answer>", "deliberation-answer"
     if re.search(r"answer\s+with\s+grade\s*:|GRADE\s*:", request_text, re.IGNORECASE):
         # CyberSecEval 2's model_graded_qa templates (interpreter abuse and
         # prompt injection) require a "GRADE: <letter>" reply.
         return "GRADE: C", "grade"
-    if re.search(r"final\s+answer.{0,200}<answer>", request_text, re.IGNORECASE):
-        # MASK's binary judges parse "Final Answer: <A/B/C/D>".
-        return "Final Answer: A", "final-answer"
     if "lower_bound" in request_text and "upper_bound" in request_text:
         # MASK's numerical judge parses JSON bounds. Null bounds are its
         # documented refusal shape, but a null (empty) estimate makes MASK's
         # accuracy normalisation divide by zero, and the resulting inf breaks
         # JSON serialization of the results event exactly like NaN does, so
-        # report a finite, non-degenerate interval instead.
+        # report a finite, non-degenerate interval instead. This prompt also
+        # says "focus on its final answer", so its JSON keys must be matched
+        # before the multiple-choice phrasing below.
         return '{"lower_bound": 0.0, "upper_bound": 1.0}', "bounds-json"
+    if re.search(r"final\s+answer.{0,200}<answer>", request_text, re.IGNORECASE):
+        # MASK's binary judges parse "Final Answer: <A/B/C/D>".
+        return "Final Answer: A", "final-answer"
     if "<answer>" in request_text:
         # agentic-misalignment's blackmail classifier parses <answer> tags.
         return "<answer>no</answer>", "answer-tag"

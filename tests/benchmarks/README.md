@@ -82,17 +82,16 @@ per token, exact `max_tokens=0` echo scoring, token-id prompt echo, and
 LM Evaluation Harness loglikelihood benchmarks execute against it. The mock
 server source is `scripts/kind-openai-mock.py`; its protocol regression tests
 run with `make test-scripts`. It builds every curated adapter image
-(`ADAPTERS=all`) unless `ADAPTERS` is set, so the
-discovered providers run images from this checkout rather than
-operator-packaged ones; pass `SKIP_BUILD=true` to reuse images that are already
-built. garak and garak-kfp are not curated adapters, so they keep their
-operator-packaged image. It also mints a short-lived service-account token,
-creates or refreshes the dev-deploy-owned mock-auth Secret (failing if a
-same-named Secret belongs to something else), and exports `JUDGE_MODEL_NAME`,
-`JUDGE_BASE_URL`, `LM_EVAL_TOKENIZER`, and `RULER_TOKENIZER` so judge-based,
-LM Evaluation Harness, and RULER benchmarks execute instead of skipping or
-failing. The Secret contains
-the primary `api-key` and both `judge_api-key`/`judge_url` and
+(`ADAPTERS=all`) unless `ADAPTERS` is set, so the discovered providers run
+images from this checkout rather than operator-packaged ones; pass
+`SKIP_BUILD=true` to reuse images that are already built. garak and garak-kfp
+are not curated adapters, so they keep their operator-packaged image. It also
+mints a short-lived service-account token, creates or refreshes the
+dev-deploy-owned mock-auth Secret (failing if a same-named Secret belongs to
+something else), and exports `JUDGE_MODEL_NAME`, `JUDGE_BASE_URL`,
+`LM_EVAL_TOKENIZER`, and `RULER_TOKENIZER` so judge-based, LM Evaluation
+Harness, and RULER benchmarks execute instead of skipping or failing. The
+Secret contains the primary `api-key` and both `judge_api-key`/`judge_url` and
 `grader_api-key`/`grader_url`. The judge and grader pairs share
 `KIND_BENCHMARK_JUDGE_API_KEY` and `KIND_BENCHMARK_JUDGE_URL`, so both roles use
 the mock judge endpoint. The key is provisioned in the Secret; fixtures do not
@@ -104,10 +103,11 @@ on both the chat-completions and Responses API endpoints: the structured
 judges), the tool a request forces through `tool_choice` (inspect_evals'
 `schema_tool_graded_scorer`, for example simpleqa's `submit`), and the text
 shapes CyberSecEval 2 (`GRADE:`), MASK (`Final Answer:`, JSON bounds) and
-agentic-misalignment (`<answer>` tags) require. Arguments and replies are
-synthesized from each request's own declared schema. A plain reply to any of
-these leaves the sample unscored; the resulting `NaN` or `inf` metrics then
-break JSON serialization of the results event, the adapter never reports the
+agentic-misalignment (its blackmail classifier's `<answer>yes|no</answer>` and
+its deliberation classifier's three-category `<answer>`) require. Arguments and
+replies are synthesized from each request's own declared schema. A plain reply
+to any of these leaves the sample unscored; the resulting `NaN` or `inf` metrics
+then break JSON serialization of the results event, the adapter never reports the
 terminal job status, and the job hangs in `post_processing` until its fixture
 deadline. Requests that declare other tools (agent scaffolds such as
 `submit_understanding`) keep the plain-text reply. Both mock Deployments serve
@@ -115,14 +115,16 @@ requests concurrently (a threaded HTTP server), so one slow or stuck client
 cannot stall the rest of a parallel run.
 
 The single-node kind cluster has roughly 8 GiB of allocatable memory, and
-`dev-deploy` lowers the rendered inspect (8Gi→2Gi) and lighteval (4Gi→2Gi)
-adapter memory requests for that reason; with the default
+`dev-deploy` lowers the rendered inspect (8Gi→2Gi), lighteval (4Gi→2Gi) and
+garak (4Gi→2Gi) provider memory requests for that reason; with the default
 `KIND_BENCHMARK_PARALLEL=8`, only about three 2Gi job pods schedule at once
-next to the system pods, and the rest queue until earlier jobs finish. garak
-keeps its packaged 4Gi request and its operator-packaged quay.io image, which
-is not pullable without credentials in the dev cluster, so garak smoke
-benchmarks stay `pending` until their deadline; they need a curated adapter
-image before they can pass in kind.
+next to the system pods, and the rest queue until earlier jobs finish. garak is
+not a curated adapter, so it runs the operator-packaged
+`quay.io/trustyai/trustyai-garak-lls-provider-dsp` image: it is public, about
+950MB, and its fixtures carry a 15m deadline so the first pull does not consume
+the whole budget. With its packaged 4Gi request no garak job pod is ever
+admitted alongside the other providers, so every garak benchmark stays
+`pending` until its deadline; that is why `dev-deploy` lowers it too.
 
 The default `KIND_BENCHMARK_RUN` selects the
 whole catalog the deployed EvalHub discovers, so every configured provider's
@@ -136,9 +138,9 @@ kind cluster. The run mints one ServiceAccount token and reuses it for every
 request, so `KIND_BENCHMARK_TOKEN_DURATION` defaults to
 `KIND_BENCHMARK_TIMEOUT` plus `KIND_BENCHMARK_TOKEN_MARGIN` (1h) rather than a
 fixed hour a long run outlives. The token is minted before the suite's
-gotestsum install and test compilation, so an explicit token duration must cover
-`KIND_BENCHMARK_TIMEOUT` plus `KIND_BENCHMARK_SETUP_MARGIN` (15m); a shorter one
-fails before the deployment builds start.
+gotestsum install and test compilation, so an explicit token duration must
+cover `KIND_BENCHMARK_TIMEOUT` plus `KIND_BENCHMARK_SETUP_MARGIN` (15m); a
+shorter one fails before the deployment builds start.
 
 ## Fixtures
 
@@ -476,3 +478,27 @@ requirements, and `LM_EVAL_OFFLINE_HF_REPO_ID` / `LM_EVAL_OFFLINE_HF_REVISION`
 inputs. Point these at the prepared bundle, not the original dataset repository.
 Qasper data is included in the bundle, but its job remains unchanged because the
 SCROLLS adapter also needs to handle its metric cache on a read-only data mount.
+
+## Known failures that need adapter, image, or dataset changes
+
+A full-catalog run also exercises benchmarks whose prerequisites this suite
+cannot supply, so its residual failures are expected and are not fixture
+regressions. Each entry needs a change outside `testdata/`; recording them here
+is what lets a later run be read at a glance. Adding ignored flags, widening
+every deadline, or dropping the benchmark would hide the defect rather than
+track it.
+
+| Benchmarks | Observed failure | Needs |
+| --- | --- | --- |
+| LM `blimp` and its 14 `blimp_*` tasks, `truthfulqa_mc1`, `lambada_standard_cloze_yaml` | `Invalid HF URI 'hf://datasets/blimp@<sha>/.huggingface.yaml'. Repository id must be 'namespace/name', got 'blimp'` | Adapter support for lm-eval's legacy bare dataset paths (`blimp`, `truthful_qa`, `lambada`), or prepared offline data as above |
+| LM `humaneval`, `mbpp`, `careqa_open_perplexity` | `module 'huggingface_hub.hf_api' has no attribute 'HfFolder'` | LM Evaluation Harness image dependency pin |
+| LM `humaneval_instruct` | `Evaluation failed: 'humaneval_instruct'` (unregistered task name) | LM Evaluation Harness task/alias resolution |
+| LM `tinyTruthfulQA` | `index 1 is out of bounds for axis 0 with size 1` | LM Evaluation Harness metric that assumes more than the one sample this fixture requests |
+| LM `scrolls_qasper`, `cruxeval_output` | SCROLLS metric cache on a read-only `/test_data`; `confirm_run_unsafe_code` not forwarded | Adapter support (see the Qasper note in `offline/README.md`) |
+| LM `paloma_wikitext_103`, `leaderboard_gpqa`; Inspect `gaia`, `hle` | gated HuggingFace dataset | Dataset access plus an `hf-token` key in the model auth Secret |
+| Inspect `swe-bench`, `bigcodebench` | missing `swebench` optional dependency; no `docker` binary | Inspect adapter image |
+| Inspect `cybench`, `cybergym`, `theagentcompany` | `ModuleNotFoundError: No module named 'inspect_cyber'` | Inspect adapter image |
+| Inspect `agentdojo` | `ImportError: email-validator is not installed` | Inspect adapter image |
+| Inspect `strong-reject` | `parameters.grader_model requires OPENAI_JUDGE_API_KEY in the adapter environment` | Inspect adapter image that routes `grader_model` through the judge Secret pair |
+| Inspect `gdm-stealth` | sample setup script cannot create `/home/agent` (permission denied) | Task-specific sandbox user or image |
+| Inspect `gdm-self-proliferation` | upstream `secrets.zip` returns HTTP 404 from GitHub | Network access and an inspect-evals release that ships the fixture |
