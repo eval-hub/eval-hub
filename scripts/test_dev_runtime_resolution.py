@@ -30,44 +30,25 @@ import tempfile
 import unittest
 
 SCRIPTS_DIR = pathlib.Path(__file__).resolve().parent
+LIB_PATH = SCRIPTS_DIR / "lib" / "dev-runtime.sh"
 
-# The functions each script needs for its runtime resolution, extracted from the
-# script itself so the tests cannot drift from the implementation.
+# The runtime selection helpers live in scripts/lib/dev-runtime.sh; each script
+# keeps only its own detect_container_runtime policy, which is what the
+# per-script lists below extract. Both are read from the real files so the tests
+# cannot drift from the implementation.
+LIB_FUNCTIONS = [
+    "kind_cmd",
+    "canonical_runtime",
+    "kind_cluster_in_runtime",
+    "recorded_runtime",
+    "record_runtime",
+    "use_runtime",
+]
 SCRIPT_FUNCTIONS = {
-    "dev-deploy.sh": [
-        "log",
-        "fail",
-        "need_command",
-        "kind_cluster_in_runtime",
-        "canonical_runtime",
-        "recorded_runtime",
-        "use_runtime",
-        "detect_container_runtime",
-    ],
-    "dev-clean.sh": [
-        "log",
-        "fail",
-        "kind_cluster_in_runtime",
-        "canonical_runtime",
-        "recorded_runtime",
-        "use_runtime",
-        "detect_container_runtime",
-    ],
-    "dev-demo.sh": [
-        "log",
-        "fail",
-        "need_command",
-        "kind_cluster_in_runtime",
-        "recorded_runtime",
-        "detect_container_runtime",
-    ],
-    "clean-container-storage.sh": [
-        "log",
-        "fail",
-        "kind_cluster_in_runtime",
-        "recorded_runtime",
-        "detect_container_runtime",
-    ],
+    "dev-deploy.sh": ["log", "fail", "need_command", "detect_container_runtime"],
+    "dev-clean.sh": ["log", "fail", "detect_container_runtime"],
+    "dev-demo.sh": ["log", "fail", "need_command", "detect_container_runtime"],
+    "clean-container-storage.sh": ["log", "fail", "detect_container_runtime"],
 }
 
 CLUSTER = "probe-cluster"
@@ -102,13 +83,13 @@ exit 0
 """
 
 
-def extract_functions(script, names):
-    """Return the source of `names` from `script`, comments included."""
-    lines = (SCRIPTS_DIR / script).read_text().splitlines()
+def extract_functions(path, names):
+    """Return the source of `names` from `path`, comments included."""
+    lines = pathlib.Path(path).read_text().splitlines()
     blocks = []
     for name in names:
         start = next((i for i, line in enumerate(lines) if re.match(rf"^{name}\(\) \{{", line)), None)
-        assert start is not None, f"{name}() not found in scripts/{script}"
+        assert start is not None, f"{name}() not found in {path}"
         while start > 0 and lines[start - 1].startswith("#"):
             start -= 1
         end = start
@@ -152,7 +133,8 @@ class RuntimeResolutionTestCase(unittest.TestCase):
             f"KIND_CLUSTER_NAME={CLUSTER}\n"
             f'KUBECONFIG_DIR="{self.work_dir}"\n'
             f'RUNTIME_STATE_FILE="{state_path}"\n'
-            f"{extract_functions(script, SCRIPT_FUNCTIONS[script])}\n"
+            f"{extract_functions(LIB_PATH, LIB_FUNCTIONS)}\n"
+            f"{extract_functions(SCRIPTS_DIR / script, SCRIPT_FUNCTIONS[script])}\n"
             "detect_container_runtime\n"
             'printf "RESULT=%s\\n" "$CONTAINER_RUNTIME"\n'
         )
@@ -272,8 +254,6 @@ class StorageCleanupResolutionTests(RuntimeResolutionTestCase):
         self.assert_resolves("clean-container-storage.sh", "docker", podman_reachable=False)
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 class RecordRoundTripTests(RuntimeResolutionTestCase):
     def test_recorded_engine_round_trips(self):
@@ -289,7 +269,8 @@ class RecordRoundTripTests(RuntimeResolutionTestCase):
             'CONTAINER_RUNTIME="docker"\n'
             f"KIND_CLUSTER_NAME={CLUSTER}\n"
             f'RUNTIME_STATE_FILE="{state_path}"\n'
-            f"{extract_functions('dev-deploy.sh', ['log', 'fail', 'recorded_runtime', 'record_runtime'])}\n"
+            f"{extract_functions(SCRIPTS_DIR / 'dev-deploy.sh', ['log', 'fail'])}\n"
+            f"{extract_functions(LIB_PATH, ['recorded_runtime', 'record_runtime'])}\n"
             "record_runtime\n"
             'printf "READ=%s\\n" "$(recorded_runtime)"\n'
         )
@@ -303,3 +284,7 @@ class RecordRoundTripTests(RuntimeResolutionTestCase):
         self.assertIn("READ=docker", proc.stdout)
         self.assertEqual(state_path.read_text(), "docker\n")
         self.assertEqual(oct(state_path.stat().st_mode & 0o777), "0o600")
+
+
+if __name__ == "__main__":
+    unittest.main()

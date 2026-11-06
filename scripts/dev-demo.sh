@@ -5,6 +5,10 @@
 set -Eeuo pipefail
 umask 077
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Runtime selection helpers, shared with the other dev scripts.
+. "${SCRIPT_DIR}/lib/dev-runtime.sh"
+
 KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-evalhub-dev}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-}"
 EVALHUB_HOST_PORT="${EVALHUB_HOST_PORT:-18443}"
@@ -91,47 +95,6 @@ validate_inputs() {
   [[ -n "$DEMO_SOURCE_COLLECTION_ID" ]] || fail "DEMO_SOURCE_COLLECTION_ID must not be empty."
   [[ "$API_BASE_URL" =~ ^https://(127\.0\.0\.1|localhost)(:[0-9]{1,5})?$ ]] ||
     fail "EVALHUB_API_BASE_URL must be an HTTPS localhost URL, for example https://127.0.0.1:18443."
-}
-
-kind_cmd() {
-  if [[ "$CONTAINER_RUNTIME" == podman ]]; then
-    KIND_EXPERIMENTAL_PROVIDER=podman kind "$@"
-  else
-    env -u KIND_EXPERIMENTAL_PROVIDER kind "$@"
-  fi
-}
-
-# Return 0 when KIND_CLUSTER_NAME already exists under the given container
-# runtime, using the kind provider that runtime requires. A runtime that is not
-# installed or not reachable cannot own a cluster, so it reports false.
-kind_cluster_in_runtime() {
-  local runtime="$1" clusters
-  command -v "$runtime" >/dev/null 2>&1 || return 1
-  "$runtime" info >/dev/null 2>&1 || return 1
-  case "$runtime" in
-    podman)
-      clusters="$(KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters 2>/dev/null || true)"
-      ;;
-    docker)
-      clusters="$(env -u KIND_EXPERIMENTAL_PROVIDER kind get clusters 2>/dev/null || true)"
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-  grep -Fqx -- "$KIND_CLUSTER_NAME" <<<"$clusters"
-}
-
-# recorded_runtime prints the engine dev-deploy recorded for KIND_CLUSTER_NAME, if
-# any (see record_runtime in dev-deploy.sh).
-recorded_runtime() {
-  local recorded
-  [[ -f "$RUNTIME_STATE_FILE" ]] || return 1
-  recorded="$(head -n 1 "$RUNTIME_STATE_FILE" 2>/dev/null | tr -d '[:space:]')"
-  case "$recorded" in
-    podman|docker) printf '%s\n' "$recorded" ;;
-    *) return 1 ;;
-  esac
 }
 
 # Select the container runtime that backs the kind cluster so kind queries the

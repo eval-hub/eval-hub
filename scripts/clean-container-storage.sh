@@ -9,6 +9,10 @@
 # This script removes that unreferenced data for podman or Docker.
 set -Eeuo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Runtime selection helpers, shared with the other dev scripts.
+. "${SCRIPT_DIR}/lib/dev-runtime.sh"
+
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-}"
 KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-evalhub-dev}"
 # The engine dev-deploy recorded for KIND_CLUSTER_NAME (see record_runtime in
@@ -75,40 +79,6 @@ DRY_RUN=true reports the stopped containers without stopping.
 USAGE
 }
 
-# Return 0 when KIND_CLUSTER_NAME exists under the given container runtime,
-# using the kind provider that runtime requires. A runtime that is not installed
-# or not reachable cannot own a cluster, so it reports false.
-kind_cluster_in_runtime() {
-  local runtime="$1" clusters
-  command -v kind >/dev/null 2>&1 || return 1
-  command -v "$runtime" >/dev/null 2>&1 || return 1
-  "$runtime" info >/dev/null 2>&1 || return 1
-  case "$runtime" in
-    podman)
-      clusters="$(KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters 2>/dev/null || true)"
-      ;;
-    docker)
-      clusters="$(env -u KIND_EXPERIMENTAL_PROVIDER kind get clusters 2>/dev/null || true)"
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-  grep -Fqx -- "$KIND_CLUSTER_NAME" <<<"$clusters"
-}
-
-# recorded_runtime prints the engine dev-deploy recorded for KIND_CLUSTER_NAME, if
-# any (see record_runtime in dev-deploy.sh).
-recorded_runtime() {
-  local recorded
-  [[ -f "$RUNTIME_STATE_FILE" ]] || return 1
-  recorded="$(head -n 1 "$RUNTIME_STATE_FILE" 2>/dev/null | tr -d '[:space:]')"
-  case "$recorded" in
-    podman|docker) printf '%s\n' "$recorded" ;;
-    *) return 1 ;;
-  esac
-}
-
 # Select the runtime to clean, in order of authority: an explicit
 # CONTAINER_RUNTIME, the engine dev-deploy recorded for KIND_CLUSTER_NAME (see
 # recorded_runtime), the engine that owns the cluster, and finally the first
@@ -120,33 +90,34 @@ detect_container_runtime() {
       podman|docker) ;;
       *) fail "CONTAINER_RUNTIME must be 'podman' or 'docker'." ;;
     esac
-    command -v "$CONTAINER_RUNTIME" >/dev/null 2>&1 ||
-      fail "Required command not found: $CONTAINER_RUNTIME"
-    "$CONTAINER_RUNTIME" info >/dev/null 2>&1 ||
-      fail "$CONTAINER_RUNTIME is installed but not reachable. Start the $CONTAINER_RUNTIME daemon (or podman machine) and retry."
-  elif recorded="$(recorded_runtime)"; then
-    CONTAINER_RUNTIME="$recorded"
-    log INFO "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE); pruning $recorded."
-  else
-    for runtime in podman docker; do
-      if kind_cluster_in_runtime "$runtime"; then
-        CONTAINER_RUNTIME="$runtime"
-        log INFO "Kind cluster '$KIND_CLUSTER_NAME' exists under $runtime; pruning $runtime."
-        break
-      fi
-    done
-    if [[ -z "$CONTAINER_RUNTIME" ]]; then
-      for runtime in podman docker; do
-        if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
-          CONTAINER_RUNTIME="$runtime"
-          break
-        fi
-      done
+    if recorded="$(recorded_runtime)" && [[ "$recorded" != "$(canonical_runtime "$CONTAINER_RUNTIME")" ]]; then
+      log WARN "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE); pruning $recorded instead of $CONTAINER_RUNTIME."
+      use_runtime "$recorded"
+      return 0
     fi
-    [[ -n "$CONTAINER_RUNTIME" ]] ||
-      fail "Neither podman nor docker is reachable. Install podman (or docker) and make sure it is running."
+    use_runtime "$CONTAINER_RUNTIME"
+    return 0
   fi
-  log INFO "Using $CONTAINER_RUNTIME as the container runtime."
+  if recorded="$(recorded_runtime)"; then
+    log INFO "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE); pruning $recorded."
+    use_runtime "$recorded"
+    return 0
+  fi
+  for runtime in podman docker; do
+    if kind_cluster_in_runtime "$(canonical_runtime "$runtime")"; then
+      runtime="$(canonical_runtime "$runtime")"
+      log INFO "Kind cluster '$KIND_CLUSTER_NAME' exists under $runtime; pruning $runtime."
+      use_runtime "$runtime"
+      return 0
+    fi
+  done
+  for runtime in podman docker; do
+    if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
+      use_runtime "$runtime"
+      return 0
+    fi
+  done
+  fail "Neither podman nor docker is reachable. Install podman (or docker) and make sure it is running."
 }
 
 validate_inputs() {

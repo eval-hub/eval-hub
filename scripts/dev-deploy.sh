@@ -39,6 +39,9 @@ PORT_FORWARD_PID=""
 KIND_CLUSTER_CREATED=false
 API_HOST_ACCESS_PORT="${EVALHUB_HOST_PORT}"
 
+# Runtime selection helpers, shared with the other dev scripts.
+. "${SCRIPT_DIR}/lib/dev-runtime.sh"
+
 log() {
   printf '[%s] [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S%z')" "$1" "$2"
 }
@@ -183,78 +186,6 @@ need_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
 }
 
-# Return 0 when KIND_CLUSTER_NAME already exists under the given container
-# runtime, using the kind provider that runtime requires. A runtime that is not
-# installed or not reachable cannot own a cluster, so it reports false.
-kind_cluster_in_runtime() {
-  local runtime="$1" clusters
-  command -v "$runtime" >/dev/null 2>&1 || return 1
-  "$runtime" info >/dev/null 2>&1 || return 1
-  case "$runtime" in
-    podman)
-      clusters="$(KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters 2>/dev/null || true)"
-      ;;
-    docker)
-      clusters="$(env -u KIND_EXPERIMENTAL_PROVIDER kind get clusters 2>/dev/null || true)"
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-  grep -Fqx -- "$KIND_CLUSTER_NAME" <<<"$clusters"
-}
-
-# Resolve a runtime name to the engine that actually runs it. The podman-docker
-# package installs a `docker` wrapper that execs podman, so both names reach one
-# engine and that wrapper reports itself through --version. The kind provider
-# environment and the registry push flags depend on knowing it is really podman:
-# treating the shim as docker would run kind with the docker provider and push to
-# the plain-HTTP local registry without --tls-verify=false.
-canonical_runtime() {
-  local runtime="$1"
-  if [[ "$runtime" == docker ]] && command -v docker >/dev/null 2>&1 &&
-    docker --version 2>/dev/null | grep -qi podman; then
-    printf 'podman\n'
-  else
-    printf '%s\n' "$runtime"
-  fi
-}
-
-# recorded_runtime prints the engine recorded for KIND_CLUSTER_NAME, if any.
-# dev-deploy records it next to the private kubeconfig, so a redeploy, dev-clean,
-# dev-demo, and clean-container-storage reuse the engine that backs the cluster
-# instead of probing both engines for it.
-recorded_runtime() {
-  local recorded
-  [[ -f "$RUNTIME_STATE_FILE" ]] || return 1
-  recorded="$(head -n 1 "$RUNTIME_STATE_FILE" 2>/dev/null | tr -d '[:space:]')"
-  case "$recorded" in
-    podman|docker) printf '%s\n' "$recorded" ;;
-    *) return 1 ;;
-  esac
-}
-
-# record_runtime stores the engine that backs KIND_CLUSTER_NAME. It runs once the
-# cluster exists, so a failed deploy does not claim an engine for a cluster it
-# never created.
-record_runtime() {
-  printf '%s\n' "$CONTAINER_RUNTIME" >"${RUNTIME_STATE_FILE}.tmp.$$"
-  mv -f -- "${RUNTIME_STATE_FILE}.tmp.$$" "$RUNTIME_STATE_FILE"
-  log INFO "Recorded $CONTAINER_RUNTIME as the container runtime of kind cluster '$KIND_CLUSTER_NAME' in $RUNTIME_STATE_FILE."
-}
-
-# use_runtime makes ENGINE the selected container runtime after checking that it
-# exists and is reachable.
-use_runtime() {
-  local engine
-  engine="$(canonical_runtime "$1")"
-  need_command "$engine"
-  "$engine" info >/dev/null 2>&1 ||
-    fail "$engine is installed but not reachable. Start the $engine daemon (or podman machine) and retry."
-  CONTAINER_RUNTIME="$engine"
-  log INFO "Using $CONTAINER_RUNTIME as the container runtime for builds, the local registry, and kind."
-}
-
 # Select the container runtime used for image builds, the local registry, and the
 # kind nodes, in order of authority:
 #   1. an explicit CONTAINER_RUNTIME, which has to match the engine recorded for
@@ -276,37 +207,29 @@ detect_container_runtime() {
     if recorded="$(recorded_runtime)" && [[ "$recorded" != "$(canonical_runtime "$CONTAINER_RUNTIME")" ]]; then
       fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE). Unset CONTAINER_RUNTIME to reuse $recorded, or delete that cluster and its state file before switching to $CONTAINER_RUNTIME."
     fi
-    use_runtime "$CONTAINER_RUNTIME"
+    use_runtime "$CONTAINER_RUNTIME" "for builds, the local registry, and kind"
     return 0
   fi
   if recorded="$(recorded_runtime)"; then
     log INFO "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE)."
-    use_runtime "$recorded"
+    use_runtime "$recorded" "for builds, the local registry, and kind"
     return 0
   fi
   for runtime in podman docker; do
     if kind_cluster_in_runtime "$(canonical_runtime "$runtime")"; then
       runtime="$(canonical_runtime "$runtime")"
       log INFO "Kind cluster '$KIND_CLUSTER_NAME' already exists under $runtime; using $runtime to reuse that cluster."
-      use_runtime "$runtime"
+      use_runtime "$runtime" "for builds, the local registry, and kind"
       return 0
     fi
   done
   for runtime in podman docker; do
     if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
-      use_runtime "$runtime"
+      use_runtime "$runtime" "for builds, the local registry, and kind"
       return 0
     fi
   done
   fail "Neither podman nor docker is reachable. Install podman (or docker) and make sure it is running."
-}
-
-kind_cmd() {
-  if [[ "${CONTAINER_RUNTIME:-}" == podman ]]; then
-    KIND_EXPERIMENTAL_PROVIDER=podman kind "$@"
-  else
-    env -u KIND_EXPERIMENTAL_PROVIDER kind "$@"
-  fi
 }
 
 trim_whitespace() {
