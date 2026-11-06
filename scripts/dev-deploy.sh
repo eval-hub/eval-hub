@@ -26,6 +26,9 @@ SELECTED_ADAPTER_IMAGES=()
 CALICO_VERSION="v3.33.0"
 KUBECONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/evalhub/kubeconfigs"
 KUBECONFIG_FILE="${KUBECONFIG_DIR}/${KIND_CLUSTER_NAME}.yaml"
+# The engine that backs KIND_CLUSTER_NAME is recorded next to the private
+# kubeconfig, so later commands reuse it instead of probing both engines.
+RUNTIME_STATE_FILE="${KUBECONFIG_DIR}/${KIND_CLUSTER_NAME}.runtime"
 WORK_DIR=""
 REGISTRY_NAME=""
 REGISTRY_ALIAS=""
@@ -35,6 +38,9 @@ TEMP_REGISTRY_TAGS=()
 PORT_FORWARD_PID=""
 KIND_CLUSTER_CREATED=false
 API_HOST_ACCESS_PORT="${EVALHUB_HOST_PORT}"
+
+# Runtime selection helpers, shared with the other dev scripts.
+. "${SCRIPT_DIR}/lib/dev-runtime.sh"
 
 log() {
   printf '[%s] [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S%z')" "$1" "$2"
@@ -65,10 +71,12 @@ Inputs (also accepted as environment variables):
   AIRGAP=true              create/use a Calico kind cluster and deny external
                           egress from system-namespace evaluation jobs (default: false)
   CONTAINER_RUNTIME        container engine for image builds, the local registry,
-                           and the kind nodes (podman or docker; default: the
-                           engine that already owns KIND_CLUSTER_NAME, otherwise
-                           podman when reachable, or docker under WSL). A forced
-                           engine must own an existing KIND_CLUSTER_NAME;
+                           and the kind nodes (podman or docker). Default: the
+                           engine recorded for KIND_CLUSTER_NAME in
+                           evalhub/kubeconfigs/<cluster>.runtime, otherwise the
+                           engine that already owns the cluster, otherwise the
+                           first reachable engine (podman before docker). An
+                           explicit value must match the recorded engine;
                            otherwise the script fails instead of creating a
                            duplicate cluster and replacing its kubeconfig.
   Repeated builds use the container runtime's layer cache; the EvalHub build date is stable
@@ -178,133 +186,50 @@ need_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
 }
 
-# Return 0 when KIND_CLUSTER_NAME already exists under the given container
-# runtime, using the kind provider that runtime requires. A runtime that is not
-# installed or not reachable cannot own a cluster, so it reports false.
-kind_cluster_in_runtime() {
-  local runtime="$1" clusters
-  command -v "$runtime" >/dev/null 2>&1 || return 1
-  "$runtime" info >/dev/null 2>&1 || return 1
-  case "$runtime" in
-    podman)
-      clusters="$(KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters 2>/dev/null || true)"
-      ;;
-    docker)
-      clusters="$(env -u KIND_EXPERIMENTAL_PROVIDER kind get clusters 2>/dev/null || true)"
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-  grep -Fqx -- "$KIND_CLUSTER_NAME" <<<"$clusters"
-}
-
-# Fail when a forced CONTAINER_RUNTIME does not own KIND_CLUSTER_NAME while the
-# other container engine does. kind only lists the clusters of the engine it is
-# pointed at, so continuing would create a second cluster with the same name
-# under the selected engine and overwrite the private kubeconfig of the cluster
-# that is already running. Auto-detection already selects the owning engine, so
-# this guard only applies when CONTAINER_RUNTIME is set explicitly.
-ensure_forced_runtime_matches_owner() {
-  local other
-  case "$CONTAINER_RUNTIME" in
-    podman) other=docker ;;
-    docker) other=podman ;;
-    *) return 0 ;;
-  esac
-  # A cluster of this name under the forced engine is reused as-is, so the other
-  # engine owning one too changes nothing: this run creates no cluster and
-  # rewrites no kubeconfig for a cluster it is not using.
-  kind_cluster_in_runtime "$CONTAINER_RUNTIME" && return 0
-  kind_cluster_in_runtime "$other" || return 0
-  fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $other, not $CONTAINER_RUNTIME. Unset CONTAINER_RUNTIME to reuse the engine that owns the cluster, or set CONTAINER_RUNTIME=$other."
-}
-
-# Resolve a runtime name to the engine that actually runs it. The podman-docker
-# package installs a `docker` wrapper that execs podman, so both names reach one
-# engine and that wrapper reports itself through --version. The provider
-# environment, the registry push flags, and the ownership guard all depend on
-# knowing it is really podman, and treating the shim as docker would run kind
-# with the docker provider and push to the plain-HTTP local registry without
-# --tls-verify=false.
-canonical_runtime() {
-  local runtime="$1"
-  if [[ "$runtime" == docker ]] && command -v docker >/dev/null 2>&1 &&
-    docker --version 2>/dev/null | grep -qi podman; then
-    printf 'podman\n'
-  else
-    printf '%s\n' "$runtime"
-  fi
-}
-
-# Select the container runtime used for image builds, the local registry, and
-# the kind nodes. Set CONTAINER_RUNTIME to force a specific runtime. Otherwise an
-# existing KIND_CLUSTER_NAME decides the runtime: kind only lists the clusters
-# owned by the runtime it is pointed at, so reusing the runtime that already owns
-# the cluster prevents creating a second cluster with the same name (and private
-# kubeconfig path) under the other engine. With no existing cluster, Podman is
-# preferred whenever it is installed and reachable, except under WSL where Docker
-# is preferred instead: WSL2 podman answers 'podman info' but kind node startup
-# fails during systemd/cgroup setup. The non-preferred runtime is the fallback
-# when the preferred one is not reachable. A forced runtime must own an existing
-# KIND_CLUSTER_NAME (see ensure_forced_runtime_matches_owner).
+# Select the container runtime used for image builds, the local registry, and the
+# kind nodes, in order of authority:
+#   1. an explicit CONTAINER_RUNTIME, which has to match the engine recorded for
+#      KIND_CLUSTER_NAME: continuing under the other engine would create a second
+#      cluster with the same name and overwrite the kubeconfig of the running one;
+#   2. the engine recorded for KIND_CLUSTER_NAME (see recorded_runtime);
+#   3. the engine that already owns KIND_CLUSTER_NAME, for clusters deployed
+#      before that record existed;
+#   4. the first reachable engine, podman before docker.
+# dev-deploy records the outcome, so 3 and 4 only ever run on a first deploy and
+# every later command reads the answer instead of probing both engines.
 detect_container_runtime() {
-  local runtime canonical
-  # Resolve each preferred name to the engine that actually runs it before
-  # probing: under WSL docker is preferred, and a docker that is the
-  # podman-docker shim would otherwise leave the run on the docker name, so kind
-  # would use the docker provider and a registry push would omit Podman's
-  # --tls-verify=false (see canonical_runtime).
-  local -a preferred_runtimes=()
-  if uname -r | grep -qiE 'microsoft|wsl'; then
-    preferred_runtimes=("$(canonical_runtime docker)" "$(canonical_runtime podman)")
-  else
-    preferred_runtimes=("$(canonical_runtime podman)" "$(canonical_runtime docker)")
+  local runtime recorded
+  if [[ -n "$CONTAINER_RUNTIME" ]]; then
+    case "$CONTAINER_RUNTIME" in
+      podman|docker) ;;
+      *) fail "CONTAINER_RUNTIME must be 'podman' or 'docker'." ;;
+    esac
+    if recorded="$(recorded_runtime)" && [[ "$recorded" != "$(canonical_runtime "$CONTAINER_RUNTIME")" ]]; then
+      fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE). Unset CONTAINER_RUNTIME to reuse $recorded, or delete that cluster and its state file before switching to $CONTAINER_RUNTIME."
+    fi
+    use_runtime "$CONTAINER_RUNTIME" "for builds, the local registry, and kind"
+    return 0
   fi
-  case "$CONTAINER_RUNTIME" in
-    podman|docker)
-      canonical="$(canonical_runtime "$CONTAINER_RUNTIME")"
-      if [[ "$canonical" != "$CONTAINER_RUNTIME" ]]; then
-        log WARN "$CONTAINER_RUNTIME on this machine is the podman CLI shim; using podman for builds, the local registry, and kind."
-        CONTAINER_RUNTIME="$canonical"
-      fi
-      need_command "$CONTAINER_RUNTIME"
-      "$CONTAINER_RUNTIME" info >/dev/null 2>&1 ||
-        fail "$CONTAINER_RUNTIME is installed but not reachable. Start the $CONTAINER_RUNTIME daemon (or podman machine) and retry."
-      ensure_forced_runtime_matches_owner
-      ;;
-    "")
-      for runtime in "${preferred_runtimes[@]}"; do
-        if kind_cluster_in_runtime "$runtime"; then
-          CONTAINER_RUNTIME="$runtime"
-          log INFO "Kind cluster '$KIND_CLUSTER_NAME' already exists under $runtime; using $runtime to reuse that cluster."
-          break
-        fi
-      done
-      if [[ -z "$CONTAINER_RUNTIME" ]]; then
-        for runtime in "${preferred_runtimes[@]}"; do
-          if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
-            CONTAINER_RUNTIME="$runtime"
-            break
-          fi
-        done
-      fi
-      [[ -n "$CONTAINER_RUNTIME" ]] ||
-        fail "Neither podman nor docker is reachable. Install podman (preferred; docker under WSL) and make sure it is running."
-      ;;
-    *)
-      fail "CONTAINER_RUNTIME must be 'podman' or 'docker'."
-      ;;
-  esac
-  log INFO "Using $CONTAINER_RUNTIME as the container runtime for builds, the local registry, and kind."
-}
-
-kind_cmd() {
-  if [[ "${CONTAINER_RUNTIME:-}" == podman ]]; then
-    KIND_EXPERIMENTAL_PROVIDER=podman kind "$@"
-  else
-    env -u KIND_EXPERIMENTAL_PROVIDER kind "$@"
+  if recorded="$(recorded_runtime)"; then
+    log INFO "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE)."
+    use_runtime "$recorded" "for builds, the local registry, and kind"
+    return 0
   fi
+  for runtime in podman docker; do
+    if kind_cluster_in_runtime "$(canonical_runtime "$runtime")"; then
+      runtime="$(canonical_runtime "$runtime")"
+      log INFO "Kind cluster '$KIND_CLUSTER_NAME' already exists under $runtime; using $runtime to reuse that cluster."
+      use_runtime "$runtime" "for builds, the local registry, and kind"
+      return 0
+    fi
+  done
+  for runtime in podman docker; do
+    if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
+      use_runtime "$runtime" "for builds, the local registry, and kind"
+      return 0
+    fi
+  done
+  fail "Neither podman nor docker is reachable. Install podman (or docker) and make sure it is running."
 }
 
 trim_whitespace() {
@@ -531,6 +456,7 @@ YAML
     KIND_CLUSTER_CREATED=true
   fi
   chmod 600 "$KUBECONFIG_FILE"
+  record_runtime
   if [[ "$AIRGAP" == true ]]; then
     ensure_calico_cni
   fi

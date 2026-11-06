@@ -244,18 +244,18 @@ or **Docker**), kind, kubectl, Make, Git, curl, OpenSSL, and Python 3. Install
 `jq` as well to use the API demo and curl examples. The runtime must be running
 (for podman on macOS, start the podman machine first). These scripts use the
 container runtime to build images, run the kind nodes, and manage the local
-image registry. Podman is used in preference to Docker when it is installed and
-reachable, except under WSL where Docker is preferred (WSL2 podman can pass
-`podman info` but fail during kind node startup); set `CONTAINER_RUNTIME`
-(for example `make dev-deploy CONTAINER_RUNTIME=docker`) to force a specific
-runtime. When a kind cluster named `KIND_CLUSTER_NAME` already exists, its
-runtime is selected automatically by `make dev-deploy`, `make dev-clean`, and
-`make dev-demo`, so later commands keep using the engine that backed the
-existing cluster (passing `CONTAINER_RUNTIME` explicitly remains supported and
-must match that engine). If a forced `CONTAINER_RUNTIME` does not own an
-existing `KIND_CLUSTER_NAME` while the other engine does, `make dev-deploy` and
-`make dev-clean` fail instead of creating a duplicate cluster or cleaning up
-and deleting the kubeconfig of the cluster that is still running.
+image registry. `make dev-deploy` records the engine it used for
+`KIND_CLUSTER_NAME` in
+`${XDG_CONFIG_HOME:-$HOME/.config}/evalhub/kubeconfigs/<cluster>.runtime`, and
+`make dev-clean`, `make dev-demo`, and `make clean-container-storage` reuse that
+record, so a later command needs no second input. Set `CONTAINER_RUNTIME` (for
+example `make dev-deploy CONTAINER_RUNTIME=docker`) to choose the engine for a
+new cluster; an explicit value must match the recorded engine, and a mismatch
+fails instead of creating a duplicate cluster or cleaning up the wrong one. For
+a cluster deployed before that record existed the engine that already owns
+`KIND_CLUSTER_NAME` is used, and a first deploy with neither falls back to the
+first reachable engine, podman before docker. Deleting the cluster with
+`make dev-clean DELETE_CLUSTER=true` removes the record with its kubeconfig.
 
 Deploy the local EvalHub service, operator, adapters, and mock target/judge
 services:
