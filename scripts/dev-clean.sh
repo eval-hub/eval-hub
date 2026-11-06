@@ -12,6 +12,7 @@ CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-}"
 KUBECONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/evalhub/kubeconfigs"
 PRIVATE_KUBECONFIG="${KUBECONFIG_DIR}/${KIND_CLUSTER_NAME}.yaml"
 KUBECONFIG_FILE=""
+EXPORTED_KUBECONFIG=""
 WORK_DIR=""
 REGISTRY_NAME="evalhub-registry-${KIND_CLUSTER_NAME}"
 REGISTRY_ALIAS="evalhub-reg-$(printf '%s' "$KIND_CLUSTER_NAME" | cksum | awk '{print $1}')"
@@ -55,7 +56,12 @@ Inputs (also accepted as environment variables):
                      that already owns KIND_CLUSTER_NAME, otherwise podman when
                      reachable, or docker under WSL). A forced engine must own
                      KIND_CLUSTER_NAME; otherwise the script fails instead of
-                     skipping the cluster and removing its kubeconfig.
+                     skipping the cluster and removing its kubeconfig. The
+                     private kubeconfig is used only when it targets the
+                     selected engine's cluster; one pointing at another cluster
+                     (for example the other engine's same-named kind cluster)
+                     is preserved, and cleanup uses a temporary exported
+                     kubeconfig instead.
 
 The system namespace is retained to avoid deleting unrelated resources that may
 have been added there. Deployment resources are removed only when their ownership
@@ -151,8 +157,28 @@ ensure_forced_runtime_matches_owner() {
     docker) other=podman ;;
     *) return 0 ;;
   esac
+  # A cluster of this name under the forced engine is the one being cleaned up,
+  # so the other engine owning one too changes nothing: this run targets the
+  # forced engine's cluster only, and a private kubeconfig that belongs to the
+  # other engine's cluster is preserved rather than used or removed.
+  kind_cluster_in_runtime "$CONTAINER_RUNTIME" && return 0
   kind_cluster_in_runtime "$other" || return 0
   fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $other, not $CONTAINER_RUNTIME. Unset CONTAINER_RUNTIME to reuse the engine that owns the cluster, or set CONTAINER_RUNTIME=$other."
+}
+
+# Resolve a runtime name to the engine that actually runs it. The podman-docker
+# package installs a `docker` wrapper that execs podman, so both names reach one
+# engine and that wrapper reports itself through --version. Cleanup removes kind
+# cluster and registry containers by name, so it has to use the engine that owns
+# them rather than the wrapper's name (see canonical_runtime in dev-deploy.sh).
+canonical_runtime() {
+  local runtime="$1"
+  if [[ "$runtime" == docker ]] && command -v docker >/dev/null 2>&1 &&
+    docker --version 2>/dev/null | grep -qi podman; then
+    printf 'podman\n'
+  else
+    printf '%s\n' "$runtime"
+  fi
 }
 
 # Return 0 when any container engine still has a cluster named KIND_CLUSTER_NAME.
@@ -177,15 +203,25 @@ any_runtime_owns_cluster() {
 # A forced runtime must own an existing KIND_CLUSTER_NAME (see
 # ensure_forced_runtime_matches_owner).
 detect_container_runtime() {
-  local runtime
+  local runtime canonical
+  # Resolve each preferred name to the engine that actually runs it before
+  # probing: under WSL docker is preferred, and a docker that is the
+  # podman-docker shim would otherwise leave cleanup on the docker name, which
+  # owns neither the registry container nor the temporary image tags (see
+  # canonical_runtime).
   local -a preferred_runtimes=()
   if uname -r | grep -qiE 'microsoft|wsl'; then
-    preferred_runtimes=(docker podman)
+    preferred_runtimes=("$(canonical_runtime docker)" "$(canonical_runtime podman)")
   else
-    preferred_runtimes=(podman docker)
+    preferred_runtimes=("$(canonical_runtime podman)" "$(canonical_runtime docker)")
   fi
   case "$CONTAINER_RUNTIME" in
     podman|docker)
+      canonical="$(canonical_runtime "$CONTAINER_RUNTIME")"
+      if [[ "$canonical" != "$CONTAINER_RUNTIME" ]]; then
+        log WARN "$CONTAINER_RUNTIME on this machine is the podman CLI shim; cleaning up with podman."
+        CONTAINER_RUNTIME="$canonical"
+      fi
       command -v "$CONTAINER_RUNTIME" >/dev/null 2>&1 ||
         fail "Required command not found: $CONTAINER_RUNTIME"
       "$CONTAINER_RUNTIME" info >/dev/null 2>&1 ||
@@ -279,25 +315,71 @@ remove_registry() {
   remove_temporary_registry_tags
 }
 
+# Print the API server endpoint of a kubeconfig file's current context.
+kubeconfig_server() {
+  kubectl --kubeconfig "$1" config view --minify -o 'jsonpath={.clusters[0].cluster.server}' 2>/dev/null || true
+}
+
+# Return 0 when two kubeconfig files target the same cluster, comparing the API
+# server endpoint of their current context.
+kubeconfigs_target_same_cluster() {
+  local first_server second_server
+  first_server="$(kubeconfig_server "$1")"
+  second_server="$(kubeconfig_server "$2")"
+  [[ -n "$first_server" && "$first_server" == "$second_server" ]]
+}
+
+# Export a kubeconfig for the kind cluster under the selected container runtime
+# into the cleanup work directory and set EXPORTED_KUBECONFIG to its path. The
+# cluster must exist under CONTAINER_RUNTIME; the EXIT trap removes the work
+# directory with the exported file. Pass false to report a failed export through
+# the return status instead of exiting: a stopped kind control-plane container is
+# still listed as a cluster, but its admin.conf cannot be read, and deleting that
+# cluster must not depend on the export.
+export_runtime_kubeconfig() {
+  local fatal="${1:-true}"
+  if [[ -z "$WORK_DIR" ]]; then
+    WORK_DIR="$(mktemp -d /tmp/evalhub-dev-clean.XXXXXX)"
+  fi
+  EXPORTED_KUBECONFIG="$WORK_DIR/kubeconfig"
+  if ! kind_cmd export kubeconfig --name "$KIND_CLUSTER_NAME" --kubeconfig "$EXPORTED_KUBECONFIG" >/dev/null; then
+    rm -f -- "$EXPORTED_KUBECONFIG"
+    [[ "$fatal" == true ]] || return 1
+    fail "Could not export a kubeconfig for kind cluster '$KIND_CLUSTER_NAME' from $CONTAINER_RUNTIME."
+  fi
+  chmod 600 "$EXPORTED_KUBECONFIG"
+}
+
 prepare_kubeconfig() {
-  local context
+  local context have_private=false
   if [[ -e "$PRIVATE_KUBECONFIG" ]]; then
     [[ ! -L "$PRIVATE_KUBECONFIG" ]] || fail "Refusing to use kubeconfig symlink: $PRIVATE_KUBECONFIG"
-    KUBECONFIG_FILE="$PRIVATE_KUBECONFIG"
-    context="$(kubectl --kubeconfig "$KUBECONFIG_FILE" config current-context 2>/dev/null || true)"
+    context="$(kubectl --kubeconfig "$PRIVATE_KUBECONFIG" config current-context 2>/dev/null || true)"
     [[ "$context" == "kind-$KIND_CLUSTER_NAME" ]] ||
       fail "The private kubeconfig does not target kind-$KIND_CLUSTER_NAME: $PRIVATE_KUBECONFIG"
+    have_private=true
+  fi
+  # A matching context name does not establish kubeconfig ownership: the
+  # context is derived from the cluster name, and podman and docker can each
+  # run a kind cluster with that name at the same time. Export a reference
+  # kubeconfig from the selected runtime and compare API server endpoints
+  # before any delete runs, so a kubeconfig owned by the other runtime's
+  # cluster is preserved rather than replaced or used.
+  export_runtime_kubeconfig
+  context="$(kubectl --kubeconfig "$EXPORTED_KUBECONFIG" config current-context 2>/dev/null || true)"
+  [[ "$context" == "kind-$KIND_CLUSTER_NAME" ]] || fail "kind exported an unexpected kubeconfig context: $context"
+  KUBECONFIG_FILE="$EXPORTED_KUBECONFIG"
+  if [[ "$have_private" == true ]]; then
+    if kubeconfigs_target_same_cluster "$PRIVATE_KUBECONFIG" "$EXPORTED_KUBECONFIG"; then
+      KUBECONFIG_FILE="$PRIVATE_KUBECONFIG"
+    else
+      log WARN "The private kubeconfig at $PRIVATE_KUBECONFIG targets a different kind cluster than '$KIND_CLUSTER_NAME' under $CONTAINER_RUNTIME; preserving it and cleaning up with an exported kubeconfig."
+    fi
   else
-    WORK_DIR="$(mktemp -d /tmp/evalhub-dev-clean.XXXXXX)"
-    KUBECONFIG_FILE="$WORK_DIR/kubeconfig"
-    log INFO "No private kubeconfig exists; exporting a temporary one for this cleanup."
-    kind_cmd export kubeconfig --name "$KIND_CLUSTER_NAME" --kubeconfig "$KUBECONFIG_FILE"
-    chmod 600 "$KUBECONFIG_FILE"
-    context="$(kubectl --kubeconfig "$KUBECONFIG_FILE" config current-context 2>/dev/null || true)"
-    [[ "$context" == "kind-$KIND_CLUSTER_NAME" ]] || fail "kind exported an unexpected kubeconfig context: $context"
+    log INFO "No private kubeconfig exists; using the kubeconfig exported from $CONTAINER_RUNTIME for this cleanup."
   fi
   kubectl --kubeconfig "$KUBECONFIG_FILE" get nodes >/dev/null ||
-    fail "Cannot reach kind cluster $KIND_CLUSTER_NAME with its private kubeconfig."
+    fail "Cannot reach kind cluster $KIND_CLUSTER_NAME with the selected kubeconfig."
 }
 
 has_legacy_deployment_markers() {
@@ -522,10 +604,33 @@ delete_cluster() {
       log WARN "The private kubeconfig path is a symlink; it will be preserved."
     else
       context="$(kubectl --kubeconfig "$PRIVATE_KUBECONFIG" config current-context 2>/dev/null || true)"
-      if [[ "$context" == "kind-$KIND_CLUSTER_NAME" ]]; then
+      if [[ "$context" != "kind-$KIND_CLUSTER_NAME" ]]; then
+        log WARN "The kubeconfig at $PRIVATE_KUBECONFIG has a different context and will be preserved."
+      elif ! cluster_exists; then
+        # The selected runtime no longer runs this cluster, so the private
+        # kubeconfig cannot be verified against a freshly exported one. Keep
+        # its removal gated below on no runtime still owning the cluster name.
         remove_kubeconfig=true
       else
-        log WARN "The kubeconfig at $PRIVATE_KUBECONFIG has a different context and will be preserved."
+        # A matching context does not establish kubeconfig ownership either
+        # (both runtimes can run same-named kind clusters), so verify the
+        # private kubeconfig against one exported from the selected runtime
+        # before the cluster is deleted: no reference can be exported from a
+        # deleted cluster. A kubeconfig owned by the other runtime's cluster
+        # is preserved rather than removed with this runtime's cluster.
+        if export_runtime_kubeconfig false; then
+          if kubeconfigs_target_same_cluster "$PRIVATE_KUBECONFIG" "$EXPORTED_KUBECONFIG"; then
+            remove_kubeconfig=true
+          else
+            log WARN "The kubeconfig at $PRIVATE_KUBECONFIG targets a different kind cluster than '$KIND_CLUSTER_NAME' under $CONTAINER_RUNTIME and will be preserved."
+          fi
+        else
+          # A stopped kind control-plane container is listed as a cluster but its
+          # admin.conf cannot be read, so no reference kubeconfig can be exported
+          # to verify ownership. Preserve the private kubeconfig and still delete
+          # the cluster below instead of leaving it behind.
+          log WARN "Could not export a kubeconfig for kind cluster '$KIND_CLUSTER_NAME' from $CONTAINER_RUNTIME; preserving $PRIVATE_KUBECONFIG and deleting the cluster without kubeconfig verification."
+        fi
       fi
     fi
   fi

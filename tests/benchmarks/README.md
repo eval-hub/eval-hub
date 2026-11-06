@@ -75,21 +75,43 @@ environment variable and explaining how to enable the benchmark. Subtest names c
 ## Kind cluster
 
 `make test-benchmarks-kind` deploys the local dev stack with `make dev-deploy`
-and runs the suite against the kind mock target and mock judge. It mints a
-short-lived service-account token, creates or refreshes the dev-deploy-owned
-mock-auth Secret (failing if a same-named Secret belongs to something else), and
-exports `JUDGE_MODEL_NAME`, `JUDGE_BASE_URL`, and
-`LM_EVAL_TOKENIZER` so judge-based and LM Evaluation Harness benchmarks execute
-instead of skipping or failing. The Secret contains the primary `api-key` and
-both `judge_api-key`/`judge_url` and `grader_api-key`/`grader_url`. The judge and
-grader pairs share `KIND_BENCHMARK_JUDGE_API_KEY` and `KIND_BENCHMARK_JUDGE_URL`,
-so both roles use the mock judge endpoint. The key is provisioned in the Secret;
-fixtures do not need a `JUDGE_API_KEY` environment variable.
-The default `KIND_BENCHMARK_RUN` is a
-representative set for each adapter image dev-deploy builds; widen it with
-`BENCHMARK_RUN` (see the `Makefile` comment) to run a provider's full catalog,
-which also selects benchmarks whose fixtures require a sandbox, external
-services, or a capable judge model.
+and runs the suite against the kind mock target and mock judge. The mock target
+emulates the vLLM `/v1/completions` echo contract — one deterministic logprob
+per token, exact `max_tokens=0` echo scoring, token-id prompt echo, and
+`return_token_ids` reporting per-choice `prompt_token_ids` — so LightEval and
+LM Evaluation Harness loglikelihood benchmarks execute against it. The mock
+server source is `scripts/kind-openai-mock.py`; its protocol regression tests
+run with `make test-scripts`. It builds every curated adapter image
+(`ADAPTERS=all`) unless `ADAPTERS` is set, so the
+discovered providers run images from this checkout rather than
+operator-packaged ones; pass `SKIP_BUILD=true` to reuse images that are already
+built. garak and garak-kfp are not curated adapters, so they keep their
+operator-packaged image. It also mints a short-lived service-account token,
+creates or refreshes the dev-deploy-owned mock-auth Secret (failing if a
+same-named Secret belongs to something else), and exports `JUDGE_MODEL_NAME`,
+`JUDGE_BASE_URL`, and `LM_EVAL_TOKENIZER` so judge-based and LM Evaluation
+Harness benchmarks execute instead of skipping or failing. The Secret contains
+the primary `api-key` and both `judge_api-key`/`judge_url` and
+`grader_api-key`/`grader_url`. The judge and grader pairs share
+`KIND_BENCHMARK_JUDGE_API_KEY` and `KIND_BENCHMARK_JUDGE_URL`, so both roles use
+the mock judge endpoint. The key is provisioned in the Secret; fixtures do not
+need a `JUDGE_API_KEY` environment variable.
+
+The default `KIND_BENCHMARK_RUN` selects the
+whole catalog the deployed EvalHub discovers, so every configured provider's
+benchmarks run; narrow it with `BENCHMARK_RUN` (see the `Makefile` comment) to a
+provider or benchmark subset when iterating. Benchmarks whose fixtures require a
+sandbox, external services, or a capable judge model report failures or
+prerequisite skips in a full run rather than being excluded from it.
+`KIND_BENCHMARK_PARALLEL` (evaluation jobs in flight, default 8) and
+`KIND_BENCHMARK_TIMEOUT` (suite deadline, default 4h) size a full run to the
+kind cluster. The run mints one ServiceAccount token and reuses it for every
+request, so `KIND_BENCHMARK_TOKEN_DURATION` defaults to
+`KIND_BENCHMARK_TIMEOUT` plus `KIND_BENCHMARK_TOKEN_MARGIN` (1h) rather than a
+fixed hour a long run outlives. The token is minted before the suite's
+gotestsum install and test compilation, so an explicit token duration must cover
+`KIND_BENCHMARK_TIMEOUT` plus `KIND_BENCHMARK_SETUP_MARGIN` (15m); a shorter one
+fails before the deployment builds start.
 
 ## Fixtures
 
@@ -398,10 +420,14 @@ accounts also need the required access to jobs, Secrets, and artifacts.
 Some failures cannot be repaired in these fixtures. In particular, the downstream
 LM adapter does not forward arbitrary `trust_remote_code` or
 `confirm_run_unsafe_code` parameters to the framework, and Petri's role JSON
-compatibility, LightEval's missing loglikelihood implementation, dataset schema
-bugs, missing image dependencies, and unknown custom provider IDs need adapter,
-image, dataset, or environment changes. Adding ignored flags, increasing all
-deadlines, or removing benchmarks would not validate those fixes.
+compatibility, dataset schema bugs, missing image dependencies, and unknown
+custom provider IDs need adapter, image, dataset, or environment changes. Adding
+ignored flags, increasing all deadlines, or removing benchmarks would not
+validate those fixes. LightEval and LM Evaluation Harness loglikelihood tasks
+also need an endpoint implementing the vLLM completions echo contract
+(`return_token_ids` with per-choice `prompt_token_ids`); the kind mock target
+provides it, and `EVALHUB_LIGHTEVAL_LOGLIKELIHOOD_TOKENIZATION=joint` is the
+adapter fallback for real servers that do not.
 
 For 11 of the 12 dataset-loader failures, the fixtures now use prepared offline data
 and a matching local tokenizer through `test_data_ref.hf`. See

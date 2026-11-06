@@ -385,11 +385,14 @@ make test-benchmarks-kind
 ```
 
 This deploys (or reuses) the kind cluster via `make dev-deploy` — pass
-`SKIP_BUILD=true` to reuse previously built images — mints a short-lived token
-for the local EvalHub service account, and points the suite at the loopback API
-URL with the in-cluster mock target as the model. By default it runs only the
-providers whose adapter images the deployment builds (Inspect, FollowBench, and
-LM Evaluation Harness); the remaining benchmark-test inputs are unchanged:
+`SKIP_BUILD=true` to reuse previously built images — builds every curated
+adapter image unless `ADAPTERS` is set, mints a short-lived token for the local
+EvalHub service account, and points the suite at the loopback API URL with the
+in-cluster mock target as the model. By default it runs the whole catalog the
+deployed stack discovers, so every configured provider is exercised; narrow it
+with `BENCHMARK_RUN` (or `KIND_BENCHMARK_RUN`) when iterating, and size a full
+run with `BENCHMARK_PARALLEL` and `BENCHMARK_TIMEOUT` (the token it mints is
+derived from that deadline, so it cannot expire mid-run):
 
 ```bash
 make test-benchmarks-kind BENCHMARK_RUN='TestBenchmarkSmoke/inspect/'
