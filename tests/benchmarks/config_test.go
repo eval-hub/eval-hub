@@ -162,6 +162,47 @@ func TestTokenizerEnvironmentOverride(t *testing.T) {
 	}
 }
 
+func TestTokenizerPathEnvironmentOverride(t *testing.T) {
+	for _, tc := range []struct {
+		name, parameters, value string
+		set                     bool
+		want                    any
+	}{
+		{name: "environment supplies the tokenizer path", parameters: `{}`,
+			value: "hf-internal-testing/llama-tokenizer", set: true, want: "hf-internal-testing/llama-tokenizer"},
+		{name: "surrounding whitespace is trimmed", parameters: `{}`,
+			value: "  org/tokenizer  ", set: true, want: "org/tokenizer"},
+		{name: "unset keeps the model name fallback", parameters: `{}`},
+		{name: "blank keeps the model name fallback", parameters: `{}`, value: "   ", set: true},
+		{name: "pinned fixture tokenizer path wins", parameters: `{"tokenizer_path":"/test_data/tokenizer"}`,
+			value: "org/other", set: true, want: "/test_data/tokenizer"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeFixture(t, t.TempDir(), "ruler", "niah_single_1",
+				`{"parameters":`+tc.parameters+`,"tokenizer_path_env":"RULER_TOKENIZER","timeout":"5m"}`)
+			f, err := loadFixture(path, func(key string) (string, bool) {
+				if key != "RULER_TOKENIZER" {
+					t.Fatalf("unexpected environment lookup: %s", key)
+				}
+				return tc.value, tc.set && tc.value != ""
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, ok := f.Parameters["tokenizer_path"]
+			if tc.want == nil {
+				if ok {
+					t.Fatalf("tokenizer_path = %v, want no override", got)
+				}
+				return
+			}
+			if got != tc.want {
+				t.Fatalf("tokenizer_path = %v, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func writeFixture(t *testing.T, root, provider, benchmark, body string) string {
 	t.Helper()
 	path := fixturePath(root, provider, benchmark)
