@@ -847,6 +847,32 @@ set_lighteval_provider_memory_for_kind() {
   mv -- "$output" "$file"
 }
 
+# garak is not a curated adapter, so it keeps the operator-packaged
+# quay.io/trustyai/trustyai-garak-lls-provider-dsp image, which is public but
+# roughly 950MB. Its packaged 4Gi request has the same single-node kind problem
+# as inspect and lighteval: next to the system pods and the already lowered 2Gi
+# job pods, no garak job pod can schedule, so all of its smoke benchmarks stay
+# Pending until their fixture deadline expires. Lower the request and limit in
+# the rendered provider ConfigMap so garak jobs are admitted; the packaged
+# catalog keeps its production values.
+set_garak_provider_memory_for_kind() {
+  local file="$1" output="$WORK_DIR/provider-garak.yaml.tmp"
+  local requests limits
+  if [[ ! -f "$file" ]]; then
+    log INFO "No rendered garak provider ConfigMap at $file; leaving garak resources unchanged."
+    return 0
+  fi
+  requests="$(grep -Ec '^[[:space:]]*memory_request: 4Gi[[:space:]]*$' "$file" || true)"
+  limits="$(grep -Ec '^[[:space:]]*memory_limit: 8Gi[[:space:]]*$' "$file" || true)"
+  [[ "$requests" == 1 && "$limits" == 1 ]] ||
+    fail "Expected one garak memory_request of 4Gi and one memory_limit of 8Gi in $file."
+  sed -E \
+    -e 's/^([[:space:]]*)memory_request: 4Gi[[:space:]]*$/\1memory_request: 2Gi/' \
+    -e 's/^([[:space:]]*)memory_limit: 8Gi[[:space:]]*$/\1memory_limit: 4Gi/' \
+    "$file" >"$output"
+  mv -- "$output" "$file"
+}
+
 make_certificate() {
   local directory="$1" name="$2" common_name="$3" sans="$4" config
   config="$directory/$name.cnf"
@@ -991,6 +1017,9 @@ render_operator_overlay() {
       set_lighteval_provider_memory_for_kind "$config_root/configmaps/evalhub/$provider_config"
     fi
   done
+  # garak and garak-kfp are not curated adapters, so they never enter the loop
+  # above and keep the operator-packaged provider ConfigMaps.
+  set_garak_provider_memory_for_kind "$config_root/configmaps/evalhub/provider-garak.yaml"
   replace_env_value "$params" kube-rbac-proxy "localhost:${REGISTRY_PORT}/opendatahub/odh-kube-rbac-proxy:odh-stable"
 
   overlay="$config_root/overlays/evalhub-kind"
