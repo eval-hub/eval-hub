@@ -40,5 +40,8 @@ jobs:
       with:
         # Keep in sync with GOLANGCI_LINT_VERSION in the Makefile.
         version: v2.12.2
-        # Existing findings are not cleaned up yet; fail only on newly introduced issues.
-        only-new-issues: true
+        # This workflow is the single lint gate: the CI workflow no longer runs
+        # `make lint`, so lint the whole repository and fail on any finding
+        # (the same verdict `make lint` produced) instead of only on newly
+        # introduced issues.
+        only-new-issues: false
