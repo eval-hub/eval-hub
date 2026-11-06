@@ -204,11 +204,16 @@ any_runtime_owns_cluster() {
 # ensure_forced_runtime_matches_owner).
 detect_container_runtime() {
   local runtime canonical
+  # Resolve each preferred name to the engine that actually runs it before
+  # probing: under WSL docker is preferred, and a docker that is the
+  # podman-docker shim would otherwise leave cleanup on the docker name, which
+  # owns neither the registry container nor the temporary image tags (see
+  # canonical_runtime).
   local -a preferred_runtimes=()
   if uname -r | grep -qiE 'microsoft|wsl'; then
-    preferred_runtimes=(docker podman)
+    preferred_runtimes=("$(canonical_runtime docker)" "$(canonical_runtime podman)")
   else
-    preferred_runtimes=(podman docker)
+    preferred_runtimes=("$(canonical_runtime podman)" "$(canonical_runtime docker)")
   fi
   case "$CONTAINER_RUNTIME" in
     podman|docker)
@@ -327,14 +332,21 @@ kubeconfigs_target_same_cluster() {
 # Export a kubeconfig for the kind cluster under the selected container runtime
 # into the cleanup work directory and set EXPORTED_KUBECONFIG to its path. The
 # cluster must exist under CONTAINER_RUNTIME; the EXIT trap removes the work
-# directory with the exported file.
+# directory with the exported file. Pass false to report a failed export through
+# the return status instead of exiting: a stopped kind control-plane container is
+# still listed as a cluster, but its admin.conf cannot be read, and deleting that
+# cluster must not depend on the export.
 export_runtime_kubeconfig() {
+  local fatal="${1:-true}"
   if [[ -z "$WORK_DIR" ]]; then
     WORK_DIR="$(mktemp -d /tmp/evalhub-dev-clean.XXXXXX)"
   fi
   EXPORTED_KUBECONFIG="$WORK_DIR/kubeconfig"
-  kind_cmd export kubeconfig --name "$KIND_CLUSTER_NAME" --kubeconfig "$EXPORTED_KUBECONFIG" >/dev/null ||
+  if ! kind_cmd export kubeconfig --name "$KIND_CLUSTER_NAME" --kubeconfig "$EXPORTED_KUBECONFIG" >/dev/null; then
+    rm -f -- "$EXPORTED_KUBECONFIG"
+    [[ "$fatal" == true ]] || return 1
     fail "Could not export a kubeconfig for kind cluster '$KIND_CLUSTER_NAME' from $CONTAINER_RUNTIME."
+  fi
   chmod 600 "$EXPORTED_KUBECONFIG"
 }
 
@@ -606,11 +618,18 @@ delete_cluster() {
         # before the cluster is deleted: no reference can be exported from a
         # deleted cluster. A kubeconfig owned by the other runtime's cluster
         # is preserved rather than removed with this runtime's cluster.
-        export_runtime_kubeconfig
-        if kubeconfigs_target_same_cluster "$PRIVATE_KUBECONFIG" "$EXPORTED_KUBECONFIG"; then
-          remove_kubeconfig=true
+        if export_runtime_kubeconfig false; then
+          if kubeconfigs_target_same_cluster "$PRIVATE_KUBECONFIG" "$EXPORTED_KUBECONFIG"; then
+            remove_kubeconfig=true
+          else
+            log WARN "The kubeconfig at $PRIVATE_KUBECONFIG targets a different kind cluster than '$KIND_CLUSTER_NAME' under $CONTAINER_RUNTIME and will be preserved."
+          fi
         else
-          log WARN "The kubeconfig at $PRIVATE_KUBECONFIG targets a different kind cluster than '$KIND_CLUSTER_NAME' under $CONTAINER_RUNTIME and will be preserved."
+          # A stopped kind control-plane container is listed as a cluster but its
+          # admin.conf cannot be read, so no reference kubeconfig can be exported
+          # to verify ownership. Preserve the private kubeconfig and still delete
+          # the cluster below instead of leaving it behind.
+          log WARN "Could not export a kubeconfig for kind cluster '$KIND_CLUSTER_NAME' from $CONTAINER_RUNTIME; preserving $PRIVATE_KUBECONFIG and deleting the cluster without kubeconfig verification."
         fi
       fi
     fi

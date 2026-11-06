@@ -12,6 +12,10 @@
 #   scripts/go-duration.sh seconds <duration>    print the duration in seconds
 #   scripts/go-duration.sh add <duration>...     print the sum as a Go duration
 #   scripts/go-duration.sh at-least <a> <b>      exit 0 when a is not shorter than b
+#
+# Comparisons keep subsecond precision (1.2s is shorter than 1.4s), because they
+# guard token expiry against a suite deadline. Printed durations are whole
+# seconds, the resolution `kubectl create token --duration` needs.
 set -Eeuo pipefail
 
 fail() {
@@ -25,33 +29,44 @@ Usage: scripts/go-duration.sh <command> [duration...]
 
   seconds <duration>   print the duration as whole seconds (90m -> 5400)
   add <duration>...    print the sum of the durations (4h 1h -> 5h)
-  at-least <a> <b>     exit 0 when duration a is not shorter than duration b
+  at-least <a> <b>     exit 0 when duration a is not shorter than duration b,
+                       comparing exact durations (1.2s is shorter than 1.4s)
 
 Durations use Go syntax: 45s, 90m, 4h, 1h30m.
 USAGE
   exit 2
 }
 
-# duration_seconds prints a Go duration as whole seconds. It rejects anything
+# duration_milliseconds prints a Go duration as milliseconds without rounding, so
+# comparing two durations cannot hide a subsecond difference. It rejects anything
 # that is not a run of duration components, so a typo cannot silently become 0.
-duration_seconds() {
+duration_milliseconds() {
   awk -v duration="$1" '
     BEGIN {
       if (duration == "") exit 1
       rest = duration
-      seconds = 0
+      milliseconds = 0
       while (match(rest, /[0-9]+(\.[0-9]+)?(ms|s|m|h)/)) {
         component = substr(rest, RSTART, RLENGTH)
         value = component + 0
-        if (component ~ /ms$/) seconds += value / 1000
-        else if (component ~ /h$/) seconds += value * 3600
-        else if (component ~ /m$/) seconds += value * 60
-        else seconds += value
+        if (component ~ /ms$/) milliseconds += value
+        else if (component ~ /h$/) milliseconds += value * 3600000
+        else if (component ~ /m$/) milliseconds += value * 60000
+        else milliseconds += value * 1000
         rest = substr(rest, 1, RSTART - 1) substr(rest, RSTART + RLENGTH)
       }
       if (rest != "") exit 1
-      printf "%d\n", seconds + 0.5
+      printf "%.6f\n", milliseconds
     }'
+}
+
+# duration_seconds prints a Go duration as whole seconds, rounding to the nearest
+# second for display. Comparisons use duration_milliseconds instead, so rounding
+# can never make a shorter duration pass.
+duration_seconds() {
+  local milliseconds
+  milliseconds="$(duration_milliseconds "$1")" || return 1
+  awk -v milliseconds="$milliseconds" 'BEGIN { printf "%d\n", milliseconds / 1000 + 0.5 }'
 }
 
 # format_duration prints whole seconds as the shortest Go duration that parses
@@ -88,9 +103,9 @@ case "${1:-}" in
     ;;
   at-least)
     [[ $# -eq 3 ]] || usage
-    actual="$(duration_seconds "$2")" || fail "not a Go duration: '$2'"
-    minimum="$(duration_seconds "$3")" || fail "not a Go duration: '$3'"
-    ((actual >= minimum))
+    actual="$(duration_milliseconds "$2")" || fail "not a Go duration: '$2'"
+    minimum="$(duration_milliseconds "$3")" || fail "not a Go duration: '$3'"
+    awk -v actual="$actual" -v minimum="$minimum" 'BEGIN { exit !(actual + 0 >= minimum + 0) }'
     ;;
   *)
     usage

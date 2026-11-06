@@ -10,13 +10,13 @@ LightEval's logprob patch and LM Evaluation Harness's local-completions
 backend. Scores are deterministic and not meaningful.
 
 Protocol regression tests: scripts/test_kind_openai_mock.py, run with
-`python3 -m unittest discover -s scripts` from the repository root.
+`make test-scripts` from the repository root.
 """
 
 import json
 import os
 import re
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROLE = os.environ["MOCK_ROLE"]
 MODEL = os.environ["MOCK_MODEL"]
@@ -26,10 +26,14 @@ HOST = os.environ.get("MOCK_BIND", "0.0.0.0")
 PORT = int(os.environ.get("MOCK_PORT", "8000"))
 
 class Handler(BaseHTTPRequestHandler):
+    """Answers one mock HTTP request per handler instance."""
+
     def log_message(self, _format, *_args):
+        """Suppress the default stderr line; each accepted reply is logged as JSON."""
         pass
 
     def reply(self, status, value):
+        """Send `value` as a JSON body with the given HTTP status."""
         body = json.dumps(value).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -38,12 +42,14 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        """Serve the model list at /v1/models and 404 for every other path."""
         if self.path.rstrip("/").endswith("/models"):
             self.reply(200, {"object": "list", "data": [{"id": MODEL, "object": "model"}]})
         else:
             self.reply(404, {"error": {"message": "not found"}})
 
     def do_POST(self):
+        """Authenticate the caller, then answer completions, responses, and chat requests."""
         token = self.headers.get("Authorization", "")
         if token not in {"Bearer " + key for key in API_KEYS}:
             self.reply(401, {"error": {"message": "mock rejected credential"}})
@@ -203,4 +209,8 @@ class Handler(BaseHTTPRequestHandler):
         })
         print(json.dumps({"role": ROLE, "auth": "accepted", "response_format": response_format if ROLE == "judge" else "target"}), flush=True)
 
-HTTPServer((HOST, PORT), Handler).serve_forever()
+# A thread per request: a kind benchmark run keeps KIND_BENCHMARK_PARALLEL
+# evaluation jobs (plus their readiness probes) in flight against these mocks,
+# and one slow client must not block the others the way a serial HTTPServer
+# does. The handler only reads module constants and prints, so threads are safe.
+ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()

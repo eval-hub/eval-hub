@@ -250,11 +250,16 @@ canonical_runtime() {
 # KIND_CLUSTER_NAME (see ensure_forced_runtime_matches_owner).
 detect_container_runtime() {
   local runtime canonical
+  # Resolve each preferred name to the engine that actually runs it before
+  # probing: under WSL docker is preferred, and a docker that is the
+  # podman-docker shim would otherwise leave the run on the docker name, so kind
+  # would use the docker provider and a registry push would omit Podman's
+  # --tls-verify=false (see canonical_runtime).
   local -a preferred_runtimes=()
   if uname -r | grep -qiE 'microsoft|wsl'; then
-    preferred_runtimes=(docker podman)
+    preferred_runtimes=("$(canonical_runtime docker)" "$(canonical_runtime podman)")
   else
-    preferred_runtimes=(podman docker)
+    preferred_runtimes=("$(canonical_runtime podman)" "$(canonical_runtime docker)")
   fi
   case "$CONTAINER_RUNTIME" in
     podman|docker)

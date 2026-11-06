@@ -81,9 +81,8 @@ per token, exact `max_tokens=0` echo scoring, token-id prompt echo, and
 `return_token_ids` reporting per-choice `prompt_token_ids` — so LightEval and
 LM Evaluation Harness loglikelihood benchmarks execute against it. The mock
 server source is `scripts/kind-openai-mock.py`; its protocol regression tests
-run with `python3 -m unittest discover -s scripts`. It builds
-every
-curated adapter image (`ADAPTERS=all`) unless `ADAPTERS` is set, so the
+run with `make test-scripts`. It builds every curated adapter image
+(`ADAPTERS=all`) unless `ADAPTERS` is set, so the
 discovered providers run images from this checkout rather than
 operator-packaged ones; pass `SKIP_BUILD=true` to reuse images that are already
 built. garak and garak-kfp are not curated adapters, so they keep their
@@ -109,8 +108,10 @@ prerequisite skips in a full run rather than being excluded from it.
 kind cluster. The run mints one ServiceAccount token and reuses it for every
 request, so `KIND_BENCHMARK_TOKEN_DURATION` defaults to
 `KIND_BENCHMARK_TIMEOUT` plus `KIND_BENCHMARK_TOKEN_MARGIN` (1h) rather than a
-fixed hour a long run outlives; an explicit token duration shorter than the
-deadline fails before the run starts.
+fixed hour a long run outlives. The token is minted before the suite's
+gotestsum install and test compilation, so an explicit token duration must cover
+`KIND_BENCHMARK_TIMEOUT` plus `KIND_BENCHMARK_SETUP_MARGIN` (15m); a shorter one
+fails before the deployment builds start.
 
 ## Fixtures
 

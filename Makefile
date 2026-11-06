@@ -387,10 +387,21 @@ test-coverage: $(BIN_DIR) ## Run unit tests with coverage
 	@go tool cover -html=$(BIN_DIR)/coverage-init.out -o $(BIN_DIR)/coverage-init.html
 	@echo "Coverage report generated: $(BIN_DIR)/coverage.html and $(BIN_DIR)/coverage-init.html"
 
-test-all: test test-fvt test-fvt-server test-mcp-fvt ## Run all tests (unit + FVT)
+test-all: test test-scripts test-fvt test-fvt-server test-mcp-fvt ## Run all tests (unit + script regressions + FVT)
 
 test-help: ## Display Go test flags documentation
 	@go help testflag
+
+## ------------------------------------------------------------------------------------------------
+## Script regression tests
+## ------------------------------------------------------------------------------------------------
+
+.PHONY: test-scripts
+test-scripts: ## Run the Python regression tests for the development scripts (scripts/*.py)
+	@echo "Running development script regression tests..."
+	@command -v python3 >/dev/null 2>&1 || { echo "Error: Python 3 is required for make test-scripts. Install python3 and retry."; exit 1; }
+	@python3 -m unittest discover -s scripts -v
+	@echo "Development script regression tests complete"
 
 SERVER_URL ?= http://localhost:8080
 
@@ -403,7 +414,7 @@ FVT_OUTPUT ?= --godog.format=junit:${PWD}/$(BIN_DIR)/junit-fvt-report.xml,pretty
 FVT_TAGS ?= --godog.tags=~@ignore && ~@mlflow && ~@cluster && ~@local_runtime && ~@benchmark_providers
 FVT_CONCURRENCY ?= 1
 
-.PHONY: test-benchmarks test-benchmarks-kind test-benchmarks-kind-deploy generate-benchmark-configs
+.PHONY: test-benchmarks test-benchmarks-kind test-benchmarks-kind-deploy test-benchmarks-kind-token-check generate-benchmark-configs
 BENCHMARK_PARALLEL ?= 2
 BENCHMARK_TIMEOUT ?= 30m
 BENCHMARK_RUN ?= TestBenchmarkSmoke
@@ -468,8 +479,9 @@ KIND_BENCHMARK_OWNERSHIP_ANNOTATION ?= io.evalhub.kind-smoke.cluster
 # One token is minted for the whole run and every request in the sub-make reuses
 # it, so the token has to outlive the suite: derive its lifetime from the
 # deadline plus a cleanup margin instead of pinning an hour that a longer
-# deadline outlasts. An explicit value still wins, but the recipe rejects one
-# shorter than the deadline rather than letting the run fail with HTTP 401s.
+# deadline outlasts. An explicit value still wins, but
+# test-benchmarks-kind-token-check rejects one that cannot cover the deadline
+# plus KIND_BENCHMARK_SETUP_MARGIN rather than letting the run fail with 401s.
 KIND_BENCHMARK_TOKEN_MARGIN ?= 1h
 KIND_BENCHMARK_TOKEN_DURATION ?= $(shell bash scripts/go-duration.sh add $(KIND_BENCHMARK_TIMEOUT) $(KIND_BENCHMARK_TOKEN_MARGIN))
 # An explicit BENCHMARK_PARALLEL/BENCHMARK_TIMEOUT (command line or environment)
@@ -477,6 +489,12 @@ KIND_BENCHMARK_TOKEN_DURATION ?= $(shell bash scripts/go-duration.sh add $(KIND_
 # while those shared settings keep their standalone defaults.
 KIND_BENCHMARK_PARALLEL ?= $(if $(filter command line environment,$(origin BENCHMARK_PARALLEL)),$(BENCHMARK_PARALLEL),8)
 KIND_BENCHMARK_TIMEOUT ?= $(if $(filter command line environment,$(origin BENCHMARK_TIMEOUT)),$(BENCHMARK_TIMEOUT),4h)
+# The token is minted before `make test-benchmarks` installs gotestsum and
+# compiles the Go tests, so that setup is charged against the token lifetime. The
+# guard requires the token to cover the deadline plus this bounded preparation
+# allowance instead of only matching the deadline.
+KIND_BENCHMARK_SETUP_MARGIN ?= 15m
+KIND_BENCHMARK_REQUIRED_TOKEN_DURATION ?= $(shell bash scripts/go-duration.sh add $(KIND_BENCHMARK_TIMEOUT) $(KIND_BENCHMARK_SETUP_MARGIN))
 # dev-deploy's own ADAPTERS default is the small set used for manual work; a
 # benchmark run needs every curated adapter, so default the deployment to
 # ADAPTERS=all and keep an explicit ADAPTERS (command line or environment).
@@ -486,9 +504,16 @@ KIND_BENCHMARK_JUDGE_URL ?= http://evalhub-kind-mock-judge.system.svc.cluster.lo
 KIND_BENCHMARK_JUDGE_API_KEY ?= judge-test-token
 KIND_BENCHMARK_LM_EVAL_TOKENIZER ?= hf-internal-testing/llama-tokenizer
 
+# Reject a token lifetime that cannot cover the suite before the (long) image
+# builds start, so a bad explicit KIND_BENCHMARK_TOKEN_DURATION fails in seconds
+# instead of after dev-deploy has built every curated adapter image.
+test-benchmarks-kind-token-check:
+	@bash scripts/go-duration.sh at-least "$(KIND_BENCHMARK_TOKEN_DURATION)" "$(KIND_BENCHMARK_REQUIRED_TOKEN_DURATION)" || \
+		{ echo "FAIL: KIND_BENCHMARK_TOKEN_DURATION=$(KIND_BENCHMARK_TOKEN_DURATION) must be a Go duration at least as long as KIND_BENCHMARK_TIMEOUT=$(KIND_BENCHMARK_TIMEOUT) plus KIND_BENCHMARK_SETUP_MARGIN=$(KIND_BENCHMARK_SETUP_MARGIN) (= $(KIND_BENCHMARK_REQUIRED_TOKEN_DURATION)); the minted token would expire while the suite is still running and requests would start failing with HTTP 401."; exit 1; }
+
 # Deploy (or reuse) the kind cluster with the adapter set the benchmark run
 # needs; `make dev-deploy` on its own keeps its smaller ADAPTERS default.
-test-benchmarks-kind-deploy:
+test-benchmarks-kind-deploy: test-benchmarks-kind-token-check
 	@ADAPTERS="$(KIND_BENCHMARK_ADAPTERS)" $(MAKE) dev-deploy
 
 test-benchmarks-kind: test-benchmarks-kind-deploy ## Run benchmark smoke tests against the local kind cluster (deploys it first; SKIP_BUILD=true reuses built images)
@@ -517,8 +542,6 @@ test-benchmarks-kind: test-benchmarks-kind-deploy ## Run benchmark smoke tests a
 		| kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" apply -f - >/dev/null; \
 	echo "Applied the dev-deploy-owned mock-auth Secret $(KIND_BENCHMARK_MODEL_SECRET) with the mock target, judge, and grader keys."; \
 	token_duration="$(KIND_BENCHMARK_TOKEN_DURATION)"; \
-	bash scripts/go-duration.sh at-least "$$token_duration" "$(KIND_BENCHMARK_TIMEOUT)" || \
-		{ echo "FAIL: KIND_BENCHMARK_TOKEN_DURATION=$$token_duration must be a Go duration at least as long as KIND_BENCHMARK_TIMEOUT=$(KIND_BENCHMARK_TIMEOUT); the minted token would expire before the suite ends and requests would start failing with HTTP 401."; exit 1; }; \
 	token="$$(kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" create token evalhub-local-service --duration="$$token_duration")"; \
 	echo "Running benchmark smoke tests against $(KIND_BENCHMARK_SERVER_URL) with model $(KIND_BENCHMARK_MODEL_NAME) and a $$token_duration token for the $(KIND_BENCHMARK_TIMEOUT) deadline."; \
 	SERVER_URL="$(KIND_BENCHMARK_SERVER_URL)" \

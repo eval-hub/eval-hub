@@ -36,8 +36,9 @@ make build-mcp          # evalhub-mcp only
 
 ```bash
 make test               # unit tests (internal, cmd, pkg, …)
+make test-scripts       # Python regression tests for scripts/ (kind mock protocol suite)
 make test-fvt           # godog FVT (tests/features)
-make test-all           # unit + FVT + FVT against started server
+make test-all           # unit + script regressions + FVT + FVT against started server
 make test-coverage      # HTML under bin/
 
 go test -v ./internal/eval_hub/handlers -run TestHandleName

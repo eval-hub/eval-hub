@@ -1,6 +1,6 @@
 """Protocol regression tests for the kind mock OpenAI-compatible server.
 
-Run from the repository root:
+Run from the repository root with `make test-scripts`, or directly:
 
     python3 -m unittest discover -s scripts
 
@@ -27,6 +27,7 @@ MOCK_PATH = Path(__file__).resolve().parent / "kind-openai-mock.py"
 
 
 def free_port():
+    """Return a TCP port that is currently free on loopback."""
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         return sock.getsockname()[1]
@@ -42,6 +43,7 @@ class MockServerTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        """Start the mock on a free loopback port and wait for /v1/models to answer."""
         cls.port = free_port()
         cls.base = f"http://127.0.0.1:{cls.port}"
         cls.process = subprocess.Popen(
@@ -71,12 +73,14 @@ class MockServerTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        """Terminate the mock process started by setUpClass."""
         process = getattr(cls, "process", None)
         if process is not None and process.poll() is None:
             process.terminate()
             process.wait(timeout=5)
 
     def post(self, path, payload, key=None):
+        """POST a JSON payload to the mock and return the decoded JSON response."""
         request = urllib.request.Request(
             f"{self.base}{path}",
             data=json.dumps(payload).encode(),
@@ -215,6 +219,7 @@ class TargetMockTests(MockServerTestCase):
         self.assertIn("prompt_token_ids", choice)
 
     def test_string_prompt_batch(self):
+        """A batch of string prompts returns one indexed choice each, with token ids."""
         choices = self.post("/v1/completions", {
             "model": self.model,
             "prompt": ["one", "two"],
@@ -227,6 +232,7 @@ class TargetMockTests(MockServerTestCase):
         self.assertEqual(choices[0]["prompt_token_ids"], [ord(c) for c in "one"])
 
     def test_chat_completions_fallthrough(self):
+        """Target chat requests get the neutral mock reply."""
         message = self.post("/v1/chat/completions", {
             "model": self.model,
             "messages": [{"role": "user", "content": "hi"}],
@@ -234,6 +240,7 @@ class TargetMockTests(MockServerTestCase):
         self.assertEqual(message["content"], "I will follow the requested constraints.")
 
     def test_bearer_token_authentication(self):
+        """An unknown bearer token is rejected with HTTP 401."""
         with self.assertRaises(urllib.error.HTTPError) as raised:
             self.post("/v1/completions", {"prompt": "x"}, key="wrong-token")
         with raised.exception:  # close the error body to avoid a ResourceWarning
@@ -256,6 +263,7 @@ class JudgeMockTests(MockServerTestCase):
         self.assertEqual(content, "GRADE: C")
 
     def test_yes_array_format(self):
+        """A 'reply with N values' prompt yields an N-element YES array."""
         content = self.post("/v1/chat/completions", {
             "model": self.model,
             "messages": [{"role": "user", "content": "reply with 3 values"}],
