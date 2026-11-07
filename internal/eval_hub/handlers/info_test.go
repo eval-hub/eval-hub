@@ -43,7 +43,7 @@ func TestHandleGetInfo(t *testing.T) {
 		}}
 		h := handlers.New(nil, nil, runtime, nil, nil, &config.Config{Service: &config.ServiceConfig{
 			Version: "1.2.3", Build: "release", BuildDate: "2026-10-02", GitHash: "abc123",
-		}}, nil)
+		}}, nil, nil)
 		recorder := httptest.NewRecorder()
 		ctx := &executioncontext.ExecutionContext{Ctx: context.Background(), Tenant: api.Tenant("tenant-a")}
 		h.HandleGetInfo(ctx, createMockRequest("GET", "/api/v1/info"), MockResponseWrapper{recorder: recorder})
@@ -118,7 +118,7 @@ func TestHandleGetInfo(t *testing.T) {
 	})
 
 	t.Run("runtimes without profile discovery return an empty array", func(t *testing.T) {
-		h := handlers.New(nil, nil, nil, nil, nil, &config.Config{Service: &config.ServiceConfig{}}, nil)
+		h := handlers.New(nil, nil, nil, nil, nil, &config.Config{Service: &config.ServiceConfig{}}, nil, nil)
 		recorder := httptest.NewRecorder()
 		ctx := &executioncontext.ExecutionContext{Ctx: context.Background()}
 		h.HandleGetInfo(ctx, createMockRequest("GET", "/api/v1/info"), MockResponseWrapper{recorder: recorder})
@@ -134,7 +134,7 @@ func TestHandleGetInfo(t *testing.T) {
 
 	t.Run("profile lister returning nil profiles produces an empty array", func(t *testing.T) {
 		runtime := &infoHardwareProfileRuntime{}
-		h := handlers.New(nil, nil, runtime, nil, nil, &config.Config{Service: &config.ServiceConfig{}}, nil)
+		h := handlers.New(nil, nil, runtime, nil, nil, &config.Config{Service: &config.ServiceConfig{}}, nil, nil)
 		recorder := httptest.NewRecorder()
 		ctx := &executioncontext.ExecutionContext{Ctx: context.Background(), Tenant: api.Tenant("tenant-a")}
 		h.HandleGetInfo(ctx, createMockRequest("GET", "/api/v1/info"), MockResponseWrapper{recorder: recorder})
@@ -151,7 +151,7 @@ func TestHandleGetInfo(t *testing.T) {
 	t.Run("unexpected profile lookup errors are logged and redacted", func(t *testing.T) {
 		const rawError = "profile lookup denied"
 		runtime := &infoHardwareProfileRuntime{err: errors.New(rawError)}
-		h := handlers.New(nil, nil, runtime, nil, nil, &config.Config{Service: &config.ServiceConfig{}}, nil)
+		h := handlers.New(nil, nil, runtime, nil, nil, &config.Config{Service: &config.ServiceConfig{}}, nil, nil)
 		recorder := httptest.NewRecorder()
 		var logs bytes.Buffer
 		ctx := &executioncontext.ExecutionContext{
@@ -178,7 +178,7 @@ func TestHandleGetInfo(t *testing.T) {
 
 	t.Run("service errors retain their client message", func(t *testing.T) {
 		runtime := &infoHardwareProfileRuntime{err: serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "profile", "ResourceId", "gpu")}
-		h := handlers.New(nil, nil, runtime, nil, nil, &config.Config{Service: &config.ServiceConfig{}}, nil)
+		h := handlers.New(nil, nil, runtime, nil, nil, &config.Config{Service: &config.ServiceConfig{}}, nil, nil)
 		recorder := httptest.NewRecorder()
 		ctx := &executioncontext.ExecutionContext{Ctx: context.Background(), RequestID: "request-1", Tenant: api.Tenant("tenant-a")}
 		h.HandleGetInfo(ctx, createMockRequest("GET", "/api/v1/info"), MockResponseWrapper{recorder: recorder})

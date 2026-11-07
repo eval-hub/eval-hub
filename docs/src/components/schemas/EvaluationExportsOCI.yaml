@@ -2,6 +2,9 @@ type: object
 description: >-
   OCI export configuration for local and Kubernetes evaluation jobs. Signing
   configuration is retained only; accepting it does not perform or schedule signing.
+  Completed and partially_failed jobs publish an evaluation card and a final index
+  containing recorded completed benchmark artifacts. Adapters use their own fallback
+  tags; the job-level prefix is reserved for the final index.
 examples:
   - coordinates:
       oci_host: quay.io

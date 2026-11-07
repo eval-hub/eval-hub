@@ -490,6 +490,10 @@ func TestRunEvaluationJobMLFlowTrackingURIEnvironment(t *testing.T) {
 func TestRunEvaluationJobWritesJobSpec(t *testing.T) {
 	providerID := "provider-1"
 	evaluation := sampleEvaluation(providerID)
+	evaluation.Exports = &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{Coordinates: api.OCICoordinates{
+		OCIHost: "http://localhost:5001", OCIRepository: "team/results", OCITag: "release",
+		Annotations: map[string]string{"purpose": "test"},
+	}}}
 	dirName := localJobDir("job-1", 0, providerID, "bench-1")
 	sentinelPath := filepath.Join(dirName, "done")
 	providers := sampleLocalProviders(providerID, fmt.Sprintf("touch %s", sentinelPath))
@@ -544,6 +548,14 @@ func TestRunEvaluationJobWritesJobSpec(t *testing.T) {
 	}
 	if spec.Model.Name != "model-1" {
 		t.Fatalf("expected Model.Name %q, got %q", "model-1", spec.Model.Name)
+	}
+
+	if strings.Contains(string(data), "oci_tag") || evaluation.Exports.OCI.Coordinates.OCITag != "release" {
+		t.Fatalf("adapter tag override or mutated stored prefix: %s", data)
+	}
+	coords := spec.Exports.OCI.Coordinates
+	if coords.OCIHost != "http://localhost:5001" || coords.OCIRepository != "team/results" || coords.Annotations["purpose"] != "test" {
+		t.Fatalf("adapter coordinates changed: %+v", coords)
 	}
 }
 

@@ -217,7 +217,7 @@ func TestHandleCreateEvaluation_RepeatedBenchmarkOverridesReachRuntime(t *testin
 			}
 			runtime := &repeatedBenchmarkCaptureRuntime{}
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-			h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+			h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 			req := &bodyRequest{
 				MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
 				body:        []byte(benchmarkJSON(t, job.EvaluationJobConfig)),
@@ -313,7 +313,7 @@ func TestRepeatedBenchmarkOverridesRejectAmbiguousCountsBeforeCreatingJob(t *tes
 			}
 			storage := &collectionRunCountStorage{fakeStorage: &fakeStorage{}, collection: collection}
 			runtime := &repeatedBenchmarkCaptureRuntime{}
-			h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+			h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 			req := &bodyRequest{
 				MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
 				body:        []byte(benchmarkJSON(t, job.EvaluationJobConfig)),
