@@ -26,7 +26,7 @@ func (h *Handlers) onEvaluationJobUpdated(
 		return
 	}
 
-	h.exportEvaluationResults(ctx, job, logger)
+	h.exportEvaluationResults(ctx, storage, job, logger)
 
 	if h.runtime != nil && job.Results != nil {
 		h.notifyThresholdViolations(ctx, job, logger)

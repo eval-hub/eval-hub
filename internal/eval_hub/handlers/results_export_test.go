@@ -41,7 +41,7 @@ func TestExportEvaluationResultsEligibleStates(t *testing.T) {
 			job.Status.State = tc.state
 			exporter := &stubResultsExporter{}
 			h := &Handlers{resultsExporter: exporter}
-			h.exportEvaluationResults(context.Background(), job, nil)
+			h.exportEvaluationResults(context.Background(), nil, job, nil)
 			if got := exporter.card != nil; got != tc.want {
 				t.Fatalf("card exported = %v, want %v", got, tc.want)
 			}
@@ -52,7 +52,7 @@ func TestExportEvaluationResultsEligibleStates(t *testing.T) {
 		job.Status = nil
 		exporter := &stubResultsExporter{}
 		h := &Handlers{resultsExporter: exporter}
-		h.exportEvaluationResults(context.Background(), job, nil)
+		h.exportEvaluationResults(context.Background(), nil, job, nil)
 		if exporter.card != nil {
 			t.Fatal("card exported without job status")
 		}
@@ -71,7 +71,7 @@ func testEvaluationJob() *api.EvaluationJobResource {
 func TestExportEvaluationResultsNilExporter(t *testing.T) {
 	t.Parallel()
 	h := &Handlers{}
-	h.exportEvaluationResults(context.Background(), testEvaluationJob(), nil)
+	h.exportEvaluationResults(context.Background(), nil, testEvaluationJob(), nil)
 }
 
 func TestExportEvaluationResultsExportsCard(t *testing.T) {
@@ -80,19 +80,19 @@ func TestExportEvaluationResultsExportsCard(t *testing.T) {
 	h := &Handlers{resultsExporter: exporter}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	h.exportEvaluationResults(context.Background(), testEvaluationJob(), logger)
+	h.exportEvaluationResults(context.Background(), nil, testEvaluationJob(), logger)
 }
 
 func TestExportEvaluationResultsExportError(t *testing.T) {
 	t.Parallel()
 	h := &Handlers{resultsExporter: &stubResultsExporter{err: errors.New("mlflow unavailable")}}
 
-	h.exportEvaluationResults(context.Background(), testEvaluationJob(), nil)
+	h.exportEvaluationResults(context.Background(), nil, testEvaluationJob(), nil)
 }
 
 func TestExportEvaluationResultsNilJob(t *testing.T) {
 	t.Parallel()
 	h := &Handlers{resultsExporter: &stubResultsExporter{cardURL: "https://example.com/card.json"}}
 
-	h.exportEvaluationResults(context.Background(), nil, nil)
+	h.exportEvaluationResults(context.Background(), nil, nil, nil)
 }
