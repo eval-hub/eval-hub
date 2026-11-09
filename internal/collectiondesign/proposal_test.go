@@ -477,42 +477,51 @@ func TestCalibrateProposalRequiresMatchingParametersAndTestDataForThresholds(t *
 	reference := func(id, task, claim, subPath string, threshold float32) api.CollectionResource {
 		benchmark := testBenchmarkWithWeightScoreAndThreshold("p1", "b1", 1, "accuracy", false, threshold)
 		benchmark.Parameters = map[string]any{"task": task}
-		benchmark.TestDataRef = &api.TestDataRef{PVC: &api.PVCTestDataRef{ClaimName: claim, SubPath: subPath}, ResolvedSHA: "sha256:same-content"}
+		benchmark.TestDataRef = &api.TestDataRef{PVC: &api.PVCTestDataRef{ClaimName: claim, SubPath: subPath}}
 		return systemReference(id, benchmark)
 	}
 
 	source := &fakeCatalogSource{
 		providers: []api.ProviderResource{provider},
 		collections: []api.CollectionResource{
-			reference("compatible", "candidate", "candidate-data", "dataset", 0.7),
 			reference("different-parameters", "other-task", "candidate-data", "dataset", 0.99),
 			reference("different-test-data", "candidate", "other-data", "dataset", 0.1),
 			reference("different-subpath", "candidate", "candidate-data", "other-dataset", 0.2),
-			reference("unresolved-test-data", "candidate", "candidate-data", "dataset", 0.3),
 		},
 	}
-	source.collections[len(source.collections)-1].Benchmarks[0].TestDataRef.ResolvedSHA = ""
 	got, decisions, err := CalibrateProposal(context.Background(), source, proposalTestOptions(t, "", 2, StrictnessStrict), candidate)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Benchmarks[0].PassCriteria != nil {
-		t.Fatalf("mutable PVC data without a caller-supplied identity must not be calibrated: %+v", got.Benchmarks[0].PassCriteria)
+		t.Fatalf("threshold was inferred from references with different parameters or PVC locations: %+v", got.Benchmarks[0].PassCriteria)
 	}
 	if !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "no system references match the candidate parameters and test-data identity") {
-		t.Fatalf("missing explanation for mutable test data without a trusted identity: %+v", decisions)
+		t.Fatalf("missing explanation for references that do not match the candidate: %+v", decisions)
+	}
+}
+
+func TestCalibrateProposalUsesMatchingPVCSourceDescriptorWithoutResolvedSHA(t *testing.T) {
+	t.Parallel()
+	provider := testProvider("p1", "b1", []string{"accuracy"}, &api.PrimaryScore{Metric: "accuracy"}, nil)
+	candidate := validProposal()
+	candidate.Benchmarks[0].TestDataRef = &api.TestDataRef{PVC: &api.PVCTestDataRef{ClaimName: "calibration-data", SubPath: "dataset"}}
+	reference := testBenchmarkWithWeightScoreAndThreshold("p1", "b1", 1, "accuracy", false, 0.73)
+	reference.TestDataRef = &api.TestDataRef{PVC: &api.PVCTestDataRef{ClaimName: "calibration-data", SubPath: "dataset"}, ResolvedSHA: "0123456789abcdef0123456789abcdef01234567"}
+	source := &fakeCatalogSource{
+		providers:   []api.ProviderResource{provider},
+		collections: []api.CollectionResource{systemReference("same-pvc-source", reference)},
 	}
 
-	source.collections = source.collections[1:]
-	got, decisions, err = CalibrateProposal(context.Background(), source, proposalTestOptions(t, "", 2, StrictnessModerate), candidate)
+	got, decisions, err := CalibrateProposal(context.Background(), source, proposalTestOptions(t, "", 2, StrictnessModerate), candidate)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Benchmarks[0].PassCriteria != nil {
-		t.Fatalf("threshold was inferred without comparable data: %+v", got.Benchmarks[0].PassCriteria)
+	if got.Benchmarks[0].PassCriteria == nil || got.Benchmarks[0].PassCriteria.Threshold == nil || *got.Benchmarks[0].PassCriteria.Threshold != 0.73 {
+		t.Fatalf("threshold from matching PVC source descriptor was not used: %+v", got.Benchmarks[0].PassCriteria)
 	}
-	if !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "no system references match the candidate parameters and test-data identity") {
-		t.Fatalf("missing no-calibration reason for incompatible references: %+v", decisions)
+	if !reflect.DeepEqual(decisionIDs(decisions, "benchmarks[0].pass_criteria.threshold"), []string{"same-pvc-source"}) {
+		t.Fatalf("unexpected threshold provenance: %+v", decisions)
 	}
 }
 
@@ -544,7 +553,7 @@ func TestCalibrateProposalUsesImmutableGitRevisionWithoutResolvedSHA(t *testing.
 	}
 }
 
-func TestSameTestDataIdentityRequiresStableIdentityForMutableSources(t *testing.T) {
+func TestSameTestDataIdentityUsesStableSourceDescriptors(t *testing.T) {
 	t.Parallel()
 	const commit = "0123456789abcdef0123456789abcdef01234567"
 	gitPinned := &api.TestDataRef{Git: &api.GitTestDataRef{URL: "https://example.com/data.git", Ref: commit, SubPath: "set"}}
@@ -566,9 +575,12 @@ func TestSameTestDataIdentityRequiresStableIdentityForMutableSources(t *testing.
 		{name: "immutable commit with one recorded resolved identity", left: &api.TestDataRef{Git: gitPinned.Git, ResolvedSHA: commit}, right: gitPinned, want: true},
 		{name: "mutable git branch", left: gitBranch, right: gitBranch},
 		{name: "mutable Hugging Face revision", left: hfBranch, right: hfBranch},
-		{name: "mutable PVC", left: pvc, right: pvc},
-		{name: "mutable S3 object", left: s3, right: s3},
+		{name: "same PVC location", left: pvc, right: pvc, want: true},
+		{name: "same S3 object location", left: s3, right: s3, want: true},
+		{name: "same PVC location with one resolved identity", left: &api.TestDataRef{PVC: pvc.PVC, ResolvedSHA: commit}, right: pvc, want: true},
 		{name: "different immutable revision", left: gitPinned, right: &api.TestDataRef{Git: &api.GitTestDataRef{URL: "https://example.com/data.git", Ref: strings.Repeat("f", 40), SubPath: "set"}}},
+		{name: "different credential refs do not change HF dataset identity", left: &api.TestDataRef{HF: &api.HFTestDataRef{RepoID: "org/data", Revision: commit, SubPath: "set", SecretRef: "secret-a"}}, right: &api.TestDataRef{HF: &api.HFTestDataRef{RepoID: "org/data", Revision: commit, SubPath: "set", SecretRef: "secret-b"}}, want: true},
+		{name: "mutable git branch with matching resolved identity", left: &api.TestDataRef{Git: gitBranch.Git, ResolvedSHA: commit}, right: &api.TestDataRef{Git: gitBranch.Git, ResolvedSHA: commit}, want: true},
 		{name: "matching resolved identity", left: &api.TestDataRef{PVC: pvc.PVC, ResolvedSHA: commit}, right: &api.TestDataRef{PVC: pvc.PVC, ResolvedSHA: commit}, want: true},
 		{name: "different resolved identity", left: &api.TestDataRef{PVC: pvc.PVC, ResolvedSHA: commit}, right: &api.TestDataRef{PVC: pvc.PVC, ResolvedSHA: strings.Repeat("f", 40)}},
 	} {

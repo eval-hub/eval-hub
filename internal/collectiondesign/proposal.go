@@ -467,9 +467,10 @@ func matchingReferenceBenchmarks(collections []api.CollectionResource, key bench
 
 // comparableThresholdReferences limits threshold evidence to system benchmarks
 // with the same configured parameters and test-data identity as the candidate.
-// Provider metadata does not expose parameter defaults. Mutable test-data
-// sources need a resolved content identity; full Git/Hugging Face commit
-// revisions are immutable and can be compared directly.
+// Provider metadata does not expose parameter defaults. S3 and PVC sources are
+// matched by their configured locations; mutable Git/Hugging Face revisions
+// need equal resolved content identities, while full commit revisions are
+// immutable and can be compared directly.
 func comparableThresholdReferences(references []referenceBenchmark, candidate api.CollectionBenchmarkConfig) []referenceBenchmark {
 	comparable := make([]referenceBenchmark, 0, len(references))
 	for _, reference := range references {
@@ -495,23 +496,40 @@ func sameTestDataIdentity(left, right *api.TestDataRef) bool {
 	if left == nil || right == nil {
 		return left == nil && right == nil
 	}
-	leftSource := *left
-	rightSource := *right
-	leftSource.ResolvedSHA = ""
-	rightSource.ResolvedSHA = ""
-	if !reflect.DeepEqual(leftSource, rightSource) {
+	if !reflect.DeepEqual(testDataSourceDescriptor(left), testDataSourceDescriptor(right)) {
 		return false
 	}
-	if hasImmutableTestDataRevision(left) {
-		return true
+	if left.ResolvedSHA != "" && right.ResolvedSHA != "" && left.ResolvedSHA != right.ResolvedSHA {
+		return false
 	}
-	if left.ResolvedSHA != "" || right.ResolvedSHA != "" {
+	if requiresResolvedTestDataIdentity(left) {
 		return left.ResolvedSHA != "" && left.ResolvedSHA == right.ResolvedSHA
 	}
-	return false
+	return true
 }
 
-func hasImmutableTestDataRevision(ref *api.TestDataRef) bool {
+func testDataSourceDescriptor(ref *api.TestDataRef) api.TestDataRef {
+	descriptor := *ref
+	descriptor.ResolvedSHA = ""
+	if ref.S3 != nil {
+		source := *ref.S3
+		source.SecretRef = ""
+		descriptor.S3 = &source
+	}
+	if ref.Git != nil {
+		source := *ref.Git
+		source.SecretRef = ""
+		descriptor.Git = &source
+	}
+	if ref.HF != nil {
+		source := *ref.HF
+		source.SecretRef = ""
+		descriptor.HF = &source
+	}
+	return descriptor
+}
+
+func requiresResolvedTestDataIdentity(ref *api.TestDataRef) bool {
 	sourceCount := 0
 	if ref.S3 != nil {
 		sourceCount++
@@ -526,13 +544,13 @@ func hasImmutableTestDataRevision(ref *api.TestDataRef) bool {
 		sourceCount++
 	}
 	if sourceCount != 1 {
-		return false
+		return true
 	}
 	if ref.Git != nil {
-		return isFullCommitSHA(ref.Git.Ref)
+		return !isFullCommitSHA(ref.Git.Ref)
 	}
 	if ref.HF != nil {
-		return isFullCommitSHA(ref.HF.Revision)
+		return !isFullCommitSHA(ref.HF.Revision)
 	}
 	return false
 }
