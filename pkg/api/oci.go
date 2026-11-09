@@ -1,5 +1,10 @@
 package api
 
+// IsOCIExportEnabled reports whether a job has OCI exports configured.
+func IsOCIExportEnabled(job *EvaluationJobResource) bool {
+	return job != nil && job.Exports != nil && job.Exports.OCI != nil
+}
+
 // OCISigningConfig selects the signing method and optionally references a key Secret.
 // It retains configuration only; it does not resolve keys or schedule signing.
 type OCISigningConfig struct {
@@ -23,6 +28,11 @@ const (
 	OCIProcessingCompleted OCIProcessingState = "completed"
 )
 
+// IsOCIProcessingTerminalState reports whether an OCI workflow state is a terminal outcome.
+func IsOCIProcessingTerminalState(state OCIProcessingState) bool {
+	return state == OCIProcessingFailed || state == OCIProcessingCompleted
+}
+
 // OCIProcessingStatus reports actual card, bundle, and signing workflow information.
 // It has no default state or message.
 // Workflow reporting uses running followed by completed or failed.
@@ -42,4 +52,34 @@ type EvaluationOCIResults struct {
 	EvaluationCard   *OCIArtifactReference `json:"evaluation_card,omitempty"`
 	EvaluationBundle *OCIArtifactReference `json:"evaluation_bundle,omitempty"`
 	Signing          *OCISigningResult     `json:"signing,omitempty"`
+}
+
+// UpdateOCIResults partially merges OCI workflow status and the card reference in memory.
+// It performs no field validation or workflow enforcement. Storage updates have a
+// stricter contract: UpdateEvaluationJobOCI requires a non-nil, validated status
+// and validation of any supplied card, even though this helper permits card-only updates.
+// A non-nil card intentionally replaces the existing reference (last-write-wins),
+// which supports future evaluation-card regeneration; the current workflow has no
+// regeneration path yet. Replacement updates the stored digest and reference,
+// not the previously published immutable artifact.
+// It initializes missing results and preserves all other
+// fields. A nil status or card means no change to the existing value; if both are
+// nil, results are returned unchanged.
+func UpdateOCIResults(results *EvaluationJobResults, status *OCIProcessingStatus, card *OCIArtifactReference) *EvaluationJobResults {
+	if status == nil && card == nil {
+		return results
+	}
+	if results == nil {
+		results = &EvaluationJobResults{}
+	}
+	if results.OCI == nil {
+		results.OCI = &EvaluationOCIResults{}
+	}
+	if status != nil {
+		results.OCI.Status = status
+	}
+	if card != nil {
+		results.OCI.EvaluationCard = card
+	}
+	return results
 }

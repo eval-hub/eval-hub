@@ -18,7 +18,9 @@ local thresholdZeroBenchmark() =
       tokenizer: test.defaultTokenizer(),
     },
   } + if harness.disconnected then {
-    test_data_ref: test.testDataRef(),
+    test_data_ref: test.testDataRef(
+      test.benchmarkTestDataKey('lm_evaluation_harness', 'arc_easy')
+    ),
   } else {};
 
 {
