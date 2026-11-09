@@ -2,6 +2,7 @@ package collectiondesign
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -162,6 +163,18 @@ func TestValidateProposalReturnsIndependentPostableCopy(t *testing.T) {
 	if err := registeredValidator.Struct(got); err != nil {
 		t.Fatalf("returned config does not pass the collection POST validator: %v", err)
 	}
+	encoded, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshal returned config: %v", err)
+	}
+	var decoded api.CollectionConfig
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal returned config: %v", err)
+	}
+	postIssues, err := ValidateCollection(context.Background(), source, decoded)
+	if err != nil || len(postIssues) != 0 {
+		t.Fatalf("serialized proposal does not pass collection validation: issues=%+v err=%v", postIssues, err)
+	}
 	if candidate.Benchmarks[0].URL == "" {
 		t.Fatal("ValidateProposal mutated the caller's candidate")
 	}
@@ -206,12 +219,17 @@ func TestValidateProposalFindings(t *testing.T) {
 		{name: "duplicate pair", candidate: proposalWithBenchmarks(testBenchmark("p1", "b1"), testBenchmark("p1", "b1")), options: proposalTestOptions(t, "", 3, StrictnessModerate), wantCode: issueDuplicateBenchmark, wantPath: "benchmarks[1]"},
 		{name: "provider filter violation", candidate: proposalWithBenchmarks(testBenchmark("p2", "b2")), options: validOptions, wantCode: issueProviderFilter, wantPath: "benchmarks[0].provider_id"},
 		{name: "unknown filtered provider", candidate: proposalWithBenchmarks(testBenchmark("p1", "b1")), options: proposalTestOptions(t, "p1,missing", 3, StrictnessModerate), wantCode: issueUnknownProvider, wantPath: "provider_filter"},
-		{name: "comma only provider filter", candidate: proposalWithBenchmarks(testBenchmark("p1", "b1")), options: proposalTestOptions(t, ", ,", 3, StrictnessModerate), wantCode: issueUnknownProvider, wantPath: "provider_filter"},
+		{name: "comma only provider filter", candidate: proposalWithBenchmarks(testBenchmark("p1", "b1")), options: proposalTestOptions(t, ", ,", 3, StrictnessModerate), wantCode: issueInvalidOptions, wantPath: "provider_filter"},
 		{name: "benchmark cap", candidate: proposalWithBenchmarks(testBenchmark("p1", "b1"), testBenchmark("p2", "b2")), options: validOptions, wantCode: issueBenchmarkCap, wantPath: "benchmarks"},
 		{name: "unadvertised metric", candidate: proposalWithBenchmarks(testBenchmarkWithScore("p1", "b1", "unadvertised", false)), options: validOptions, wantCode: issueMetricNotAdvertised, wantPath: "benchmarks[0].primary_score.metric"},
 		{name: "conflicting direction", candidate: proposalWithBenchmarks(testBenchmarkWithScore("p1", "b1", "accuracy", true)), options: validOptions, wantCode: issueDirectionConflict, wantPath: "benchmarks[0].primary_score.lower_is_better"},
 		{name: "threshold without metric", candidate: proposalWithBenchmarks(testBenchmarkWithThreshold("p2", "b2", 0.5)), options: validOptions, wantCode: issueMetricNotAdvertised, wantPath: "benchmarks[0].pass_criteria.threshold"},
 		{name: "admin curation field", candidate: func() api.CollectionConfig { c := validProposal(); c.CurationOrder = 2; return c }(), options: validOptions, wantCode: issueAdminOnlyField, wantPath: "curation_order"},
+		{name: "server-managed test data identity", candidate: func() api.CollectionConfig {
+			c := validProposal()
+			c.Benchmarks[0].TestDataRef = &api.TestDataRef{Git: &api.GitTestDataRef{URL: "https://example.com/data.git", Ref: "0123456789abcdef0123456789abcdef01234567"}, ResolvedSHA: "0123456789abcdef0123456789abcdef01234567"}
+			return c
+		}(), options: validOptions, wantCode: issueAdminOnlyField, wantPath: "benchmarks[0].test_data_ref.resolved_sha"},
 		{name: "non finite threshold", candidate: proposalWithBenchmarks(testBenchmarkWithThreshold("p1", "b1", float32(math.NaN()))), options: validOptions, wantCode: issueInvalidNumber, wantPath: "benchmarks[0].pass_criteria.threshold"},
 		{name: "non finite weight", candidate: proposalWithBenchmarks(testBenchmarkWithWeight("p1", "b1", float32(math.Inf(1)))), options: validOptions, wantCode: issueInvalidNumber, wantPath: "benchmarks[0].weight"},
 	}
@@ -236,20 +254,20 @@ func TestValidateProposalFindings(t *testing.T) {
 
 func TestValidateProposalOptionsCatalogErrorsAndCancellation(t *testing.T) {
 	t.Parallel()
-	if _, _, err := ValidateProposal(context.Background(), nil, proposalTestOptions(t, "", 2, StrictnessModerate), validProposal()); err == nil || !strings.Contains(err.Error(), "catalog source is nil") {
+	if got, issues, err := ValidateProposal(context.Background(), nil, proposalTestOptions(t, "", 2, StrictnessModerate), validProposal()); err == nil || !strings.Contains(err.Error(), "catalog source is nil") || !reflect.DeepEqual(got, api.CollectionConfig{}) || issues != nil {
 		t.Fatalf("nil source validation error = %v", err)
 	}
-	if _, _, err := CalibrateProposal(context.Background(), nil, proposalTestOptions(t, "", 2, StrictnessModerate), validProposal()); err == nil || !strings.Contains(err.Error(), "catalog source is nil") {
+	if got, decisions, err := CalibrateProposal(context.Background(), nil, proposalTestOptions(t, "", 2, StrictnessModerate), validProposal()); err == nil || !strings.Contains(err.Error(), "catalog source is nil") || !reflect.DeepEqual(got, api.CollectionConfig{}) || decisions != nil {
 		t.Fatalf("nil source calibration error = %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, _, err := ValidateProposal(ctx, proposalTestSource(), proposalTestOptions(t, "", 2, StrictnessModerate), validProposal()); !errors.Is(err, context.Canceled) {
+	if got, issues, err := ValidateProposal(ctx, proposalTestSource(), proposalTestOptions(t, "", 2, StrictnessModerate), validProposal()); !errors.Is(err, context.Canceled) || !reflect.DeepEqual(got, api.CollectionConfig{}) || issues != nil {
 		t.Fatalf("pre-canceled validation error = %v", err)
 	}
 
-	invalidOptions := Options{Goal: "goal", MaxBenchmarks: 0, Strictness: "invalid"}
+	invalidOptions := Options{Goal: "goal", MaxBenchmarks: -1, Strictness: "invalid"}
 	_, issues, err := ValidateProposal(context.Background(), proposalTestSource(), invalidOptions, validProposal())
 	if err != nil || !hasIssue(issues, issueInvalidOptions, "max_benchmarks") || !hasIssue(issues, issueInvalidOptions, "strictness") {
 		t.Fatalf("invalid options: issues=%+v err=%v", issues, err)
@@ -269,8 +287,8 @@ func TestValidateProposalOptionsCatalogErrorsAndCancellation(t *testing.T) {
 
 	providerErr := errors.New("catalog unavailable")
 	source := &fakeCatalogSource{providerErr: providerErr}
-	_, issues, err = ValidateProposal(context.Background(), source, proposalTestOptions(t, "", 2, StrictnessModerate), validProposal())
-	if len(issues) != 0 || !errors.Is(err, providerErr) || !strings.Contains(err.Error(), "fetching provider catalog") {
+	got, issues, err := ValidateProposal(context.Background(), source, proposalTestOptions(t, "", 2, StrictnessModerate), validProposal())
+	if len(issues) != 0 || !errors.Is(err, providerErr) || !strings.Contains(err.Error(), "fetching provider catalog") || !reflect.DeepEqual(got, api.CollectionConfig{}) {
 		t.Fatalf("provider failure: issues=%+v err=%v", issues, err)
 	}
 
@@ -284,6 +302,20 @@ func TestValidateProposalOptionsCatalogErrorsAndCancellation(t *testing.T) {
 	_, _, err = ValidateProposal(context.Background(), duplicateBenchmark, proposalTestOptions(t, "", 2, StrictnessModerate), validProposal())
 	if err == nil || !strings.Contains(err.Error(), "duplicate benchmark pair") {
 		t.Fatalf("duplicate benchmark catalog error = %v", err)
+	}
+}
+
+func TestValidateProposalNormalizesHandBuiltOptions(t *testing.T) {
+	t.Parallel()
+	options := Options{
+		Goal:           "  goal  ",
+		ProviderFilter: " p1, p1, , ",
+		ProviderIDs:    map[string]struct{}{"stale": {}},
+		// Zero max and empty strictness use the same defaults as ParseOptions.
+	}
+	_, issues, err := ValidateProposal(context.Background(), proposalTestSource(), options, validProposal())
+	if err != nil || len(issues) != 0 {
+		t.Fatalf("hand-built options were not normalized consistently: issues=%+v err=%v", issues, err)
 	}
 }
 
@@ -440,7 +472,7 @@ func TestCalibrateProposalRequiresMatchingParametersAndTestDataForThresholds(t *
 	candidate := validProposal()
 	candidate.Benchmarks[0].Weight = 1
 	candidate.Benchmarks[0].Parameters = map[string]any{"task": "candidate"}
-	candidate.Benchmarks[0].TestDataRef = &api.TestDataRef{PVC: &api.PVCTestDataRef{ClaimName: "candidate-data", SubPath: "dataset"}, ResolvedSHA: "sha256:same-content"}
+	candidate.Benchmarks[0].TestDataRef = &api.TestDataRef{PVC: &api.PVCTestDataRef{ClaimName: "candidate-data", SubPath: "dataset"}}
 
 	reference := func(id, task, claim, subPath string, threshold float32) api.CollectionResource {
 		benchmark := testBenchmarkWithWeightScoreAndThreshold("p1", "b1", 1, "accuracy", false, threshold)
@@ -464,11 +496,11 @@ func TestCalibrateProposalRequiresMatchingParametersAndTestDataForThresholds(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Benchmarks[0].PassCriteria == nil || got.Benchmarks[0].PassCriteria.Threshold == nil || *got.Benchmarks[0].PassCriteria.Threshold != 0.7 {
-		t.Fatalf("threshold=%+v, want 0.7 from the only comparable reference", got.Benchmarks[0].PassCriteria)
+	if got.Benchmarks[0].PassCriteria != nil {
+		t.Fatalf("mutable PVC data without a caller-supplied identity must not be calibrated: %+v", got.Benchmarks[0].PassCriteria)
 	}
-	if !reflect.DeepEqual(decisionIDs(decisions, "benchmarks[0].pass_criteria.threshold"), []string{"compatible"}) {
-		t.Fatalf("threshold provenance included incomparable references: %+v", decisions)
+	if !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "no system references match the candidate parameters and test-data identity") {
+		t.Fatalf("missing explanation for mutable test data without a trusted identity: %+v", decisions)
 	}
 
 	source.collections = source.collections[1:]
@@ -479,8 +511,73 @@ func TestCalibrateProposalRequiresMatchingParametersAndTestDataForThresholds(t *
 	if got.Benchmarks[0].PassCriteria != nil {
 		t.Fatalf("threshold was inferred without comparable data: %+v", got.Benchmarks[0].PassCriteria)
 	}
-	if !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "no finite comparable") {
+	if !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "no system references match the candidate parameters and test-data identity") {
 		t.Fatalf("missing no-calibration reason for incompatible references: %+v", decisions)
+	}
+}
+
+func TestCalibrateProposalUsesImmutableGitRevisionWithoutResolvedSHA(t *testing.T) {
+	t.Parallel()
+	const commit = "0123456789abcdef0123456789abcdef01234567"
+	candidate := validProposal()
+	candidate.Benchmarks[0].TestDataRef = &api.TestDataRef{Git: &api.GitTestDataRef{
+		URL: "https://example.com/data.git", Ref: commit, SubPath: "dataset",
+	}}
+	reference := testBenchmarkWithWeightScoreAndThreshold("p1", "b1", 1, "accuracy", false, 0.73)
+	reference.TestDataRef = &api.TestDataRef{Git: &api.GitTestDataRef{
+		URL: "https://example.com/data.git", Ref: commit, SubPath: "dataset",
+	}}
+	source := &fakeCatalogSource{
+		providers:   []api.ProviderResource{testProvider("p1", "b1", []string{"accuracy"}, &api.PrimaryScore{Metric: "accuracy"}, nil)},
+		collections: []api.CollectionResource{systemReference("pinned-data", reference)},
+	}
+
+	got, decisions, err := CalibrateProposal(context.Background(), source, proposalTestOptions(t, "", 2, StrictnessModerate), candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Benchmarks[0].PassCriteria == nil || got.Benchmarks[0].PassCriteria.Threshold == nil || *got.Benchmarks[0].PassCriteria.Threshold != 0.73 {
+		t.Fatalf("threshold from identical immutable Git data was not used: %+v", got.Benchmarks[0].PassCriteria)
+	}
+	if !reflect.DeepEqual(decisionIDs(decisions, "benchmarks[0].pass_criteria.threshold"), []string{"pinned-data"}) {
+		t.Fatalf("unexpected threshold provenance: %+v", decisions)
+	}
+}
+
+func TestSameTestDataIdentityRequiresStableIdentityForMutableSources(t *testing.T) {
+	t.Parallel()
+	const commit = "0123456789abcdef0123456789abcdef01234567"
+	gitPinned := &api.TestDataRef{Git: &api.GitTestDataRef{URL: "https://example.com/data.git", Ref: commit, SubPath: "set"}}
+	hfPinned := &api.TestDataRef{HF: &api.HFTestDataRef{RepoID: "org/data", Revision: commit, SubPath: "set"}}
+	gitBranch := &api.TestDataRef{Git: &api.GitTestDataRef{URL: "https://example.com/data.git", Ref: "main", SubPath: "set"}}
+	hfBranch := &api.TestDataRef{HF: &api.HFTestDataRef{RepoID: "org/data", Revision: "main", SubPath: "set"}}
+	pvc := &api.TestDataRef{PVC: &api.PVCTestDataRef{ClaimName: "data", SubPath: "set"}}
+	s3 := &api.TestDataRef{S3: &api.S3TestDataRef{Bucket: "bucket", Key: "set/data.jsonl", SecretRef: "credentials"}}
+
+	for _, test := range []struct {
+		name  string
+		left  *api.TestDataRef
+		right *api.TestDataRef
+		want  bool
+	}{
+		{name: "both absent", want: true},
+		{name: "both same git commit", left: gitPinned, right: gitPinned, want: true},
+		{name: "both same Hugging Face commit", left: hfPinned, right: hfPinned, want: true},
+		{name: "immutable commit with one recorded resolved identity", left: &api.TestDataRef{Git: gitPinned.Git, ResolvedSHA: commit}, right: gitPinned, want: true},
+		{name: "mutable git branch", left: gitBranch, right: gitBranch},
+		{name: "mutable Hugging Face revision", left: hfBranch, right: hfBranch},
+		{name: "mutable PVC", left: pvc, right: pvc},
+		{name: "mutable S3 object", left: s3, right: s3},
+		{name: "different immutable revision", left: gitPinned, right: &api.TestDataRef{Git: &api.GitTestDataRef{URL: "https://example.com/data.git", Ref: strings.Repeat("f", 40), SubPath: "set"}}},
+		{name: "matching resolved identity", left: &api.TestDataRef{PVC: pvc.PVC, ResolvedSHA: commit}, right: &api.TestDataRef{PVC: pvc.PVC, ResolvedSHA: commit}, want: true},
+		{name: "different resolved identity", left: &api.TestDataRef{PVC: pvc.PVC, ResolvedSHA: commit}, right: &api.TestDataRef{PVC: pvc.PVC, ResolvedSHA: strings.Repeat("f", 40)}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := sameTestDataIdentity(test.left, test.right); got != test.want {
+				t.Fatalf("sameTestDataIdentity() = %t, want %t", got, test.want)
+			}
+		})
 	}
 }
 
@@ -528,7 +625,7 @@ func TestCalibrateProposalPaginatesReferencesAndDoesNotInventDirection(t *testin
 	if got.Benchmarks[0].PassCriteria != nil {
 		t.Fatalf("calibration invented a threshold without a provider-advertised direction: %+v", got.Benchmarks[0].PassCriteria)
 	}
-	if !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "trusted direction") {
+	if !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "provider does not advertise a default primary score") {
 		t.Fatalf("missing no-direction explanation: %+v", decisions)
 	}
 }
@@ -548,8 +645,24 @@ func TestCalibrateProposalIgnoresInvalidProviderDefaultScore(t *testing.T) {
 	if got.Benchmarks[0].PrimaryScore != nil || got.Benchmarks[0].PassCriteria != nil {
 		t.Fatalf("unadvertised provider default was used: %+v", got.Benchmarks[0])
 	}
-	if !hasDecision(decisions, "benchmarks[0].primary_score", "no advertised default") || !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "trusted direction") {
+	if !hasDecision(decisions, "benchmarks[0].primary_score", "provider-advertised default metric \"missing-metric\" is not included") || !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "provider-advertised default metric \"missing-metric\" is not included") {
 		t.Fatalf("missing reasons for invalid provider default: %+v", decisions)
+	}
+}
+
+func TestCalibrateProposalDistinguishesMissingProviderDefault(t *testing.T) {
+	t.Parallel()
+	provider := testProvider("p1", "b1", []string{"accuracy"}, nil, nil)
+	source := &fakeCatalogSource{
+		providers:   []api.ProviderResource{provider},
+		collections: []api.CollectionResource{systemReference("reference", testBenchmarkWithThreshold("p1", "b1", 0.8))},
+	}
+	_, decisions, err := CalibrateProposal(context.Background(), source, proposalTestOptions(t, "", 2, StrictnessModerate), validProposal())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasDecision(decisions, "benchmarks[0].primary_score", "provider does not advertise a default primary score") {
+		t.Fatalf("missing distinct no-default explanation: %+v", decisions)
 	}
 }
 
@@ -557,28 +670,29 @@ func TestCalibrateProposalMissingEvidenceAndWeightConsensus(t *testing.T) {
 	t.Parallel()
 	provider := testProvider("p1", "b1", []string{"accuracy"}, &api.PrimaryScore{Metric: "accuracy"}, nil)
 	for _, test := range []struct {
-		name             string
-		refs             []api.CollectionResource
-		wantWeight       float32
-		wantThreshold    bool
-		wantReasonPhrase string
+		name                string
+		refs                []api.CollectionResource
+		wantWeight          float32
+		wantThreshold       bool
+		wantWeightReason    string
+		wantThresholdReason string
 	}{
-		{name: "no references", wantReasonPhrase: "no finite comparable"},
+		{name: "no references", wantWeightReason: "no matching system references", wantThresholdReason: "no matching system references"},
 		{name: "agreed weights but no thresholds", refs: []api.CollectionResource{
 			systemReference("a", testBenchmarkWithWeightScoreAndThreshold("p1", "b1", 3, "accuracy", false, float32(math.NaN()))),
 			systemReference("b", testBenchmarkWithWeightScoreAndThreshold("p1", "b1", 3, "accuracy", false, float32(math.Inf(1)))),
-		}, wantWeight: 3, wantReasonPhrase: "no finite comparable"},
+		}, wantWeight: 3, wantThresholdReason: "no finite thresholds"},
 		{name: "conflicting weights", refs: []api.CollectionResource{
 			systemReference("a", testBenchmarkWithWeightScoreAndThreshold("p1", "b1", 3, "accuracy", false, float32(math.NaN()))),
 			systemReference("b", testBenchmarkWithWeightScoreAndThreshold("p1", "b1", 4, "accuracy", false, float32(math.NaN()))),
-		}, wantReasonPhrase: "do not agree"},
+		}, wantWeightReason: "consensus positive weight", wantThresholdReason: "no finite thresholds"},
 		{name: "omitted reference weight prevents consensus", refs: []api.CollectionResource{
 			systemReference("a", testBenchmarkWithWeightScoreAndThreshold("p1", "b1", 3, "accuracy", false, float32(math.NaN()))),
 			systemReference("b", testBenchmarkWithWeightScoreAndThreshold("p1", "b1", 0, "accuracy", false, float32(math.NaN()))),
-		}, wantReasonPhrase: "do not agree"},
+		}, wantWeightReason: "consensus positive weight", wantThresholdReason: "no finite thresholds"},
 		{name: "direction mismatches", refs: []api.CollectionResource{
 			systemReference("a", testBenchmarkWithWeightScoreAndThreshold("p1", "b1", 1, "accuracy", true, 0.4)),
-		}, wantWeight: 1, wantReasonPhrase: "no finite comparable"},
+		}, wantWeight: 1, wantThresholdReason: "no finite thresholds"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
@@ -594,14 +708,11 @@ func TestCalibrateProposalMissingEvidenceAndWeightConsensus(t *testing.T) {
 			if (got.Benchmarks[0].PassCriteria != nil) != test.wantThreshold {
 				t.Fatalf("threshold presence=%t, want %t", got.Benchmarks[0].PassCriteria != nil, test.wantThreshold)
 			}
-			foundReason := false
-			for _, decision := range decisions {
-				if decision.Reason != "" && strings.Contains(decision.Reason, test.wantReasonPhrase) {
-					foundReason = true
-				}
+			if test.wantWeightReason != "" && !hasDecision(decisions, "benchmarks[0].weight", test.wantWeightReason) {
+				t.Fatalf("expected weight reason containing %q in %+v", test.wantWeightReason, decisions)
 			}
-			if !foundReason {
-				t.Fatalf("expected reason containing %q in %+v", test.wantReasonPhrase, decisions)
+			if test.wantThresholdReason != "" && !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", test.wantThresholdReason) {
+				t.Fatalf("expected threshold reason containing %q in %+v", test.wantThresholdReason, decisions)
 			}
 		})
 	}
@@ -611,26 +722,26 @@ func TestCalibrateProposalErrors(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, _, err := CalibrateProposal(ctx, proposalTestSource(), proposalTestOptions(t, "", 2, StrictnessModerate), validProposal()); !errors.Is(err, context.Canceled) {
+	if got, decisions, err := CalibrateProposal(ctx, proposalTestSource(), proposalTestOptions(t, "", 2, StrictnessModerate), validProposal()); !errors.Is(err, context.Canceled) || !reflect.DeepEqual(got, api.CollectionConfig{}) || decisions != nil {
 		t.Fatalf("pre-canceled calibration error = %v", err)
 	}
 
-	_, _, err := CalibrateProposal(context.Background(), proposalTestSource(), proposalTestOptions(t, "", 2, StrictnessModerate), api.CollectionConfig{})
-	if err == nil || !strings.Contains(err.Error(), issueClassificationRequired) {
+	got, decisions, err := CalibrateProposal(context.Background(), proposalTestSource(), proposalTestOptions(t, "", 2, StrictnessModerate), api.CollectionConfig{})
+	if err == nil || !strings.Contains(err.Error(), issueClassificationRequired) || !reflect.DeepEqual(got, api.CollectionConfig{}) || decisions != nil {
 		t.Fatalf("invalid proposal error = %v", err)
 	}
 
 	collectionErr := errors.New("references unavailable")
 	source := &fakeCatalogSource{providers: proposalTestSource().providers, collectionErr: collectionErr}
-	_, _, err = CalibrateProposal(context.Background(), source, proposalTestOptions(t, "", 2, StrictnessModerate), validProposal())
-	if !errors.Is(err, collectionErr) || !strings.Contains(err.Error(), "fetching calibration references") {
+	got, decisions, err = CalibrateProposal(context.Background(), source, proposalTestOptions(t, "", 2, StrictnessModerate), validProposal())
+	if !errors.Is(err, collectionErr) || !strings.Contains(err.Error(), "fetching calibration references") || !reflect.DeepEqual(got, api.CollectionConfig{}) || decisions != nil {
 		t.Fatalf("reference read error = %v", err)
 	}
 
 	badCandidate := validProposal()
 	badCandidate.Benchmarks[0].PrimaryScore = &api.PrimaryScore{Metric: "not-advertised"}
-	_, _, err = CalibrateProposal(context.Background(), proposalTestSource(), proposalTestOptions(t, "", 2, StrictnessModerate), badCandidate)
-	if err == nil || !strings.Contains(err.Error(), issueMetricNotAdvertised) {
+	got, decisions, err = CalibrateProposal(context.Background(), proposalTestSource(), proposalTestOptions(t, "", 2, StrictnessModerate), badCandidate)
+	if err == nil || !strings.Contains(err.Error(), issueMetricNotAdvertised) || !reflect.DeepEqual(got, api.CollectionConfig{}) || decisions != nil {
 		t.Fatalf("catalog-invalid proposal error = %v", err)
 	}
 }

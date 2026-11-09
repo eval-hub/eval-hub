@@ -75,7 +75,8 @@ func ValidateCollection(ctx context.Context, source CatalogSource, candidate api
 
 // ValidateProposal adds generation-specific checks to ValidateCollection.
 // The returned config is a deep copy with server-enriched benchmark URLs
-// removed. If issues are returned, the config must not be submitted.
+// removed. It is postable only when err is nil and issues is empty. On an
+// operational error, the returned config and issues are zero values.
 func ValidateProposal(ctx context.Context, source CatalogSource, options Options, candidate api.CollectionConfig) (api.CollectionConfig, []Issue, error) {
 	proposal, err := cloneCollectionConfig(candidate)
 	if err != nil {
@@ -85,7 +86,10 @@ func ValidateProposal(ctx context.Context, source CatalogSource, options Options
 	preflightIssues := append(optionIssues, validateProposalFields(proposal)...)
 	catalog, issues, err := validateCollectionWithCatalog(ctx, source, proposal, preflightIssues)
 	if err != nil {
-		return proposal, nil, err
+		return api.CollectionConfig{}, nil, err
+	}
+	if catalog == nil && len(issues) == 0 {
+		return api.CollectionConfig{}, nil, fmt.Errorf("provider catalog unavailable after successful proposal validation")
 	}
 	if catalog != nil {
 		issues = append(issues, validateProposalAgainstCatalog(proposal, normalized, catalog)...)
@@ -96,7 +100,8 @@ func ValidateProposal(ctx context.Context, source CatalogSource, options Options
 // CalibrateProposal fills only absent primary score, threshold, and weight
 // values. It uses matching system-owned collections as evidence, never writes
 // to storage, and returns explicit decisions for selected and unavailable
-// values.
+// values. On any error it returns a zero config and no decisions; a returned
+// config is complete only when err is nil.
 func CalibrateProposal(ctx context.Context, source CatalogSource, options Options, validated api.CollectionConfig) (api.CollectionConfig, []CalibrationDecision, error) {
 	proposal, err := cloneCollectionConfig(validated)
 	if err != nil {
@@ -106,18 +111,21 @@ func CalibrateProposal(ctx context.Context, source CatalogSource, options Option
 	preflightIssues := append(optionIssues, validateProposalFields(proposal)...)
 	catalog, issues, err := validateCollectionWithCatalog(ctx, source, proposal, preflightIssues)
 	if err != nil {
-		return proposal, nil, err
+		return api.CollectionConfig{}, nil, err
 	}
 	if catalog != nil {
 		issues = append(issues, validateProposalAgainstCatalog(proposal, normalized, catalog)...)
 	}
 	if len(issues) != 0 {
-		return proposal, nil, proposalIssuesError(sortedIssues(issues))
+		return api.CollectionConfig{}, nil, proposalIssuesError(sortedIssues(issues))
+	}
+	if catalog == nil {
+		return api.CollectionConfig{}, nil, fmt.Errorf("provider catalog unavailable after successful proposal validation")
 	}
 
 	collections, err := readAllPages(ctx, source.ListCollections)
 	if err != nil {
-		return proposal, nil, fmt.Errorf("fetching calibration references: %w", err)
+		return api.CollectionConfig{}, nil, fmt.Errorf("fetching calibration references: %w", err)
 	}
 	decisions := make([]CalibrationDecision, 0, len(proposal.Benchmarks)*3)
 	for i := range proposal.Benchmarks {
@@ -129,7 +137,7 @@ func CalibrateProposal(ctx context.Context, source CatalogSource, options Option
 		if benchmark.PrimaryScore == nil {
 			defaultScore := advertisedDefaultScore(providerBenchmark)
 			if defaultScore == nil {
-				decisions = append(decisions, noDecision(*benchmark, pathPrefix+".primary_score", "provider has no advertised default primary score"))
+				decisions = append(decisions, noDecision(*benchmark, pathPrefix+".primary_score", defaultScoreUnavailableReason(providerBenchmark)))
 			} else {
 				copyScore := *defaultScore
 				benchmark.PrimaryScore = &copyScore
@@ -151,14 +159,18 @@ func CalibrateProposal(ctx context.Context, source CatalogSource, options Option
 		if benchmark.Weight == 0 {
 			value, ids := consensusReferenceWeight(references)
 			if value == nil {
-				decisions = append(decisions, noDecision(*benchmark, pathPrefix+".weight", "comparable system references do not agree on a positive weight"))
+				reason := "matching system references do not provide a consensus positive weight"
+				if len(references) == 0 {
+					reason = "no matching system references were found"
+				}
+				decisions = append(decisions, noDecision(*benchmark, pathPrefix+".weight", reason))
 			} else {
 				benchmark.Weight = *value
 				decisions = append(decisions, CalibrationDecision{
 					ProviderID: benchmark.ProviderID, BenchmarkID: benchmark.ID,
 					Field: pathPrefix + ".weight", Value: *value,
 					ReferenceCollectionIDs: ids,
-					Reason:                 "all comparable system references agree on this positive weight",
+					Reason:                 "all matching system references agree on this positive weight",
 				})
 			}
 		} else {
@@ -179,7 +191,7 @@ func CalibrateProposal(ctx context.Context, source CatalogSource, options Option
 			thresholdReferences := comparableThresholdReferences(references, *benchmark)
 			threshold, ids := calibratedThreshold(thresholdReferences, providerBenchmark, benchmark.PrimaryScore, normalized.Strictness)
 			if threshold == nil {
-				decisions = append(decisions, noDecision(*benchmark, pathPrefix+".pass_criteria.threshold", "no finite comparable system-reference thresholds with a trusted direction"))
+				decisions = append(decisions, noDecision(*benchmark, pathPrefix+".pass_criteria.threshold", thresholdUnavailableReason(references, thresholdReferences, providerBenchmark, benchmark.PrimaryScore)))
 			} else {
 				if benchmark.PassCriteria == nil {
 					benchmark.PassCriteria = &api.PassCriteria{}
@@ -197,17 +209,28 @@ func CalibrateProposal(ctx context.Context, source CatalogSource, options Option
 
 	issues, err = validateCollectionConfig(proposal)
 	if err != nil {
-		return proposal, decisions, err
+		return api.CollectionConfig{}, nil, err
 	}
 	if len(issues) != 0 {
-		return proposal, decisions, proposalIssuesError(sortedIssues(issues))
+		return api.CollectionConfig{}, nil, proposalIssuesError(sortedIssues(issues))
 	}
 	return proposal, decisions, nil
 }
 
 func validateProposalOptions(options Options) (Options, []Issue) {
-	issues := make([]Issue, 0, 3)
-	if strings.TrimSpace(options.Goal) == "" {
+	options.Goal = strings.TrimSpace(options.Goal)
+	options.ProviderFilter = strings.TrimSpace(options.ProviderFilter)
+	options.Strictness = strings.TrimSpace(options.Strictness)
+	options.ProviderIDs = providerIDsFromFilter(options.ProviderFilter)
+	if options.MaxBenchmarks == 0 {
+		options.MaxBenchmarks = DefaultMaxBenchmarks
+	}
+	if options.Strictness == "" {
+		options.Strictness = DefaultStrictness
+	}
+
+	issues := make([]Issue, 0, 4)
+	if options.Goal == "" {
 		issues = append(issues, Issue{Code: issueInvalidOptions, Path: "evaluation_goal", Message: "evaluation_goal is required"})
 	}
 	if options.MaxBenchmarks <= 0 {
@@ -216,13 +239,17 @@ func validateProposalOptions(options Options) (Options, []Issue) {
 	if !isValidStrictness(options.Strictness) {
 		issues = append(issues, Issue{Code: issueInvalidOptions, Path: "strictness", Message: fmt.Sprintf("invalid strictness %q; valid values: %s", options.Strictness, strings.Join(ValidStrictness(), ", "))})
 	}
+	if options.ProviderFilter != "" && len(options.ProviderIDs) == 0 {
+		issues = append(issues, Issue{Code: issueInvalidOptions, Path: "provider_filter", Message: "provider filter must contain at least one provider ID"})
+	}
 	return options, issues
 }
 
 // validateCollectionWithCatalog runs the shared rules once and returns the
 // catalog so proposal-only checks and calibration can reuse the same snapshot.
-// Preflight findings prevent catalog reads but are reported alongside field
-// validation findings.
+// It returns a nil catalog when preflight/field findings prevent the catalog
+// read; an empty issue list always implies a non-nil catalog. Preflight findings
+// are reported alongside field validation findings.
 func validateCollectionWithCatalog(ctx context.Context, source CatalogSource, candidate api.CollectionConfig, preflightIssues []Issue) (*providerCatalog, []Issue, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
@@ -286,10 +313,19 @@ func validateCollectionConfig(candidate api.CollectionConfig) ([]Issue, error) {
 }
 
 func validateProposalFields(candidate api.CollectionConfig) []Issue {
+	issues := make([]Issue, 0)
 	if candidate.CurationOrder > 0 {
-		return []Issue{{Code: issueAdminOnlyField, Path: "curation_order", Message: "curation_order is server-managed and cannot be set in a generated collection"}}
+		issues = append(issues, Issue{Code: issueAdminOnlyField, Path: "curation_order", Message: "curation_order is server-managed and cannot be set in a generated collection"})
 	}
-	return nil
+	for i, benchmark := range candidate.Benchmarks {
+		if benchmark.TestDataRef != nil && benchmark.TestDataRef.ResolvedSHA != "" {
+			issues = append(issues, Issue{
+				Code: issueAdminOnlyField, Path: fmt.Sprintf("benchmarks[%d].test_data_ref.resolved_sha", i),
+				Message: "resolved_sha is server-managed and cannot be set in a generated collection",
+			})
+		}
+	}
+	return issues
 }
 
 func readProviderCatalog(ctx context.Context, source CatalogSource) (*providerCatalog, error) {
@@ -362,9 +398,6 @@ func validateAgainstCatalog(candidate api.CollectionConfig, catalog *providerCat
 func validateProposalAgainstCatalog(candidate api.CollectionConfig, options Options, catalog *providerCatalog) []Issue {
 	issues := make([]Issue, 0)
 	requestedProviderIDs := sortedMapKeys(options.ProviderIDs)
-	if options.ProviderFilter != "" && len(requestedProviderIDs) == 0 {
-		issues = append(issues, Issue{Code: issueUnknownProvider, Path: "provider_filter", Message: "provider filter contains no provider IDs"})
-	}
 	for _, id := range requestedProviderIDs {
 		if _, exists := catalog.providers[id]; !exists {
 			issues = append(issues, Issue{Code: issueUnknownProvider, Path: "provider_filter", Message: fmt.Sprintf("provider %q is not present in the tenant catalog", id)})
@@ -390,6 +423,13 @@ func advertisedDefaultScore(benchmark api.BenchmarkResource) *api.PrimaryScore {
 		return nil
 	}
 	return benchmark.PrimaryScore
+}
+
+func defaultScoreUnavailableReason(benchmark api.BenchmarkResource) string {
+	if benchmark.PrimaryScore == nil {
+		return "provider does not advertise a default primary score"
+	}
+	return fmt.Sprintf("provider-advertised default metric %q is not included in the benchmark's metrics", benchmark.PrimaryScore.Metric)
 }
 
 func matchingReferenceBenchmarks(collections []api.CollectionResource, key benchmarkKey) []referenceBenchmark {
@@ -427,8 +467,9 @@ func matchingReferenceBenchmarks(collections []api.CollectionResource, key bench
 
 // comparableThresholdReferences limits threshold evidence to system benchmarks
 // with the same configured parameters and test-data identity as the candidate.
-// Provider metadata does not expose parameter defaults, and mutable test-data
-// sources need a resolved content identity, so unknown equivalence is excluded.
+// Provider metadata does not expose parameter defaults. Mutable test-data
+// sources need a resolved content identity; full Git/Hugging Face commit
+// revisions are immutable and can be compared directly.
 func comparableThresholdReferences(references []referenceBenchmark, candidate api.CollectionBenchmarkConfig) []referenceBenchmark {
 	comparable := make([]referenceBenchmark, 0, len(references))
 	for _, reference := range references {
@@ -454,14 +495,62 @@ func sameTestDataIdentity(left, right *api.TestDataRef) bool {
 	if left == nil || right == nil {
 		return left == nil && right == nil
 	}
-	if left.ResolvedSHA == "" || left.ResolvedSHA != right.ResolvedSHA {
-		return false
-	}
 	leftSource := *left
 	rightSource := *right
 	leftSource.ResolvedSHA = ""
 	rightSource.ResolvedSHA = ""
-	return reflect.DeepEqual(leftSource, rightSource)
+	if !reflect.DeepEqual(leftSource, rightSource) {
+		return false
+	}
+	if hasImmutableTestDataRevision(left) {
+		return true
+	}
+	if left.ResolvedSHA != "" || right.ResolvedSHA != "" {
+		return left.ResolvedSHA != "" && left.ResolvedSHA == right.ResolvedSHA
+	}
+	return false
+}
+
+func hasImmutableTestDataRevision(ref *api.TestDataRef) bool {
+	sourceCount := 0
+	if ref.S3 != nil {
+		sourceCount++
+	}
+	if ref.PVC != nil {
+		sourceCount++
+	}
+	if ref.Git != nil {
+		sourceCount++
+	}
+	if ref.HF != nil {
+		sourceCount++
+	}
+	if sourceCount != 1 {
+		return false
+	}
+	if ref.Git != nil {
+		return isFullCommitSHA(ref.Git.Ref)
+	}
+	if ref.HF != nil {
+		return isFullCommitSHA(ref.HF.Revision)
+	}
+	return false
+}
+
+func isFullCommitSHA(value string) bool {
+	if len(value) != 40 {
+		return false
+	}
+	for _, char := range value {
+		if !isHexDigit(char) {
+			return false
+		}
+	}
+	return true
+}
+
+func isHexDigit(char rune) bool {
+	return (char >= '0' && char <= '9') || (char >= 'a' && char <= 'f') || (char >= 'A' && char <= 'F')
 }
 
 type referenceBenchmark struct {
@@ -552,6 +641,26 @@ func calibratedThreshold(references []referenceBenchmark, providerBenchmark api.
 	return &result, uniqueSorted(ids)
 }
 
+func thresholdUnavailableReason(references, comparable []referenceBenchmark, providerBenchmark api.BenchmarkResource, candidateScore *api.PrimaryScore) string {
+	if len(references) == 0 {
+		return "no matching system references were found"
+	}
+	if len(comparable) == 0 {
+		return "no system references match the candidate parameters and test-data identity"
+	}
+	defaultScore := advertisedDefaultScore(providerBenchmark)
+	if defaultScore == nil {
+		return defaultScoreUnavailableReason(providerBenchmark)
+	}
+	if candidateScore == nil {
+		return "candidate has no primary score with a trusted provider-advertised direction"
+	}
+	if candidateScore.Metric != defaultScore.Metric || candidateScore.LowerIsBetter != defaultScore.LowerIsBetter {
+		return "candidate primary score does not match the provider-advertised metric and direction"
+	}
+	return "comparable system references have no finite thresholds for the selected primary score"
+}
+
 func noDecision(benchmark api.CollectionBenchmarkConfig, field, reason string) CalibrationDecision {
 	return CalibrationDecision{ProviderID: benchmark.ProviderID, BenchmarkID: benchmark.ID, Field: field, Reason: reason}
 }
@@ -620,6 +729,10 @@ func finite(value float64) bool {
 	return !math.IsNaN(value) && !math.IsInf(value, 0)
 }
 
+// cloneCollectionConfig makes a detached copy of a collection config. Custom
+// and Parameters are API JSON objects and are copied through encoding/json;
+// numbers become float64, so very large integers may lose precision compared
+// with their original Go types. This matches the API's JSON representation.
 func cloneCollectionConfig(candidate api.CollectionConfig) (api.CollectionConfig, error) {
 	copy := candidate
 	copy.Tags = cloneStrings(candidate.Tags)
