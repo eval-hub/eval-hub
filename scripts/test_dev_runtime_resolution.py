@@ -161,6 +161,7 @@ class RuntimeResolutionTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        """Create the stub directory and temporary workspace shared by the class."""
         cls.work = tempfile.TemporaryDirectory()
         cls.work_dir = pathlib.Path(cls.work.name)
         cls.bin_dir = cls.work_dir / "bin"
@@ -178,6 +179,7 @@ class RuntimeResolutionTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        """Remove the temporary workspace created by setUpClass."""
         cls.work.cleanup()
 
     def engine_path(self, missing=()):
@@ -295,6 +297,7 @@ class RuntimeResolutionTestCase(unittest.TestCase):
         self.assertEqual(resolved, expected, output)
         return output
 
+
 class EnginePathTests(RuntimeResolutionTestCase):
     """The PATH used by the missing-engine cases must hide the engine only."""
 
@@ -322,6 +325,8 @@ class EnginePathTests(RuntimeResolutionTestCase):
 
 
 class DeployResolutionTests(RuntimeResolutionTestCase):
+    """dev-deploy must reuse a cluster and refuse to duplicate one."""
+
     def test_explicit_runtime_is_used(self):
         """An explicit CONTAINER_RUNTIME with no record is used as given."""
         self.assert_resolves("dev-deploy.sh", "podman", explicit="podman")
@@ -411,7 +416,10 @@ class DeployResolutionTests(RuntimeResolutionTestCase):
         self.assertIn(f"{CLUSTER}.runtime", output)
         self.assertIn("rm -- ", output)
 
+
 class CleanResolutionTests(RuntimeResolutionTestCase):
+    """dev-clean must target the engine that owns the deployment and registry."""
+
     def test_recorded_runtime_is_reused(self):
         """`make dev-clean` after `make dev-deploy` needs no second input."""
         self.assert_resolves("dev-clean.sh", "podman", recorded="podman")
@@ -468,7 +476,10 @@ class CleanResolutionTests(RuntimeResolutionTestCase):
         self.assertIn("rm -- ", output)
         self.assertTrue((self.work_dir / f"{CLUSTER}.runtime").exists(), output)
 
+
 class DemoResolutionTests(RuntimeResolutionTestCase):
+    """dev-demo must query kind through the engine that backs the deployment."""
+
     def test_recorded_runtime_is_reused(self):
         """dev-demo queries kind with the engine that backed the deployment."""
         self.assert_resolves("dev-demo.sh", "podman", recorded="podman")
@@ -630,6 +641,12 @@ class StaleRecordCleanupTests(RuntimeResolutionTestCase):
     """`make dev-clean` must not leave a record for a cluster that is already gone."""
 
     def run_main(self, recorded="", cluster_exists=False):
+        """Run dev-clean's main with the cluster and the record stubbed.
+
+        `recorded` seeds the runtime record, and `cluster_exists` decides whether
+        the selected engine still lists the cluster. Returns the combined output
+        and the record path so a case can check what the run left behind.
+        """
         state_path = self.work_dir / f"{CLUSTER}.runtime"
         state_path.unlink(missing_ok=True)
         if recorded:
@@ -678,6 +695,8 @@ class StaleRecordCleanupTests(RuntimeResolutionTestCase):
 
 
 class StorageCleanupResolutionTests(RuntimeResolutionTestCase):
+    """clean-container-storage must always find an engine to prune."""
+
     def test_recorded_runtime_is_reused(self):
         """Pruning targets the engine that backs the dev stack."""
         self.assert_resolves("clean-container-storage.sh", "podman", recorded="podman")
@@ -724,8 +743,9 @@ class StorageCleanupResolutionTests(RuntimeResolutionTestCase):
         self.assert_resolves("clean-container-storage.sh", "docker", wsl=True)
 
 
-
 class RecordRoundTripTests(RuntimeResolutionTestCase):
+    """The runtime record dev-deploy writes must read back as the same engine."""
+
     def test_recorded_engine_round_trips(self):
         """The record dev-deploy writes is what the other scripts read back.
 
