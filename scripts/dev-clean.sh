@@ -69,7 +69,12 @@ Inputs (also accepted as environment variables):
                      private kubeconfig is used only when it targets the
                      selected engine's cluster; one pointing at another cluster
                      is preserved, and cleanup uses a temporary exported
-                     kubeconfig instead.
+                     kubeconfig instead. With DELETE_CLUSTER=true the kubeconfig
+                     is removed only when the cluster is gone from the selected
+                     engine, the other engine can be shown not to hold a
+                     cluster of that name, and its API server no longer answers;
+                     an unreachable other engine or a live API server preserves
+                     it.
 
 The system namespace is retained to avoid deleting unrelated resources that may
 have been added there. Deployment resources are removed only when their ownership
@@ -177,6 +182,29 @@ forget_runtime() {
   [[ -e "$RUNTIME_STATE_FILE" ]] || return 0
   rm -f -- "$RUNTIME_STATE_FILE"
   log INFO "Removed the runtime record $RUNTIME_STATE_FILE of the deleted cluster."
+}
+
+# other_runtime_cluster_state prints "<state> <engine>" for KIND_CLUSTER_NAME in
+# the container engine that is not CONTAINER_RUNTIME. The state is "true" when
+# that engine lists the cluster, "false" when it cannot own one, and "unknown"
+# when it is installed but not reachable: a stopped engine (for example a podman
+# machine the user shut down) can still own the cluster and its kubeconfig, so its
+# answer must not be read as "the cluster is gone".
+other_runtime_cluster_state() {
+  local other state=false
+  case "$CONTAINER_RUNTIME" in
+    podman) other=docker ;;
+    docker) other=podman ;;
+    *) printf 'false -\n' && return 0 ;;
+  esac
+  if command -v "$other" >/dev/null 2>&1; then
+    if ! "$other" info >/dev/null 2>&1; then
+      state=unknown
+    elif kind_cluster_in_runtime "$other"; then
+      state=true
+    fi
+  fi
+  printf '%s %s\n' "$state" "$other"
 }
 
 check_prerequisites() {
@@ -523,7 +551,7 @@ clean_deployment_keep_cluster() {
 }
 
 delete_cluster() {
-  local remove_kubeconfig=false context
+  local remove_kubeconfig=false context other_state other_runtime
   if [[ -e "$PRIVATE_KUBECONFIG" ]]; then
     if [[ -L "$PRIVATE_KUBECONFIG" ]]; then
       log WARN "The private kubeconfig path is a symlink; it will be preserved."
@@ -533,11 +561,17 @@ delete_cluster() {
         log WARN "The kubeconfig at $PRIVATE_KUBECONFIG has a different context and will be preserved."
       elif ! cluster_exists; then
         # The selected runtime, which the record says deployed this cluster, no
-        # longer runs it, so it cannot come back under this name. Still, only
-        # remove the kubeconfig when its API server is unreachable: a file that
-        # still reaches a live cluster (for example the other engine's same-named
-        # one) belongs to that cluster and is preserved.
-        if kubectl --kubeconfig "$PRIVATE_KUBECONFIG" --request-timeout=5s get --raw /healthz >/dev/null 2>&1; then
+        # longer runs it, so it cannot come back under this name. The kubeconfig
+        # can still belong to a same-named cluster under the other engine, so ask
+        # that engine before trusting the API server probe: neither an engine
+        # this script cannot query nor a probe that times out proves the cluster
+        # is gone, and removing the file would lose the only reference to it.
+        read -r other_state other_runtime <<<"$(other_runtime_cluster_state)"
+        if [[ "$other_state" == true ]]; then
+          log WARN "Kind cluster '$KIND_CLUSTER_NAME' is gone from $CONTAINER_RUNTIME but still exists under $other_runtime; preserving $PRIVATE_KUBECONFIG."
+        elif [[ "$other_state" == unknown ]]; then
+          log WARN "Kind cluster '$KIND_CLUSTER_NAME' is gone from $CONTAINER_RUNTIME; $other_runtime is installed but not reachable, so it cannot be checked for that cluster and $PRIVATE_KUBECONFIG is preserved."
+        elif kubectl --kubeconfig "$PRIVATE_KUBECONFIG" --request-timeout=5s get --raw /healthz >/dev/null 2>&1; then
           log WARN "Kind cluster '$KIND_CLUSTER_NAME' is gone from $CONTAINER_RUNTIME, but $PRIVATE_KUBECONFIG still reaches a cluster; preserving it."
         else
           remove_kubeconfig=true

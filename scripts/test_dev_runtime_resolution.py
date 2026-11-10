@@ -20,7 +20,10 @@ registry pushes keep `--tls-verify=false`.
 The delete-cluster cases check that `make dev-clean DELETE_CLUSTER=true` removes
 the runtime record even when it preserves the private kubeconfig (a kubeconfig
 that targets another cluster, or no private kubeconfig at all), because a stale
-record rejects a later deploy that explicitly selects another engine.
+record rejects a later deploy that explicitly selects another engine. They also
+check that the kubeconfig survives when the selected engine no longer runs the
+cluster but the other engine still lists it or cannot be queried, and that it is
+removed once neither engine holds the name and its API server stops answering.
 
 Run from the repository root with `make test-scripts`, or directly:
 
@@ -94,10 +97,13 @@ exit 0
 """
 
 # dev-clean reads the private kubeconfig's context to decide whether the file is
-# worth verifying; the delete-cluster cases answer it with this cluster's context.
+# worth verifying, and probes the API server before removing it; the delete-cluster
+# cases answer the context and make the probe succeed or fail on demand.
 KUBECTL_FAKE = """#!/usr/bin/env bash
 if [[ "$*" == *"config current-context"* ]]; then
   printf 'kind-%s\\n' "${KIND_CLUSTER_NAME:-}"
+elif [[ "$*" == *"--raw /healthz"* ]]; then
+  [[ "${FAKE_KUBECTL_HEALTH:-ok}" == ok ]] || exit 1
 fi
 exit 0
 """
@@ -291,12 +297,23 @@ class DemoResolutionTests(RuntimeResolutionTestCase):
 class DeleteClusterRecordTests(RuntimeResolutionTestCase):
     """`make dev-clean DELETE_CLUSTER=true` must not leave a stale runtime record."""
 
-    def delete_cluster(self, kubeconfig="owned", same_cluster=True):
+    def delete_cluster(
+        self,
+        kubeconfig="owned",
+        same_cluster=True,
+        cluster_exists=True,
+        other_clusters="",
+        other_reachable=True,
+        health_ok=True,
+    ):
         """Run dev-clean's delete_cluster against a stubbed cluster.
 
         `kubeconfig` is "owned" for a private kubeconfig that targets the cluster
         and "missing" for one that was never created; `same_cluster` decides
         whether that kubeconfig is verified as targeting the deleted cluster.
+        `cluster_exists` decides whether the selected engine still runs it;
+        `other_clusters`, `other_reachable` and `health_ok` describe the other
+        engine and the API server probe for the case where it does not.
         Returns (output, private kubeconfig path, runtime record path) with the
         paths reflecting the state left by the run.
         """
@@ -317,11 +334,12 @@ class DeleteClusterRecordTests(RuntimeResolutionTestCase):
             f'PRIVATE_KUBECONFIG="{private}"\n'
             f'EXPORTED_KUBECONFIG="{exported}"\n'
             f'RUNTIME_STATE_FILE="{state_path}"\n'
-            f"{extract_functions(SCRIPTS_DIR / 'dev-clean.sh', ['log', 'fail', 'forget_runtime'])}\n"
+            f"{extract_functions(LIB_PATH, ['kind_cluster_in_runtime'])}\n"
+            f"{extract_functions(SCRIPTS_DIR / 'dev-clean.sh', ['log', 'fail', 'forget_runtime', 'other_runtime_cluster_state'])}\n"
             f"{extract_functions(SCRIPTS_DIR / 'dev-clean.sh', ['delete_cluster'])}\n"
             "# Stand in for the cluster, kind, kubeconfig export, and registry\n"
             "# cleanup so the run reaches the kubeconfig and record decisions.\n"
-            "cluster_exists() { return 0; }\n"
+            f"cluster_exists() {{ return {0 if cluster_exists else 1}; }}\n"
             "kind_cmd() { :; }\n"
             "export_runtime_kubeconfig() { return 0; }\n"
             f"kubeconfigs_target_same_cluster() {{ return {0 if same_cluster else 1}; }}\n"
@@ -336,6 +354,9 @@ class DeleteClusterRecordTests(RuntimeResolutionTestCase):
                 "PATH": f"{self.bin_dir}:{os.environ['PATH']}",
                 "HOME": str(self.work_dir),
                 "KIND_CLUSTER_NAME": CLUSTER,
+                "FAKE_DOCKER_CLUSTERS": other_clusters,
+                "FAKE_DOCKER_REACHABLE": "1" if other_reachable else "0",
+                "FAKE_KUBECTL_HEALTH": "ok" if health_ok else "unreachable",
             },
         )
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
@@ -357,6 +378,29 @@ class DeleteClusterRecordTests(RuntimeResolutionTestCase):
     def test_missing_kubeconfig_still_drops_the_record(self):
         """A deploy without a private kubeconfig still drops the stale record."""
         output, private, state_path = self.delete_cluster(kubeconfig="missing")
+        self.assertFalse(private.exists(), output)
+        self.assertFalse(state_path.exists(), output)
+
+    def test_cluster_under_the_other_engine_keeps_the_kubeconfig(self):
+        """A probe that cannot reach the other engine's cluster proves nothing."""
+        output, private, state_path = self.delete_cluster(
+            cluster_exists=False, other_clusters=CLUSTER + "\n", health_ok=False
+        )
+        self.assertIn("still exists under docker", output)
+        self.assertTrue(private.exists(), output)
+        self.assertFalse(state_path.exists(), output)
+
+    def test_unreachable_other_engine_keeps_the_kubeconfig(self):
+        """A stopped engine can still own the cluster, so the kubeconfig stays."""
+        output, private, _ = self.delete_cluster(
+            cluster_exists=False, other_reachable=False, health_ok=False
+        )
+        self.assertIn("cannot be checked for that cluster", output)
+        self.assertTrue(private.exists(), output)
+
+    def test_gone_from_both_engines_removes_the_kubeconfig(self):
+        """With no cluster anywhere and no API server, the kubeconfig goes too."""
+        output, private, state_path = self.delete_cluster(cluster_exists=False, health_ok=False)
         self.assertFalse(private.exists(), output)
         self.assertFalse(state_path.exists(), output)
 

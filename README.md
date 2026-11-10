@@ -260,7 +260,9 @@ deployed before that record existed the engine that already owns
 value does not own that cluster; a first deploy with neither a record nor a
 cluster falls back to the first reachable engine, podman before docker. Deleting
 the cluster with `make dev-clean DELETE_CLUSTER=true` removes the record, and
-the kubeconfig with it when that kubeconfig targets the deleted cluster.
+removes the kubeconfig with it only when that kubeconfig targets the deleted
+cluster and no engine still lists or answers for a cluster of that name;
+otherwise the kubeconfig is preserved.
 
 Deploy the local EvalHub service, operator, adapters, and mock target/judge
 services:
