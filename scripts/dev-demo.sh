@@ -103,11 +103,16 @@ validate_inputs() {
 # KIND_CLUSTER_NAME, the engine that owns the cluster, and finally Docker so that
 # check_cluster reports the missing cluster. dev-demo never builds or pushes
 # images, so an unreachable engine is only a problem when it is forced.
+#
+# Every candidate is canonicalized first: a `docker` that is the podman-docker
+# shim has to be queried as podman, otherwise kind_cmd clears the provider
+# variable and asks the Docker provider for a Podman-backed cluster.
 detect_container_runtime() {
   local runtime recorded
   if [[ -n "$CONTAINER_RUNTIME" ]]; then
     case "$CONTAINER_RUNTIME" in
       podman|docker)
+        CONTAINER_RUNTIME="$(canonical_runtime "$CONTAINER_RUNTIME")"
         need_command "$CONTAINER_RUNTIME"
         ;;
       *)
@@ -119,16 +124,17 @@ detect_container_runtime() {
       CONTAINER_RUNTIME="$recorded"
     fi
   elif recorded="$(recorded_runtime)"; then
-    CONTAINER_RUNTIME="$recorded"
+    CONTAINER_RUNTIME="$(canonical_runtime "$recorded")"
   else
     for runtime in docker podman; do
+      runtime="$(canonical_runtime "$runtime")"
       if kind_cluster_in_runtime "$runtime"; then
         CONTAINER_RUNTIME="$runtime"
         log INFO "Kind cluster '$KIND_CLUSTER_NAME' exists under $runtime; querying kind with $runtime."
         break
       fi
     done
-    [[ -n "$CONTAINER_RUNTIME" ]] || CONTAINER_RUNTIME=docker
+    [[ -n "$CONTAINER_RUNTIME" ]] || CONTAINER_RUNTIME="$(canonical_runtime docker)"
   fi
   log INFO "Using $CONTAINER_RUNTIME as the container runtime for kind queries."
 }
