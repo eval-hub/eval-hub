@@ -250,13 +250,17 @@ image registry. `make dev-deploy` records the engine it used for
 `make dev-clean`, `make dev-demo`, and `make clean-container-storage` reuse that
 record, so a later command needs no second input. Set `CONTAINER_RUNTIME` (for
 example `make dev-deploy CONTAINER_RUNTIME=docker`) to choose the engine for a
-new cluster; an explicit value must match the recorded engine, and a mismatch
-fails instead of creating a duplicate cluster or cleaning up the wrong one. For
-a cluster deployed before that record existed the engine that already owns
-`KIND_CLUSTER_NAME` is used, and a first deploy with neither falls back to the
-first reachable engine, podman before docker. Deleting the cluster with
-`make dev-clean DELETE_CLUSTER=true` removes the record, and the kubeconfig with
-it when that kubeconfig targets the deleted cluster.
+new cluster. When an explicit value differs from the recorded engine,
+`make dev-deploy` and `make dev-clean` fail instead of creating a duplicate
+cluster or cleaning up and deleting the kubeconfig of the cluster that is still
+running, while `make dev-demo` and `make clean-container-storage` warn and use
+the recorded engine, because neither can destroy the deployment. For a cluster
+deployed before that record existed the engine that already owns
+`KIND_CLUSTER_NAME` is used, and `make dev-deploy` also fails when an explicit
+value does not own that cluster; a first deploy with neither a record nor a
+cluster falls back to the first reachable engine, podman before docker. Deleting
+the cluster with `make dev-clean DELETE_CLUSTER=true` removes the record, and
+the kubeconfig with it when that kubeconfig targets the deleted cluster.
 
 Deploy the local EvalHub service, operator, adapters, and mock target/judge
 services:
