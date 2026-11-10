@@ -11,7 +11,15 @@ on PATH, and check the resolution order:
   2. the recorded engine;
   3. the engine that owns KIND_CLUSTER_NAME (clusters deployed before the record);
   4. the first reachable engine (dev-deploy and clean-container-storage), the
-     owning engine then docker (dev-demo), and podman before docker.
+     owning engine then docker (dev-demo), and podman before docker, or docker
+     before podman under WSL.
+
+A record is only an answer to "which engine backed this cluster", not proof that
+it still does: the stale-record cases check that dev-deploy fails instead of
+creating a second cluster over one the other engine still runs, and that
+dev-clean drops the record for a cluster that is already gone. The
+unreachable-record cases check that clean-container-storage still prunes, because
+a stopped or uninstalled engine must not make storage unreclaimable.
 
 The podman-docker shim cases check that a `docker` that is really podman is
 resolved to podman for every script, so kind uses the podman provider and
@@ -50,6 +58,8 @@ LIB_FUNCTIONS = [
     "kind_cluster_in_runtime",
     "recorded_runtime",
     "record_runtime",
+    "runtime_is_reachable",
+    "fallback_runtime_order",
     "use_runtime",
 ]
 SCRIPT_FUNCTIONS = {
@@ -96,6 +106,15 @@ fi
 exit 0
 """
 
+# The fallback engine order is WSL-aware (WSL2 podman answers 'podman info' but
+# kind node startup fails), so the kernel release is stubbed too.
+UNAME_FAKE = """#!/usr/bin/env bash
+case "${1:-}" in
+  -r) printf '%s\\n' "${FAKE_UNAME_RELEASE:-6.8.0-45-generic}" ;;
+  *) printf 'Linux\\n' ;;
+esac
+"""
+
 # dev-clean reads the private kubeconfig's context to decide whether the file is
 # worth verifying, and probes the API server before removing it; the delete-cluster
 # cases answer the context and make the probe succeed or fail on demand.
@@ -140,6 +159,7 @@ class RuntimeResolutionTestCase(unittest.TestCase):
             ("docker", DOCKER_FAKE),
             ("kind", KIND_FAKE),
             ("kubectl", KUBECTL_FAKE),
+            ("uname", UNAME_FAKE),
         ):
             stub = cls.bin_dir / name
             stub.write_text(body)
@@ -149,7 +169,18 @@ class RuntimeResolutionTestCase(unittest.TestCase):
     def tearDownClass(cls):
         cls.work.cleanup()
 
-    def resolve(self, script, explicit="", recorded="", podman_clusters="", docker_clusters="", shim=False, podman_reachable=True):
+    def resolve(
+        self,
+        script,
+        explicit="",
+        recorded="",
+        podman_clusters="",
+        docker_clusters="",
+        shim=False,
+        podman_reachable=True,
+        docker_reachable=True,
+        wsl=False,
+    ):
         """Return (returncode, resolved runtime, output) for one scenario."""
         state_path = self.work_dir / f"{CLUSTER}.runtime"
         if state_path.exists():
@@ -175,6 +206,10 @@ class RuntimeResolutionTestCase(unittest.TestCase):
             "FAKE_PODMAN_CLUSTERS": podman_clusters,
             "FAKE_DOCKER_CLUSTERS": docker_clusters,
             "FAKE_PODMAN_REACHABLE": "1" if podman_reachable else "0",
+            "FAKE_DOCKER_REACHABLE": "1" if docker_reachable else "0",
+            "FAKE_UNAME_RELEASE": (
+                "4.4.0-19041-Microsoft" if wsl else "6.8.0-45-generic"
+            ),
             "FAKE_DOCKER_VERSION": (
                 "podman version 5.0.0 (podman-docker shim)"
                 if shim
@@ -200,11 +235,18 @@ class DeployResolutionTests(RuntimeResolutionTestCase):
         """An explicit CONTAINER_RUNTIME with no record is used as given."""
         self.assert_resolves("dev-deploy.sh", "podman", explicit="podman")
 
-    def test_recorded_runtime_wins_over_the_other_engine(self):
-        """The record decides, even when the other engine owns a same-named cluster."""
-        self.assert_resolves(
-            "dev-deploy.sh", "podman", recorded="podman", docker_clusters=CLUSTER + "\n"
+    def test_recorded_runtime_is_reused(self):
+        """The record decides, so a redeploy needs no second input."""
+        self.assert_resolves("dev-deploy.sh", "podman", recorded="podman")
+
+    def test_stale_record_does_not_duplicate_the_cluster_the_other_engine_owns(self):
+        """A record whose cluster moved to the other engine fails instead of overwriting it."""
+        code, _, output = self.resolve(
+            "dev-deploy.sh", recorded="podman", docker_clusters=CLUSTER + "\n"
         )
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("recorded as podman-backed", output)
+        self.assertIn("rm -- ", output)
 
     def test_unrecorded_cluster_selects_its_owning_engine(self):
         """A cluster deployed before the record existed is still reused."""
@@ -244,6 +286,10 @@ class DeployResolutionTests(RuntimeResolutionTestCase):
         self.assert_resolves("dev-deploy.sh", "podman")
         self.assert_resolves("dev-deploy.sh", "docker", podman_reachable=False)
 
+    def test_wsl_prefers_docker_on_a_first_deploy(self):
+        """WSL2 podman answers 'podman info' but fails kind node startup."""
+        self.assert_resolves("dev-deploy.sh", "docker", wsl=True)
+
 class CleanResolutionTests(RuntimeResolutionTestCase):
     def test_recorded_runtime_is_reused(self):
         """`make dev-clean` after `make dev-deploy` needs no second input."""
@@ -269,6 +315,10 @@ class CleanResolutionTests(RuntimeResolutionTestCase):
         self.assert_resolves("dev-clean.sh", "podman")
         self.assert_resolves("dev-clean.sh", "docker", podman_reachable=False)
 
+    def test_wsl_prefers_docker_on_a_first_clean(self):
+        """The WSL engine order is shared with dev-deploy."""
+        self.assert_resolves("dev-clean.sh", "docker", wsl=True)
+
 class DemoResolutionTests(RuntimeResolutionTestCase):
     def test_recorded_runtime_is_reused(self):
         """dev-demo queries kind with the engine that backed the deployment."""
@@ -292,6 +342,12 @@ class DemoResolutionTests(RuntimeResolutionTestCase):
         self.assert_resolves("dev-demo.sh", "podman", explicit="docker", shim=True)
         self.assert_resolves("dev-demo.sh", "podman", recorded="docker", shim=True)
         self.assert_resolves("dev-demo.sh", "podman", shim=True)
+
+    def test_recorded_shim_over_an_explicit_shim_still_resolves_to_podman(self):
+        """The record is canonicalized too, so the explicit-mismatch branch cannot leave docker."""
+        self.assert_resolves(
+            "dev-demo.sh", "podman", explicit="docker", recorded="docker", shim=True
+        )
 
 
 class DeleteClusterRecordTests(RuntimeResolutionTestCase):
@@ -405,6 +461,57 @@ class DeleteClusterRecordTests(RuntimeResolutionTestCase):
         self.assertFalse(state_path.exists(), output)
 
 
+class StaleRecordCleanupTests(RuntimeResolutionTestCase):
+    """`make dev-clean` must not leave a record for a cluster that is already gone."""
+
+    def run_main(self, recorded="", cluster_exists=False):
+        state_path = self.work_dir / f"{CLUSTER}.runtime"
+        state_path.unlink(missing_ok=True)
+        if recorded:
+            state_path.write_text(recorded + "\n")
+        harness = self.work_dir / "clean-main.sh"
+        harness.write_text(
+            "#!/usr/bin/env bash\n"
+            "set -Eeuo pipefail\n"
+            f"KIND_CLUSTER_NAME={CLUSTER}\n"
+            'CONTAINER_RUNTIME="podman"\n'
+            'DELETE_CLUSTER="false"\n'
+            f'RUNTIME_STATE_FILE="{state_path}"\n'
+            'WORK_DIR=""\n'
+            f"{extract_functions(LIB_PATH, ['recorded_runtime'])}\n"
+            f"{extract_functions(SCRIPTS_DIR / 'dev-clean.sh', ['log', 'fail', 'forget_runtime', 'main'])}\n"
+            f"cluster_exists() {{ return {0 if cluster_exists else 1}; }}\n"
+            "validate_inputs() { :; }\n"
+            "check_prerequisites() { :; }\n"
+            "check_registry_ownership() { :; }\n"
+            "clean_deployment_keep_cluster() { printf 'KEPT_DEPLOYMENT\\n'; }\n"
+            "delete_cluster() { printf 'DELETED_CLUSTER\\n'; }\n"
+            "remove_registry() { printf 'REMOVED_REGISTRY\\n'; }\n"
+            'main "$@"\n'
+        )
+        proc = subprocess.run(
+            ["bash", str(harness)],
+            capture_output=True,
+            text=True,
+            env={"PATH": os.environ["PATH"], "HOME": str(self.work_dir)},
+        )
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        return proc.stdout + proc.stderr, state_path
+
+    def test_record_is_dropped_when_the_cluster_is_already_gone(self):
+        """A cluster removed out of band must not leave a record that rejects a deploy."""
+        output, state_path = self.run_main(recorded="podman")
+        self.assertIn("REMOVED_REGISTRY", output)
+        self.assertIn("Removed the runtime record", output)
+        self.assertFalse(state_path.exists(), output)
+
+    def test_retained_cluster_keeps_the_record(self):
+        """A cluster that still exists keeps the record for the next command."""
+        output, state_path = self.run_main(recorded="podman", cluster_exists=True)
+        self.assertIn("KEPT_DEPLOYMENT", output)
+        self.assertTrue(state_path.exists(), output)
+
+
 class StorageCleanupResolutionTests(RuntimeResolutionTestCase):
     def test_recorded_runtime_is_reused(self):
         """Pruning targets the engine that backs the dev stack."""
@@ -425,6 +532,31 @@ class StorageCleanupResolutionTests(RuntimeResolutionTestCase):
         """With nothing recorded and no cluster, podman is preferred."""
         self.assert_resolves("clean-container-storage.sh", "podman")
         self.assert_resolves("clean-container-storage.sh", "docker", podman_reachable=False)
+
+    def test_unreachable_record_falls_back_to_the_explicit_engine(self):
+        """Pruning still works when the recorded engine is stopped or uninstalled."""
+        output = self.assert_resolves(
+            "clean-container-storage.sh",
+            "docker",
+            explicit="docker",
+            recorded="podman",
+            podman_reachable=False,
+        )
+        self.assertIn("not reachable; pruning docker", output)
+
+    def test_unreachable_record_falls_back_to_the_other_reachable_engine(self):
+        """Without an explicit engine the next reachable engine is pruned."""
+        output = self.assert_resolves(
+            "clean-container-storage.sh",
+            "docker",
+            recorded="podman",
+            podman_reachable=False,
+        )
+        self.assertIn("selecting another engine to prune", output)
+
+    def test_wsl_prefers_docker_on_a_first_clean(self):
+        """The WSL engine order is shared with dev-deploy."""
+        self.assert_resolves("clean-container-storage.sh", "docker", wsl=True)
 
 
 

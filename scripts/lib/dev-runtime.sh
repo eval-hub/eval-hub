@@ -87,6 +87,29 @@ record_runtime() {
   log INFO "Recorded $CONTAINER_RUNTIME as the container runtime of kind cluster '$KIND_CLUSTER_NAME' in $RUNTIME_STATE_FILE."
 }
 
+# runtime_is_reachable returns 0 when the given runtime is installed and answers.
+# Unlike use_runtime it never exits, so a caller can fall back to another engine
+# when the recorded one is stopped, uninstalled, or belongs to an unmounted podman
+# machine.
+runtime_is_reachable() {
+  local engine
+  engine="$(canonical_runtime "$1")"
+  command -v "$engine" >/dev/null 2>&1 || return 1
+  "$engine" info >/dev/null 2>&1
+}
+
+# fallback_runtime_order prints the engine preference used when neither the record
+# nor an existing cluster decides, one name per line: podman before docker, except
+# under WSL where Docker is preferred, because WSL2 podman answers 'podman info'
+# but kind node startup fails during systemd/cgroup setup.
+fallback_runtime_order() {
+  if uname -r 2>/dev/null | grep -qiE 'microsoft|wsl'; then
+    printf 'docker\npodman\n'
+  else
+    printf 'podman\ndocker\n'
+  fi
+}
+
 # use_runtime makes ENGINE the selected runtime after checking that it exists and
 # is reachable. The optional second argument names what the runtime is used for,
 # so the log line matches the script ("for builds, the local registry, and kind").

@@ -119,9 +119,12 @@ detect_container_runtime() {
         fail "CONTAINER_RUNTIME must be 'podman' or 'docker'."
         ;;
     esac
-    if recorded="$(recorded_runtime)" && [[ "$recorded" != "$CONTAINER_RUNTIME" ]]; then
-      log WARN "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE); querying kind with $recorded instead of $CONTAINER_RUNTIME."
-      CONTAINER_RUNTIME="$recorded"
+    if recorded="$(recorded_runtime)"; then
+      recorded="$(canonical_runtime "$recorded")"
+      if [[ "$recorded" != "$CONTAINER_RUNTIME" ]]; then
+        log WARN "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE); querying kind with $recorded instead of $CONTAINER_RUNTIME."
+        CONTAINER_RUNTIME="$recorded"
+      fi
     fi
   elif recorded="$(recorded_runtime)"; then
     CONTAINER_RUNTIME="$(canonical_runtime "$recorded")"

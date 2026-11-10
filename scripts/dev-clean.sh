@@ -63,9 +63,12 @@ Inputs (also accepted as environment variables):
                      recorded for KIND_CLUSTER_NAME in
                      evalhub/kubeconfigs/<cluster>.runtime, otherwise the engine
                      that owns the cluster, otherwise the first reachable engine
-                     (podman before docker). An explicit value must match the
-                     recorded engine; otherwise the script fails instead of
-                     skipping the cluster and removing its kubeconfig. The
+                     (podman before docker, docker before podman under WSL). An
+                     explicit value must match the recorded engine; otherwise the
+                     script fails instead of skipping the cluster and removing its
+                     kubeconfig. The record is dropped when the selected engine no
+                     longer runs the cluster, so a cluster removed out of band
+                     does not leave a record that rejects a later deploy. The
                      private kubeconfig is used only when it targets the
                      selected engine's cluster; one pointing at another cluster
                      is preserved, and cleanup uses a temporary exported
@@ -137,8 +140,9 @@ validate_inputs() {
 #      `make dev-clean` after `make dev-deploy` needs no second input;
 #   3. the engine that owns KIND_CLUSTER_NAME, for deployments made before that
 #      record existed;
-#   4. the first reachable engine, podman before docker, so leftover registry
-#      containers and image tags are still removed when no cluster is left.
+#   4. the first reachable engine, podman before docker (docker before podman
+#      under WSL; see fallback_runtime_order), so leftover registry containers and
+#      image tags are still removed when no cluster is left.
 detect_container_runtime() {
   local runtime recorded
   if [[ -n "$CONTAINER_RUNTIME" ]]; then
@@ -157,7 +161,9 @@ detect_container_runtime() {
     use_runtime "$recorded"
     return 0
   fi
-  for runtime in podman docker; do
+  # The engine order is the policy shared with the other scripts; splitting the
+  # helper's newline-separated output is intended.
+  for runtime in $(fallback_runtime_order); do
     if kind_cluster_in_runtime "$(canonical_runtime "$runtime")"; then
       runtime="$(canonical_runtime "$runtime")"
       log INFO "Kind cluster '$KIND_CLUSTER_NAME' exists under $runtime; cleaning up with $runtime."
@@ -165,7 +171,7 @@ detect_container_runtime() {
       return 0
     fi
   done
-  for runtime in podman docker; do
+  for runtime in $(fallback_runtime_order); do
     if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
       use_runtime "$runtime"
       return 0
@@ -645,6 +651,12 @@ main() {
     clean_deployment_keep_cluster
   else
     log INFO "Kind cluster '$KIND_CLUSTER_NAME' does not exist; no Kubernetes resources need cleanup."
+    # The record names the engine that backed this cluster, and that engine does
+    # not run it any more (cluster_exists lists the selected engine's clusters
+    # only). Drop it here as well as in delete_cluster, so a later deploy that
+    # explicitly selects another engine is not rejected against a record whose
+    # cluster is gone.
+    forget_runtime
     remove_registry
   fi
 }

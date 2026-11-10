@@ -75,11 +75,15 @@ Inputs (also accepted as environment variables):
                            engine recorded for KIND_CLUSTER_NAME in
                            evalhub/kubeconfigs/<cluster>.runtime, otherwise the
                            engine that already owns the cluster, otherwise the
-                           first reachable engine (podman before docker). An
-                           explicit value must match the recorded engine, or own
-                           the cluster when no record exists yet; otherwise the
-                           script fails instead of creating a duplicate cluster
-                           and replacing its kubeconfig.
+                           first reachable engine (podman before docker, docker
+                           before podman under WSL). An explicit value must match
+                           the recorded engine, or own the cluster when no record
+                           exists yet; otherwise the script fails instead of
+                           creating a duplicate cluster and replacing its
+                           kubeconfig. A record whose engine no longer runs
+                           KIND_CLUSTER_NAME also fails when the other engine
+                           owns that cluster, so a stale record neither hides it
+                           nor gets its kubeconfig replaced.
   Repeated builds use the container runtime's layer cache; the EvalHub build date is stable
   for a source commit so a no-change deploy does not rebuild Go binaries.
   Temporary localhost:<port> registry tags are removed after each successful push.
@@ -192,9 +196,11 @@ need_command() {
 # continuing under the selected engine would create a second cluster with the
 # same name and overwrite the private kubeconfig of the cluster that is already
 # running. A recorded cluster is checked against its record instead; this guard
-# covers clusters deployed before that record existed.
+# covers clusters deployed before that record existed. The optional second
+# argument names where the engine came from ("explicit" by default), so a stale
+# record gets an error that explains how to clear it.
 ensure_runtime_owns_existing_cluster() {
-  local runtime other
+  local runtime other reason="${2:-explicit}"
   runtime="$(canonical_runtime "$1")"
   # A cluster of this name under the selected engine is reused as-is, so the
   # other engine owning one too changes nothing: this run creates no cluster and
@@ -206,6 +212,9 @@ ensure_runtime_owns_existing_cluster() {
     *) return 0 ;;
   esac
   kind_cluster_in_runtime "$other" || return 0
+  if [[ "$reason" == recorded ]]; then
+    fail "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $runtime-backed in $RUNTIME_STATE_FILE, but $runtime no longer runs it and $other does. Remove the stale record (rm -- '$RUNTIME_STATE_FILE') to reuse the $other cluster, or delete that cluster with 'make dev-clean CONTAINER_RUNTIME=$other DELETE_CLUSTER=true'."
+  fi
   fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $other, not $runtime. Unset CONTAINER_RUNTIME to reuse the engine that owns the cluster, or set CONTAINER_RUNTIME=$other."
 }
 
@@ -215,10 +224,13 @@ ensure_runtime_owns_existing_cluster() {
 #      KIND_CLUSTER_NAME, or own that cluster when no record exists yet:
 #      continuing under the other engine would create a second cluster with the
 #      same name and overwrite the kubeconfig of the running one;
-#   2. the engine recorded for KIND_CLUSTER_NAME (see recorded_runtime);
+#   2. the engine recorded for KIND_CLUSTER_NAME (see recorded_runtime), which
+#      must still run that cluster: a record left behind by a cluster removed out
+#      of band must not hide a live same-named cluster under the other engine;
 #   3. the engine that already owns KIND_CLUSTER_NAME, for clusters deployed
 #      before that record existed;
-#   4. the first reachable engine, podman before docker.
+#   4. the first reachable engine, podman before docker (docker before podman
+#      under WSL; see fallback_runtime_order).
 # dev-deploy records the outcome, so 3 and 4 only ever run on a first deploy and
 # every later command reads the answer instead of probing both engines.
 detect_container_runtime() {
@@ -241,10 +253,17 @@ detect_container_runtime() {
   fi
   if recorded="$(recorded_runtime)"; then
     log INFO "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE)."
+    # The record names the engine that backed the cluster, not one that still
+    # runs it: a cluster removed out of band leaves the record behind, and
+    # creating under the recorded engine would then duplicate a cluster the
+    # other engine still runs and overwrite its kubeconfig.
+    ensure_runtime_owns_existing_cluster "$recorded" recorded
     use_runtime "$recorded" "for builds, the local registry, and kind"
     return 0
   fi
-  for runtime in podman docker; do
+  # The engine order is the policy shared with the other scripts; splitting the
+  # helper's newline-separated output is intended.
+  for runtime in $(fallback_runtime_order); do
     if kind_cluster_in_runtime "$(canonical_runtime "$runtime")"; then
       runtime="$(canonical_runtime "$runtime")"
       log INFO "Kind cluster '$KIND_CLUSTER_NAME' already exists under $runtime; using $runtime to reuse that cluster."
@@ -252,7 +271,7 @@ detect_container_runtime() {
       return 0
     fi
   done
-  for runtime in podman docker; do
+  for runtime in $(fallback_runtime_order); do
     if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
       use_runtime "$runtime" "for builds, the local registry, and kind"
       return 0
