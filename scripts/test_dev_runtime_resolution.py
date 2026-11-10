@@ -49,9 +49,11 @@ Run from the repository root with `make test-scripts`, or directly:
 import os
 import pathlib
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 SCRIPTS_DIR = pathlib.Path(__file__).resolve().parent
 LIB_PATH = SCRIPTS_DIR / "lib" / "dev-runtime.sh"
@@ -182,9 +184,16 @@ class RuntimeResolutionTestCase(unittest.TestCase):
         """PATH with the stubs first and no real engine that a case removes.
 
         A developer machine can have the real podman or docker installed, which
-        would answer once the stub is removed, so drop the directories that hold
-        the removed engines: "not installed" then means what it says. A stub that
-        only answers `info` with a failure is a stopped engine, a different state.
+        would answer once the stub is removed, so the directories that hold the
+        removed engines are replaced by a mirror of themselves without those
+        engines: "not installed" then means what it says. A stub that only
+        answers `info` with a failure is a stopped engine, a different state.
+
+        The mirror keeps the rest of the directory reachable. The CI runners keep
+        podman, docker, bash, and the coreutils in the same /usr/bin, so dropping
+        a directory whole would take the shell that the harness and the stubs
+        start with it, and every missing-engine case would error out with
+        "bash: No such file or directory" before probing anything.
         """
         if not missing:
             return f"{self.bin_dir}:{os.environ['PATH']}"
@@ -199,10 +208,30 @@ class RuntimeResolutionTestCase(unittest.TestCase):
         for entry in os.environ["PATH"].split(os.pathsep):
             if not entry:
                 continue
-            if any((pathlib.Path(entry) / name).exists() for name in missing):
-                continue
-            dirs.append(entry)
+            hidden = tuple(name for name in missing if (pathlib.Path(entry) / name).exists())
+            mapped = self.engine_free_dir(entry, hidden) if hidden else entry
+            if mapped not in dirs:
+                dirs.append(mapped)
         return os.pathsep.join(dirs)
+
+    def engine_free_dir(self, entry, hidden):
+        """Return a mirror of `entry` without the executables named in `hidden`.
+
+        Symlinking the remaining entries keeps a directory that mixes an engine
+        with the shell and the coreutils usable, while `command -v` still fails
+        for the removed engines. The mirror is built once per directory and
+        hidden set, and a directory reached twice through a symlink (`/bin` and
+        `/usr/bin` on the CI runners) maps to the same mirror.
+        """
+        source = pathlib.Path(entry).resolve()
+        label = "-".join(("mirror", source.as_posix().strip("/").replace("/", "-"), *hidden))
+        mirror = self.work_dir / label
+        if not mirror.exists():
+            mirror.mkdir()
+            for child in source.iterdir():
+                if child.name not in hidden:
+                    (mirror / child.name).symlink_to(child)
+        return str(mirror)
 
     def resolve(
         self,
@@ -265,6 +294,32 @@ class RuntimeResolutionTestCase(unittest.TestCase):
         self.assertEqual(code, 0, output)
         self.assertEqual(resolved, expected, output)
         return output
+
+class EnginePathTests(RuntimeResolutionTestCase):
+    """The PATH used by the missing-engine cases must hide the engine only."""
+
+    def test_engine_sharing_a_directory_with_the_shell_stays_removed(self):
+        """podman and docker sit in /usr/bin next to bash on the CI runners.
+
+        Dropping that directory instead of mirroring it removed the shell with
+        the engine, so the harness never started: the missing-engine cases failed
+        with "bash: No such file or directory" instead of checking a resolution.
+        """
+        shared = self.work_dir / "shared-bin"
+        shared.mkdir()
+        for name in ("bash", "grep"):
+            real = shutil.which(name)
+            self.assertIsNotNone(real, f"{name} is required by this test")
+            (shared / name).symlink_to(real)
+        (shared / "podman").symlink_to(shutil.which("bash"))
+        with mock.patch.dict(os.environ, {"PATH": str(shared)}):
+            path = self.engine_path(missing=("podman",))
+        self.assertIsNone(shutil.which("podman", path=path), path)
+        for name in ("bash", "grep"):
+            found = shutil.which(name, path=path)
+            self.assertIsNotNone(found, f"{name} is unreachable through {path}")
+            self.assertEqual(pathlib.Path(found).resolve(), (shared / name).resolve(), path)
+
 
 class DeployResolutionTests(RuntimeResolutionTestCase):
     def test_explicit_runtime_is_used(self):
