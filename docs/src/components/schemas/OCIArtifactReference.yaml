@@ -1,10 +1,14 @@
 type: object
 description: >-
-  OCI artifact reference returned by the publisher. The digest identifies the
+  OCI artifact reference for a published evaluation output. The digest identifies the
   immutable artifact and is authoritative. The reference may include the
   publication tag in the form registry/repository:tag@digest; the tag is
   informational and may move independently of the digest. Changing the tag does
   not change or invalidate the digest-qualified reference.
+  Artifact immutability does not imply that the stored reference is permanent.
+  If an output is regenerated, its stored digest and reference may be replaced
+  with those of the newly published artifact; the previously published artifact
+  remains unchanged.
 properties:
   oci_digest:
     type: string

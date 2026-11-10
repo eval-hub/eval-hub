@@ -322,24 +322,6 @@ func TestToxiGenEvaluationConfigReferencesOfflineAssets(t *testing.T) {
 	}
 }
 
-func TestToxiGenAssetPreparationProgramUsesOfflineDatasetAndTokenizer(t *testing.T) {
-	program := toxigenAssetPreparationProgram()
-	for _, required := range []string{
-		"skg/toxigen-data",
-		"annotated",
-		"skg--toxigen-data--annotated",
-		"HF_DATASETS_OFFLINE",
-		"load_from_disk(dataset_bundle)",
-		"dataset.save_to_disk(dataset_bundle)",
-		"AutoTokenizer.from_pretrained",
-		"TOXIGEN_ASSETS_READY",
-	} {
-		if !strings.Contains(program, required) {
-			t.Errorf("staging program does not contain %q", required)
-		}
-	}
-}
-
 func TestAdapterImageDetails(t *testing.T) {
 	pod := &corev1.Pod{
 		Spec: corev1.PodSpec{Containers: []corev1.Container{

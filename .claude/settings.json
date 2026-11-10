@@ -1,0 +1,16 @@
+{
+  "extraKnownMarketplaces": {
+    "evalhub": {
+      "source": {
+        "source": "github",
+        "repo": "eval-hub/eval-hub-skills"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "evalhub-bug-review@evalhub": true,
+    "fix-fvt-test@evalhub": true,
+    "golang-toolchain-update@evalhub": true,
+    "release-notes@evalhub": true
+  }
+}

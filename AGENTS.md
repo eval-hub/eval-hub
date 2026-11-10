@@ -36,8 +36,9 @@ make build-mcp          # evalhub-mcp only
 
 ```bash
 make test               # unit tests (internal, cmd, pkg, …)
+make test-scripts       # Python regression tests for scripts/ (kind mock protocol and dev runtime resolution)
 make test-fvt           # godog FVT (tests/features)
-make test-all           # unit + FVT + FVT against started server
+make test-all           # unit + script regressions + FVT + FVT against started server
 make test-coverage      # HTML under bin/
 
 go test -v ./internal/eval_hub/handlers -run TestHandleName
@@ -56,6 +57,8 @@ make vet                # Run go vet (same as lint)
 
 **Always run `make fmt lint` after file changes and before committing.** This ensures consistent formatting and catches issues early.
 
+`make lint` and `make vet` static-analyse with the Go toolchain declared in `go.mod` (`GOTOOLCHAIN=go<version>`, `GO_TOOLCHAIN` in the Makefile), not the Go installed on the machine, so every contributor and CI type-check against the same standard library. Always lint through `make lint` (pre-commit does the same) rather than a globally installed `golangci-lint` from Homebrew or a distro package: the linter bundles an export-data importer that only understands standard-library data up to the Go release it shipped with, so a newer local Go fails with `cannot decode "internal/goarch", export data version N is greater than maximum supported version M`. When `go.mod` is bumped (see **Go Version**), bump `GOLANGCI_LINT_VERSION` in the Makefile and `version` in `.github/workflows/golangci-lint.yml` together.
+
 If a `.pre-commit-config.yaml` file exists, run `pre-commit install && pre-commit install --hook-type commit-msg` before making any commits. This automatically enforces formatting, linting, and commit message conventions on every commit.
 
 **Do not use `#nosec` or `//gosec:disable` annotations in Go files.** CI rejects any PR that contains either inline suppression form. Fix the underlying code instead (e.g. use `os.OpenInRoot` for path-traversal-safe file access). If a gosec finding cannot be structurally fixed, add a path-scoped `--exclude-rules` entry in the Gosec Security Scanner step of `.github/workflows/ci.yml`.
@@ -66,7 +69,7 @@ The version in `go.mod` is the source of truth for local development. If your lo
 
 `GOTOOLCHAIN=auto` requires an installed Go 1.21+ binary. Contributors on older Go versions should upgrade to Go 1.21 or newer, or use the project container (`podman build` / `podman run` with the repo `Containerfile`; see README), before relying on automatic toolchain switching.
 
-For intentional Go upgrades, follow `CLAUDE.md` (CVE fixing → Updating the golang version) and the `golang-version-update` skill at `.claude/skills/golang-version-update/SKILL.md`. The target version must exist in `registry.access.redhat.com/ubi10/go-toolset` before updating `go.mod`.
+For intentional Go upgrades, follow `CLAUDE.md` (CVE fixing → Updating the golang version) and the `golang-toolchain-update` dev skill (see [Development Skills](#development-skills)). The target version must exist in the `go-toolset` image referenced by the `Containerfile` (`registry.access.redhat.com/ubi10/go-toolset`) before updating `go.mod`.
 
 ### Version Bumps
 
@@ -80,8 +83,8 @@ When updating the project version, edit these four source files:
 Then run `make documentation` to regenerate the bundled docs. Do **not** hand-edit the generated files under `docs/` (`openapi.yaml`, `openapi.json`, `openapi-internal.yaml`, `openapi-internal.json`, `index*.html`).
 
 For each GitHub release, publish curated release notes (human-readable summary and
-upgrade impact — not raw `git log`). Use the `release-notes` skill at
-`.claude/skills/release-notes/SKILL.md` (see also `CLAUDE.md`).
+upgrade impact — not raw `git log`). Use the `release-notes` dev skill (see
+[Development Skills](#development-skills) and `CLAUDE.md`).
 
 ### Dependencies
 
@@ -110,6 +113,70 @@ make create-database
 make create-user
 make grant-permissions
 ```
+
+## Development Skills
+
+Maintainer workflows live in the external skills repository
+[`eval-hub/eval-hub-skills`](https://github.com/eval-hub/eval-hub-skills)
+(`dev-skills/`), which is shared by every eval-hub repository. Do **not** add
+copies under `.claude/skills/`; change the external skill instead.
+
+| Skill | Use it when |
+| --- | --- |
+| `evalhub-bug-review` | Reviewing an eval-hub PR, branch, commit range, or working-tree change for bugs. Returns a severity-ranked findings table and never edits code. |
+| `fix-fvt-test` | Diagnosing a failing FVT (godog) scenario on an OpenShift AI cluster from the JUnit report, test log, and pod logs. |
+| `golang-toolchain-update` | Auditing Go CVEs and bumping the Go toolchain, gated on the go-toolset image publishing the target tag. Modes: `cve` (default) and `latest`. |
+| `release-notes` | Drafting OpenSSF-compliant, human-readable GitHub release notes for a tag or version. |
+
+The human review workflow — the `ready-for-review` label, the approval ruleset
+and the reviewer checklist — is documented in `CONTRIBUTING.md` →
+[Review Process](./CONTRIBUTING.md#review-process).
+
+**Claude Code:** the committed `.claude/settings.json` declares the `evalhub`
+marketplace (`extraKnownMarketplaces`) and enables the four skills as plugins
+(`enabledPlugins`), but declaring and enabling a plugin does not download or
+install it: on a fresh machine `/evalhub-bug-review`, `/fix-fvt-test`,
+`/golang-toolchain-update` and `/release-notes` are **not** available until each
+collaborator installs them. Claude Code can also fetch enabled plugins in the
+background once a session starts, which needs network access, but a fresh clone
+starts with **none** of the four skills installed, so install the ones you rely
+on explicitly before you need them — when you need the skill immediately after
+cloning, when you want to review what a plugin adds before it runs, or when you
+will need it in a later offline session.
+An install only helps that later offline session once its download has finished:
+offline work can use only the plugins that are already downloaded, and the
+background fetch cannot run without network. Use project scope:
+
+```shell
+claude plugin install evalhub-bug-review@evalhub --scope project
+# repeat for fix-fvt-test, golang-toolchain-update and release-notes
+```
+
+In a session, `/plugin install <skill>@evalhub` opens the panel where you can
+choose **Install for all collaborators on this repository (project scope)**. In
+another repository, copy the `extraKnownMarketplaces` / `enabledPlugins` block
+from `.claude/settings.json`.
+
+**Other harnesses** (Cursor, Codex CLI, …) do not read Claude Code plugins. Keep
+a shallow clone current and symlink the skills into your harness's skills
+directory (`~/.claude/skills` by default; Codex CLI loads user skills from
+`~/.agents/skills`):
+
+```bash
+make install-dev-skills     # optional: DEV_SKILLS_REF=<ref> DEV_SKILLS_CLONE_DIR=<path> DEV_SKILLS_TARGET_DIR=<path>
+make uninstall-dev-skills   # honours DEV_SKILLS_TARGET_DIR and DEV_SKILLS_CLONE_DIR
+```
+
+For Codex CLI, point the target at its global skills directory, for example
+`make install-dev-skills DEV_SKILLS_TARGET_DIR=~/.agents/skills`.
+
+Then attach the skill file from the clone, for example
+`@~/.cache/eval-hub-skills/dev-skills/release-notes/SKILL.md`, or from any
+checkout of `eval-hub/eval-hub-skills` as
+`@dev-skills/release-notes/SKILL.md`.
+
+Invoke a skill by name once installed (for example `/release-notes` in Claude
+Code) or ask for it naturally; each `SKILL.md` documents its own steps.
 
 ## Git commits
 
