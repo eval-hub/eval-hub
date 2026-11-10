@@ -23,7 +23,7 @@ func (s *stubResultsExporter) Export(_ context.Context, _ *api.EvaluationJobReso
 	return evalcards.ExportResult{CardURL: s.cardURL}, s.err
 }
 
-func TestExportEvaluationResultsEligibleStates(t *testing.T) {
+func TestExportEvaluationResultsAsyncEligibleStates(t *testing.T) {
 	for _, tc := range []struct {
 		state api.OverallState
 		want  bool
@@ -39,11 +39,20 @@ func TestExportEvaluationResultsEligibleStates(t *testing.T) {
 		t.Run(string(tc.state), func(t *testing.T) {
 			job := testEvaluationJob()
 			job.Status.State = tc.state
-			exporter := &stubResultsExporter{}
-			h := &Handlers{resultsExporter: exporter}
-			h.exportEvaluationResults(context.Background(), nil, job, nil)
-			if got := exporter.card != nil; got != tc.want {
-				t.Fatalf("card exported = %v, want %v", got, tc.want)
+			exported := make(chan struct{}, 1)
+			h := &Handlers{resultsExporter: exportFunc(func(context.Context, *api.EvaluationJobResource, *cards.EvaluationCard) (evalcards.ExportResult, error) {
+				exported <- struct{}{}
+				return evalcards.ExportResult{}, nil
+			})}
+			h.exportEvaluationResultsAsync(context.Background(), nil, job, nil)
+			if tc.want {
+				awaitExportSignal(t, exported)
+			} else {
+				select {
+				case <-exported:
+					t.Fatal("ineligible job was exported")
+				default:
+				}
 			}
 		})
 	}
@@ -52,7 +61,7 @@ func TestExportEvaluationResultsEligibleStates(t *testing.T) {
 		job.Status = nil
 		exporter := &stubResultsExporter{}
 		h := &Handlers{resultsExporter: exporter}
-		h.exportEvaluationResults(context.Background(), nil, job, nil)
+		h.exportEvaluationResultsAsync(context.Background(), nil, job, nil)
 		if exporter.card != nil {
 			t.Fatal("card exported without job status")
 		}
@@ -90,9 +99,9 @@ func TestExportEvaluationResultsExportError(t *testing.T) {
 	h.exportEvaluationResults(context.Background(), nil, testEvaluationJob(), nil)
 }
 
-func TestExportEvaluationResultsNilJob(t *testing.T) {
+func TestExportEvaluationResultsAsyncNilJob(t *testing.T) {
 	t.Parallel()
 	h := &Handlers{resultsExporter: &stubResultsExporter{cardURL: "https://example.com/card.json"}}
 
-	h.exportEvaluationResults(context.Background(), nil, nil, nil)
+	h.exportEvaluationResultsAsync(context.Background(), nil, nil, nil)
 }

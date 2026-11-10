@@ -5,7 +5,9 @@ import (
 	"io"
 	"log/slog"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/evalcards"
@@ -17,12 +19,16 @@ import (
 )
 
 type recordingResultsExporter struct {
-	called  bool
+	called  atomic.Bool
+	done    chan struct{}
 	cardURL string
 }
 
 func (r *recordingResultsExporter) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (evalcards.ExportResult, error) {
-	r.called = true
+	r.called.Store(true)
+	if r.done != nil {
+		defer close(r.done)
+	}
 	return evalcards.ExportResult{CardURL: r.cardURL}, nil
 }
 
@@ -77,14 +83,14 @@ func TestHandleUpdateEvaluationSkipsCardExportWhenNotTerminal(t *testing.T) {
 	if recorder.Code != 204 {
 		t.Fatalf("expected status 204, got %d body %s", recorder.Code, recorder.Body.String())
 	}
-	if exporter.called {
+	if exporter.called.Load() {
 		t.Fatal("expected card export to be skipped for non-terminal job")
 	}
 }
 
 func TestHandleUpdateEvaluationExportsCardOnTerminalTransition(t *testing.T) {
 	t.Parallel()
-	exporter := &recordingResultsExporter{cardURL: "https://example.com/card.json"}
+	exporter := &recordingResultsExporter{cardURL: "https://example.com/card.json", done: make(chan struct{})}
 	storage := &terminalExportStorage{
 		fakeStorage: &fakeStorage{
 			job: &api.EvaluationJobResource{
@@ -115,7 +121,12 @@ func TestHandleUpdateEvaluationExportsCardOnTerminalTransition(t *testing.T) {
 	if recorder.Code != 204 {
 		t.Fatalf("expected status 204, got %d body %s", recorder.Code, recorder.Body.String())
 	}
-	if !exporter.called {
+	select {
+	case <-exporter.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("export did not start")
+	}
+	if !exporter.called.Load() {
 		t.Fatal("expected card export when job transitions to terminal state")
 	}
 }
@@ -153,7 +164,7 @@ func TestHandleUpdateEvaluationSkipsCardExportOnFailedTransition(t *testing.T) {
 	if recorder.Code != 204 {
 		t.Fatalf("expected status 204, got %d body %s", recorder.Code, recorder.Body.String())
 	}
-	if exporter.called {
+	if exporter.called.Load() {
 		t.Fatal("expected card export to be skipped when job transitions to failed")
 	}
 }
@@ -191,7 +202,7 @@ func TestHandleUpdateEvaluationSkipsCardExportWhenTerminalStateUnchanged(t *test
 	if recorder.Code != 204 {
 		t.Fatalf("expected status 204, got %d body %s", recorder.Code, recorder.Body.String())
 	}
-	if exporter.called {
+	if exporter.called.Load() {
 		t.Fatal("expected card export to be skipped when terminal state is unchanged")
 	}
 }

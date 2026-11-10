@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	evalhubmlflow "github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/cards"
@@ -46,6 +48,7 @@ type ManagerConfig struct {
 	MLFlowClient           *mlflowclient.Client
 	MLFlowWorkspaceSupport *evalhubmlflow.WorkspaceSupport
 	OCIPublisherFactory    OCIPublisherFactory
+	OCIPushTimeout         time.Duration
 }
 
 // Manager routes evaluation card export to enabled targets.
@@ -59,13 +62,9 @@ func NewManager(logger *slog.Logger, cfg ManagerConfig) *Manager {
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
-	ociFactory := cfg.OCIPublisherFactory
-	if ociFactory == nil {
-		ociFactory = NewNoopOCIPublisherFactory()
-	}
 	targets := []ExportTarget{
 		NewMLflowTarget(cfg.MLFlowClient, cfg.MLFlowWorkspaceSupport, logger),
-		NewOCITarget(ociFactory, logger),
+		NewOCITarget(cfg.OCIPublisherFactory, logger, cfg.OCIPushTimeout),
 	}
 	return &Manager{logger: logger, targets: targets}
 }
@@ -185,14 +184,15 @@ func (t *mlflowTarget) Export(ctx context.Context, job *api.EvaluationJobResourc
 }
 
 type ociTarget struct {
-	factory OCIPublisherFactory
+	factory     OCIPublisherFactory
+	pushTimeout time.Duration
 }
 
-func NewOCITarget(factory OCIPublisherFactory, _ *slog.Logger) ExportTarget {
+func NewOCITarget(factory OCIPublisherFactory, _ *slog.Logger, pushTimeout time.Duration) ExportTarget {
 	if factory == nil {
 		factory = NewNoopOCIPublisherFactory()
 	}
-	return &ociTarget{factory: factory}
+	return &ociTarget{factory: factory, pushTimeout: pushTimeout}
 }
 
 func (t *ociTarget) Target() Target {
@@ -219,7 +219,13 @@ func (t *ociTarget) Export(ctx context.Context, job *api.EvaluationJobResource, 
 		return nil, &OCIExportError{Operation: "initialize OCI publisher", Reason: "publisher is unavailable"}
 	}
 	defer func() { _ = publisher.Close() }()
-	artifact, err := publisher.PublishEvalCard(ctx, cardJSON)
+	pushTimeout := t.pushTimeout
+	if pushTimeout <= 0 {
+		pushTimeout = config.DefaultOCIPushTimeout
+	}
+	pushCtx, cancelPush := context.WithTimeout(ctx, pushTimeout)
+	defer cancelPush()
+	artifact, err := publisher.PublishEvalCard(pushCtx, cardJSON)
 	if err != nil {
 		return nil, &OCIExportError{Operation: "publish evaluation card to OCI", Err: err}
 	}

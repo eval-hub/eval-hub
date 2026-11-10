@@ -169,7 +169,7 @@ func TestMLflowTargetExport(t *testing.T) {
 }
 
 func TestOCITargetEnabled(t *testing.T) {
-	target := NewOCITarget(nil, nil)
+	target := NewOCITarget(nil, nil, 0)
 	job := &api.EvaluationJobResource{
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Exports: &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{}},
@@ -332,7 +332,7 @@ func (errOCIFactory) NewPublisher(_ context.Context, _ *api.EvaluationJobResourc
 }
 
 func TestOCITargetExportFactoryError(t *testing.T) {
-	target := NewOCITarget(errOCIFactory{}, nil)
+	target := NewOCITarget(errOCIFactory{}, nil, 0)
 	job := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
 		EvaluationJobConfig: api.EvaluationJobConfig{
@@ -496,7 +496,7 @@ func TestOCITargetGenerationAndSerializationFailures(t *testing.T) {
 		{card: &cards.EvaluationCard{}, operation: "generate evaluation card"},
 		{card: cards.NewEvaluationCard(&api.EvaluationJobResource{Resource: job.Resource, Results: &api.EvaluationJobResults{Benchmarks: []api.BenchmarkResult{{Metrics: map[string]any{"invalid": make(chan int)}}}}}), operation: "serialize evaluation card"},
 	} {
-		_, err := NewOCITarget(errOCIFactory{}, nil).Export(context.Background(), job, tc.card)
+		_, err := NewOCITarget(errOCIFactory{}, nil, 0).Export(context.Background(), job, tc.card)
 		var exportErr *OCIExportError
 		if !errors.As(err, &exportErr) || exportErr.Operation != tc.operation {
 			t.Fatalf("error=%v, want operation %s", err, tc.operation)

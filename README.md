@@ -688,8 +688,16 @@ Configuration is loaded from `config/config.yaml`, overridden by environment var
 | `DB_URL` | Database connection string | SQLite in-memory |
 | `MLFLOW_TRACKING_URI` | MLflow tracking server | `http://localhost:5000` |
 | `MLFLOW_CA_CERT_PATH` | PEM CA bundle for MLflow TLS verification | (system roots) |
+| `OCI_PUSH_TIMEOUT` | Overall API-service registry push deadline (`sidecar.oci.push_timeout`); omitted or `0` uses the default | `5m` |
 | `LOG_LEVEL` | Logging level | `INFO` |
 | `EVALHUB_HARDWARE_PROFILES_NAMESPACE` | Platform namespace where OpenDataHub `HardwareProfile` CRs are fetched (Kubernetes runtime). Required for `hardware_config.hardware_profile_name` evaluations; typically `opendatahub` or `redhat-ods-applications`. Set by the TrustyAI Service Operator deployment. | _(unset — hardware profile lookups fail)_ |
+
+Evaluation-result exports run asynchronously after the job reaches an eligible terminal state.
+The OCI push deadline starts after credential resolution and excludes MLflow export and status
+persistence. The independent `sidecar.oci.http_timeout` bounds each registry HTTP request
+and the API service's credential lookup. Export workers
+are not drained during shutdown; interruption or persistence failures may leave OCI status
+absent or `running`.
 
 Provider configurations live in `config/providers/` as YAML files. The default set includes lm-evaluation-harness (167 benchmarks), RAGAS, Garak, GuideLLM, LightEval, and MTEB.
 
