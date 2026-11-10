@@ -64,6 +64,39 @@ kind_cluster_in_runtime() {
   grep -Fqx -- "$KIND_CLUSTER_NAME" <<<"$clusters"
 }
 
+# ensure_runtime_owns_existing_cluster fails when the other engine lists
+# KIND_CLUSTER_NAME and the selected one does not. kind only lists the clusters of
+# the engine it is pointed at, so a command that continues under the selected
+# engine would miss the running cluster: a deploy creates a second cluster with
+# the same name and overwrites the private kubeconfig of the one that is running,
+# and a cleanup reports the cluster absent, drops its record, and still removes
+# registry state on an engine the user did not deploy with. The optional second
+# argument names what the caller is about to do: "deploy" (the default), "clean",
+# or "recorded" when the engine comes from the record, which fails with the stale
+# record to remove instead of an "Unset CONTAINER_RUNTIME" hint.
+ensure_runtime_owns_existing_cluster() {
+  local runtime other purpose="${2:-deploy}"
+  runtime="$(canonical_runtime "$1")"
+  # A cluster of this name under the selected engine is used as-is, so the other
+  # engine owning one too changes nothing: this run creates no cluster and
+  # rewrites no kubeconfig, and a cleanup removes only the selected engine's
+  # registry container and image tags.
+  kind_cluster_in_runtime "$runtime" && return 0
+  case "$runtime" in
+    podman) other=docker ;;
+    docker) other=podman ;;
+    *) return 0 ;;
+  esac
+  kind_cluster_in_runtime "$other" || return 0
+  if [[ "$purpose" == recorded ]]; then
+    fail "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $runtime-backed in $RUNTIME_STATE_FILE, but $runtime no longer runs it and $other does. Remove the stale record (rm -- '$RUNTIME_STATE_FILE') to reuse the $other cluster with this script, or remove it and run 'make dev-clean CONTAINER_RUNTIME=$other DELETE_CLUSTER=true' to delete that cluster."
+  fi
+  if [[ "$purpose" == clean ]]; then
+    fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $other, not $runtime. Unset CONTAINER_RUNTIME to clean up with the engine that owns the cluster, or set CONTAINER_RUNTIME=$other."
+  fi
+  fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $other, not $runtime. Unset CONTAINER_RUNTIME to reuse the engine that owns the cluster, or set CONTAINER_RUNTIME=$other."
+}
+
 # recorded_runtime prints the engine dev-deploy recorded for KIND_CLUSTER_NAME, if
 # any. The record keeps a redeploy, dev-clean, dev-demo, and
 # clean-container-storage on the engine that backs the cluster without probing

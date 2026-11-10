@@ -64,22 +64,23 @@ Inputs (also accepted as environment variables):
                      evalhub/kubeconfigs/<cluster>.runtime, otherwise the engine
                      that owns the cluster, otherwise the first reachable engine
                      (podman before docker, docker before podman under WSL). An
-                     explicit value must match the recorded engine; otherwise the
-                     script fails instead of skipping the cluster and removing its
-                     kubeconfig. The record is dropped when the selected engine no
-                     longer runs the cluster or its engine is not installed, so
-                     neither a cluster removed out of band nor an uninstalled
-                     engine leaves a record that rejects a later command; a
-                     recorded engine that is installed but stopped fails with the
-                     state file to remove. The private kubeconfig is used only
-                     when it targets the selected engine's cluster; one pointing
-                     at another cluster is preserved, and cleanup uses a temporary
-                     exported kubeconfig instead. With DELETE_CLUSTER=true the
-                     kubeconfig is removed only when the cluster is gone from the
-                     selected engine, the other engine can be shown not to hold a
-                     cluster of that name, and its API server no longer answers;
-                     an unreachable other engine or a live API server preserves
-                     it.
+                     explicit value must match the recorded engine, and own the
+                     cluster when no record exists yet; otherwise the script fails
+                     instead of skipping the cluster, dropping its record, and
+                     removing its kubeconfig. The record is dropped when the
+                     selected engine no longer runs the cluster or its engine is
+                     not installed, so neither a cluster removed out of band nor
+                     an uninstalled engine leaves a record that rejects a later
+                     command; a recorded engine that is installed but stopped
+                     fails with the state file to remove. The private kubeconfig
+                     is used only when it targets the selected engine's cluster;
+                     one pointing at another cluster is preserved, and cleanup
+                     uses a temporary exported kubeconfig instead. With
+                     DELETE_CLUSTER=true the kubeconfig is removed only when the
+                     cluster is gone from the selected engine, the other engine
+                     can be shown not to hold a cluster of that name, and its API
+                     server no longer answers; an unreachable other engine or a
+                     live API server preserves it.
 
 The system namespace is retained to avoid deleting unrelated resources that may
 have been added there. Deployment resources are removed only when their ownership
@@ -137,7 +138,10 @@ validate_inputs() {
 # image tags, in order of authority:
 #   1. an explicit CONTAINER_RUNTIME, which has to match the engine dev-deploy
 #      recorded: cleaning the other engine would skip the running cluster and
-#      still remove its kubeconfig;
+#      still remove its kubeconfig. When no record exists yet, that engine also
+#      has to own the cluster, or cleanup would report the cluster absent, drop
+#      its record, and prune the selected engine's registry instead (see
+#      ensure_runtime_owns_existing_cluster in scripts/lib/dev-runtime.sh);
 #   2. the engine recorded for KIND_CLUSTER_NAME (see recorded_runtime), so
 #      `make dev-clean` after `make dev-deploy` needs no second input;
 #   3. the engine that owns KIND_CLUSTER_NAME, for deployments made before that
@@ -161,8 +165,16 @@ detect_container_runtime() {
       podman|docker) ;;
       *) fail "CONTAINER_RUNTIME must be 'podman' or 'docker'." ;;
     esac
-    if [[ -n "$recorded" && "$recorded" != "$(canonical_runtime "$CONTAINER_RUNTIME")" ]]; then
-      fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE). Unset CONTAINER_RUNTIME to reuse $recorded, or delete that cluster and its state file before switching to $CONTAINER_RUNTIME."
+    if [[ -n "$recorded" ]]; then
+      [[ "$recorded" == "$(canonical_runtime "$CONTAINER_RUNTIME")" ]] ||
+        fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE). Unset CONTAINER_RUNTIME to reuse $recorded, or delete that cluster and its state file before switching to $CONTAINER_RUNTIME."
+    else
+      # No record yet: either no cluster exists or it predates the record, so ask
+      # both engines which one owns the name. Cleaning under the other engine
+      # would find no cluster, drop the record, and still remove that engine's
+      # registry container and image tags, then report success while the cluster
+      # keeps running.
+      ensure_runtime_owns_existing_cluster "$CONTAINER_RUNTIME" clean
     fi
     use_runtime "$CONTAINER_RUNTIME"
     return 0

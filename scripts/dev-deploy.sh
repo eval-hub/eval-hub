@@ -195,32 +195,9 @@ need_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
 }
 
-# Fail when an explicit runtime does not own KIND_CLUSTER_NAME while the other
-# engine does. kind only lists the clusters of the engine it is pointed at, so
-# continuing under the selected engine would create a second cluster with the
-# same name and overwrite the private kubeconfig of the cluster that is already
-# running. A recorded cluster is checked against its record instead; this guard
-# covers clusters deployed before that record existed. The optional second
-# argument names where the engine came from ("explicit" by default), so a stale
-# record gets an error that explains how to clear it.
-ensure_runtime_owns_existing_cluster() {
-  local runtime other reason="${2:-explicit}"
-  runtime="$(canonical_runtime "$1")"
-  # A cluster of this name under the selected engine is reused as-is, so the
-  # other engine owning one too changes nothing: this run creates no cluster and
-  # rewrites no kubeconfig for a cluster it is not using.
-  kind_cluster_in_runtime "$runtime" && return 0
-  case "$runtime" in
-    podman) other=docker ;;
-    docker) other=podman ;;
-    *) return 0 ;;
-  esac
-  kind_cluster_in_runtime "$other" || return 0
-  if [[ "$reason" == recorded ]]; then
-    fail "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $runtime-backed in $RUNTIME_STATE_FILE, but $runtime no longer runs it and $other does. Remove the stale record (rm -- '$RUNTIME_STATE_FILE') to reuse the $other cluster with this script, or remove it and run 'make dev-clean CONTAINER_RUNTIME=$other DELETE_CLUSTER=true' to delete that cluster."
-  fi
-  fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $other, not $runtime. Unset CONTAINER_RUNTIME to reuse the engine that owns the cluster, or set CONTAINER_RUNTIME=$other."
-}
+# ensure_runtime_owns_existing_cluster is shared with dev-clean, which needs the
+# same guard for an explicit runtime when no record exists yet; it lives in
+# scripts/lib/dev-runtime.sh.
 
 # Select the container runtime used for image builds, the local registry, and the
 # kind nodes. A record naming an engine that is not installed is ignored first,

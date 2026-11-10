@@ -257,13 +257,15 @@ running, while `make dev-demo` follows the record and
 `make clean-container-storage` keeps the explicit engine with a warning,
 because neither can destroy the deployment. For a cluster deployed before that
 record existed the engine that already owns `KIND_CLUSTER_NAME` is used, and
-`make dev-deploy` also fails when an explicit value does not own that cluster; a
-first deploy with neither a record nor a cluster falls back to the first
-reachable engine, podman before docker (or docker before podman under WSL,
+`make dev-deploy` and `make dev-clean` also fail when an explicit value does not
+own that cluster, instead of creating a second one or reporting a cleanup that
+skipped it; a first deploy with neither a record nor a cluster falls back to the
+first reachable engine, podman before docker (or docker before podman under WSL,
 where podman passes `podman info`
 but fails kind node startup). A record whose engine no longer runs the cluster
 is not trusted: `make dev-deploy` fails when the other engine owns that cluster,
-an explicit matching value included, instead of creating a second one, and
+an explicit matching value included, instead of creating a second one,
+`make dev-demo` falls back to the engine that owns the cluster, and
 `make dev-clean` drops the record (with or without `DELETE_CLUSTER=true`) once
 the cluster is gone from the recorded engine. A record whose engine is no longer
 installed cannot describe a reachable cluster, so `make dev-deploy` ignores it
