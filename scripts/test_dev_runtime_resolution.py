@@ -2,9 +2,12 @@
 
 dev-deploy records the engine that backs a kind cluster next to the private
 kubeconfig, and dev-deploy, dev-clean, dev-demo, and clean-container-storage
-resolve the runtime from that record instead of probing both engines. These tests
-extract the real function bodies from each script, stub podman, docker, and kind
-on PATH, and check the resolution order:
+resolve the runtime from that record instead of probing both engines. The
+resolution itself lives once, in resolve_runtime_decision
+(scripts/lib/dev-runtime.sh): these tests extract the real function bodies, stub
+podman, docker, and kind on PATH, and check the evidence it reports alongside
+what each script does with it. Each detect_container_runtime is a policy table
+over that evidence, so the same evidence is pinned per script:
 
   1. an explicit CONTAINER_RUNTIME: dev-deploy and dev-clean reject a value that
      does not match the record, and one that does not own an unrecorded cluster,
@@ -16,6 +19,12 @@ on PATH, and check the resolution order:
   4. the first reachable engine (dev-deploy and clean-container-storage), the
      owning engine then docker (dev-demo), and podman before docker, or docker
      before podman under WSL.
+
+The mapping is deliberately not shared: a deploy must fail before it can
+duplicate a cluster, a cleanup must not skip the cluster it was asked to clean, a
+read-only query should fall back to the owner, and a prune must not be blocked by
+an unreachable engine. Those divergences are asserted per script, so a policy
+edit cannot silently change another command.
 
 A record is only an answer to "which engine backed this cluster", not proof that
 it still does: the stale-record cases check that dev-deploy fails instead of
@@ -71,12 +80,15 @@ LIB_FUNCTIONS = [
     "kind_cmd",
     "canonical_runtime",
     "kind_cluster_in_runtime",
-    "ensure_runtime_owns_existing_cluster",
     "recorded_runtime",
     "record_runtime",
     "runtime_is_installed",
     "runtime_is_reachable",
     "fallback_runtime_order",
+    "runtime_other",
+    "first_reachable_runtime",
+    "cluster_owner",
+    "resolve_runtime_decision",
     "use_runtime",
 ]
 SCRIPT_FUNCTIONS = {
@@ -91,7 +103,6 @@ SCRIPT_FUNCTIONS = {
         "log",
         "fail",
         "need_command",
-        "recorded_runtime_if_trusted",
         "detect_container_runtime",
     ],
     "clean-container-storage.sh": ["log", "fail", "detect_container_runtime"],

@@ -134,76 +134,56 @@ validate_inputs() {
   case "$DELETE_CLUSTER" in true|false) ;; *) fail "DELETE_CLUSTER must be true or false." ;; esac
 }
 
-# Select the container runtime that owns the registry container and the temporary
-# image tags, in order of authority:
-#   1. an explicit CONTAINER_RUNTIME, which has to match the engine dev-deploy
-#      recorded: cleaning the other engine would skip the running cluster and
-#      still remove its kubeconfig. When no record exists yet, that engine also
-#      has to own the cluster, or cleanup would report the cluster absent, drop
-#      its record, and prune the selected engine's registry instead (see
-#      ensure_runtime_owns_existing_cluster in scripts/lib/dev-runtime.sh);
-#   2. the engine recorded for KIND_CLUSTER_NAME (see recorded_runtime), so
-#      `make dev-clean` after `make dev-deploy` needs no second input;
-#   3. the engine that owns KIND_CLUSTER_NAME, for deployments made before that
-#      record existed;
-#   4. the first reachable engine, podman before docker (docker before podman
-#      under WSL; see fallback_runtime_order), so leftover registry containers and
-#      image tags are still removed when no cluster is left.
+# Container runtime policy for a cleanup. resolve_runtime_decision (in
+# scripts/lib/dev-runtime.sh) works out which engine runs KIND_CLUSTER_NAME and
+# why; this table decides what cleanup does about it. Two facts make cleanup
+# different from a deploy: cleaning the wrong engine skips the running cluster,
+# drops its record, and still removes that engine's registry, while a record for
+# a cluster removed out of band must not be left behind. So an explicit value
+# that does not own an unrecorded cluster fails like a deploy, but a record whose
+# engine still answers is followed even when that engine no longer runs the
+# cluster, because main then drops the record instead of touching another
+# engine's cluster.
 detect_container_runtime() {
-  local runtime recorded
-  # A record whose engine is no longer installed describes no reachable cluster,
-  # so drop it before selecting: an uninstalled engine must not reject the
-  # explicit value or keep cleanup from running. A reinstall is still recovered by
-  # the engine that owns the cluster (step 3).
-  if recorded="$(recorded_runtime)" && ! runtime_is_installed "$recorded"; then
-    log WARN "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $recorded-backed in $RUNTIME_STATE_FILE, but $recorded is not installed; dropping the stale record."
+  local runtime
+  resolve_runtime_decision fallback
+  if [[ "$RESOLVED_RECORD_STATE" == uninstalled ]]; then
+    log WARN "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $RESOLVED_RECORDED-backed in $RUNTIME_STATE_FILE, but $RESOLVED_RECORDED is not installed; dropping the stale record."
     forget_runtime
-    recorded=""
   fi
-  if [[ -n "$CONTAINER_RUNTIME" ]]; then
-    case "$CONTAINER_RUNTIME" in
-      podman|docker) ;;
-      *) fail "CONTAINER_RUNTIME must be 'podman' or 'docker'." ;;
-    esac
-    if [[ -n "$recorded" ]]; then
-      [[ "$recorded" == "$(canonical_runtime "$CONTAINER_RUNTIME")" ]] ||
-        fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE). Unset CONTAINER_RUNTIME to reuse $recorded, or delete that cluster and its state file before switching to $CONTAINER_RUNTIME."
-    else
-      # No record yet: either no cluster exists or it predates the record, so ask
-      # both engines which one owns the name. Cleaning under the other engine
-      # would find no cluster, drop the record, and still remove that engine's
-      # registry container and image tags, then report success while the cluster
-      # keeps running.
-      ensure_runtime_owns_existing_cluster "$CONTAINER_RUNTIME" clean
-    fi
-    use_runtime "$CONTAINER_RUNTIME"
-    return 0
-  fi
-  if [[ -n "$recorded" ]]; then
-    if ! runtime_is_reachable "$recorded"; then
-      fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE), but $recorded is not reachable. Start $recorded and retry, or remove the stale record (rm -- '$RUNTIME_STATE_FILE') if that cluster is gone."
-    fi
-    log INFO "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE); cleaning up with $recorded."
-    use_runtime "$recorded"
-    return 0
-  fi
-  # The engine order is the policy shared with the other scripts; splitting the
-  # helper's newline-separated output is intended.
-  for runtime in $(fallback_runtime_order); do
-    if kind_cluster_in_runtime "$(canonical_runtime "$runtime")"; then
-      runtime="$(canonical_runtime "$runtime")"
-      log INFO "Kind cluster '$KIND_CLUSTER_NAME' exists under $runtime; cleaning up with $runtime."
+  case "$RESOLVED_EVIDENCE" in
+    explicit-invalid)
+      fail "CONTAINER_RUNTIME must be 'podman' or 'docker'."
+      ;;
+    explicit-mismatch|explicit-mismatch-stale|explicit-mismatch-gone)
+      fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $RESOLVED_RECORDED (see $RUNTIME_STATE_FILE). Unset CONTAINER_RUNTIME to reuse $RESOLVED_RECORDED, or delete that cluster and its state file before switching to $RESOLVED_RUNTIME."
+      ;;
+    explicit-other-owns)
+      fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $RESOLVED_OWNER, not $RESOLVED_RUNTIME. Unset CONTAINER_RUNTIME to clean up with the engine that owns the cluster, or set CONTAINER_RUNTIME=$RESOLVED_OWNER."
+      ;;
+    recorded-stopped)
+      fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $RESOLVED_RUNTIME (see $RUNTIME_STATE_FILE), but $RESOLVED_RUNTIME is not reachable. Start $RESOLVED_RUNTIME and retry, or remove the stale record (rm -- '$RUNTIME_STATE_FILE') if that cluster is gone."
+      ;;
+    recorded-owned|recorded-stale|recorded-gone)
+      log INFO "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $RESOLVED_RUNTIME (see $RUNTIME_STATE_FILE); cleaning up with $RESOLVED_RUNTIME."
+      use_runtime "$RESOLVED_RUNTIME"
+      ;;
+    owner)
+      log INFO "Kind cluster '$KIND_CLUSTER_NAME' exists under $RESOLVED_RUNTIME; cleaning up with $RESOLVED_RUNTIME."
+      use_runtime "$RESOLVED_RUNTIME"
+      ;;
+    no-owner)
+      runtime="$(first_reachable_runtime)" ||
+        fail "Neither podman nor docker is reachable. Install podman (or docker) and make sure it is running."
       use_runtime "$runtime"
-      return 0
-    fi
-  done
-  for runtime in $(fallback_runtime_order); do
-    if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
-      use_runtime "$runtime"
-      return 0
-    fi
-  done
-  fail "Neither podman nor docker is reachable. Install podman (or docker) and make sure it is running."
+      ;;
+    explicit-owned|explicit-recorded-unverified|explicit-recorded-stale|explicit-no-owner|explicit-missing)
+      use_runtime "$RESOLVED_RUNTIME"
+      ;;
+    *)
+      fail "Unhandled runtime decision: $RESOLVED_EVIDENCE"
+      ;;
+  esac
 }
 
 # forget_runtime removes the record of the engine that backed KIND_CLUSTER_NAME
