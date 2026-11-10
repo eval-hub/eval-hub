@@ -14,8 +14,13 @@ on PATH, and check the resolution order:
      owning engine then docker (dev-demo), and podman before docker.
 
 The podman-docker shim cases check that a `docker` that is really podman is
-resolved to podman, so kind uses the podman provider and registry pushes keep
-`--tls-verify=false`.
+resolved to podman for every script, so kind uses the podman provider and
+registry pushes keep `--tls-verify=false`.
+
+The delete-cluster cases check that `make dev-clean DELETE_CLUSTER=true` removes
+the runtime record even when it preserves the private kubeconfig (a kubeconfig
+that targets another cluster, or no private kubeconfig at all), because a stale
+record rejects a later deploy that explicitly selects another engine.
 
 Run from the repository root with `make test-scripts`, or directly:
 
@@ -82,6 +87,15 @@ fi
 exit 0
 """
 
+# dev-clean reads the private kubeconfig's context to decide whether the file is
+# worth verifying; the delete-cluster cases answer it with this cluster's context.
+KUBECTL_FAKE = """#!/usr/bin/env bash
+if [[ "$*" == *"config current-context"* ]]; then
+  printf 'kind-%s\\n' "${KIND_CLUSTER_NAME:-}"
+fi
+exit 0
+"""
+
 
 def extract_functions(path, names):
     """Return the source of `names` from `path`, comments included."""
@@ -109,7 +123,12 @@ class RuntimeResolutionTestCase(unittest.TestCase):
         cls.work_dir = pathlib.Path(cls.work.name)
         cls.bin_dir = cls.work_dir / "bin"
         cls.bin_dir.mkdir()
-        for name, body in (("podman", PODMAN_FAKE), ("docker", DOCKER_FAKE), ("kind", KIND_FAKE)):
+        for name, body in (
+            ("podman", PODMAN_FAKE),
+            ("docker", DOCKER_FAKE),
+            ("kind", KIND_FAKE),
+            ("kubectl", KUBECTL_FAKE),
+        ):
             stub = cls.bin_dir / name
             stub.write_text(body)
             stub.chmod(0o755)
@@ -237,6 +256,85 @@ class DemoResolutionTests(RuntimeResolutionTestCase):
     def test_missing_cluster_still_queries_docker(self):
         """The docker fallback lets check_cluster report the missing cluster."""
         self.assert_resolves("dev-demo.sh", "docker")
+
+    def test_podman_docker_shim_resolves_to_podman(self):
+        """A shim `docker` is queried as podman, or kind asks the wrong provider."""
+        self.assert_resolves("dev-demo.sh", "podman", explicit="docker", shim=True)
+        self.assert_resolves("dev-demo.sh", "podman", recorded="docker", shim=True)
+        self.assert_resolves("dev-demo.sh", "podman", shim=True)
+
+
+class DeleteClusterRecordTests(RuntimeResolutionTestCase):
+    """`make dev-clean DELETE_CLUSTER=true` must not leave a stale runtime record."""
+
+    def delete_cluster(self, kubeconfig="owned", same_cluster=True):
+        """Run dev-clean's delete_cluster against a stubbed cluster.
+
+        `kubeconfig` is "owned" for a private kubeconfig that targets the cluster
+        and "missing" for one that was never created; `same_cluster` decides
+        whether that kubeconfig is verified as targeting the deleted cluster.
+        Returns (output, private kubeconfig path, runtime record path) with the
+        paths reflecting the state left by the run.
+        """
+        state_path = self.work_dir / f"{CLUSTER}.runtime"
+        state_path.write_text("podman\n")
+        private = self.work_dir / f"{CLUSTER}.yaml"
+        private.unlink(missing_ok=True)
+        if kubeconfig != "missing":
+            private.write_text("apiVersion: v1\n")
+        exported = self.work_dir / "exported.yaml"
+        exported.write_text("apiVersion: v1\n")
+        harness = self.work_dir / "delete-cluster.sh"
+        harness.write_text(
+            "#!/usr/bin/env bash\n"
+            "set -Eeuo pipefail\n"
+            f"KIND_CLUSTER_NAME={CLUSTER}\n"
+            "CONTAINER_RUNTIME=podman\n"
+            f'PRIVATE_KUBECONFIG="{private}"\n'
+            f'EXPORTED_KUBECONFIG="{exported}"\n'
+            f'RUNTIME_STATE_FILE="{state_path}"\n'
+            f"{extract_functions(SCRIPTS_DIR / 'dev-clean.sh', ['log', 'fail', 'forget_runtime'])}\n"
+            f"{extract_functions(SCRIPTS_DIR / 'dev-clean.sh', ['delete_cluster'])}\n"
+            "# Stand in for the cluster, kind, kubeconfig export, and registry\n"
+            "# cleanup so the run reaches the kubeconfig and record decisions.\n"
+            "cluster_exists() { return 0; }\n"
+            "kind_cmd() { :; }\n"
+            "export_runtime_kubeconfig() { return 0; }\n"
+            f"kubeconfigs_target_same_cluster() {{ return {0 if same_cluster else 1}; }}\n"
+            "remove_registry() { :; }\n"
+            "delete_cluster\n"
+        )
+        proc = subprocess.run(
+            ["bash", str(harness)],
+            capture_output=True,
+            text=True,
+            env={
+                "PATH": f"{self.bin_dir}:{os.environ['PATH']}",
+                "HOME": str(self.work_dir),
+                "KIND_CLUSTER_NAME": CLUSTER,
+            },
+        )
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        return proc.stdout + proc.stderr, private, state_path
+
+    def test_record_is_removed_with_the_owned_kubeconfig(self):
+        """The kubeconfig that targets the deleted cluster goes with the record."""
+        output, private, state_path = self.delete_cluster()
+        self.assertFalse(private.exists(), output)
+        self.assertFalse(state_path.exists(), output)
+
+    def test_preserved_kubeconfig_still_drops_the_record(self):
+        """A kubeconfig kept for another cluster must not keep the stale record."""
+        output, private, state_path = self.delete_cluster(same_cluster=False)
+        self.assertIn("will be preserved", output)
+        self.assertTrue(private.exists(), output)
+        self.assertFalse(state_path.exists(), output)
+
+    def test_missing_kubeconfig_still_drops_the_record(self):
+        """A deploy without a private kubeconfig still drops the stale record."""
+        output, private, state_path = self.delete_cluster(kubeconfig="missing")
+        self.assertFalse(private.exists(), output)
+        self.assertFalse(state_path.exists(), output)
 
 
 class StorageCleanupResolutionTests(RuntimeResolutionTestCase):
