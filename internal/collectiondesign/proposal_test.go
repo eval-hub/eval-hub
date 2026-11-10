@@ -28,6 +28,12 @@ func TestValidateCollectionSharedRules(t *testing.T) {
 		{name: "unknown provider", candidate: proposalWithBenchmarks(testBenchmark("missing", "b1")), wantCode: issueUnknownProvider, wantPath: "benchmarks[0].provider_id"},
 		{name: "unknown benchmark", candidate: proposalWithBenchmarks(testBenchmark("p1", "missing")), wantCode: issueUnknownBenchmark, wantPath: "benchmarks[0].id"},
 		{name: "duplicate pair", candidate: proposalWithBenchmarks(testBenchmark("p1", "b1"), testBenchmark("p1", "b1")), wantCode: issueDuplicateBenchmark, wantPath: "benchmarks[1]"},
+		{name: "same pair with different parameters", candidate: func() api.CollectionConfig {
+			first, second := testBenchmark("p1", "b1"), testBenchmark("p1", "b1")
+			first.Parameters = map[string]any{"task": "task-a"}
+			second.Parameters = map[string]any{"task": "task-b"}
+			return proposalWithBenchmarks(first, second)
+		}()},
 		{name: "unadvertised metric", candidate: proposalWithBenchmarks(testBenchmarkWithScore("p1", "b1", "missing", false)), wantCode: issueMetricNotAdvertised, wantPath: "benchmarks[0].primary_score.metric"},
 		{name: "wrong direction", candidate: proposalWithBenchmarks(testBenchmarkWithScore("p1", "b1", "accuracy", true)), wantCode: issueDirectionConflict, wantPath: "benchmarks[0].primary_score.lower_is_better"},
 		{name: "threshold without metric", candidate: proposalWithBenchmarks(testBenchmarkWithThreshold("p2", "b2", 0.5)), wantCode: issueMetricNotAdvertised, wantPath: "benchmarks[0].pass_criteria.threshold"},
@@ -214,6 +220,7 @@ func TestValidateProposalFindings(t *testing.T) {
 		{name: "missing required classification", candidate: api.CollectionConfig{Name: "valid", Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}}}, options: validOptions, wantCode: issueClassificationRequired, wantPath: "domains"},
 		{name: "empty benchmark selection", candidate: api.CollectionConfig{Name: "valid", Domains: []string{"reasoning"}}, options: validOptions, wantCode: issueSchemaInvalid, wantPath: "benchmarks"},
 		{name: "empty name", candidate: api.CollectionConfig{Category: "reasoning", Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "b1"}, ProviderID: "p1"}}}, options: validOptions, wantCode: issueRequiredField, wantPath: "name"},
+		{name: "missing benchmark ID uses API path", candidate: proposalWithBenchmarks(testBenchmark("p1", "")), options: validOptions, wantCode: issueRequiredField, wantPath: "benchmarks[0].id"},
 		{name: "unknown provider", candidate: proposalWithBenchmarks(testBenchmark("missing", "b1")), options: validOptions, wantCode: issueUnknownProvider, wantPath: "benchmarks[0].provider_id"},
 		{name: "unknown benchmark pair", candidate: proposalWithBenchmarks(testBenchmark("p1", "missing")), options: validOptions, wantCode: issueUnknownBenchmark, wantPath: "benchmarks[0].id"},
 		{name: "duplicate pair", candidate: proposalWithBenchmarks(testBenchmark("p1", "b1"), testBenchmark("p1", "b1")), options: proposalTestOptions(t, "", 3, StrictnessModerate), wantCode: issueDuplicateBenchmark, wantPath: "benchmarks[1]"},
@@ -626,7 +633,7 @@ func TestCalibrateProposalPaginatesReferencesAndDoesNotInventDirection(t *testin
 	withoutDirection := &fakeCatalogSource{
 		providers: []api.ProviderResource{provider},
 		collections: []api.CollectionResource{systemReference("no-trusted-direction",
-			testBenchmarkWithWeightScoreAndThreshold("p1", "b1", 1, "accuracy", false, 0.9))},
+			testBenchmarkWithThreshold("p1", "b1", 0.9))},
 	}
 	candidate := validProposal()
 	candidate.Benchmarks[0].PrimaryScore = &api.PrimaryScore{Metric: "accuracy"}
@@ -637,7 +644,7 @@ func TestCalibrateProposalPaginatesReferencesAndDoesNotInventDirection(t *testin
 	if got.Benchmarks[0].PassCriteria != nil {
 		t.Fatalf("calibration invented a threshold without a provider-advertised direction: %+v", got.Benchmarks[0].PassCriteria)
 	}
-	if !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "provider does not advertise a default primary score") {
+	if !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "references do not declare the selected primary-score metric and direction") {
 		t.Fatalf("missing no-direction explanation: %+v", decisions)
 	}
 }
@@ -675,6 +682,42 @@ func TestCalibrateProposalDistinguishesMissingProviderDefault(t *testing.T) {
 	}
 	if !hasDecision(decisions, "benchmarks[0].primary_score", "provider does not advertise a default primary score") {
 		t.Fatalf("missing distinct no-default explanation: %+v", decisions)
+	}
+}
+
+func TestInspectCustomAllowsExplicitMetricAndCalibratesRepeatedReferences(t *testing.T) {
+	t.Parallel()
+	provider := testProvider("inspect", "inspect/custom", nil, nil, nil)
+	candidateBenchmark := testBenchmarkWithScore("inspect", "inspect/custom", "accuracy", false)
+	candidateBenchmark.Parameters = map[string]any{"task": "inspect_evals/gsm8k", "task_args": map[string]any{"fewshot": float64(5)}}
+	candidate := proposalWithBenchmarks(candidateBenchmark)
+	options := proposalTestOptions(t, "", 3, StrictnessModerate)
+
+	firstReference := testBenchmarkWithWeightScoreAndThreshold("inspect", "inspect/custom", 1, "accuracy", false, 0.2)
+	firstReference.Parameters = map[string]any{"task": "inspect_evals/gsm8k", "task_args": map[string]any{"fewshot": 0}}
+	matchingReference := testBenchmarkWithWeightScoreAndThreshold("inspect", "inspect/custom", 1, "accuracy", false, 0.9)
+	matchingReference.Parameters = map[string]any{"task": "inspect_evals/gsm8k", "task_args": map[string]any{"fewshot": float64(5)}}
+	source := &fakeCatalogSource{
+		providers: []api.ProviderResource{provider},
+		collections: []api.CollectionResource{
+			systemReference("evaluate-model-accuracy", firstReference, matchingReference),
+		},
+	}
+
+	_, issues, err := ValidateProposal(context.Background(), source, options, candidate)
+	if err != nil || len(issues) != 0 {
+		t.Fatalf("explicit metric on provider with unknown metrics was rejected: issues=%+v err=%v", issues, err)
+	}
+
+	got, decisions, err := CalibrateProposal(context.Background(), source, options, candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Benchmarks[0].PassCriteria == nil || got.Benchmarks[0].PassCriteria.Threshold == nil || *got.Benchmarks[0].PassCriteria.Threshold != 0.9 {
+		t.Fatalf("matching repeated reference did not calibrate threshold: %+v", got.Benchmarks[0].PassCriteria)
+	}
+	if !reflect.DeepEqual(decisionIDs(decisions, "benchmarks[0].pass_criteria.threshold"), []string{"evaluate-model-accuracy"}) {
+		t.Fatalf("unexpected reference provenance: %+v", decisions)
 	}
 }
 
@@ -792,6 +835,9 @@ func TestProposalFormattingAndReferenceHelpers(t *testing.T) {
 	if got := jsonPath("Name"); got != "Name" {
 		t.Fatalf("jsonPath() without a namespace = %q, want Name", got)
 	}
+	if got := jsonPath("CollectionConfig.benchmarks[0].Ref.id"); got != "benchmarks[0].id" {
+		t.Fatalf("jsonPath() for an embedded Ref field = %q, want benchmarks[0].id", got)
+	}
 
 	issues := []Issue{
 		{Path: "benchmarks[0]", Code: "schema_invalid", Message: "z"},
@@ -820,8 +866,32 @@ func TestProposalFormattingAndReferenceHelpers(t *testing.T) {
 		systemReference("unrelated", testBenchmark("p1", "other")),
 	}
 	got := matchingReferenceBenchmarks(references, key)
-	if len(got) != 1 || got[0].collectionID != "same" {
-		t.Fatalf("matchingReferenceBenchmarks() = %+v, want only the unique system reference", got)
+	wantCollectionIDs := []string{"ambiguous", "ambiguous", "same", "same"}
+	if len(got) != len(wantCollectionIDs) {
+		t.Fatalf("matchingReferenceBenchmarks() returned %d references, want %d: %+v", len(got), len(wantCollectionIDs), got)
+	}
+	for i, wantID := range wantCollectionIDs {
+		if got[i].collectionID != wantID {
+			t.Fatalf("matchingReferenceBenchmarks()[%d].collectionID = %q, want %q", i, got[i].collectionID, wantID)
+		}
+	}
+}
+
+func TestCollectionValidationFlattensEmbeddedBenchmarkIDPath(t *testing.T) {
+	t.Parallel()
+	issues, err := validateCollectionConfig(api.CollectionConfig{
+		Name:    "valid",
+		Domains: []string{"reasoning"},
+		Benchmarks: []api.CollectionBenchmarkConfig{{
+			Ref:        api.Ref{ID: ""},
+			ProviderID: "p1",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasIssue(issues, issueRequiredField, "benchmarks[0].id") {
+		t.Fatalf("embedded benchmark ID should use its API path: %+v", issues)
 	}
 }
 

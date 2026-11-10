@@ -356,14 +356,17 @@ func readProviderCatalog(ctx context.Context, source CatalogSource) (*providerCa
 
 func validateAgainstCatalog(candidate api.CollectionConfig, catalog *providerCatalog) []Issue {
 	issues := make([]Issue, 0)
-	seen := make(map[benchmarkKey]struct{}, len(candidate.Benchmarks))
+	seen := make(map[benchmarkKey][]api.CollectionBenchmarkConfig, len(candidate.Benchmarks))
 	for i, selected := range candidate.Benchmarks {
 		path := fmt.Sprintf("benchmarks[%d]", i)
 		key := benchmarkKey{providerID: selected.ProviderID, benchmarkID: selected.ID}
-		if _, exists := seen[key]; exists {
-			issues = append(issues, Issue{Code: issueDuplicateBenchmark, Path: path, Message: "provider/benchmark pair is duplicated"})
+		for _, previous := range seen[key] {
+			if sameBenchmarkSelection(previous, selected) {
+				issues = append(issues, Issue{Code: issueDuplicateBenchmark, Path: path, Message: "provider/benchmark selection with the same parameters and test data is duplicated"})
+				break
+			}
 		}
-		seen[key] = struct{}{}
+		seen[key] = append(seen[key], selected)
 
 		_, providerExists := catalog.providers[selected.ProviderID]
 		if !providerExists {
@@ -375,7 +378,7 @@ func validateAgainstCatalog(candidate api.CollectionConfig, catalog *providerCat
 			issues = append(issues, Issue{Code: issueUnknownBenchmark, Path: path + ".id", Message: fmt.Sprintf("benchmark %q is not advertised by provider %q", selected.ID, selected.ProviderID)})
 			continue
 		}
-		if selected.PrimaryScore != nil && !contains(metadata.Metrics, selected.PrimaryScore.Metric) {
+		if selected.PrimaryScore != nil && len(metadata.Metrics) > 0 && !contains(metadata.Metrics, selected.PrimaryScore.Metric) {
 			issues = append(issues, Issue{Code: issueMetricNotAdvertised, Path: path + ".primary_score.metric", Message: fmt.Sprintf("metric %q is not advertised by provider %q for this benchmark", selected.PrimaryScore.Metric, selected.ProviderID)})
 		}
 		defaultScore := advertisedDefaultScore(metadata)
@@ -419,7 +422,7 @@ func validateProposalAgainstCatalog(candidate api.CollectionConfig, options Opti
 }
 
 func advertisedDefaultScore(benchmark api.BenchmarkResource) *api.PrimaryScore {
-	if benchmark.PrimaryScore == nil || !contains(benchmark.Metrics, benchmark.PrimaryScore.Metric) {
+	if benchmark.PrimaryScore == nil || (len(benchmark.Metrics) > 0 && !contains(benchmark.Metrics, benchmark.PrimaryScore.Metric)) {
 		return nil
 	}
 	return benchmark.PrimaryScore
@@ -438,16 +441,10 @@ func matchingReferenceBenchmarks(collections []api.CollectionResource, key bench
 		if !collection.Resource.IsSystemResource() {
 			continue
 		}
-		var match api.CollectionBenchmarkConfig
-		matchCount := 0
 		for _, benchmark := range collection.Benchmarks {
 			if benchmark.ProviderID == key.providerID && benchmark.ID == key.benchmarkID {
-				match = benchmark
-				matchCount++
+				references = append(references, referenceBenchmark{collectionID: collection.Resource.ID, benchmark: benchmark})
 			}
-		}
-		if matchCount == 1 {
-			references = append(references, referenceBenchmark{collectionID: collection.Resource.ID, benchmark: match})
 		}
 	}
 	sort.Slice(references, func(i, j int) bool {
@@ -456,13 +453,7 @@ func matchingReferenceBenchmarks(collections []api.CollectionResource, key bench
 		}
 		return references[i].collectionID < references[j].collectionID
 	})
-	unique := references[:0]
-	for _, reference := range references {
-		if len(unique) == 0 || reference.collectionID != unique[len(unique)-1].collectionID {
-			unique = append(unique, reference)
-		}
-	}
-	return unique
+	return references
 }
 
 // comparableThresholdReferences limits threshold evidence to system benchmarks
@@ -492,11 +483,25 @@ func sameConfiguredParameters(left, right map[string]any) bool {
 	return reflect.DeepEqual(left, right)
 }
 
+func sameBenchmarkSelection(left, right api.CollectionBenchmarkConfig) bool {
+	return left.ProviderID == right.ProviderID &&
+		left.ID == right.ID &&
+		sameConfiguredParameters(left.Parameters, right.Parameters) &&
+		sameTestDataSourceDescriptor(left.TestDataRef, right.TestDataRef)
+}
+
+func sameTestDataSourceDescriptor(left, right *api.TestDataRef) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return reflect.DeepEqual(testDataSourceDescriptor(left), testDataSourceDescriptor(right))
+}
+
 func sameTestDataIdentity(left, right *api.TestDataRef) bool {
 	if left == nil || right == nil {
 		return left == nil && right == nil
 	}
-	if !reflect.DeepEqual(testDataSourceDescriptor(left), testDataSourceDescriptor(right)) {
+	if !sameTestDataSourceDescriptor(left, right) {
 		return false
 	}
 	if left.ResolvedSHA != "" && right.ResolvedSHA != "" && left.ResolvedSHA != right.ResolvedSHA {
@@ -603,7 +608,16 @@ func consensusReferenceWeight(references []referenceBenchmark) (*float32, []stri
 
 func calibratedThreshold(references []referenceBenchmark, providerBenchmark api.BenchmarkResource, candidateScore *api.PrimaryScore, strictness string) (*float32, []string) {
 	defaultScore := advertisedDefaultScore(providerBenchmark)
-	if defaultScore == nil || candidateScore == nil || candidateScore.Metric != defaultScore.Metric || candidateScore.LowerIsBetter != defaultScore.LowerIsBetter {
+	if candidateScore == nil {
+		return nil, nil
+	}
+	calibrationScore := candidateScore
+	if defaultScore != nil {
+		if candidateScore.Metric != defaultScore.Metric || candidateScore.LowerIsBetter != defaultScore.LowerIsBetter {
+			return nil, nil
+		}
+		calibrationScore = defaultScore
+	} else if len(providerBenchmark.Metrics) > 0 && !contains(providerBenchmark.Metrics, candidateScore.Metric) {
 		return nil, nil
 	}
 	values := make([]float64, 0)
@@ -613,7 +627,7 @@ func calibratedThreshold(references []referenceBenchmark, providerBenchmark api.
 		if refScore == nil {
 			refScore = defaultScore
 		}
-		if refScore.Metric != defaultScore.Metric || refScore.LowerIsBetter != defaultScore.LowerIsBetter {
+		if refScore == nil || refScore.Metric != calibrationScore.Metric || refScore.LowerIsBetter != calibrationScore.LowerIsBetter {
 			continue
 		}
 		if reference.benchmark.PassCriteria == nil || reference.benchmark.PassCriteria.Threshold == nil {
@@ -633,13 +647,13 @@ func calibratedThreshold(references []referenceBenchmark, providerBenchmark api.
 	var selected float64
 	switch strictness {
 	case StrictnessLenient:
-		if defaultScore.LowerIsBetter {
+		if calibrationScore.LowerIsBetter {
 			selected = values[len(values)-1]
 		} else {
 			selected = values[0]
 		}
 	case StrictnessStrict:
-		if defaultScore.LowerIsBetter {
+		if calibrationScore.LowerIsBetter {
 			selected = values[0]
 		} else {
 			selected = values[len(values)-1]
@@ -667,14 +681,28 @@ func thresholdUnavailableReason(references, comparable []referenceBenchmark, pro
 		return "no system references match the candidate parameters and test-data identity"
 	}
 	defaultScore := advertisedDefaultScore(providerBenchmark)
-	if defaultScore == nil {
-		return defaultScoreUnavailableReason(providerBenchmark)
-	}
 	if candidateScore == nil {
+		if defaultScore == nil {
+			return defaultScoreUnavailableReason(providerBenchmark)
+		}
 		return "candidate has no primary score with a trusted provider-advertised direction"
 	}
-	if candidateScore.Metric != defaultScore.Metric || candidateScore.LowerIsBetter != defaultScore.LowerIsBetter {
+	if defaultScore != nil && (candidateScore.Metric != defaultScore.Metric || candidateScore.LowerIsBetter != defaultScore.LowerIsBetter) {
 		return "candidate primary score does not match the provider-advertised metric and direction"
+	} else if len(providerBenchmark.Metrics) > 0 && !contains(providerBenchmark.Metrics, candidateScore.Metric) {
+		return fmt.Sprintf("candidate metric %q is not advertised by the provider", candidateScore.Metric)
+	}
+	for _, reference := range comparable {
+		refScore := reference.benchmark.PrimaryScore
+		if refScore == nil {
+			refScore = defaultScore
+		}
+		if refScore != nil && refScore.Metric == candidateScore.Metric && refScore.LowerIsBetter == candidateScore.LowerIsBetter {
+			return "comparable system references have no finite thresholds for the selected primary score"
+		}
+	}
+	if defaultScore == nil {
+		return "comparable system references do not declare the selected primary-score metric and direction"
 	}
 	return "comparable system references have no finite thresholds for the selected primary score"
 }
@@ -693,9 +721,9 @@ func proposalIssuesError(issues []Issue) error {
 
 func jsonPath(namespace string) string {
 	if index := strings.IndexByte(namespace, '.'); index >= 0 {
-		return namespace[index+1:]
+		namespace = namespace[index+1:]
 	}
-	return namespace
+	return strings.ReplaceAll(namespace, ".Ref.", ".")
 }
 
 func sortedIssues(issues []Issue) []Issue {
