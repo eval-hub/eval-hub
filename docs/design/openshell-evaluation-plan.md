@@ -113,28 +113,30 @@ Agent connectivity is part of the provider profile: broker endpoint, authenticat
 
 The catalog and the proposal use "agent evaluation" for different execution shapes. Classify each provider before assigning a sandbox profile or a connectivity route; otherwise a trace-scoring benchmark is provisioned as a live agent, or a model-driven benchmark is blocked waiting for an agent endpoint that does not exist.
 
-As of this revision, [`config/providers`](../../config/providers) declares **7 benchmarks with `evaluation_targets: [agent]` across 3 providers**:
+As of this revision, [`config/providers`](../../config/providers) declares **7 benchmarks with `evaluation_targets: [agent]` across 3 providers**. The columns are independent: a single benchmark can run its agent loop in the primary sandbox, create a child task environment, and call a model endpoint outside the sandbox.
 
-| Provider | Benchmark | Execution shape | External agent service |
-|---|---|---|---|
-| `inspect` | `inspect/cybench` | Model-driven agent scaffold; CTF task environment | No |
-| `inspect` | `inspect/cybergym` | Model-driven agent scaffold; cyber exercise environment | No |
-| `inspect` | `inspect/gaia` | Model-driven multi-step tool use | No |
-| `inspect` | `inspect/agentdojo` | Model-driven agent; prompt-injection task environment | No |
-| `inspect` | `inspect/theagentcompany` | Model-driven agent; workplace/tool environment | No |
-| `atif` | `atif_trajectory_default` | Scores pre-recorded ATIF trajectories; never reruns an agent | No |
-| `ibm-clear` | `agentic-evaluation` | Error-category analysis over agent traces | No |
+| Provider | Benchmark | Agent execution location | Model dependency | User-hosted agent service |
+|---|---|---|---|---|
+| `inspect` | `inspect/cybench` | Primary evaluator (solver) and child sandbox (CTF task environment) | Model endpoint under test | No |
+| `inspect` | `inspect/cybergym` | Primary evaluator (solver) and child sandbox (cyber exercise environment) | Model endpoint under test | No |
+| `inspect` | `inspect/gaia` | Primary evaluator (solver) and child sandbox (tool environment) | Model endpoint under test | No |
+| `inspect` | `inspect/agentdojo` | Primary evaluator (solver) and child sandbox (prompt-injection task environment) | Model endpoint under test | No |
+| `inspect` | `inspect/theagentcompany` | Primary evaluator (solver) and child sandbox (workplace/tool environment) | Model endpoint under test | No |
+| `atif` | `atif_trajectory_default` | None; scores pre-recorded trajectories | Judge model endpoint (not an agent scaffold) | No |
+| `ibm-clear` | `agentic-evaluation` | None; analyzes agent traces | Analysis model endpoint (not an agent scaffold) | No |
+
+"External" in this table means outside the sandbox boundary, not necessarily outside the cluster: an in-cluster model service is still an external endpoint from the sandbox's perspective. A child sandbox is inside the evaluation workspace and is not external in that sense.
 
 The remaining catalog targets are not agent evaluations: 319 benchmarks declare `evaluation_targets: [model]`, 5 `[ai_app]`, and 4 `[rag_system]`. Provider- and benchmark-level `agent:` blocks in files such as `garak.yaml` and `lm_evaluation_harness.yaml` are MCP discovery metadata (`AgentMetadata` in [`pkg/api/providers.go`](../../pkg/api/providers.go)), not execution targets.
 
-"External agent" is therefore resolved by definition, not by a single count:
+The four delivery questions are orthogonal; the counts below are not a partition:
 
-| Definition | Required by |
-|---|---|
-| User-hosted agent service (an HTTP endpoint outside the evaluation workspace) | **0** benchmarks today. The external-endpoint delivery mode is optional and remains blocked until an authenticated, tenant/attempt-bound route is qualified. |
-| Agent process outside the primary evaluator sandbox (an OpenShell child sandbox) | **5** Inspect agent benchmarks, and the Harbor / Terminal-Bench paths. The child is inside the evaluation workspace, not outside its containment boundary. |
-| External model endpoint consumed by the agent scaffold | **5** Inspect agent benchmarks. |
-| Pre-recorded agent output | **2** (ATIF, IBM CLEAR). |
+| Dimension | Question | Count |
+|---|---|---|
+| Agent execution placement | Does a separate child sandbox run a task environment or a containerized agent? | 5 Inspect benchmarks, plus the Harbor / Terminal-Bench paths |
+| Model dependency | Does the agent scaffold call a model endpoint outside the sandbox boundary? | 5 Inspect benchmarks |
+| Agent hosting | Is the agent itself a user-hosted HTTP service? | **0** benchmarks today; the external-endpoint mode remains blocked until an authenticated, tenant/attempt-bound route is qualified |
+| Agent liveness | Is there no live agent, only pre-recorded traces? | 2 (ATIF, IBM CLEAR) |
 
 The proposal's named qualification paths — Inspect Harbor / Terminal-Bench, AgentDojo, and the credential-exfiltration suite — are **sandbox-required**, not external-agent-required. Their agent or task environment runs inside the evaluation workspace; the per-attempt broker and relay endpoints are the only external control surfaces the agent needs.
 
