@@ -1,6 +1,6 @@
 # EvalHub evaluation sandbox plan using the internal OpenShell gateway
 
-Status: Proposed. Date: 2026-10-19. Revised: 2026-11-03 — references and local-mode wording; no change to the plan's decisions. Delivery teams: EvalHub, TrustyAI Service Operator, OpenShift AI platform, OpenShell integration, Security and QE.
+Status: Proposed. Date: 2026-10-19. Revised: 2026-11-10 — agent-target classification; 2026-11-03 — references and local-mode wording; no change to the plan's decisions. Delivery teams: EvalHub, TrustyAI Service Operator, OpenShift AI platform, OpenShell integration, Security and QE.
 
 ## Proposed outcome
 
@@ -109,6 +109,39 @@ Neither option is implemented by changing environment variables alone. If neithe
 
 Agent connectivity is part of the provider profile: broker endpoint, authentication, child name mapping, exec/attach transport and permitted inter-sandbox services. Disable `ExposeService` and create-time service exposures by default. A provider needing peer HTTP services or an independent canary receiver requires an authenticated tenant/attempt-bound route; raw Host-based routing on the shared gateway is not an acceptable tenancy boundary. Lack of such a route blocks that provider.
 
+### Agent-target classification
+
+The catalog and the proposal use "agent evaluation" for different execution shapes. Classify each provider before assigning a sandbox profile or a connectivity route; otherwise a trace-scoring benchmark is provisioned as a live agent, or a model-driven benchmark is blocked waiting for an agent endpoint that does not exist.
+
+As of this revision, [`config/providers`](../../config/providers) declares **7 benchmarks with `evaluation_targets: [agent]` across 3 providers**:
+
+| Provider | Benchmark | Execution shape | External agent service |
+|---|---|---|---|
+| `inspect` | `inspect/cybench` | Model-driven agent scaffold; CTF task environment | No |
+| `inspect` | `inspect/cybergym` | Model-driven agent scaffold; cyber exercise environment | No |
+| `inspect` | `inspect/gaia` | Model-driven multi-step tool use | No |
+| `inspect` | `inspect/agentdojo` | Model-driven agent; prompt-injection task environment | No |
+| `inspect` | `inspect/theagentcompany` | Model-driven agent; workplace/tool environment | No |
+| `atif` | `atif_trajectory_default` | Scores pre-recorded ATIF trajectories; never reruns an agent | No |
+| `ibm-clear` | `agentic-evaluation` | Error-category analysis over agent traces | No |
+
+The remaining catalog targets are not agent evaluations: 319 benchmarks declare `evaluation_targets: [model]`, 5 `[ai_app]`, and 4 `[rag_system]`. Provider- and benchmark-level `agent:` blocks in files such as `garak.yaml` and `lm_evaluation_harness.yaml` are MCP discovery metadata (`AgentMetadata` in [`pkg/api/providers.go`](../../pkg/api/providers.go)), not execution targets.
+
+"External agent" is therefore resolved by definition, not by a single count:
+
+| Definition | Required by |
+|---|---|
+| User-hosted agent service (an HTTP endpoint outside the evaluation workspace) | **0** benchmarks today. The external-endpoint delivery mode is optional and remains blocked until an authenticated, tenant/attempt-bound route is qualified. |
+| Agent process outside the primary evaluator sandbox (an OpenShell child sandbox) | **5** Inspect agent benchmarks, and the Harbor / Terminal-Bench paths. The child is inside the evaluation workspace, not outside its containment boundary. |
+| External model endpoint consumed by the agent scaffold | **5** Inspect agent benchmarks. |
+| Pre-recorded agent output | **2** (ATIF, IBM CLEAR). |
+
+The proposal's named qualification paths — Inspect Harbor / Terminal-Bench, AgentDojo, and the credential-exfiltration suite — are **sandbox-required**, not external-agent-required. Their agent or task environment runs inside the evaluation workspace; the per-attempt broker and relay endpoints are the only external control surfaces the agent needs.
+
+No capability flag currently distinguishes these shapes: [`pkg/api/providers.go`](../../pkg/api/providers.go) has no `required_capabilities`, `sandbox_required`, or agent-delivery field. Phase 2 adds the provider schema extension, and each provider must be classified before it is enabled. Until then, task classification for a mixed provider is trusted onboarding metadata, not a request-time choice.
+
+**Implication for the request model.** A request may declare a model, an agent artifact, or both. An in-sandbox agent image is the default sandbox delivery shape; an external agent URL is an optional mode that requires the authenticated route above. A trace-scoring benchmark needs neither a live agent nor an external endpoint: it needs its authorized trajectory input.
+
 ### Credentials, inputs and results
 
 Preserve [EH-0002's tenant boundaries](https://github.com/opendatahub-io/architecture-decision-records/blob/main/architecture-decision-records/eval-hub/ODH-ADR-EH-0002-multi-tenancy-and-authz.md) and [EH-0004's credential-hiding intent](https://github.com/opendatahub-io/architecture-decision-records/blob/main/architecture-decision-records/eval-hub/ODH-ADR-EH-0004-eval-sidecar-creds-injection.md). The compute namespace is ephemeral; the business tenant and MLflow workspace remain the authorized original tenant. Do not infer tenancy from a sandbox namespace or from the caller's ServiceAccount namespace.
@@ -199,6 +232,6 @@ Enable only approved providers on explicitly opted-in installations, cap admissi
 
 ## Review decisions still required
 
-Platform ownership and machine identity issuance; the managed-mode readiness extension and namespace admission mechanism; Harbor's plugin versus virtual API approach; authenticated child service connectivity; ephemeral PVC scope and reclamation; Kueue reservation integration; supported OpenShell/Agent Sandbox/OpenShift versions; initial concurrency/latency budgets; and Kata qualification.
+Platform ownership and machine identity issuance; the managed-mode readiness extension and namespace admission mechanism; per-provider agent delivery classification (in-sandbox, external endpoint, or pre-recorded trace); Harbor's plugin versus virtual API approach; authenticated child service connectivity; ephemeral PVC scope and reclamation; Kueue reservation integration; supported OpenShell/Agent Sandbox/OpenShift versions; initial concurrency/latency budgets; and Kata qualification.
 
 These decisions block enabling affected providers, not preparation of this plan. Update the strategy and child epics after review rather than marking the previous acceptance criteria complete under different semantics. No release date or reduced effort estimate is asserted: the shared gateway removes duplicate lifecycle implementation but adds platform, compatibility, identity and scheduling dependencies.
