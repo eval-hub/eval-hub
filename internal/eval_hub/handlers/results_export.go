@@ -12,6 +12,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/evalcards"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
+	"github.com/eval-hub/eval-hub/internal/otel"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/cards"
 )
@@ -37,7 +38,8 @@ func (h *Handlers) exportEvaluationResultsAsync(ctx context.Context, storage abs
 			results.OCI = &oci
 		}
 	}
-	go h.exportEvaluationResults(context.WithoutCancel(ctx), storage, &snapshot, logger)
+	// Background exports outlive the request; carry its span as a link source.
+	go h.exportEvaluationResults(otel.DetachedContext(ctx), storage, &snapshot, logger)
 }
 
 func (h *Handlers) exportEvaluationResults(ctx context.Context, storage abstractions.Storage, job *api.EvaluationJobResource, logger *slog.Logger) {
@@ -46,6 +48,8 @@ func (h *Handlers) exportEvaluationResults(ctx context.Context, storage abstract
 	}
 	ociEligible := api.IsOCIExportEnabled(job)
 	ctx = context.WithoutCancel(ctx)
+	ctx, span := otel.StartLinkedSpan(ctx, "eval-hub/handlers", "evaluation-results-export")
+	defer span.End()
 	// Persist OCI progress before updating the in-memory job. A nil card preserves
 	// any previously published reference; a supplied card is saved with the status.
 	reportOCI := func(state api.OCIProcessingState, code, message string, card *api.OCIArtifactReference) bool {

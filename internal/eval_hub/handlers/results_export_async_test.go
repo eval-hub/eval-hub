@@ -16,7 +16,81 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/httpwrappers"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/cards"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
+
+type exportSpanRecorder struct {
+	*tracetest.SpanRecorder
+	done chan struct{}
+}
+
+func (r *exportSpanRecorder) OnEnd(span sdktrace.ReadOnlySpan) {
+	r.SpanRecorder.OnEnd(span)
+	if span.Name() == "evaluation-results-export" {
+		close(r.done)
+	}
+}
+
+func TestExportAsyncLinksRequestAndParentsDownstreamSpans(t *testing.T) {
+	recorder := &exportSpanRecorder{SpanRecorder: tracetest.NewSpanRecorder(), done: make(chan struct{})}
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+	previous := otel.GetTracerProvider()
+	otel.SetTracerProvider(tp)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previous)
+		_ = tp.Shutdown(context.Background())
+	})
+
+	parent, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	ctx, requestSpan := tp.Tracer("test").Start(parent, "update-evaluation-job")
+	requestSC := requestSpan.SpanContext()
+	requestSpan.End()
+	cancel()
+
+	job := completedOCIJob()
+	storage := newDetachedExportStorage(job)
+	h := &Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exportFunc(func(ctx context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (evalcards.ExportResult, error) {
+		if ctx.Err() != nil {
+			t.Error("export inherited request cancellation")
+		}
+		if _, ok := ctx.Deadline(); ok {
+			t.Error("export inherited request deadline")
+		}
+		_, child := otel.Tracer("test").Start(ctx, "registry-request")
+		child.End()
+		return evalcards.ExportResult{OCIArtifact: publishedCard()}, nil
+	})}
+	h.exportEvaluationResultsAsync(ctx, storage, job, nil)
+	awaitExportSignal(t, recorder.done)
+
+	var export, child sdktrace.ReadOnlySpan
+	for _, span := range recorder.Ended() {
+		switch span.Name() {
+		case "evaluation-results-export":
+			export = span
+		case "registry-request":
+			child = span
+		}
+	}
+	if export == nil || child == nil {
+		t.Fatal("missing export or downstream span")
+	}
+	if export.Parent().IsValid() || export.SpanContext().TraceID() == requestSC.TraceID() {
+		t.Error("export should be a root in a separate trace")
+	}
+	links := export.Links()
+	if len(links) != 1 || links[0].SpanContext.TraceID() != requestSC.TraceID() || links[0].SpanContext.SpanID() != requestSC.SpanID() {
+		t.Errorf("export links = %v, want one link to %v", links, requestSC)
+	}
+	if child.Parent().SpanID() != export.SpanContext().SpanID() || child.SpanContext().TraceID() != export.SpanContext().TraceID() {
+		t.Error("downstream span should be a child of the export span")
+	}
+	nextStatusWrite(t, storage, api.OCIProcessingRunning)
+	nextStatusWrite(t, storage, api.OCIProcessingCompleted)
+}
 
 func awaitExportSignal(t *testing.T, ch <-chan struct{}) {
 	t.Helper()
