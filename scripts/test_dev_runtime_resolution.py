@@ -6,8 +6,9 @@ resolve the runtime from that record instead of probing both engines. These test
 extract the real function bodies from each script, stub podman, docker, and kind
 on PATH, and check the resolution order:
 
-  1. an explicit CONTAINER_RUNTIME, which must match the recorded engine for the
-     scripts that build, push, or delete;
+  1. an explicit CONTAINER_RUNTIME: dev-deploy and dev-clean reject a value that
+     does not match the record, while clean-container-storage warns when it
+     differs from the record and keeps the explicit engine;
   2. the recorded engine;
   3. the engine that owns KIND_CLUSTER_NAME (clusters deployed before the record);
   4. the first reachable engine (dev-deploy and clean-container-storage), the
@@ -702,11 +703,12 @@ class StorageCleanupResolutionTests(RuntimeResolutionTestCase):
         self.assert_resolves("clean-container-storage.sh", "podman", recorded="podman")
 
     def test_explicit_runtime_warns_instead_of_failing(self):
-        """Pruning cannot destroy the cluster, so it follows the record with a warning."""
+        """Pruning cannot destroy the cluster, so the explicit engine wins with a warning."""
         output = self.assert_resolves(
-            "clean-container-storage.sh", "podman", explicit="docker", recorded="podman"
+            "clean-container-storage.sh", "docker", explicit="docker", recorded="podman"
         )
-        self.assertIn("pruning podman", output)
+        self.assertIn("was deployed with podman", output)
+        self.assertIn("pruning docker as requested", output)
 
     def test_unrecorded_cluster_selects_its_owning_engine(self):
         """A cluster deployed before the record existed still selects its engine."""
@@ -717,8 +719,8 @@ class StorageCleanupResolutionTests(RuntimeResolutionTestCase):
         self.assert_resolves("clean-container-storage.sh", "podman")
         self.assert_resolves("clean-container-storage.sh", "docker", podman_reachable=False)
 
-    def test_unreachable_record_falls_back_to_the_explicit_engine(self):
-        """Pruning still works when the recorded engine is stopped or uninstalled."""
+    def test_stopped_record_does_not_override_the_explicit_engine(self):
+        """A record naming a stopped engine must not replace the explicit one."""
         output = self.assert_resolves(
             "clean-container-storage.sh",
             "docker",
@@ -726,7 +728,7 @@ class StorageCleanupResolutionTests(RuntimeResolutionTestCase):
             recorded="podman",
             podman_reachable=False,
         )
-        self.assertIn("not reachable; pruning docker", output)
+        self.assertIn("pruning docker as requested", output)
 
     def test_unreachable_record_falls_back_to_the_other_reachable_engine(self):
         """Without an explicit engine the next reachable engine is pruned."""

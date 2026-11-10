@@ -254,13 +254,13 @@ new cluster. When an explicit value differs from the recorded engine,
 `make dev-deploy` and `make dev-clean` fail instead of creating a duplicate
 cluster or cleaning up and deleting the kubeconfig of the cluster that is still
 running, while `make dev-demo` follows the record and
-`make clean-container-storage` follows it while that engine is reachable and
-otherwise prunes the explicit engine, because neither can destroy the
-deployment. For a cluster deployed before that record existed the engine that
-already owns `KIND_CLUSTER_NAME` is used, and `make dev-deploy` also fails when
-an explicit value does not own that cluster; a first deploy with neither a
-record nor a cluster falls back to the first reachable engine, podman before
-docker (or docker before podman under WSL, where podman passes `podman info`
+`make clean-container-storage` keeps the explicit engine with a warning,
+because neither can destroy the deployment. For a cluster deployed before that
+record existed the engine that already owns `KIND_CLUSTER_NAME` is used, and
+`make dev-deploy` also fails when an explicit value does not own that cluster; a
+first deploy with neither a record nor a cluster falls back to the first
+reachable engine, podman before docker (or docker before podman under WSL,
+where podman passes `podman info`
 but fails kind node startup). A record whose engine no longer runs the cluster
 is not trusted: `make dev-deploy` fails when the other engine owns that cluster,
 an explicit matching value included, instead of creating a second one, and

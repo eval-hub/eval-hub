@@ -50,11 +50,9 @@ Inputs (also accepted as environment variables):
                      engine dev-deploy recorded for KIND_CLUSTER_NAME, otherwise
                      the engine that owns it, otherwise the first reachable
                      engine, podman before docker, docker before podman under
-                     WSL). An explicit value that differs from the record follows
-                     the record while that engine is reachable and prunes the
-                     explicit engine when it is not, so storage is still
-                     reclaimed after the deployment moved or the recorded engine
-                     was removed.
+                     WSL). An explicit value is always pruned, with a warning
+                     when it differs from the record, so storage can be
+                     reclaimed from either engine.
   KIND_CLUSTER_NAME  cluster used to select that engine (default: evalhub-dev)
   ALL                true to also remove unused (non-dangling) images such as
                      cached base images and previous dev image tags (default:
@@ -85,7 +83,8 @@ USAGE
 }
 
 # Select the runtime to clean, in order of authority: an explicit
-# CONTAINER_RUNTIME, the engine dev-deploy recorded for KIND_CLUSTER_NAME (see
+# CONTAINER_RUNTIME (used even when the record names another engine, with a
+# warning), the engine dev-deploy recorded for KIND_CLUSTER_NAME (see
 # recorded_runtime), the engine that owns the cluster, and finally the first
 # reachable engine, podman before docker (docker before podman under WSL). Unlike
 # dev-deploy and dev-clean an explicit value is never a hard error, because
@@ -101,12 +100,7 @@ detect_container_runtime() {
       *) fail "CONTAINER_RUNTIME must be 'podman' or 'docker'." ;;
     esac
     if recorded="$(recorded_runtime)" && [[ "$recorded" != "$(canonical_runtime "$CONTAINER_RUNTIME")" ]]; then
-      if runtime_is_reachable "$recorded"; then
-        log WARN "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE); pruning $recorded instead of $CONTAINER_RUNTIME."
-        use_runtime "$recorded"
-        return 0
-      fi
-      log WARN "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded, but $recorded is not reachable; pruning $CONTAINER_RUNTIME instead."
+      log WARN "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE); pruning $CONTAINER_RUNTIME as requested."
     fi
     use_runtime "$CONTAINER_RUNTIME"
     return 0
