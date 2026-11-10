@@ -255,7 +255,8 @@ fails instead of creating a duplicate cluster or cleaning up the wrong one. For
 a cluster deployed before that record existed the engine that already owns
 `KIND_CLUSTER_NAME` is used, and a first deploy with neither falls back to the
 first reachable engine, podman before docker. Deleting the cluster with
-`make dev-clean DELETE_CLUSTER=true` removes the record with its kubeconfig.
+`make dev-clean DELETE_CLUSTER=true` removes the record, and the kubeconfig with
+it when that kubeconfig targets the deleted cluster.
 
 Deploy the local EvalHub service, operator, adapters, and mock target/judge
 services:

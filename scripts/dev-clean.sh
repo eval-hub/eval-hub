@@ -123,27 +123,6 @@ validate_inputs() {
   case "$DELETE_CLUSTER" in true|false) ;; *) fail "DELETE_CLUSTER must be true or false." ;; esac
 }
 
-# Return 0 when KIND_CLUSTER_NAME already exists under the given container
-# runtime, using the kind provider that runtime requires. A runtime that is not
-# installed or not reachable cannot own a cluster, so it reports false.
-kind_cluster_in_runtime() {
-  local runtime="$1" clusters
-  command -v "$runtime" >/dev/null 2>&1 || return 1
-  "$runtime" info >/dev/null 2>&1 || return 1
-  case "$runtime" in
-    podman)
-      clusters="$(KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters 2>/dev/null || true)"
-      ;;
-    docker)
-      clusters="$(env -u KIND_EXPERIMENTAL_PROVIDER kind get clusters 2>/dev/null || true)"
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-  grep -Fqx -- "$KIND_CLUSTER_NAME" <<<"$clusters"
-}
-
 # Select the container runtime that owns the registry container and the temporary
 # image tags, in order of authority:
 #   1. an explicit CONTAINER_RUNTIME, which has to match the engine dev-deploy
@@ -188,6 +167,16 @@ detect_container_runtime() {
     fi
   done
   fail "Neither podman nor docker is reachable. Install podman (or docker) and make sure it is running."
+}
+
+# forget_runtime removes the record of the engine that backed KIND_CLUSTER_NAME
+# once that cluster is gone. dev-deploy writes the record (see record_runtime) and
+# every script resolves the runtime from it, so a record left behind after the
+# cluster is deleted would reject a later deploy that selects another engine.
+forget_runtime() {
+  [[ -e "$RUNTIME_STATE_FILE" ]] || return 0
+  rm -f -- "$RUNTIME_STATE_FILE"
+  log INFO "Removed the runtime record $RUNTIME_STATE_FILE of the deleted cluster."
 }
 
 check_prerequisites() {
@@ -585,11 +574,16 @@ delete_cluster() {
     log INFO "Kind cluster '$KIND_CLUSTER_NAME' does not exist under $CONTAINER_RUNTIME; nothing to delete."
   fi
 
+  # The record names the engine that backed this cluster, and that engine no
+  # longer runs it. Drop the record even when the private kubeconfig is preserved
+  # for a different cluster (or was never there): a later deploy that explicitly
+  # selects another engine must not be rejected against a record whose cluster is
+  # gone.
+  forget_runtime
+
   if [[ "$remove_kubeconfig" == true ]]; then
-    # The private kubeconfig and the runtime record describe this cluster under
-    # the selected engine, which no longer exists, so both go with it.
-    rm -f -- "$PRIVATE_KUBECONFIG" "$RUNTIME_STATE_FILE"
-    log INFO "Removed this cluster's private kubeconfig and runtime record."
+    rm -f -- "$PRIVATE_KUBECONFIG"
+    log INFO "Removed this cluster's private kubeconfig."
   fi
   remove_registry
   log PASS "Cluster deletion is complete. Host images and the container runtime build cache are retained."
