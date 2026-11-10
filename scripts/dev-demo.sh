@@ -102,7 +102,9 @@ validate_inputs() {
 # of authority: an explicit CONTAINER_RUNTIME, the engine dev-deploy recorded for
 # KIND_CLUSTER_NAME, the engine that owns the cluster, and finally Docker so that
 # check_cluster reports the missing cluster. dev-demo never builds or pushes
-# images, so an unreachable engine is only a problem when it is forced.
+# images, so an unreachable engine is only a problem when it is forced, and a
+# record naming an engine that is not installed is ignored so the engine that owns
+# the cluster is queried instead.
 #
 # Every candidate is canonicalized first: a `docker` that is the podman-docker
 # shim has to be queried as podman, otherwise kind_cmd clears the provider
@@ -119,14 +121,14 @@ detect_container_runtime() {
         fail "CONTAINER_RUNTIME must be 'podman' or 'docker'."
         ;;
     esac
-    if recorded="$(recorded_runtime)"; then
+    if recorded="$(recorded_runtime)" && runtime_is_installed "$recorded"; then
       recorded="$(canonical_runtime "$recorded")"
       if [[ "$recorded" != "$CONTAINER_RUNTIME" ]]; then
         log WARN "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE); querying kind with $recorded instead of $CONTAINER_RUNTIME."
         CONTAINER_RUNTIME="$recorded"
       fi
     fi
-  elif recorded="$(recorded_runtime)"; then
+  elif recorded="$(recorded_runtime)" && runtime_is_installed "$recorded"; then
     CONTAINER_RUNTIME="$(canonical_runtime "$recorded")"
   else
     for runtime in docker podman; do

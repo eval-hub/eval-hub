@@ -76,14 +76,18 @@ Inputs (also accepted as environment variables):
                            evalhub/kubeconfigs/<cluster>.runtime, otherwise the
                            engine that already owns the cluster, otherwise the
                            first reachable engine (podman before docker, docker
-                           before podman under WSL). An explicit value must match
-                           the recorded engine, or own the cluster when no record
+                           before podman under WSL). A record whose engine is not
+                           installed is ignored, so an uninstalled engine does not
+                           block the next deploy. An explicit value must match the
+                           recorded engine, or own the cluster when no record
                            exists yet; otherwise the script fails instead of
                            creating a duplicate cluster and replacing its
                            kubeconfig. A record whose engine no longer runs
-                           KIND_CLUSTER_NAME also fails when the other engine
-                           owns that cluster, so a stale record neither hides it
-                           nor gets its kubeconfig replaced.
+                           KIND_CLUSTER_NAME also fails, an explicit value
+                           included, when the other engine owns that cluster, so a
+                           stale record neither hides it nor gets its kubeconfig
+                           replaced; one whose engine is installed but stopped
+                           fails with the state file to remove.
   Repeated builds use the container runtime's layer cache; the EvalHub build date is stable
   for a source commit so a no-change deploy does not rebuild Go binaries.
   Temporary localhost:<port> registry tags are removed after each successful push.
@@ -213,36 +217,55 @@ ensure_runtime_owns_existing_cluster() {
   esac
   kind_cluster_in_runtime "$other" || return 0
   if [[ "$reason" == recorded ]]; then
-    fail "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $runtime-backed in $RUNTIME_STATE_FILE, but $runtime no longer runs it and $other does. Remove the stale record (rm -- '$RUNTIME_STATE_FILE') to reuse the $other cluster, or delete that cluster with 'make dev-clean CONTAINER_RUNTIME=$other DELETE_CLUSTER=true'."
+    fail "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $runtime-backed in $RUNTIME_STATE_FILE, but $runtime no longer runs it and $other does. Remove the stale record (rm -- '$RUNTIME_STATE_FILE') to reuse the $other cluster with this script, or remove it and run 'make dev-clean CONTAINER_RUNTIME=$other DELETE_CLUSTER=true' to delete that cluster."
   fi
   fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $other, not $runtime. Unset CONTAINER_RUNTIME to reuse the engine that owns the cluster, or set CONTAINER_RUNTIME=$other."
 }
 
 # Select the container runtime used for image builds, the local registry, and the
-# kind nodes, in order of authority:
+# kind nodes. A record naming an engine that is not installed is ignored first,
+# because it cannot describe a reachable cluster. The remaining order of authority
+# is:
 #   1. an explicit CONTAINER_RUNTIME, which has to match the engine recorded for
 #      KIND_CLUSTER_NAME, or own that cluster when no record exists yet:
 #      continuing under the other engine would create a second cluster with the
 #      same name and overwrite the kubeconfig of the running one;
 #   2. the engine recorded for KIND_CLUSTER_NAME (see recorded_runtime), which
-#      must still run that cluster: a record left behind by a cluster removed out
-#      of band must not hide a live same-named cluster under the other engine;
+#      must still run that cluster and answer: a record left behind by a cluster
+#      removed out of band must not hide a live same-named cluster under the
+#      other engine, and a recorded engine that is stopped fails with the state
+#      file to remove instead of a bare "not reachable";
 #   3. the engine that already owns KIND_CLUSTER_NAME, for clusters deployed
 #      before that record existed;
 #   4. the first reachable engine, podman before docker (docker before podman
 #      under WSL; see fallback_runtime_order).
+# Both 1 and 2 check ownership, so a recorded engine that no longer runs the
+# cluster cannot replace the kubeconfig of one the other engine still runs.
 # dev-deploy records the outcome, so 3 and 4 only ever run on a first deploy and
 # every later command reads the answer instead of probing both engines.
 detect_container_runtime() {
   local runtime recorded
+  # A record whose engine is no longer installed describes no reachable cluster,
+  # so ignore it: the ownership probe below still finds a live cluster under the
+  # other engine, and a deploy that creates one records its own engine.
+  if recorded="$(recorded_runtime)" && ! runtime_is_installed "$recorded"; then
+    log WARN "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $recorded-backed in $RUNTIME_STATE_FILE, but $recorded is not installed; ignoring the stale record and selecting another engine."
+    recorded=""
+  fi
   if [[ -n "$CONTAINER_RUNTIME" ]]; then
     case "$CONTAINER_RUNTIME" in
       podman|docker) ;;
       *) fail "CONTAINER_RUNTIME must be 'podman' or 'docker'." ;;
     esac
-    if recorded="$(recorded_runtime)"; then
+    if [[ -n "$recorded" ]]; then
       [[ "$recorded" == "$(canonical_runtime "$CONTAINER_RUNTIME")" ]] ||
         fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE). Unset CONTAINER_RUNTIME to reuse $recorded, or delete that cluster and its state file before switching to $CONTAINER_RUNTIME."
+      # The record names the engine that backed the cluster, not one that still
+      # runs it: a cluster removed out of band leaves the record behind, so an
+      # explicit runtime matching the record must not create a second cluster over
+      # one the other engine still runs (see
+      # ensure_runtime_owns_existing_cluster).
+      ensure_runtime_owns_existing_cluster "$CONTAINER_RUNTIME" recorded
     else
       # No record yet: either no cluster exists or it predates the record, so
       # ask both engines which one owns the name before selecting this one.
@@ -251,13 +274,16 @@ detect_container_runtime() {
     use_runtime "$CONTAINER_RUNTIME" "for builds, the local registry, and kind"
     return 0
   fi
-  if recorded="$(recorded_runtime)"; then
+  if [[ -n "$recorded" ]]; then
     log INFO "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE)."
     # The record names the engine that backed the cluster, not one that still
     # runs it: a cluster removed out of band leaves the record behind, and
     # creating under the recorded engine would then duplicate a cluster the
     # other engine still runs and overwrite its kubeconfig.
     ensure_runtime_owns_existing_cluster "$recorded" recorded
+    if ! runtime_is_reachable "$recorded"; then
+      fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE), but $recorded is not reachable. Start $recorded and retry, or remove the stale record (rm -- '$RUNTIME_STATE_FILE') if that cluster is gone."
+    fi
     use_runtime "$recorded" "for builds, the local registry, and kind"
     return 0
   fi

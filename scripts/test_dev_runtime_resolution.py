@@ -21,6 +21,14 @@ dev-clean drops the record for a cluster that is already gone. The
 unreachable-record cases check that clean-container-storage still prunes, because
 a stopped or uninstalled engine must not make storage unreclaimable.
 
+A record whose engine is no longer installed cannot describe a reachable cluster,
+so it must not keep a command from running: the missing-engine cases check that
+dev-deploy and dev-demo ignore such a record, that dev-clean drops it (also when
+the explicit engine names another one), and that a recorded engine which is
+installed but stopped fails with the state file to remove. The explicit cases also
+check that an explicit CONTAINER_RUNTIME matching the record still has to own the
+cluster, so naming the recorded engine cannot skip that guard.
+
 The podman-docker shim cases check that a `docker` that is really podman is
 resolved to podman for every script, so kind uses the podman provider and
 registry pushes keep `--tls-verify=false`.
@@ -58,6 +66,7 @@ LIB_FUNCTIONS = [
     "kind_cluster_in_runtime",
     "recorded_runtime",
     "record_runtime",
+    "runtime_is_installed",
     "runtime_is_reachable",
     "fallback_runtime_order",
     "use_runtime",
@@ -70,7 +79,7 @@ SCRIPT_FUNCTIONS = {
         "ensure_runtime_owns_existing_cluster",
         "detect_container_runtime",
     ],
-    "dev-clean.sh": ["log", "fail", "detect_container_runtime"],
+    "dev-clean.sh": ["log", "fail", "forget_runtime", "detect_container_runtime"],
     "dev-demo.sh": ["log", "fail", "need_command", "detect_container_runtime"],
     "clean-container-storage.sh": ["log", "fail", "detect_container_runtime"],
 }
@@ -169,6 +178,32 @@ class RuntimeResolutionTestCase(unittest.TestCase):
     def tearDownClass(cls):
         cls.work.cleanup()
 
+    def engine_path(self, missing=()):
+        """PATH with the stubs first and no real engine that a case removes.
+
+        A developer machine can have the real podman or docker installed, which
+        would answer once the stub is removed, so drop the directories that hold
+        the removed engines: "not installed" then means what it says. A stub that
+        only answers `info` with a failure is a stopped engine, a different state.
+        """
+        if not missing:
+            return f"{self.bin_dir}:{os.environ['PATH']}"
+        case_bin = self.work_dir / ("bin-no-" + "-".join(sorted(missing)))
+        if not case_bin.exists():
+            case_bin.mkdir()
+            for stub in self.bin_dir.iterdir():
+                (case_bin / stub.name).symlink_to(stub)
+            for name in missing:
+                (case_bin / name).unlink(missing_ok=True)
+        dirs = [str(case_bin)]
+        for entry in os.environ["PATH"].split(os.pathsep):
+            if not entry:
+                continue
+            if any((pathlib.Path(entry) / name).exists() for name in missing):
+                continue
+            dirs.append(entry)
+        return os.pathsep.join(dirs)
+
     def resolve(
         self,
         script,
@@ -180,6 +215,7 @@ class RuntimeResolutionTestCase(unittest.TestCase):
         podman_reachable=True,
         docker_reachable=True,
         wsl=False,
+        missing=(),
     ):
         """Return (returncode, resolved runtime, output) for one scenario."""
         state_path = self.work_dir / f"{CLUSTER}.runtime"
@@ -201,7 +237,7 @@ class RuntimeResolutionTestCase(unittest.TestCase):
             'printf "RESULT=%s\\n" "$CONTAINER_RUNTIME"\n'
         )
         env = {
-            "PATH": f"{self.bin_dir}:{os.environ['PATH']}",
+            "PATH": self.engine_path(missing),
             "HOME": str(self.work_dir),
             "FAKE_PODMAN_CLUSTERS": podman_clusters,
             "FAKE_DOCKER_CLUSTERS": docker_clusters,
@@ -290,6 +326,36 @@ class DeployResolutionTests(RuntimeResolutionTestCase):
         """WSL2 podman answers 'podman info' but fails kind node startup."""
         self.assert_resolves("dev-deploy.sh", "docker", wsl=True)
 
+    def test_explicit_runtime_matching_the_record_still_owns_the_cluster(self):
+        """Naming the recorded engine must not skip the ownership guard."""
+        code, _, output = self.resolve(
+            "dev-deploy.sh",
+            recorded="podman",
+            explicit="podman",
+            docker_clusters=CLUSTER + "\n",
+        )
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("recorded as podman-backed", output)
+        self.assertIn("rm -- ", output)
+
+    def test_uninstalled_recorded_engine_is_ignored(self):
+        """A record naming an engine that is gone must not block a deploy."""
+        code, resolved, output = self.resolve(
+            "dev-deploy.sh", recorded="podman", missing=("podman",)
+        )
+        self.assertEqual(code, 0, output)
+        self.assertEqual(resolved, "docker", output)
+        self.assertIn("not installed; ignoring the stale record", output)
+
+    def test_stopped_recorded_engine_names_the_state_file(self):
+        """A stopped engine fails with the record to remove, not a bare probe error."""
+        code, _, output = self.resolve(
+            "dev-deploy.sh", recorded="podman", podman_reachable=False
+        )
+        self.assertNotEqual(code, 0, output)
+        self.assertIn(f"{CLUSTER}.runtime", output)
+        self.assertIn("rm -- ", output)
+
 class CleanResolutionTests(RuntimeResolutionTestCase):
     def test_recorded_runtime_is_reused(self):
         """`make dev-clean` after `make dev-deploy` needs no second input."""
@@ -318,6 +384,34 @@ class CleanResolutionTests(RuntimeResolutionTestCase):
     def test_wsl_prefers_docker_on_a_first_clean(self):
         """The WSL engine order is shared with dev-deploy."""
         self.assert_resolves("dev-clean.sh", "docker", wsl=True)
+
+    def test_uninstalled_recorded_engine_is_dropped(self):
+        """A record naming an engine that is gone must not block cleanup."""
+        code, resolved, output = self.resolve(
+            "dev-clean.sh", recorded="podman", missing=("podman",)
+        )
+        self.assertEqual(code, 0, output)
+        self.assertEqual(resolved, "docker", output)
+        self.assertIn("dropping the stale record", output)
+        self.assertFalse((self.work_dir / f"{CLUSTER}.runtime").exists(), output)
+
+    def test_uninstalled_record_does_not_reject_the_explicit_engine(self):
+        """Cleaning with the explicit engine must not fail on a record it cannot honour."""
+        code, resolved, output = self.resolve(
+            "dev-clean.sh", recorded="podman", explicit="docker", missing=("podman",)
+        )
+        self.assertEqual(code, 0, output)
+        self.assertEqual(resolved, "docker", output)
+
+    def test_stopped_recorded_engine_names_the_state_file(self):
+        """A stopped engine fails with the record to remove and keeps it."""
+        code, _, output = self.resolve(
+            "dev-clean.sh", recorded="podman", podman_reachable=False
+        )
+        self.assertNotEqual(code, 0, output)
+        self.assertIn(f"{CLUSTER}.runtime", output)
+        self.assertIn("rm -- ", output)
+        self.assertTrue((self.work_dir / f"{CLUSTER}.runtime").exists(), output)
 
 class DemoResolutionTests(RuntimeResolutionTestCase):
     def test_recorded_runtime_is_reused(self):
@@ -348,6 +442,22 @@ class DemoResolutionTests(RuntimeResolutionTestCase):
         self.assert_resolves(
             "dev-demo.sh", "podman", explicit="docker", recorded="docker", shim=True
         )
+
+    def test_uninstalled_recorded_engine_falls_back_to_the_owner(self):
+        """A record naming a missing engine must not point kind at it."""
+        code, resolved, output = self.resolve(
+            "dev-demo.sh", recorded="podman", missing=("podman",)
+        )
+        self.assertEqual(code, 0, output)
+        self.assertEqual(resolved, "docker", output)
+
+    def test_uninstalled_record_does_not_override_the_explicit_engine(self):
+        """An explicit engine must not be swapped for a record that names a dead one."""
+        code, resolved, output = self.resolve(
+            "dev-demo.sh", explicit="podman", recorded="docker", missing=("docker",)
+        )
+        self.assertEqual(code, 0, output)
+        self.assertEqual(resolved, "podman", output)
 
 
 class DeleteClusterRecordTests(RuntimeResolutionTestCase):
@@ -562,7 +672,12 @@ class StorageCleanupResolutionTests(RuntimeResolutionTestCase):
 
 class RecordRoundTripTests(RuntimeResolutionTestCase):
     def test_recorded_engine_round_trips(self):
-        """The record dev-deploy writes is what the other scripts read back."""
+        """The record dev-deploy writes is what the other scripts read back.
+
+        The harness leaves the umask alone, so the 0600 mode has to come from
+        record_runtime itself rather than from dev-deploy's `umask 077`: dropping
+        that line must not turn the record world-readable.
+        """
         state_path = self.work_dir / f"{CLUSTER}.runtime"
         if state_path.exists():
             state_path.unlink()
@@ -570,7 +685,6 @@ class RecordRoundTripTests(RuntimeResolutionTestCase):
         harness.write_text(
             "#!/usr/bin/env bash\n"
             "set -Eeuo pipefail\n"
-            "umask 077\n"
             'CONTAINER_RUNTIME="docker"\n'
             f"KIND_CLUSTER_NAME={CLUSTER}\n"
             f'RUNTIME_STATE_FILE="{state_path}"\n'

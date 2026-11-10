@@ -67,14 +67,16 @@ Inputs (also accepted as environment variables):
                      explicit value must match the recorded engine; otherwise the
                      script fails instead of skipping the cluster and removing its
                      kubeconfig. The record is dropped when the selected engine no
-                     longer runs the cluster, so a cluster removed out of band
-                     does not leave a record that rejects a later deploy. The
-                     private kubeconfig is used only when it targets the
-                     selected engine's cluster; one pointing at another cluster
-                     is preserved, and cleanup uses a temporary exported
-                     kubeconfig instead. With DELETE_CLUSTER=true the kubeconfig
-                     is removed only when the cluster is gone from the selected
-                     engine, the other engine can be shown not to hold a
+                     longer runs the cluster or its engine is not installed, so
+                     neither a cluster removed out of band nor an uninstalled
+                     engine leaves a record that rejects a later command; a
+                     recorded engine that is installed but stopped fails with the
+                     state file to remove. The private kubeconfig is used only
+                     when it targets the selected engine's cluster; one pointing
+                     at another cluster is preserved, and cleanup uses a temporary
+                     exported kubeconfig instead. With DELETE_CLUSTER=true the
+                     kubeconfig is removed only when the cluster is gone from the
+                     selected engine, the other engine can be shown not to hold a
                      cluster of that name, and its API server no longer answers;
                      an unreachable other engine or a live API server preserves
                      it.
@@ -145,18 +147,30 @@ validate_inputs() {
 #      image tags are still removed when no cluster is left.
 detect_container_runtime() {
   local runtime recorded
+  # A record whose engine is no longer installed describes no reachable cluster,
+  # so drop it before selecting: an uninstalled engine must not reject the
+  # explicit value or keep cleanup from running. A reinstall is still recovered by
+  # the engine that owns the cluster (step 3).
+  if recorded="$(recorded_runtime)" && ! runtime_is_installed "$recorded"; then
+    log WARN "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $recorded-backed in $RUNTIME_STATE_FILE, but $recorded is not installed; dropping the stale record."
+    forget_runtime
+    recorded=""
+  fi
   if [[ -n "$CONTAINER_RUNTIME" ]]; then
     case "$CONTAINER_RUNTIME" in
       podman|docker) ;;
       *) fail "CONTAINER_RUNTIME must be 'podman' or 'docker'." ;;
     esac
-    if recorded="$(recorded_runtime)" && [[ "$recorded" != "$(canonical_runtime "$CONTAINER_RUNTIME")" ]]; then
+    if [[ -n "$recorded" && "$recorded" != "$(canonical_runtime "$CONTAINER_RUNTIME")" ]]; then
       fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE). Unset CONTAINER_RUNTIME to reuse $recorded, or delete that cluster and its state file before switching to $CONTAINER_RUNTIME."
     fi
     use_runtime "$CONTAINER_RUNTIME"
     return 0
   fi
-  if recorded="$(recorded_runtime)"; then
+  if [[ -n "$recorded" ]]; then
+    if ! runtime_is_reachable "$recorded"; then
+      fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE), but $recorded is not reachable. Start $recorded and retry, or remove the stale record (rm -- '$RUNTIME_STATE_FILE') if that cluster is gone."
+    fi
     log INFO "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE); cleaning up with $recorded."
     use_runtime "$recorded"
     return 0
@@ -181,13 +195,15 @@ detect_container_runtime() {
 }
 
 # forget_runtime removes the record of the engine that backed KIND_CLUSTER_NAME
-# once that cluster is gone. dev-deploy writes the record (see record_runtime) and
-# every script resolves the runtime from it, so a record left behind after the
-# cluster is deleted would reject a later deploy that selects another engine.
+# once that cluster is gone or its engine no longer exists. dev-deploy writes the
+# record (see record_runtime) and every script resolves the runtime from it, so a
+# record left behind after the cluster is deleted would reject a later deploy that
+# selects another engine, and one naming an uninstalled engine would reject every
+# command until someone removed the file by hand.
 forget_runtime() {
   [[ -e "$RUNTIME_STATE_FILE" ]] || return 0
   rm -f -- "$RUNTIME_STATE_FILE"
-  log INFO "Removed the runtime record $RUNTIME_STATE_FILE of the deleted cluster."
+  log INFO "Removed the runtime record $RUNTIME_STATE_FILE."
 }
 
 # other_runtime_cluster_state prints "<state> <engine>" for KIND_CLUSTER_NAME in

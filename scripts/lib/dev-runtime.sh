@@ -82,9 +82,23 @@ recorded_runtime() {
 # cluster exists, so a failed deploy does not claim an engine for a cluster it
 # never created.
 record_runtime() {
-  printf '%s\n' "$CONTAINER_RUNTIME" >"${RUNTIME_STATE_FILE}.tmp.$$"
-  mv -f -- "${RUNTIME_STATE_FILE}.tmp.$$" "$RUNTIME_STATE_FILE"
+  local tmp="${RUNTIME_STATE_FILE}.tmp.$$"
+  printf '%s\n' "$CONTAINER_RUNTIME" >"$tmp"
+  # The record sits next to the private kubeconfig, so keep it private whatever
+  # the caller's umask is.
+  chmod 600 "$tmp"
+  mv -f -- "$tmp" "$RUNTIME_STATE_FILE"
   log INFO "Recorded $CONTAINER_RUNTIME as the container runtime of kind cluster '$KIND_CLUSTER_NAME' in $RUNTIME_STATE_FILE."
+}
+
+# runtime_is_installed returns 0 when the CLI of the given runtime is installed. A
+# record naming an engine that is no longer installed cannot describe a live
+# cluster, so a caller ignores or drops that record instead of repeating a failure
+# the user can only clear by editing the state file.
+runtime_is_installed() {
+  local engine
+  engine="$(canonical_runtime "$1")"
+  command -v "$engine" >/dev/null 2>&1
 }
 
 # runtime_is_reachable returns 0 when the given runtime is installed and answers.
@@ -94,7 +108,7 @@ record_runtime() {
 runtime_is_reachable() {
   local engine
   engine="$(canonical_runtime "$1")"
-  command -v "$engine" >/dev/null 2>&1 || return 1
+  runtime_is_installed "$engine" || return 1
   "$engine" info >/dev/null 2>&1
 }
 

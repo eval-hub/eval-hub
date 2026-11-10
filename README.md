@@ -262,13 +262,16 @@ an explicit value does not own that cluster; a first deploy with neither a
 record nor a cluster falls back to the first reachable engine, podman before
 docker (or docker before podman under WSL, where podman passes `podman info`
 but fails kind node startup). A record whose engine no longer runs the cluster
-is not trusted: `make dev-deploy` fails when the other engine owns that cluster
-instead of creating a second one, and `make dev-clean` drops the record (with
-or without `DELETE_CLUSTER=true`) once the cluster is gone from the recorded
-engine. Deleting the cluster with `make dev-clean DELETE_CLUSTER=true` removes
-the record, and removes the kubeconfig with it only when that kubeconfig
-targets the deleted cluster and no engine still lists or answers for a cluster
-of that name; otherwise the kubeconfig is preserved.
+is not trusted: `make dev-deploy` fails when the other engine owns that cluster,
+an explicit matching value included, instead of creating a second one, and
+`make dev-clean` drops the record (with or without `DELETE_CLUSTER=true`) once
+the cluster is gone from the recorded engine. A record whose engine is no longer
+installed cannot describe a reachable cluster, so `make dev-deploy` ignores it
+and `make dev-clean` drops it; a recorded engine that is installed but stopped
+fails with the state file to remove. Deleting the cluster with `make dev-clean
+DELETE_CLUSTER=true` removes the record, and removes the kubeconfig with it only
+when that kubeconfig targets the deleted cluster and no engine still lists or
+answers for a cluster of that name; otherwise the kubeconfig is preserved.
 
 Deploy the local EvalHub service, operator, adapters, and mock target/judge
 services:
