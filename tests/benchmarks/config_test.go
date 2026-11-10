@@ -672,3 +672,52 @@ func TestSmokeEnvAliases(t *testing.T) {
 		})
 	}
 }
+
+func TestProgressInterval(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		value   string
+		want    time.Duration
+		wantErr bool
+	}{
+		{"default", "", 5 * time.Minute, false},
+		{"disabled", "0", 0, false},
+		{"explicit", "30s", 30 * time.Second, false},
+		{"whitespace", " 1m ", time.Minute, false},
+		{"invalid", "soon", 0, true},
+		{"negative", "-1m", 0, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("BENCHMARK_PROGRESS_INTERVAL", tc.value)
+			got, err := progressInterval()
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("progressInterval() error = %v, wantErr %v", err, tc.wantErr)
+			}
+			if !tc.wantErr && got != tc.want {
+				t.Fatalf("progressInterval() = %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBenchmarkProgressLine(t *testing.T) {
+	progress := &benchmarkProgress{}
+	progress.selected.Add(3)
+	progress.running.Add(1)
+	progress.finished.Add(1)
+	progress.passed.Add(1)
+	want := "benchmarks: total=3 finished=1 running=1 passed=1 failed=0 skipped=0 remaining=2"
+	if got := progress.line(); got != want {
+		t.Fatalf("line() = %q, want %q", got, want)
+	}
+}
+
+func TestBenchmarkProgressHeartbeatStops(t *testing.T) {
+	progress := &benchmarkProgress{}
+	progress.selected.Add(1)
+	stop := progress.heartbeat(t, time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
+	stop()
+	// A disabled heartbeat must still return a usable stop function.
+	progress.heartbeat(t, 0)()
+}

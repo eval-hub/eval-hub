@@ -67,6 +67,25 @@ BENCHMARK_SMOKE=1 go test ./tests/benchmarks \
 the default `2s` polling interval. Standard `go test -json` output provides
 per-benchmark results for CI consumers.
 
+Each benchmark logs a `benchmarks:` progress line when it finishes, and the suite
+repeats one every `BENCHMARK_PROGRESS_INTERVAL` (default `5m`; `0` disables the
+periodic line) while benchmarks are in flight, so a long sweep shows at a glance
+how much is left:
+
+```text
+benchmarks: total=285 finished=42 running=8 passed=38 failed=2 skipped=2 remaining=243
+```
+
+`total` is the number of benchmarks the `-run` selection executes, `finished`
+counts the benchmarks that passed, failed, or skipped (a prerequisite skip is
+still done), and `remaining` counts every selected benchmark that has not
+finished yet, including the ones currently running. The suite also logs the
+discovered catalog size before the run starts, and its final summary repeats the
+counts with the number of configured, skipped, and submitted benchmarks. Because
+benchmarks are parallel subtests, the progress lines from each benchmark belong
+to that benchmark's test case, while the start line, heartbeats, and summary
+belong to the parent `TestBenchmarkSmoke` test case.
+
 Ordinary `go test ./tests/benchmarks/...` runs offline harness checks and skips live
 evaluations. Live runs fail on invalid configuration, discovery errors, failed
 jobs, timeouts, missing fixture files, or zero submitted benchmarks. Missing
