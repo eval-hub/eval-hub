@@ -244,18 +244,36 @@ or **Docker**), kind, kubectl, Make, Git, curl, OpenSSL, and Python 3. Install
 `jq` as well to use the API demo and curl examples. The runtime must be running
 (for podman on macOS, start the podman machine first). These scripts use the
 container runtime to build images, run the kind nodes, and manage the local
-image registry. Podman is used in preference to Docker when it is installed and
-reachable, except under WSL where Docker is preferred (WSL2 podman can pass
-`podman info` but fail during kind node startup); set `CONTAINER_RUNTIME`
-(for example `make dev-deploy CONTAINER_RUNTIME=docker`) to force a specific
-runtime. When a kind cluster named `KIND_CLUSTER_NAME` already exists, its
-runtime is selected automatically by `make dev-deploy`, `make dev-clean`, and
-`make dev-demo`, so later commands keep using the engine that backed the
-existing cluster (passing `CONTAINER_RUNTIME` explicitly remains supported and
-must match that engine). If a forced `CONTAINER_RUNTIME` does not own an
-existing `KIND_CLUSTER_NAME` while the other engine does, `make dev-deploy` and
-`make dev-clean` fail instead of creating a duplicate cluster or cleaning up
-and deleting the kubeconfig of the cluster that is still running.
+image registry. `make dev-deploy` records the engine it used for
+`KIND_CLUSTER_NAME` in
+`${XDG_CONFIG_HOME:-$HOME/.config}/evalhub/kubeconfigs/<cluster>.runtime`, and
+`make dev-clean`, `make dev-demo`, and `make clean-container-storage` reuse that
+record, so a later command needs no second input. Set `CONTAINER_RUNTIME` (for
+example `make dev-deploy CONTAINER_RUNTIME=docker`) to choose the engine for a
+new cluster. When an explicit value differs from the recorded engine,
+`make dev-deploy` and `make dev-clean` fail instead of creating a duplicate
+cluster or cleaning up and deleting the kubeconfig of the cluster that is still
+running, while `make dev-demo` follows the record and
+`make clean-container-storage` keeps the explicit engine with a warning,
+because neither can destroy the deployment. For a cluster deployed before that
+record existed the engine that already owns `KIND_CLUSTER_NAME` is used, and
+`make dev-deploy` and `make dev-clean` also fail when an explicit value does not
+own that cluster, instead of creating a second one or reporting a cleanup that
+skipped it; a first deploy with neither a record nor a cluster falls back to the
+first reachable engine, podman before docker (or docker before podman under WSL,
+where podman passes `podman info`
+but fails kind node startup). A record whose engine no longer runs the cluster
+is not trusted: `make dev-deploy` fails when the other engine owns that cluster,
+an explicit matching value included, instead of creating a second one,
+`make dev-demo` falls back to the engine that owns the cluster, and
+`make dev-clean` drops the record (with or without `DELETE_CLUSTER=true`) once
+the cluster is gone from the recorded engine. A record whose engine is no longer
+installed cannot describe a reachable cluster, so `make dev-deploy` ignores it
+and `make dev-clean` drops it; a recorded engine that is installed but stopped
+fails with the state file to remove. Deleting the cluster with `make dev-clean
+DELETE_CLUSTER=true` removes the record, and removes the kubeconfig with it only
+when that kubeconfig targets the deleted cluster and no engine still lists or
+answers for a cluster of that name; otherwise the kubeconfig is preserved.
 
 Deploy the local EvalHub service, operator, adapters, and mock target/judge
 services:

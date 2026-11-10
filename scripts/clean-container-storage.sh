@@ -9,8 +9,15 @@
 # This script removes that unreferenced data for podman or Docker.
 set -Eeuo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Runtime selection helpers, shared with the other dev scripts.
+. "${SCRIPT_DIR}/lib/dev-runtime.sh"
+
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-}"
 KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-evalhub-dev}"
+# The engine dev-deploy recorded for KIND_CLUSTER_NAME (see record_runtime in
+# dev-deploy.sh), so pruning targets the engine that backs the dev stack.
+RUNTIME_STATE_FILE="${XDG_CONFIG_HOME:-${HOME}/.config}/evalhub/kubeconfigs/${KIND_CLUSTER_NAME}.runtime"
 ALL="${ALL:-false}"
 VOLUMES="${VOLUMES:-false}"
 DRY_RUN="${DRY_RUN:-false}"
@@ -40,8 +47,12 @@ so a running kind cluster keeps working.
 
 Inputs (also accepted as environment variables):
   CONTAINER_RUNTIME  container engine to clean (podman or docker; default: the
-                     engine that already owns KIND_CLUSTER_NAME, otherwise podman
-                     when reachable, or docker under WSL)
+                     engine dev-deploy recorded for KIND_CLUSTER_NAME, otherwise
+                     the engine that owns it, otherwise the first reachable
+                     engine, podman before docker, docker before podman under
+                     WSL). An explicit value is always pruned, with a warning
+                     when it differs from the record, so storage can be
+                     reclaimed from either engine.
   KIND_CLUSTER_NAME  cluster used to select that engine (default: evalhub-dev)
   ALL                true to also remove unused (non-dangling) images such as
                      cached base images and previous dev image tags (default:
@@ -71,73 +82,54 @@ DRY_RUN=true reports the stopped containers without stopping.
 USAGE
 }
 
-# Return 0 when KIND_CLUSTER_NAME exists under the given container runtime,
-# using the kind provider that runtime requires. A runtime that is not installed
-# or not reachable cannot own a cluster, so it reports false.
-kind_cluster_in_runtime() {
-  local runtime="$1" clusters
-  command -v kind >/dev/null 2>&1 || return 1
-  command -v "$runtime" >/dev/null 2>&1 || return 1
-  "$runtime" info >/dev/null 2>&1 || return 1
-  case "$runtime" in
-    podman)
-      clusters="$(KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters 2>/dev/null || true)"
-      ;;
-    docker)
-      clusters="$(env -u KIND_EXPERIMENTAL_PROVIDER kind get clusters 2>/dev/null || true)"
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-  grep -Fqx -- "$KIND_CLUSTER_NAME" <<<"$clusters"
-}
-
-# Select the runtime to clean. Set CONTAINER_RUNTIME to force a specific engine.
-# Otherwise an existing KIND_CLUSTER_NAME decides the runtime, so cleanup targets
-# the engine that backed the deployment even when CONTAINER_RUNTIME was only
-# passed to dev-deploy. With no existing cluster, podman is preferred whenever
-# it is installed and reachable, except under WSL where docker is preferred
-# instead (matching detect_container_runtime in dev-deploy.sh).
+# Select the runtime to clean, in order of authority: an explicit
+# CONTAINER_RUNTIME (used even when the record names another engine, with a
+# warning), the engine dev-deploy recorded for KIND_CLUSTER_NAME (see
+# recorded_runtime), the engine that owns the cluster, and finally the first
+# reachable engine, podman before docker (docker before podman under WSL). Unlike
+# dev-deploy and dev-clean an explicit value is never a hard error, because
+# pruning cannot destroy the deployment; and a recorded engine that is stopped,
+# uninstalled, or behind an unmounted podman machine is skipped rather than
+# fatal, so storage is still reclaimed after the deployment moved to the other
+# engine.
 detect_container_runtime() {
-  local runtime
-  local -a preferred_runtimes=()
-  if uname -r | grep -qiE 'microsoft|wsl'; then
-    preferred_runtimes=(docker podman)
-  else
-    preferred_runtimes=(podman docker)
+  local runtime recorded
+  if [[ -n "$CONTAINER_RUNTIME" ]]; then
+    case "$CONTAINER_RUNTIME" in
+      podman|docker) ;;
+      *) fail "CONTAINER_RUNTIME must be 'podman' or 'docker'." ;;
+    esac
+    if recorded="$(recorded_runtime)" && [[ "$recorded" != "$(canonical_runtime "$CONTAINER_RUNTIME")" ]]; then
+      log WARN "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE); pruning $CONTAINER_RUNTIME as requested."
+    fi
+    use_runtime "$CONTAINER_RUNTIME"
+    return 0
   fi
-  case "$CONTAINER_RUNTIME" in
-    podman|docker)
-      command -v "$CONTAINER_RUNTIME" >/dev/null 2>&1 ||
-        fail "Required command not found: $CONTAINER_RUNTIME"
-      "$CONTAINER_RUNTIME" info >/dev/null 2>&1 ||
-        fail "$CONTAINER_RUNTIME is installed but not reachable. Start the $CONTAINER_RUNTIME daemon (or podman machine) and retry."
-      ;;
-    "")
-      for runtime in "${preferred_runtimes[@]}"; do
-        if kind_cluster_in_runtime "$runtime"; then
-          CONTAINER_RUNTIME="$runtime"
-          log INFO "Kind cluster '$KIND_CLUSTER_NAME' exists under $runtime; cleaning up with $runtime."
-          break
-        fi
-      done
-      if [[ -z "$CONTAINER_RUNTIME" ]]; then
-        for runtime in "${preferred_runtimes[@]}"; do
-          if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
-            CONTAINER_RUNTIME="$runtime"
-            break
-          fi
-        done
-      fi
-      [[ -n "$CONTAINER_RUNTIME" ]] ||
-        fail "Neither podman nor docker is reachable. Install podman (preferred; docker under WSL) and make sure it is running."
-      ;;
-    *)
-      fail "CONTAINER_RUNTIME must be 'podman' or 'docker'."
-      ;;
-  esac
-  log INFO "Using $CONTAINER_RUNTIME as the container runtime."
+  if recorded="$(recorded_runtime)"; then
+    if runtime_is_reachable "$recorded"; then
+      log INFO "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE); pruning $recorded."
+      use_runtime "$recorded"
+      return 0
+    fi
+    log WARN "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded, but $recorded is not reachable; selecting another engine to prune."
+  fi
+  # The engine order is the policy shared with the other scripts; splitting the
+  # helper's newline-separated output is intended.
+  for runtime in $(fallback_runtime_order); do
+    if kind_cluster_in_runtime "$(canonical_runtime "$runtime")"; then
+      runtime="$(canonical_runtime "$runtime")"
+      log INFO "Kind cluster '$KIND_CLUSTER_NAME' exists under $runtime; pruning $runtime."
+      use_runtime "$runtime"
+      return 0
+    fi
+  done
+  for runtime in $(fallback_runtime_order); do
+    if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
+      use_runtime "$runtime"
+      return 0
+    fi
+  done
+  fail "Neither podman nor docker is reachable. Install podman (or docker) and make sure it is running."
 }
 
 validate_inputs() {
