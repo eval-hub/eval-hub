@@ -82,12 +82,21 @@ recorded_runtime() {
 # cluster exists, so a failed deploy does not claim an engine for a cluster it
 # never created.
 record_runtime() {
-  local tmp="${RUNTIME_STATE_FILE}.tmp.$$"
-  printf '%s\n' "$CONTAINER_RUNTIME" >"$tmp"
-  # The record sits next to the private kubeconfig, so keep it private whatever
-  # the caller's umask is.
-  chmod 600 "$tmp"
-  mv -f -- "$tmp" "$RUNTIME_STATE_FILE"
+  local tmp
+  # Write through a private temporary file and rename it into place, so a reader
+  # never sees a partial record and a pre-placed symlink at a predictable path
+  # cannot redirect the write. mktemp creates the file in the record's own
+  # directory (same filesystem, so the rename stays atomic) with mode 600.
+  tmp="$(mktemp "${RUNTIME_STATE_FILE}.tmp.XXXXXX")" ||
+    fail "Could not create a temporary file for $RUNTIME_STATE_FILE."
+  # Keep the record private whatever the caller's umask is, and remove the
+  # temporary file if writing or renaming it fails.
+  if ! printf '%s\n' "$CONTAINER_RUNTIME" >"$tmp" ||
+    ! chmod 600 "$tmp" ||
+    ! mv -f -- "$tmp" "$RUNTIME_STATE_FILE"; then
+    rm -f -- "$tmp"
+    fail "Could not record $CONTAINER_RUNTIME in $RUNTIME_STATE_FILE."
+  fi
   log INFO "Recorded $CONTAINER_RUNTIME as the container runtime of kind cluster '$KIND_CLUSTER_NAME' in $RUNTIME_STATE_FILE."
 }
 
