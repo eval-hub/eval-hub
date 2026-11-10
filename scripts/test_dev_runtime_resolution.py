@@ -50,7 +50,13 @@ LIB_FUNCTIONS = [
     "use_runtime",
 ]
 SCRIPT_FUNCTIONS = {
-    "dev-deploy.sh": ["log", "fail", "need_command", "detect_container_runtime"],
+    "dev-deploy.sh": [
+        "log",
+        "fail",
+        "need_command",
+        "ensure_runtime_owns_existing_cluster",
+        "detect_container_runtime",
+    ],
     "dev-clean.sh": ["log", "fail", "detect_container_runtime"],
     "dev-demo.sh": ["log", "fail", "need_command", "detect_container_runtime"],
     "clean-container-storage.sh": ["log", "fail", "detect_container_runtime"],
@@ -204,6 +210,24 @@ class DeployResolutionTests(RuntimeResolutionTestCase):
         self.assertNotEqual(code, 0, output)
         self.assertIn("was deployed with podman", output)
 
+    def test_explicit_runtime_must_own_an_unrecorded_cluster(self):
+        """A cluster deployed before the record existed is not duplicated either."""
+        code, _, output = self.resolve(
+            "dev-deploy.sh", explicit="docker", podman_clusters=CLUSTER + "\n"
+        )
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("exists under podman, not docker", output)
+
+    def test_explicit_runtime_reuses_the_cluster_it_owns(self):
+        """An explicit engine still reuses an unrecorded cluster of its own."""
+        self.assert_resolves(
+            "dev-deploy.sh", "podman", explicit="podman", podman_clusters=CLUSTER + "\n"
+        )
+
+    def test_explicit_runtime_creates_a_cluster_no_engine_owns(self):
+        """With no record and no cluster, the explicit engine is used as given."""
+        self.assert_resolves("dev-deploy.sh", "docker", explicit="docker")
+
     def test_podman_docker_shim_resolves_to_podman(self):
         """The shim is podman, so kind and the registry push must use podman."""
         self.assert_resolves("dev-deploy.sh", "podman", explicit="docker", shim=True)
@@ -341,6 +365,13 @@ class StorageCleanupResolutionTests(RuntimeResolutionTestCase):
     def test_recorded_runtime_is_reused(self):
         """Pruning targets the engine that backs the dev stack."""
         self.assert_resolves("clean-container-storage.sh", "podman", recorded="podman")
+
+    def test_explicit_runtime_warns_instead_of_failing(self):
+        """Pruning cannot destroy the cluster, so it follows the record with a warning."""
+        output = self.assert_resolves(
+            "clean-container-storage.sh", "podman", explicit="docker", recorded="podman"
+        )
+        self.assertIn("pruning podman", output)
 
     def test_unrecorded_cluster_selects_its_owning_engine(self):
         """A cluster deployed before the record existed still selects its engine."""

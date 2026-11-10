@@ -76,9 +76,10 @@ Inputs (also accepted as environment variables):
                            evalhub/kubeconfigs/<cluster>.runtime, otherwise the
                            engine that already owns the cluster, otherwise the
                            first reachable engine (podman before docker). An
-                           explicit value must match the recorded engine;
-                           otherwise the script fails instead of creating a
-                           duplicate cluster and replacing its kubeconfig.
+                           explicit value must match the recorded engine, or own
+                           the cluster when no record exists yet; otherwise the
+                           script fails instead of creating a duplicate cluster
+                           and replacing its kubeconfig.
   Repeated builds use the container runtime's layer cache; the EvalHub build date is stable
   for a source commit so a no-change deploy does not rebuild Go binaries.
   Temporary localhost:<port> registry tags are removed after each successful push.
@@ -186,11 +187,34 @@ need_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
 }
 
+# Fail when an explicit runtime does not own KIND_CLUSTER_NAME while the other
+# engine does. kind only lists the clusters of the engine it is pointed at, so
+# continuing under the selected engine would create a second cluster with the
+# same name and overwrite the private kubeconfig of the cluster that is already
+# running. A recorded cluster is checked against its record instead; this guard
+# covers clusters deployed before that record existed.
+ensure_runtime_owns_existing_cluster() {
+  local runtime other
+  runtime="$(canonical_runtime "$1")"
+  # A cluster of this name under the selected engine is reused as-is, so the
+  # other engine owning one too changes nothing: this run creates no cluster and
+  # rewrites no kubeconfig for a cluster it is not using.
+  kind_cluster_in_runtime "$runtime" && return 0
+  case "$runtime" in
+    podman) other=docker ;;
+    docker) other=podman ;;
+    *) return 0 ;;
+  esac
+  kind_cluster_in_runtime "$other" || return 0
+  fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $other, not $runtime. Unset CONTAINER_RUNTIME to reuse the engine that owns the cluster, or set CONTAINER_RUNTIME=$other."
+}
+
 # Select the container runtime used for image builds, the local registry, and the
 # kind nodes, in order of authority:
 #   1. an explicit CONTAINER_RUNTIME, which has to match the engine recorded for
-#      KIND_CLUSTER_NAME: continuing under the other engine would create a second
-#      cluster with the same name and overwrite the kubeconfig of the running one;
+#      KIND_CLUSTER_NAME, or own that cluster when no record exists yet:
+#      continuing under the other engine would create a second cluster with the
+#      same name and overwrite the kubeconfig of the running one;
 #   2. the engine recorded for KIND_CLUSTER_NAME (see recorded_runtime);
 #   3. the engine that already owns KIND_CLUSTER_NAME, for clusters deployed
 #      before that record existed;
@@ -204,8 +228,13 @@ detect_container_runtime() {
       podman|docker) ;;
       *) fail "CONTAINER_RUNTIME must be 'podman' or 'docker'." ;;
     esac
-    if recorded="$(recorded_runtime)" && [[ "$recorded" != "$(canonical_runtime "$CONTAINER_RUNTIME")" ]]; then
-      fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE). Unset CONTAINER_RUNTIME to reuse $recorded, or delete that cluster and its state file before switching to $CONTAINER_RUNTIME."
+    if recorded="$(recorded_runtime)"; then
+      [[ "$recorded" == "$(canonical_runtime "$CONTAINER_RUNTIME")" ]] ||
+        fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE). Unset CONTAINER_RUNTIME to reuse $recorded, or delete that cluster and its state file before switching to $CONTAINER_RUNTIME."
+    else
+      # No record yet: either no cluster exists or it predates the record, so
+      # ask both engines which one owns the name before selecting this one.
+      ensure_runtime_owns_existing_cluster "$CONTAINER_RUNTIME"
     fi
     use_runtime "$CONTAINER_RUNTIME" "for builds, the local registry, and kind"
     return 0
