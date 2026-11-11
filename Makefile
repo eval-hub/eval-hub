@@ -69,7 +69,7 @@ assisted-by-trailer: ## Print the Assisted-by trailer for the current AI session
 #                           make install-dev-skills DEV_SKILLS_TARGET_DIR=~/.agents/skills
 DEV_SKILLS_REF ?=
 DEV_SKILLS_CLONE_DIR ?=
-DEV_SKILLS_TARGET_DIR ?=
+DEV_SKILLS_TARGET_DIR ?= ~/.agents/skills
 
 .PHONY: install-dev-skills uninstall-dev-skills
 install-dev-skills: ## Install dev skills from eval-hub/eval-hub-skills (into ~/.claude/skills; Codex CLI: DEV_SKILLS_TARGET_DIR=~/.agents/skills)
