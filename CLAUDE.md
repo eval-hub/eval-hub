@@ -68,6 +68,16 @@ The go.mod must not be updated until the same version exists in go-toolset.
 If there are other files in the repository that require updating due to new golang version then mention them in the PR.
 Use `go-version-file: "go.mod"` in the github actions where possible.
 
+The `golangci-lint` pin must move with `go.mod`. Update `GOLANGCI_LINT_VERSION`
+in the `Makefile` and `version` in `.github/workflows/golangci-lint.yml` in the
+same PR, because the linter bundles an export-data importer that only understands
+standard-library data up to the Go release it shipped with. A pin that is too old
+fails `make lint` with `cannot decode "internal/goarch", export data version N is
+greater than maximum supported version M`, which looks like a pre-existing
+failure rather than a missing bump. As of `go 1.27.3`, `v2.15.0` is pinned and
+`v2.14.0` is the oldest release that works; confirm the target version before
+choosing a lower one.
+
 Use the `golang-toolchain-update` dev skill for the full procedure (govulncheck
 scan, go-toolset registry gate, file updates, `go mod tidy`, tests, and PR):
 [`dev-skills/golang-toolchain-update/SKILL.md`](https://github.com/eval-hub/eval-hub-skills/blob/main/dev-skills/golang-toolchain-update/SKILL.md).
