@@ -63,6 +63,11 @@ func registerCustomValidators(instance *validator.Validate) error {
 	if err := instance.RegisterValidation("sha256_digest", validateOCIDigest); err != nil {
 		return fmt.Errorf("register validator failed for sha256_digest: %w", err)
 	}
+	if err := instance.RegisterValidation("oci_signing_ref", func(fl validator.FieldLevel) bool {
+		return api.ValidateOCISigningReference(fl.Field().String()) == nil
+	}); err != nil {
+		return fmt.Errorf("register validator failed for oci_signing_ref: %w", err)
+	}
 	instance.RegisterStructValidation(evaluationJobConfig, api.EvaluationJobConfig{})
 	instance.RegisterStructValidation(validateStandalonePostProcessingRequest, api.StandalonePostProcessingRequest{})
 	instance.RegisterStructValidation(validateJobPostProcessingRequest, api.ConfidenceIntervalPostProcessingRequest{})
