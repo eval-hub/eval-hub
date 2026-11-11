@@ -321,7 +321,14 @@ $(GOLANGCI_LINT):
 	@echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION) with $(GO_TOOLCHAIN) into $(dir $(GOLANGCI_LINT))..."
 	GOBIN='$(dir $(GOLANGCI_LINT))' GOTOOLCHAIN=$(GO_TOOLCHAIN) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
-GOVULNCHECK_VERSION ?= v1.1.4
+# Pinned for the Go toolchain declared in go.mod, currently go 1.27.3: v1.9.0
+# bundles golang.org/x/tools v0.52.0. v1.1.4 (x/tools v0.29.0) panics in the SSA
+# builder with `panic: unexpected expr: *ast.KeyValueExpr` while analysing the
+# linux-tagged standard-library sources under go1.27.3, so it fails on the Linux
+# CI runner even though it can pass on macOS with the same binary. Like
+# golangci-lint this tool parses the standard library, so the pin must move with
+# go.mod (see AGENTS.md -> Code Quality).
+GOVULNCHECK_VERSION ?= v1.9.0
 # Checkout-local and keyed on version + toolchain for the same reason as the
 # linter above: a toolchain bump installs a fresh binary instead of reusing one
 # built for another Go version.
