@@ -345,7 +345,11 @@ vet: ## Run go vet (go.mod toolchain)
 # Iterations (Nx) or duration for mutational fuzzing during make test / make test-fuzz.
 # Prefer Nx so CI finishes deterministically; seed corpora also run under plain go test.
 FUZZTIME ?= 10000x
-GO_TEST_TIMEOUT ?= 10m
+# The MLflow integration tests in ./internal/eval_hub/mlflow install and start one
+# tracking server per release in their version matrix (3.8.1 through the latest
+# GitHub release, with and without workspaces), which cold-cache can take longer
+# than a few minutes, so the unit-test budget is deliberately generous.
+GO_TEST_TIMEOUT ?= 30m
 # The full disconnected curated-collection suite stages four adapter bundles
 # and submits benchmark jobs serially; allow enough time for all 24 smoke cases.
 E2E_TEST_TIMEOUT ?= 480m
