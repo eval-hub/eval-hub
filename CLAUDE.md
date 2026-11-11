@@ -65,8 +65,32 @@ The PR should also update the major golang version, if needed, in the Containerf
 
 The go.mod must not be updated until the same version exists in go-toolset.
 
+When the go-toolset gate blocks a fix that a newer Go already contains, record a dated
+waiver in `osv-scanner.toml` (see `AGENTS.md` → Vulnerability waivers) instead of bumping
+`go.mod` optimistically, adding `|| true`, or skipping the scan: `make govulncheck` enforces
+the waiver and fails once its `ignoreUntil` date passes.
+
 If there are other files in the repository that require updating due to new golang version then mention them in the PR.
 Use `go-version-file: "go.mod"` in the github actions where possible.
+
+The `golangci-lint` pin must move with `go.mod`. Update `GOLANGCI_LINT_VERSION`
+in the `Makefile` and `version` in `.github/workflows/golangci-lint.yml` in the
+same PR, because the linter bundles an export-data importer that only understands
+standard-library data up to the Go release it shipped with. A pin that is too old
+fails `make lint` with `cannot decode "internal/goarch", export data version N is
+greater than maximum supported version M`, which looks like a pre-existing
+failure rather than a missing bump. As of `go 1.27.3`, `v2.15.0` is pinned and
+`v2.14.0` is the oldest release that works; confirm the target version before
+choosing a lower one.
+
+The `govulncheck` and `gosec` pins move with `go.mod` for the same reason: both
+parse the standard library. Update `GOVULNCHECK_VERSION` in the `Makefile` and
+the pinned `securego/gosec` action in `.github/workflows/ci.yml`. `govulncheck`
+v1.1.4 (x/tools v0.29.0) panics with `panic: unexpected expr: *ast.KeyValueExpr`
+on Go 1.27 sources, and the gosec 2.29.0 image cannot read Go 1.27 export data.
+Check the *image* an action tag resolves to, not just the tag name: gosec's
+v2.30.0 tag still pointed at its 2.29.0 image until the follow-up commit
+"Fix the tag in the action".
 
 Use the `golang-toolchain-update` dev skill for the full procedure (govulncheck
 scan, go-toolset registry gate, file updates, `go mod tidy`, tests, and PR):
