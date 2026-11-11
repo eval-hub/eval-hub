@@ -83,13 +83,13 @@ type Storage interface {
 	UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error
 	// UpdateEvaluationJobStatus is used to update the status of an evaluation job and is internal - do we need it here?
 	UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error
-	// UpdateEvaluationJobOCI merges service-owned OCI progress and an optional published card
+	// UpdateEvaluationJobOCI merges service-owned OCI progress and optional published card/bundle references
 	// without replacing benchmark results or the evaluation completion status.
-	// Callers must provide a non-nil, validated status and validate any supplied card.
+	// Callers must provide a non-nil, validated status and validate any supplied card and bundle.
 	// Unlike api.UpdateOCIResults, this operation does not permit card-only updates
 	// with a nil status. A nil card preserves the existing reference; a supplied card
 	// replaces it (last-write-wins) when the update is accepted.
-	UpdateEvaluationJobOCI(id string, status *api.OCIProcessingStatus, card *api.OCIArtifactReference) error
+	UpdateEvaluationJobOCI(id string, status *api.OCIProcessingStatus, card, bundle *api.OCIArtifactReference) error
 	// UpdateEvaluationJobResolvedSHA records the resolved test-data identity (e.g. git commit SHA)
 	// on the benchmark at benchmarkIndex as TestDataRef.ResolvedSHA. Idempotent: if already set, no-op.
 	UpdateEvaluationJobResolvedSHA(id string, benchmarkIndex int, sha string) error

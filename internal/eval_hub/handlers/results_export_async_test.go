@@ -170,7 +170,7 @@ func (s *detachedExportStorage) UpdateEvaluationJob(string, *api.StatusEvent) er
 	}
 	return nil
 }
-func (s *detachedExportStorage) UpdateEvaluationJobOCI(_ string, status *api.OCIProcessingStatus, card *api.OCIArtifactReference) error {
+func (s *detachedExportStorage) UpdateEvaluationJobOCI(_ string, status *api.OCIProcessingStatus, card, _ *api.OCIArtifactReference) error {
 	if status.State == api.OCIProcessingRunning && s.runningStarted != nil {
 		close(s.runningStarted)
 		<-s.releaseRunning

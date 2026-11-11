@@ -170,9 +170,9 @@ func (h *Handlers) persistOCIResults(storage abstractions.Storage, job *api.Eval
 	if storage == nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", "storage is not configured")
 	}
-	if err := storage.UpdateEvaluationJobOCI(job.Resource.ID, status, card); err != nil {
+	if err := storage.UpdateEvaluationJobOCI(job.Resource.ID, status, card, nil); err != nil {
 		return err
 	}
-	job.Results = api.UpdateOCIResults(job.Results, status, card)
+	job.Results = api.UpdateOCIResults(job.Results, status, card, nil)
 	return nil
 }
