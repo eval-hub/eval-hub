@@ -519,7 +519,7 @@ When reporting bugs, include:
 
 **Environment**:
 - OS: [e.g. Ubuntu 22.04]
-- Go Version: [e.g. 1.26.0]
+- Go Version: [e.g. 1.27.0]
 - eval-hub Version: [e.g. 0.1.1]
 - Kubernetes Version: [e.g. 1.28]
 

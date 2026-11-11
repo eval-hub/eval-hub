@@ -145,7 +145,7 @@ Local mode connects directly to the API without kube-rbac-proxy and runs each ad
 
 ### Prerequisites
 
-- Go 1.26+
+- Go 1.27+
 - Make
 - Python 3.11+ for `make govulncheck` and `make test-scripts` (the waiver gate imports `tomllib`, and the script regression tests import that gate; set `PYTHON=python3.12` to use a newer interpreter not on `PATH` as `python3`)
 - Python 3 for `make test` and `make install-deps` (any Python 3; `scripts/grcat` only needs colored output)
@@ -321,7 +321,7 @@ make dev-clean DELETE_CLUSTER=true
 
 Both cleanup modes retain the local build image tags and the container runtime's
 build cache.
-They remove temporary localhost:<port> tags used only to push images into the
+They remove temporary `localhost:<port>` tags used only to push images into the
 kind registry. Repeated deploys of unchanged EvalHub source reuse the Go build
 layers. `make dev-deploy-help` and `make dev-clean-help` list the settings.
 
