@@ -1,6 +1,10 @@
+"""Local runtime fixture for deterministic results, OCI exports, and requested failures."""
+
 import json
 import os
 import logging
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from datetime import UTC, datetime
 
 
@@ -13,6 +17,7 @@ from evalhub.adapter import (
     JobSpec,
     JobStatus,
     JobStatusUpdate,
+    OCIArtifactSpec,
     configure_telemetry,
 )
 from evalhub.adapter.callbacks import DefaultCallbacks
@@ -26,11 +31,17 @@ logger = logging.getLogger(__name__)
 
 
 class LocalTestAdapter(FrameworkAdapter):
+    """Exercise runtime callbacks without calling a model or benchmark framework."""
+
     def run_benchmark_job(self, config: JobSpec, callbacks: JobCallbacks) -> JobResults:
+        """Return fixed metrics and optional OCI output, or raise when test_fail is set."""
         logger.info(
             "Running benchmark job %s for benchmark %s", config.id, config.benchmark_id
         )
-        return JobResults(
+        if config.parameters.get("test_fail"):
+            callbacks.report_status(JobStatusUpdate(status=JobStatus.FAILED))
+            raise RuntimeError("Requested local test adapter failure")
+        results = JobResults(
             id=config.id,
             benchmark_id=config.benchmark_id,
             benchmark_index=config.benchmark_index,
@@ -53,9 +64,22 @@ class LocalTestAdapter(FrameworkAdapter):
                 "parameters": config.parameters,
             },
         )
+        if config.exports and config.exports.oci:
+            coordinates = config.exports.oci.coordinates.model_copy(deep=True)
+            coordinates.oci_host = coordinates.oci_host.removeprefix(
+                "http://"
+            ).removeprefix("https://")
+            with TemporaryDirectory(prefix="evalhub-local-results-") as directory:
+                output = Path(directory)
+                (output / "results.json").write_text(results.model_dump_json())
+                results.oci_artifact = callbacks.create_oci_artifact(
+                    OCIArtifactSpec(files_path=output, coordinates=coordinates)
+                )
+        return results
 
 
 def main() -> None:
+    """Load the job spec and report traced status and results through SDK callbacks."""
     # Bridge Python logging to OTEL so adapter logs are exported as structured
     # log records (with trace/span correlation). No-op when OTEL env vars are
     # absent, so this is safe for local runs without a collector.
@@ -66,6 +90,12 @@ def main() -> None:
     try:
         job_spec_path = os.environ["EVALHUB_JOB_SPEC_PATH"]
         adapter = LocalTestAdapter(job_spec_path=job_spec_path)
+        if (
+            adapter.job_spec.exports
+            and adapter.job_spec.exports.oci
+            and adapter.job_spec.exports.oci.coordinates.oci_host.startswith("http://")
+        ):
+            adapter.settings.oci_insecure = True
         logger.debug(
             "Loaded job spec:\n%s", json.dumps(adapter.job_spec.model_dump(), indent=2)
         )

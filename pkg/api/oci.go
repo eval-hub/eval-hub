@@ -71,6 +71,12 @@ type EvaluationOCIResults struct {
 	Signing          *OCISigningResult     `json:"signing,omitempty"`
 }
 
+// EligibleForOCIProcessing reports whether a job has OCI exports configured and
+// a completed or partially failed outcome.
+func EligibleForOCIProcessing(job *EvaluationJobResource) bool {
+	return IsResultsExportEligible(job) && IsOCIExportEnabled(job)
+}
+
 // UpdateOCIResults partially merges OCI workflow status and the card reference in memory.
 // It performs no field validation or workflow enforcement. Storage updates have a
 // stricter contract: UpdateEvaluationJobOCI requires a non-nil, validated status

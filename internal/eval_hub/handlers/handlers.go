@@ -5,6 +5,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/evalcards"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/oci"
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 	"github.com/go-playground/validator/v10"
 )
@@ -17,9 +18,11 @@ type Handlers struct {
 	mlflowClient           *mlflowclient.Client
 	mlflowWorkspaceSupport *mlflow.WorkspaceSupport
 	resultsExporter        evalcards.ResultsExporter
+	bundlePublisherFactory oci.BundlePublisherFactory
 	serviceConfig          *config.Config
 }
 
+// New wires handler dependencies; callers configure the services used by their routes.
 func New(
 	storage abstractions.Storage,
 	validate *validator.Validate,
@@ -28,6 +31,7 @@ func New(
 	mlflowWorkspaceSupport *mlflow.WorkspaceSupport,
 	serviceConfig *config.Config,
 	resultsExporter evalcards.ResultsExporter,
+	bundlePublisherFactory oci.BundlePublisherFactory,
 ) *Handlers {
 	return &Handlers{
 		storage:                storage,
@@ -36,6 +40,7 @@ func New(
 		mlflowClient:           mlflowClient,
 		mlflowWorkspaceSupport: mlflowWorkspaceSupport,
 		resultsExporter:        resultsExporter,
+		bundlePublisherFactory: bundlePublisherFactory,
 		serviceConfig:          serviceConfig,
 	}
 }

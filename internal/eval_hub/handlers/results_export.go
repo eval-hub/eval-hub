@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"runtime/debug"
 	"time"
@@ -52,7 +53,7 @@ func (h *Handlers) exportEvaluationResults(ctx context.Context, storage abstract
 	defer span.End()
 	// Persist OCI progress before updating the in-memory job. A nil card preserves
 	// any previously published reference; a supplied card is saved with the status.
-	reportOCI := func(state api.OCIProcessingState, code, message string, card *api.OCIArtifactReference) bool {
+	reportOCI := func(state api.OCIProcessingState, code, message string, card, bundle *api.OCIArtifactReference) bool {
 		status := &api.OCIProcessingStatus{State: state, Message: &api.MessageInfo{Message: message, MessageCode: code, MessageOrigin: api.MessageOriginServer}}
 		writeCtx, cancel := context.WithTimeout(ctx, exportStorageTimeout)
 		defer cancel()
@@ -60,21 +61,21 @@ func (h *Handlers) exportEvaluationResults(ctx context.Context, storage abstract
 		if storage != nil {
 			writeStorage = storage.WithContext(writeCtx)
 		}
-		err := h.persistOCIResults(writeStorage, job, status, card)
+		err := h.persistOCIResults(writeStorage, job, status, card, bundle)
 		if err != nil {
-			logger.Error("Failed to persist OCI evaluation-card processing", "job_id", job.Resource.ID, "operation", code, "error", err)
+			logger.Error("Failed to persist OCI processing", "job_id", job.Resource.ID, "operation", code, "error", err)
 			return false
 		}
 		return true
 	}
 	// Log the cause even if storage is unavailable and saving the failure also fails.
-	failOCI := func(code, message string, card *api.OCIArtifactReference) {
+	failOCI := func(code, message string, card, bundle *api.OCIArtifactReference) {
 		// A malformed reference must not cost us the failure status itself.
 		if card != nil && h.validate.Struct(card) != nil {
 			card = nil
 		}
 		logger.Error("OCI evaluation-card processing failed", "job_id", job.Resource.ID, "operation", code, "cause", message)
-		reportOCI(api.OCIProcessingFailed, code, message, card)
+		reportOCI(api.OCIProcessingFailed, code, message, card, bundle)
 	}
 	// OCI publishing proceeds only after its running status is saved successfully.
 	ociReady := false
@@ -89,27 +90,27 @@ func (h *Handlers) exportEvaluationResults(ctx context.Context, storage abstract
 			}()
 			logger.Error("Panic during evaluation export", "job_id", job.Resource.ID, "panic", recovered, "stack", string(debug.Stack()))
 			if ociReady {
-				failOCI(constants.MessageCodeOCIProcessingFailed, "Evaluation-card OCI processing panicked", published)
+				failOCI(constants.MessageCodeOCIProcessingFailed, "Evaluation-card OCI processing panicked", published, nil)
 			}
 		}
 	}()
 	if ociEligible {
-		ociReady = reportOCI(api.OCIProcessingRunning, constants.MessageCodeOCIProcessingRunning, "Evaluation-card OCI processing is running", nil)
+		ociReady = reportOCI(api.OCIProcessingRunning, constants.MessageCodeOCIProcessingRunning, "Evaluation-card OCI processing is running", nil, nil)
 		if !ociReady {
-			failOCI(constants.MessageCodeOCIProcessingFailed, "Persist running OCI progress: storage update failed", nil)
+			failOCI(constants.MessageCodeOCIProcessingFailed, "Persist running OCI progress: storage update failed", nil, nil)
 		}
 	}
 	// OCI and MLflow exports share the same evaluation card.
 	card := cards.NewEvaluationCard(job)
 	if card == nil || card.Metadata.EvaluationJobID == "" {
 		if ociReady {
-			failOCI(constants.MessageCodeOCIProcessingFailed, "Generate evaluation card: card has no evaluation job identity", nil)
+			failOCI(constants.MessageCodeOCIProcessingFailed, "Generate evaluation card: card has no evaluation job identity", nil, nil)
 		}
 		return
 	}
 	if h.resultsExporter == nil {
 		if ociReady {
-			failOCI(constants.MessageCodeOCIProcessingFailed, "Initialize OCI publisher: results exporter is unavailable", nil)
+			failOCI(constants.MessageCodeOCIProcessingFailed, "Initialize OCI publisher: results exporter is unavailable", nil, nil)
 		}
 		return
 	}
@@ -135,34 +136,66 @@ func (h *Handlers) exportEvaluationResults(ctx context.Context, storage abstract
 		// The OCI publisher returns no artifact when publication fails.
 		var exportErr *evalcards.OCIExportError
 		if errors.As(result.OCIError, &exportErr) {
-			failOCI(constants.MessageCodeOCIProcessingFailed, exportErr.Error(), nil)
+			failOCI(constants.MessageCodeOCIProcessingFailed, exportErr.Error(), nil, nil)
 		} else {
-			failOCI(constants.MessageCodeOCIProcessingFailed, "Publish evaluation card: OCI publisher failed", nil)
+			failOCI(constants.MessageCodeOCIProcessingFailed, "Publish evaluation card: OCI publisher failed", nil, nil)
 		}
 		return
 	}
 	if result.OCIArtifact == nil {
-		failOCI(constants.MessageCodeOCIProcessingFailed, "Publish evaluation card: no published manifest reference is available", nil)
+		failOCI(constants.MessageCodeOCIProcessingFailed, "Publish evaluation card: no published manifest reference is available", nil, nil)
 		return
 	}
 	if err := h.validate.Struct(result.OCIArtifact); err != nil {
 		logger.Error("Invalid published OCI evaluation-card reference", "job_id", job.Resource.ID, "error", err)
-		failOCI(constants.MessageCodeOCIProcessingFailed, "Publish evaluation card: publisher returned an invalid manifest reference", nil)
+		failOCI(constants.MessageCodeOCIProcessingFailed, "Publish evaluation card: publisher returned an invalid manifest reference", nil, nil)
 		return
 	}
-	// Save outputs and the final status together. Future bundle generation and
-	// signing phases run before this update, without intermediate progress writes.
-	if !reportOCI(api.OCIProcessingCompleted, constants.MessageCodeOCIProcessingCompleted, "OCI processing completed", result.OCIArtifact) {
-		failOCI(constants.MessageCodeOCIProcessingFailed, "Persist evaluation-card OCI completion: storage update failed", result.OCIArtifact)
+	bundle, err := h.publishEvaluationBundle(ctx, job, result.OCIArtifact)
+	if err != nil {
+		failOCI(constants.MessageCodeOCIProcessingFailed, err.Error(), result.OCIArtifact, nil)
+		return
+	}
+	// Save both outputs and completion together, without an intermediate card write.
+	if !reportOCI(api.OCIProcessingCompleted, constants.MessageCodeOCIProcessingCompleted, "OCI processing completed", result.OCIArtifact, bundle) {
+		failOCI(constants.MessageCodeOCIProcessingFailed, "Persist OCI completion: storage update failed", result.OCIArtifact, bundle)
 	}
 }
 
+// publishEvaluationBundle publishes and validates the bundle without updating job progress.
+func (h *Handlers) publishEvaluationBundle(ctx context.Context, job *api.EvaluationJobResource, card *api.OCIArtifactReference) (*api.OCIArtifactReference, error) {
+	if h.bundlePublisherFactory == nil {
+		return nil, errors.New("Initialize evaluation bundle publisher: factory is unavailable")
+	}
+	publisher, err := h.bundlePublisherFactory.NewPublisher(ctx, job)
+	if err != nil {
+		return nil, fmt.Errorf("Initialize evaluation bundle publisher: %w", err)
+	}
+	if publisher == nil {
+		return nil, errors.New("Initialize evaluation bundle publisher: publisher is unavailable")
+	}
+	bundle, err := publisher.Publish(ctx, job, card)
+	if err != nil {
+		return nil, fmt.Errorf("Evaluation bundle OCI publication failed: %w", err)
+	}
+	if bundle == nil || bundle.OCIDigest == "" || bundle.OCIReference == "" {
+		return nil, errors.New("Publish evaluation bundle: no published manifest reference is available")
+	}
+	if err := h.validate.Struct(bundle); err != nil {
+		return nil, fmt.Errorf("Invalid evaluation bundle: %w", err)
+	}
+	return bundle, nil
+}
+
 // persistOCIResults validates workflow output before touching storage or the job.
-func (h *Handlers) persistOCIResults(storage abstractions.Storage, job *api.EvaluationJobResource, status *api.OCIProcessingStatus, card *api.OCIArtifactReference) error {
+func (h *Handlers) persistOCIResults(storage abstractions.Storage, job *api.EvaluationJobResource, status *api.OCIProcessingStatus, card, bundle *api.OCIArtifactReference) error {
 	if err := h.validate.Struct(status); err != nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", "invalid OCI processing status: "+err.Error())
 	}
-	if card != nil {
+	for _, card := range []*api.OCIArtifactReference{card, bundle} {
+		if card == nil {
+			continue
+		}
 		if err := h.validate.Struct(card); err != nil {
 			return serviceerrors.NewServiceError(messages.InternalServerError, "Error", "invalid OCI artifact reference: "+err.Error())
 		}
@@ -170,9 +203,9 @@ func (h *Handlers) persistOCIResults(storage abstractions.Storage, job *api.Eval
 	if storage == nil {
 		return serviceerrors.NewServiceError(messages.InternalServerError, "Error", "storage is not configured")
 	}
-	if err := storage.UpdateEvaluationJobOCI(job.Resource.ID, status, card, nil); err != nil {
+	if err := storage.UpdateEvaluationJobOCI(job.Resource.ID, status, card, bundle); err != nil {
 		return err
 	}
-	job.Results = api.UpdateOCIResults(job.Results, status, card, nil)
+	job.Results = api.UpdateOCIResults(job.Results, status, card, bundle)
 	return nil
 }

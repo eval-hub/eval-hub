@@ -77,7 +77,7 @@ func TestHandleCancelEvaluationSoftCancelCleansUpRunningJob(t *testing.T) {
 		},
 	})
 	runtime := &fakeRuntime{}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-soft", logger, "test-user", "test-tenant")
 	recorder := httptest.NewRecorder()
 
@@ -115,7 +115,7 @@ func TestHandleCancelEvaluationSoftCancelSkipsCleanupWhenAlreadyCancelled(t *tes
 		},
 	})
 	runtime := &fakeRuntime{}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-already", logger, "test-user", "test-tenant")
 	recorder := httptest.NewRecorder()
 
@@ -138,7 +138,7 @@ func TestHandleCancelEvaluationSoftCancelSkipsCleanupWhenStatusMissing(t *testin
 		},
 	})
 	runtime := &fakeRuntime{}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-nostatus", logger, "test-user", "test-tenant")
 	recorder := httptest.NewRecorder()
 
@@ -170,7 +170,7 @@ func TestHandleCancelEvaluationHardDeleteCleansUpResources(t *testing.T) {
 		},
 	})
 	runtime := &fakeRuntime{}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-hard", logger, "test-user", "test-tenant")
 	recorder := httptest.NewRecorder()
 
@@ -201,7 +201,7 @@ func TestHandleCancelEvaluationHardDeleteStillSucceedsWhenCleanupFails(t *testin
 		},
 	})
 	runtime := &fakeRuntime{err: context.DeadlineExceeded}
-	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil)
+	h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-cleanup-fail", logger, "test-user", "test-tenant")
 	recorder := httptest.NewRecorder()
 
@@ -220,7 +220,7 @@ func TestHandleCancelEvaluationHardDeleteStillSucceedsWhenCleanupFails(t *testin
 
 func TestHandleCancelEvaluationMissingJobID(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(&fakeStorage{}, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil, nil, nil)
+	h := handlers.New(&fakeStorage{}, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil, nil, nil, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-missing", logger, "test-user", "test-tenant")
 	recorder := httptest.NewRecorder()
 	req := &listEvaluationsRequest{
@@ -238,7 +238,7 @@ func TestHandleCancelEvaluationMissingJobID(t *testing.T) {
 
 func TestHandleCancelEvaluationNotFound(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(&notFoundStorage{fakeStorage: &fakeStorage{}}, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil, nil, nil)
+	h := handlers.New(&notFoundStorage{fakeStorage: &fakeStorage{}}, testhelpers.NewValidator(t), &fakeRuntime{}, nil, nil, nil, nil, nil)
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-nf", logger, "test-user", "test-tenant")
 	recorder := httptest.NewRecorder()
 
