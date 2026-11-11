@@ -90,6 +90,7 @@ require (
 	github.com/cyphar/filepath-securejoin v0.7.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
+	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.10.0 // indirect
@@ -99,10 +100,18 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v1.0.2 // indirect
 	github.com/go-openapi/jsonreference v1.0.3 // indirect
+	github.com/go-openapi/swag v0.29.2 // indirect
+	github.com/go-openapi/swag/cmdutils v0.29.2 // indirect
 	github.com/go-openapi/swag/conv v0.29.2 // indirect
+	github.com/go-openapi/swag/fileutils v0.29.2 // indirect
 	github.com/go-openapi/swag/jsonutils v0.29.2 // indirect
+	github.com/go-openapi/swag/loading v0.29.2 // indirect
+	github.com/go-openapi/swag/mangling v0.29.2 // indirect
+	github.com/go-openapi/swag/netutils v0.29.2 // indirect
 	github.com/go-openapi/swag/pools v0.29.2 // indirect
+	github.com/go-openapi/swag/stringutils v0.29.2 // indirect
 	github.com/go-openapi/swag/typeutils v0.29.2 // indirect
+	github.com/go-openapi/swag/yamlutils v0.29.2 // indirect
 	github.com/go-playground/locales v0.14.2 // indirect
 	github.com/go-playground/universal-translator v0.18.2 // indirect
 	github.com/gofrs/flock v0.13.2 // indirect
@@ -168,7 +177,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	k8s.io/kube-openapi v0.0.0-20261104182252-5bee61fc5225 // indirect
+	k8s.io/kube-openapi v0.0.0-20260821135717-be32def86098 // indirect
 	k8s.io/streaming v0.37.2 // indirect
 	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab // indirect
 	modernc.org/libc v1.81.0 // indirect
@@ -177,6 +186,25 @@ require (
 	sigs.k8s.io/json v0.0.0-20260909141634-11ed52e25bc5 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
-	sigs.k8s.io/structured-merge-diff/v7 v7.0.1 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
+)
+
+exclude (
+	// this version has a vulnerability
+	google.golang.org/grpc v1.84.0
+	// k8s.io/api, k8s.io/apimachinery and k8s.io/client-go v0.37.2 are built
+	// against sigs.k8s.io/structured-merge-diff/v6, while the kube-openapi
+	// pseudo-versions below require /v7. Selecting one of them breaks the
+	// build with:
+	//   cannot use typeSchema.Types ([].../v7/schema.TypeDef) as
+	//   [].../v6/schema.TypeDef value in struct literal
+	// Do not remove these until the k8s.io modules move to structured-merge-diff/v7.
+	k8s.io/kube-openapi v0.0.0-20260904170622-9ab3195f2a72
+	k8s.io/kube-openapi v0.0.0-20260908163437-c4db2bdfbfe6
+	k8s.io/kube-openapi v0.0.0-20260911184034-7970a1e230da
+	k8s.io/kube-openapi v0.0.0-20260929181212-2cfbdf149b9a
+	k8s.io/kube-openapi v0.0.0-20261005140446-337977e07504
+	k8s.io/kube-openapi v0.0.0-20261007072838-e2e80c32a35f
+	k8s.io/kube-openapi v0.0.0-20261014044854-ca3452a79603
+	k8s.io/kube-openapi v0.0.0-20261104182252-5bee61fc5225
 )
