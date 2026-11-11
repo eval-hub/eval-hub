@@ -287,7 +287,15 @@ start-inspector-mcp:
 
 lint: vet golangci-lint ## Lint the code (go vet + golangci-lint)
 
-GOLANGCI_LINT_VERSION ?= v2.12.2
+# Pinned for the Go toolchain declared in go.mod, currently go 1.27.3: v2.15.0
+# bundles golang.org/x/tools v0.52.0, which understands Go 1.27 export data
+# (version 5). v2.12.2 and v2.13.x predate that support and fail under
+# GOTOOLCHAIN=go1.27.3 with "cannot decode ... export data version 5 is greater
+# than maximum supported version 4"; v2.14.0 is the oldest release that works, so
+# this pin must not be downgraded below v2.14.0 while go.mod targets go 1.27.3.
+# Keep in sync with .github/workflows/golangci-lint.yml (see AGENTS.md -> Code
+# Quality): bump both when go.mod or this version changes.
+GOLANGCI_LINT_VERSION ?= v2.15.0
 # Tool binaries live under bin/tools, keyed on the tool version *and* the go.mod
 # toolchain (the same pattern as GOTESTSUM below). An install into a shared
 # GOPATH/bin would be overwritten by another checkout with a different go.mod
