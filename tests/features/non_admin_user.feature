@@ -1,6 +1,7 @@
 @cluster
 @non-admin
 @non-admin_user
+# Run separately with GODOG_TAGS="@non-admin_user" and this identity's AUTH_TOKEN and X_USER.
 
 Feature: Evaluation Hub RBAC for an evalhub user
   As a data scientist with an evalhub-user role

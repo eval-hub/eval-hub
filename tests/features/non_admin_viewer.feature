@@ -1,6 +1,7 @@
 @cluster
 @non-admin
 @non-admin_viewer
+# Run separately with GODOG_TAGS="@non-admin_viewer" and this identity's AUTH_TOKEN and X_USER.
 
 Feature: Evaluation Hub RBAC for a viewer
   As a data scientist with a viewer role
