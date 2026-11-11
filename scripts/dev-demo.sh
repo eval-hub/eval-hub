@@ -114,6 +114,10 @@ detect_container_runtime() {
       ;;
     explicit-missing)
       need_command "$RESOLVED_RUNTIME"
+      # An installed engine that is not reachable still has to be selected by its
+      # canonical name: keeping the raw value would send a podman-docker shim's
+      # `docker` to kind with the docker provider (see canonical_runtime).
+      CONTAINER_RUNTIME="$RESOLVED_RUNTIME"
       ;;
     explicit-mismatch)
       log WARN "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $RESOLVED_RECORDED (see $RUNTIME_STATE_FILE); querying kind with $RESOLVED_RECORDED instead of $RESOLVED_RUNTIME."

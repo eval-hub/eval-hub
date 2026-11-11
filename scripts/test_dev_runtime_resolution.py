@@ -438,6 +438,24 @@ class DeployResolutionTests(RuntimeResolutionTestCase):
         self.assertIn(f"{CLUSTER}.runtime", output)
         self.assertIn("rm -- ", output)
 
+    def test_stopped_record_names_the_engine_that_owns_the_cluster(self):
+        """A stopped recorded engine must not hide the engine that runs the cluster.
+
+        The record says podman, the podman machine is shut down, and docker has a
+        cluster of that name: a deploy has to fail with the stale record to remove
+        and the engine that owns it, not with "start podman".
+        """
+        code, _, output = self.resolve(
+            "dev-deploy.sh",
+            recorded="podman",
+            podman_reachable=False,
+            docker_clusters=CLUSTER + "\n",
+        )
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("no longer runs it and docker does", output)
+        self.assertIn("rm -- ", output)
+        self.assertNotIn("Start podman and retry", output)
+
 
 class CleanResolutionTests(RuntimeResolutionTestCase):
     """dev-clean must target the engine that owns the deployment and registry."""
@@ -596,6 +614,18 @@ class DemoResolutionTests(RuntimeResolutionTestCase):
             recorded="docker",
             shim=True,
             podman_clusters=CLUSTER + "\n",
+        )
+
+    def test_stopped_shim_over_an_explicit_shim_still_resolves_to_podman(self):
+        """An engine that answers nothing is still queried by its canonical name.
+
+        With the podman machine shut down, `CONTAINER_RUNTIME=docker` on a
+        podman-docker shim is reported as an unavailable engine; leaving the raw
+        value in CONTAINER_RUNTIME would send kind_cmd to the docker provider for a
+        podman-backed cluster.
+        """
+        self.assert_resolves(
+            "dev-demo.sh", "podman", explicit="docker", shim=True, podman_reachable=False
         )
 
     def test_uninstalled_recorded_engine_falls_back_to_the_owner(self):
@@ -827,6 +857,17 @@ class StorageCleanupResolutionTests(RuntimeResolutionTestCase):
             podman_reachable=False,
         )
         self.assertIn("selecting another engine to prune", output)
+
+    def test_stopped_record_prunes_the_engine_that_owns_the_cluster(self):
+        """A stopped recorded engine must not hide the engine that owns the cluster."""
+        output = self.assert_resolves(
+            "clean-container-storage.sh",
+            "docker",
+            recorded="podman",
+            podman_reachable=False,
+            docker_clusters=CLUSTER + "\n",
+        )
+        self.assertIn("exists under docker; pruning docker", output)
 
     def test_wsl_prefers_docker_on_a_first_clean(self):
         """The WSL engine order is shared with dev-deploy."""

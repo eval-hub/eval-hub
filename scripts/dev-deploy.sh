@@ -220,14 +220,17 @@ detect_container_runtime() {
     explicit-mismatch|explicit-mismatch-stale|explicit-mismatch-gone)
       fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $RESOLVED_RECORDED (see $RUNTIME_STATE_FILE). Unset CONTAINER_RUNTIME to reuse $RESOLVED_RECORDED, or delete that cluster and its state file before switching to $RESOLVED_RUNTIME."
       ;;
-    explicit-recorded-stale|recorded-stale)
-      fail "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $RESOLVED_RECORDED-backed in $RUNTIME_STATE_FILE, but $RESOLVED_RECORDED no longer runs it and $RESOLVED_OWNER does. Remove the stale record (rm -- '$RUNTIME_STATE_FILE') to reuse the $RESOLVED_OWNER cluster with this script, or remove it and run 'make dev-clean CONTAINER_RUNTIME=$RESOLVED_OWNER DELETE_CLUSTER=true' to delete that cluster."
+    explicit-recorded-stale|recorded-stale|recorded-stopped|explicit-recorded-unverified)
+      # A recorded engine that is stopped cannot run the cluster, so an engine
+      # found running it is the owner: report it with the stale-record remedy
+      # instead of sending the user to start an engine that will not have it.
+      if [[ -n "$RESOLVED_OWNER" ]]; then
+        fail "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $RESOLVED_RECORDED-backed in $RUNTIME_STATE_FILE, but $RESOLVED_RECORDED no longer runs it and $RESOLVED_OWNER does. Remove the stale record (rm -- '$RUNTIME_STATE_FILE') to reuse the $RESOLVED_OWNER cluster with this script, or remove it and run 'make dev-clean CONTAINER_RUNTIME=$RESOLVED_OWNER DELETE_CLUSTER=true' to delete that cluster."
+      fi
+      fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $RESOLVED_RUNTIME (see $RUNTIME_STATE_FILE), but $RESOLVED_RUNTIME is not reachable. Start $RESOLVED_RUNTIME and retry, or remove the stale record (rm -- '$RUNTIME_STATE_FILE') if that cluster is gone."
       ;;
     explicit-other-owns)
       fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $RESOLVED_OWNER, not $RESOLVED_RUNTIME. Unset CONTAINER_RUNTIME to reuse the engine that owns the cluster, or set CONTAINER_RUNTIME=$RESOLVED_OWNER."
-      ;;
-    recorded-stopped)
-      fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $RESOLVED_RUNTIME (see $RUNTIME_STATE_FILE), but $RESOLVED_RUNTIME is not reachable. Start $RESOLVED_RUNTIME and retry, or remove the stale record (rm -- '$RUNTIME_STATE_FILE') if that cluster is gone."
       ;;
     recorded-owned|recorded-gone)
       log INFO "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $RESOLVED_RUNTIME (see $RUNTIME_STATE_FILE)."
@@ -242,7 +245,7 @@ detect_container_runtime() {
         fail "Neither podman nor docker is reachable. Install podman (or docker) and make sure it is running."
       use_runtime "$runtime" "for builds, the local registry, and kind"
       ;;
-    explicit-owned|explicit-recorded-unverified|explicit-no-owner)
+    explicit-owned|explicit-no-owner)
       use_runtime "$RESOLVED_RUNTIME" "for builds, the local registry, and kind"
       ;;
     *)
