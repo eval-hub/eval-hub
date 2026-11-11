@@ -65,6 +65,11 @@ The PR should also update the major golang version, if needed, in the Containerf
 
 The go.mod must not be updated until the same version exists in go-toolset.
 
+When the go-toolset gate blocks a fix that a newer Go already contains, record a dated
+waiver in `osv-scanner.toml` (see `AGENTS.md` → Vulnerability waivers) instead of bumping
+`go.mod` optimistically, adding `|| true`, or skipping the scan: `make govulncheck` enforces
+the waiver and fails once its `ignoreUntil` date passes.
+
 If there are other files in the repository that require updating due to new golang version then mention them in the PR.
 Use `go-version-file: "go.mod"` in the github actions where possible.
 

@@ -4286,7 +4286,7 @@
               "failed",
               "completed"
             ],
-            "description": "running means OCI processing has started and remains in progress throughout all applicable phases. Workflow reporting uses running followed by completed or failed. failed means a required stage failed, with the stage and cause described in the message. completed means all applicable stages succeeded; card-only completion does not require bundle or signing outputs. No state is defaulted when status is absent."
+            "description": "running means OCI processing has started and remains in progress throughout all applicable phases. Workflow reporting normally uses running followed by completed or failed. Status may remain absent or running if the service is interrupted or persistence fails. failed means a required stage failed, with the stage and cause described in the message. completed means all applicable stages succeeded; card-only completion does not require bundle or signing outputs. No state is defaulted when status is absent."
           },
           "message": {
             "$ref": "#/components/schemas/MessageInfo"
@@ -4341,7 +4341,7 @@
       },
       "EvaluationOCIResults": {
         "type": "object",
-        "description": "Optional job-level OCI processing status, artifact references, and signing information. Unavailable objects are omitted, including on completed jobs. Status, artifacts, and signing are independently optional. Artifact references identify published outputs and are returned by the publisher. The digest in each reference is authoritative; a reference may include its publication tag as registry/repository:tag@digest, but that tag is informational and may move independently of the digest. Changing the tag does not change or invalidate the digest-qualified reference. OCI workflows report running once at the start and save available outputs together with the final completed or failed status, without intermediate phase writes.",
+        "description": "Optional job-level OCI processing status, artifact references, and signing information. Unavailable objects are omitted, including on completed jobs. Status, artifacts, and signing are independently optional. Artifact references identify published outputs and are returned by the publisher. The digest in each reference is authoritative; a reference may include its publication tag as registry/repository:tag@digest, but that tag is informational and may move independently of the digest. Changing the tag does not change or invalidate the digest-qualified reference. A failed status may still include evaluation_card when publication succeeded but recording completion failed; the reference is valid and its digest is authoritative. OCI workflows report running once at the start and save available outputs together with the final completed or failed status, without intermediate phase writes.",
         "properties": {
           "status": {
             "$ref": "#/components/schemas/OCIProcessingStatus",
