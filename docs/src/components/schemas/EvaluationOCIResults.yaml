@@ -8,6 +8,9 @@ description: >-
   as registry/repository:tag@digest, but that tag is informational and may move
   independently of the digest. Changing the tag does not change or invalidate
   the digest-qualified reference.
+  A failed status may still include evaluation_card when publication succeeded
+  but recording completion failed; the reference is valid and its digest is
+  authoritative.
   OCI workflows report running once at the start and save available outputs together
   with the final completed or failed status, without intermediate phase writes.
 properties:
