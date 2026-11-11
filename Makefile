@@ -318,11 +318,19 @@ GOVULNCHECK_VERSION ?= v1.1.4
 # linter above: a toolchain bump installs a fresh binary instead of reusing one
 # built for another Go version.
 GOVULNCHECK := $(abspath $(BIN_DIR)/tools/govulncheck-$(GOVULNCHECK_VERSION)-$(GO_TOOLCHAIN))/govulncheck$(shell go env GOEXE)
+# govulncheck cannot silence a finding (https://go.dev/issue/61211) and always
+# exits 0 when a machine-readable format is requested, so the report is gated by
+# scripts/check_govulncheck_waivers.py against the dated [[IgnoredVulns]] waivers
+# in osv-scanner.toml (see AGENTS.md -> Vulnerability waivers).
+GOVULNCHECK_REPORT ?= $(abspath $(BIN_DIR)/govulncheck.json)
+GOVULNCHECK_WAIVERS ?= osv-scanner.toml
 
-govulncheck: $(GOVULNCHECK) ## Run govulncheck in verbose mode (uses .go.mod, go.mod toolchain)
-	@echo "Running govulncheck (verbose) with $(GO_TOOLCHAIN)..."
-	@GOTOOLCHAIN=$(GO_TOOLCHAIN) '$(GOVULNCHECK)' -show verbose ./...
-	@echo "govulncheck complete"
+govulncheck: $(GOVULNCHECK) ## Run govulncheck (waived findings in osv-scanner.toml, dated)
+	@command -v python3 >/dev/null 2>&1 || { echo "Error: Python 3 is required for make govulncheck (waiver gate). Install python3 and retry."; exit 1; }
+	@mkdir -p $(dir $(GOVULNCHECK_REPORT))
+	@echo "Running govulncheck (json) with $(GO_TOOLCHAIN)..."
+	@GOTOOLCHAIN=$(GO_TOOLCHAIN) '$(GOVULNCHECK)' -format=json ./... > '$(GOVULNCHECK_REPORT)'
+	@python3 scripts/check_govulncheck_waivers.py --report '$(GOVULNCHECK_REPORT)' --waivers '$(GOVULNCHECK_WAIVERS)'
 
 $(GOVULNCHECK):
 	@mkdir -p '$(dir $(GOVULNCHECK))'
