@@ -62,6 +62,14 @@ Viper loads **`config/config.yaml`** with overrides from environment variables a
 
 ---
 
+## OCI export
+
+`internal/eval_hub/oci` owns shared registry access: `http_client.go` constructs the HTTP client with timeout, TLS/CA, and optional OpenTelemetry settings; `registry_client.go` constructs job-scoped registry clients using tenant-scoped credential resolution. It also owns the evaluation-bundle publisher and factory. `internal/eval_hub/evalcards` owns card generation, the export manager, MLflow export, the OCI target adapter, and the concrete card publisher and factory.
+
+`internal/eval_hub/server/oci_export.go` initializes one HTTP client and credential resolver for both publisher factories in local and Kubernetes modes, reports initialization failures through the factories, and owns Kubernetes helper cleanup. Card and bundle publication each create a separate registry client and resolve credentials per operation. Handlers sequence publication and persist OCI status and outputs.
+
+---
+
 ## Workloads (`internal/eval_hub/workloads`)
 
 Every runnable workload is an **`EvaluationJobResource`** under the hood: its API maps a request to an `EvaluationJobConfig`, then uses the shared evaluation storage, status updates, and runtime. The [post-processing mapping](internal/eval_hub/postprocessing/mapping.go) shows both request-to-job and job-to-response conversion. The `evaluations.workload_type` column stores its type (`evaluation` by default; `post-processing` for standalone post-processing) when [SQL creates the job](internal/eval_hub/storage/sql/evaluations_crud.go). [`workloads.TypeForJob`](internal/eval_hub/workloads/workloads.go) identifies registered workloads from the stored job; an unmatched job is a conventional evaluation.
