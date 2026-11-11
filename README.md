@@ -145,7 +145,7 @@ Local mode connects directly to the API without kube-rbac-proxy and runs each ad
 
 ### Prerequisites
 
-- Go 1.26+
+- Go 1.27+
 - Make
 - Python 3 (for `make test`; used by scripts/grcat for colored output)
 - [uv](https://docs.astral.sh/uv/) (manages the Python venv required by `make start-service` and FVT tests; run `make venv` to create it)
@@ -320,7 +320,7 @@ make dev-clean DELETE_CLUSTER=true
 
 Both cleanup modes retain the local build image tags and the container runtime's
 build cache.
-They remove temporary localhost:<port> tags used only to push images into the
+They remove temporary `localhost:<port>` tags used only to push images into the
 kind registry. Repeated deploys of unchanged EvalHub source reuse the Go build
 layers. `make dev-deploy-help` and `make dev-clean-help` list the settings.
 
