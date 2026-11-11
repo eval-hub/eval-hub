@@ -156,8 +156,8 @@ func postProcessorPVCConfigs(evaluation *api.EvaluationJobResource) ([]postProce
 				return nil, fmt.Errorf("post-processing PVC sub_path must be relative")
 			}
 			for _, segment := range strings.Split(subPath, "/") {
-				if segment == ".." {
-					return nil, fmt.Errorf("post-processing PVC sub_path must not traverse parent directories")
+				if segment == "." || segment == ".." {
+					return nil, fmt.Errorf("post-processing PVC sub_path must not contain dot segments")
 				}
 			}
 		}

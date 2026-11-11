@@ -269,3 +269,43 @@ func assertValidationTag(t *testing.T, err error, tag string) {
 	}
 	t.Fatalf("validation error %v does not contain tag %q", err, tag)
 }
+
+// TestSourcePathAndSecretValidation exercises the same nested types used for
+// evaluation test data and post-processing results/calibration references.
+func TestSourcePathAndSecretValidation(t *testing.T) {
+	validate := newTestValidator(t)
+	for _, tc := range []struct {
+		path    string
+		invalid bool
+	}{
+		{"", false}, {"samples.jsonl", false}, {"data/samples.jsonl", false},
+		{"/data", true}, {"../data", true}, {"data/../samples", true},
+		{".", true}, {"data/.", true}, {"./data", true},
+	} {
+		t.Run("pvc:"+tc.path, func(t *testing.T) {
+			err := validate.Struct(api.PVCTestDataRef{ClaimName: "data", SubPath: tc.path})
+			if tc.invalid {
+				assertValidationTag(t, err, "pvc_sub_path")
+			} else if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	for _, tc := range []struct {
+		name    string
+		invalid bool
+	}{
+		{"s3-credentials", false}, {"s3.credentials", false},
+		{strings.Repeat("a", 64), false}, {"Bad_Name", true}, {"../credentials", true},
+		{"-invalid", true}, {strings.Repeat("a", 254), true},
+	} {
+		t.Run("secret:"+tc.name, func(t *testing.T) {
+			err := validate.Struct(api.S3TestDataRef{Bucket: "data", Key: "samples.jsonl", SecretRef: tc.name})
+			if tc.invalid {
+				assertValidationTag(t, err, "rfc1123_dns_subdomain")
+			} else if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
