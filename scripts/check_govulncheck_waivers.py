@@ -7,11 +7,16 @@ streaming JSON report through this gate. The gate reads the ``[[IgnoredVulns]]``
 waivers recorded in ``osv-scanner.toml`` (each needs ``ignoreUntil`` and
 ``reason``), prints one line per vulnerability with example call sites, and
 exits non-zero when a symbol-level finding is unwaived or its waiver expired.
+An expired waiver fails the gate whatever the finding's level, so an entry
+cannot be forgotten by recording it against a module- or package-level finding.
 
 Findings are grouped by OSV ID: govulncheck emits one finding per call stack, so
 a single advisory can appear dozens of times in one report. Package- and
 module-level findings are printed but do not fail, which matches the exit status
-of the text output (only reachable symbols make govulncheck exit 3).
+of the text output (only reachable symbols make govulncheck exit 3). Reports that
+govulncheck produced with ``-scan=module`` or ``-scan=package`` are rejected
+instead: without symbol-level analysis every finding is informational, so such a
+report could never fail the gate.
 
 Run directly against a saved report:
 
@@ -99,6 +104,24 @@ class Report:
         if vuln_id:
             self.osvs[vuln_id] = osv
 
+    def require_symbol_scan_level(self):
+        """Reject reports that govulncheck did not scan at symbol level.
+
+        ``-scan=module`` and ``-scan=package`` report every vulnerable dependency
+        without proving that the vulnerable symbol is reachable, and ``evaluate``
+        treats those findings as informational, so such a report would let an
+        unwaived vulnerability pass the gate.
+        """
+        if not isinstance(self.config, dict):
+            raise GateError(f"{self.path}: govulncheck config message is not an object")
+        scan_level = self.config.get("scan_level")
+        if scan_level != SYMBOL:
+            raise GateError(
+                f"{self.path}: govulncheck ran with scan_level={scan_level!r}, but the "
+                f"waiver gate requires {SYMBOL!r}. Run govulncheck without -scan "
+                "(symbol is the default) and regenerate the report."
+            )
+
     def apply_osvs(self):
         """Attach aliases and details, which govulncheck streams before findings."""
         for vuln_id, vulnerability in self.vulnerabilities.items():
@@ -110,8 +133,17 @@ class Report:
 
 
 def finding_level(finding):
-    """Return ``symbol``, ``package`` or ``module`` for one finding."""
+    """Return ``symbol``, ``package`` or ``module`` for one finding.
+
+    govulncheck always reports at least one trace frame, even for a module-level
+    finding, so a finding without one is malformed. Reject it instead of calling
+    it module level: module-level findings are informational and never fail the
+    gate, so an uninterpretable finding must not be silently downgraded.
+    """
     trace = finding.get("trace") or []
+    if not trace:
+        vuln_id = finding.get("osv") or "<unknown OSV ID>"
+        raise GateError(f"finding {vuln_id} has no trace frames")
     if any(frame.get("function") for frame in trace):
         return SYMBOL
     if any(frame.get("package") for frame in trace):
@@ -175,6 +207,7 @@ def read_report(path):
         raise GateError(
             f"{path}: no govulncheck config message, so the report is empty or incomplete"
         )
+    report.require_symbol_scan_level()
     report.apply_osvs()
     return report
 
@@ -243,11 +276,17 @@ def evaluate(report, waivers, today, max_examples):
 
     for vuln_id in sorted(report.vulnerabilities):
         vulnerability = report.vulnerabilities[vuln_id]
+        waiver = waivers.get(vuln_id)
+        # Expiry is checked before the level: a waiver that has passed its date
+        # must fail the gate even when the finding is only module or package
+        # level, otherwise recording a waiver would silence the deadline.
+        if waiver is not None and waiver.expired(today):
+            blocked.append(vulnerability)
+            continue
         if vulnerability.level != SYMBOL:
             informational.append(vulnerability)
             continue
-        waiver = waivers.get(vuln_id)
-        if waiver is None or waiver.expired(today):
+        if waiver is None:
             blocked.append(vulnerability)
             continue
         waived.append((vulnerability, waiver))

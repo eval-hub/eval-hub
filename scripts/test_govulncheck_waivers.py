@@ -132,6 +132,18 @@ class WaivedFindingTests(GateTestCase):
         self.assertIn("EXPIRED   GO-2026-6859", out)
         self.assertIn("waiver expired 2026-11-10", out)
 
+    def test_expired_waiver_for_module_level_finding_fails(self):
+        report = self.report(CONFIG, finding("GO-2026-5932", MODULE_ONLY, fixed="v0.58.1"))
+        waivers = self.waiver_file(
+            'id = "GO-2026-5932"\nignoreUntil = 2026-11-10\nreason = "expired yesterday"'
+        )
+        code, out = self.run_gate(report, waivers)
+        self.assertEqual(code, 1, out)
+        self.assertIn("EXPIRED   GO-2026-5932", out)
+        self.assertIn("module level only", out)
+        self.assertIn("waiver expired 2026-11-10", out)
+        self.assertIn("0 waived, 0 informational, 1 blocking", out)
+
     def test_multiple_call_stacks_are_grouped_by_id(self):
         report = self.report(
             CONFIG,
@@ -224,6 +236,36 @@ class MalformedInputTests(GateTestCase):
         path.write_text('{"config": {"scan_level": "symbol"', "utf-8")
         with self.assertRaises(gate.GateError):
             self.run_gate(path, self.waiver_file())
+
+    def test_report_without_finding_trace_is_rejected(self):
+        report = self.report(CONFIG, {"finding": {"osv": "GO-2026-6859"}})
+        with self.assertRaises(gate.GateError):
+            self.run_gate(report, self.waiver_file())
+
+    def test_report_with_empty_finding_trace_is_rejected(self):
+        report = self.report(CONFIG, finding("GO-2026-6859", []))
+        with self.assertRaises(gate.GateError):
+            self.run_gate(report, self.waiver_file())
+
+    def test_module_level_scan_report_is_rejected(self):
+        config = {"config": dict(CONFIG["config"], scan_level=gate.MODULE)}
+        report = self.report(config, finding("GO-2026-5932", MODULE_ONLY))
+        with self.assertRaises(gate.GateError) as raised:
+            self.run_gate(report, self.waiver_file())
+        self.assertIn("scan_level='module'", str(raised.exception))
+
+    def test_package_level_scan_report_is_rejected(self):
+        config = {"config": dict(CONFIG["config"], scan_level=gate.PACKAGE)}
+        report = self.report(config, finding("GO-2026-6859", STDLIB_PACKAGE))
+        with self.assertRaises(gate.GateError) as raised:
+            self.run_gate(report, self.waiver_file())
+        self.assertIn("scan_level='package'", str(raised.exception))
+
+    def test_report_without_scan_level_is_rejected(self):
+        report = self.report({"config": {"scanner_name": "govulncheck"}})
+        with self.assertRaises(gate.GateError) as raised:
+            self.run_gate(report, self.waiver_file())
+        self.assertIn("scan_level=None", str(raised.exception))
 
     def test_waiver_without_ignore_until_is_rejected(self):
         report = self.report(CONFIG, finding("GO-2026-6859", STDLIB_SYMBOL))
