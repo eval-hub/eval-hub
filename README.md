@@ -145,9 +145,10 @@ Local mode connects directly to the API without kube-rbac-proxy and runs each ad
 
 ### Prerequisites
 
-- Go 1.26+
+- Go 1.27+
 - Make
-- Python 3 (for `make test`; used by scripts/grcat for colored output)
+- Python 3.11+ for `make govulncheck` and `make test-scripts` (the waiver gate imports `tomllib`, and the script regression tests import that gate; set `PYTHON=python3.12` to use a newer interpreter not on `PATH` as `python3`)
+- Python 3 for `make test` and `make install-deps` (any Python 3; `scripts/grcat` only needs colored output)
 - [uv](https://docs.astral.sh/uv/) (manages the Python venv required by `make start-service` and FVT tests; run `make venv` to create it)
 - Podman (for container builds)
 - Access to an OpenShift or Kubernetes cluster (for deployment)
@@ -244,18 +245,36 @@ or **Docker**), kind, kubectl, Make, Git, curl, OpenSSL, and Python 3. Install
 `jq` as well to use the API demo and curl examples. The runtime must be running
 (for podman on macOS, start the podman machine first). These scripts use the
 container runtime to build images, run the kind nodes, and manage the local
-image registry. Podman is used in preference to Docker when it is installed and
-reachable, except under WSL where Docker is preferred (WSL2 podman can pass
-`podman info` but fail during kind node startup); set `CONTAINER_RUNTIME`
-(for example `make dev-deploy CONTAINER_RUNTIME=docker`) to force a specific
-runtime. When a kind cluster named `KIND_CLUSTER_NAME` already exists, its
-runtime is selected automatically by `make dev-deploy`, `make dev-clean`, and
-`make dev-demo`, so later commands keep using the engine that backed the
-existing cluster (passing `CONTAINER_RUNTIME` explicitly remains supported and
-must match that engine). If a forced `CONTAINER_RUNTIME` does not own an
-existing `KIND_CLUSTER_NAME` while the other engine does, `make dev-deploy` and
-`make dev-clean` fail instead of creating a duplicate cluster or cleaning up
-and deleting the kubeconfig of the cluster that is still running.
+image registry. `make dev-deploy` records the engine it used for
+`KIND_CLUSTER_NAME` in
+`${XDG_CONFIG_HOME:-$HOME/.config}/evalhub/kubeconfigs/<cluster>.runtime`, and
+`make dev-clean`, `make dev-demo`, and `make clean-container-storage` reuse that
+record, so a later command needs no second input. Set `CONTAINER_RUNTIME` (for
+example `make dev-deploy CONTAINER_RUNTIME=docker`) to choose the engine for a
+new cluster. When an explicit value differs from the recorded engine,
+`make dev-deploy` and `make dev-clean` fail instead of creating a duplicate
+cluster or cleaning up and deleting the kubeconfig of the cluster that is still
+running, while `make dev-demo` follows the record and
+`make clean-container-storage` keeps the explicit engine with a warning,
+because neither can destroy the deployment. For a cluster deployed before that
+record existed the engine that already owns `KIND_CLUSTER_NAME` is used, and
+`make dev-deploy` and `make dev-clean` also fail when an explicit value does not
+own that cluster, instead of creating a second one or reporting a cleanup that
+skipped it; a first deploy with neither a record nor a cluster falls back to the
+first reachable engine, podman before docker (or docker before podman under WSL,
+where podman passes `podman info`
+but fails kind node startup). A record whose engine no longer runs the cluster
+is not trusted: `make dev-deploy` fails when the other engine owns that cluster,
+an explicit matching value included, instead of creating a second one,
+`make dev-demo` falls back to the engine that owns the cluster, and
+`make dev-clean` drops the record (with or without `DELETE_CLUSTER=true`) once
+the cluster is gone from the recorded engine. A record whose engine is no longer
+installed cannot describe a reachable cluster, so `make dev-deploy` ignores it
+and `make dev-clean` drops it; a recorded engine that is installed but stopped
+fails with the state file to remove. Deleting the cluster with `make dev-clean
+DELETE_CLUSTER=true` removes the record, and removes the kubeconfig with it only
+when that kubeconfig targets the deleted cluster and no engine still lists or
+answers for a cluster of that name; otherwise the kubeconfig is preserved.
 
 Deploy the local EvalHub service, operator, adapters, and mock target/judge
 services:
@@ -302,7 +321,7 @@ make dev-clean DELETE_CLUSTER=true
 
 Both cleanup modes retain the local build image tags and the container runtime's
 build cache.
-They remove temporary localhost:<port> tags used only to push images into the
+They remove temporary `localhost:<port>` tags used only to push images into the
 kind registry. Repeated deploys of unchanged EvalHub source reuse the Go build
 layers. `make dev-deploy-help` and `make dev-clean-help` list the settings.
 
@@ -385,11 +404,14 @@ make test-benchmarks-kind
 ```
 
 This deploys (or reuses) the kind cluster via `make dev-deploy` — pass
-`SKIP_BUILD=true` to reuse previously built images — mints a short-lived token
-for the local EvalHub service account, and points the suite at the loopback API
-URL with the in-cluster mock target as the model. By default it runs only the
-providers whose adapter images the deployment builds (Inspect, FollowBench, and
-LM Evaluation Harness); the remaining benchmark-test inputs are unchanged:
+`SKIP_BUILD=true` to reuse previously built images — builds every curated
+adapter image unless `ADAPTERS` is set, mints a short-lived token for the local
+EvalHub service account, and points the suite at the loopback API URL with the
+in-cluster mock target as the model. By default it runs the whole catalog the
+deployed stack discovers, so every configured provider is exercised; narrow it
+with `BENCHMARK_RUN` (or `KIND_BENCHMARK_RUN`) when iterating, and size a full
+run with `BENCHMARK_PARALLEL` and `BENCHMARK_TIMEOUT` (the token it mints is
+derived from that deadline, so it cannot expire mid-run):
 
 ```bash
 make test-benchmarks-kind BENCHMARK_RUN='TestBenchmarkSmoke/inspect/'
@@ -519,7 +541,16 @@ make build-wheel
 Developers can use `scripts/test-local-oci-export.sh` to simulate a quick OCI evaluation card
 generation during development. It runs an evaluation with the local test adapter,
 downloads the exported card from a local OCI registry, and verifies it against
-the completed job. No model server is required.
+the completed job, including the OCI export status and artifact reference.
+No model server is required.
+
+Check `results.oci.status.state` for the OCI export status: `running`, `completed`,
+or `failed`. After a successful export, `results.oci.evaluation_card` provides the
+manifest digest and digest-qualified reference for retrieving the card. An OCI
+export failure leaves the evaluation's completed status and benchmark results intact.
+
+OCI export currently supports evaluation cards. Evaluation bundles, signing,
+and automatic export retries are not currently supported.
 
 Install these dependencies before starting:
 
@@ -657,8 +688,16 @@ Configuration is loaded from `config/config.yaml`, overridden by environment var
 | `DB_URL` | Database connection string | SQLite in-memory |
 | `MLFLOW_TRACKING_URI` | MLflow tracking server | `http://localhost:5000` |
 | `MLFLOW_CA_CERT_PATH` | PEM CA bundle for MLflow TLS verification | (system roots) |
+| `OCI_PUSH_TIMEOUT` | Overall API-service registry push deadline (`sidecar.oci.push_timeout`); omitted or `0` uses the default | `5m` |
 | `LOG_LEVEL` | Logging level | `INFO` |
 | `EVALHUB_HARDWARE_PROFILES_NAMESPACE` | Platform namespace where OpenDataHub `HardwareProfile` CRs are fetched (Kubernetes runtime). Required for `hardware_config.hardware_profile_name` evaluations; typically `opendatahub` or `redhat-ods-applications`. Set by the TrustyAI Service Operator deployment. | _(unset — hardware profile lookups fail)_ |
+
+Evaluation-result exports run asynchronously after the job reaches an eligible terminal state.
+The OCI push deadline starts after credential resolution and excludes MLflow export and status
+persistence. The independent `sidecar.oci.http_timeout` bounds each registry HTTP request
+and the API service's credential lookup. Export workers
+are not drained during shutdown; interruption or persistence failures may leave OCI status
+absent or `running`.
 
 Provider configurations live in `config/providers/` as YAML files. The default set includes lm-evaluation-harness (167 benchmarks), RAGAS, Garak, GuideLLM, LightEval, and MTEB.
 

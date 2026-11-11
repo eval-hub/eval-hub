@@ -25,6 +25,7 @@ env_mappings:
   MLFLOW_CA_CERT_PATH: mlflow.ca_cert_path
   MLFLOW_TOKEN_PATH: mlflow.token_path
   MLFLOW_WORKSPACE: mlflow.workspace
+  OCI_PUSH_TIMEOUT: sidecar.oci.push_timeout
   EVALHUB_CA_CERT_PATH: sidecar.eval_hub.ca_cert_path
   EVALHUB_INSECURE_SKIP_VERIFY: sidecar.eval_hub.insecure_skip_verify
   EVALHUB_TOKEN_CACHE_TIMEOUT: sidecar.eval_hub.token_cache_timeout
@@ -76,10 +77,12 @@ sidecar:
   mlflow:
     # token_cache_timeout: TTL for in-memory auth token cache for MLflow proxy (e.g. "5m", "1h"). Empty/0 uses default (5m).
     # token_cache_timeout: 5m
-  # OCI registry proxy
-  # oci:
-  #   ca_cert_path: /etc/pki/ca-trust/source/anchors/registry-ca.crt  # optional
-  #   insecure_skip_verify: false
+  # OCI settings shared by the registry proxy and API service publisher
+  oci:
+    # Overall API-service registry push deadline; omitted or 0 defaults to 5m.
+    push_timeout: 5m
+    # http_timeout: 30s  # per registry HTTP request; also bounds API-service credential lookup
+    # ca_cert_path: /etc/pki/ca-trust/source/anchors/registry-ca.crt  # optional
   sidecar_container:
     resources:
       requests:

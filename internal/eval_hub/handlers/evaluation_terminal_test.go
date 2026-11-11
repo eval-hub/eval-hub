@@ -80,7 +80,7 @@ func TestOnEvaluationJobUpdatedSkipsExportWhenNotTerminal(t *testing.T) {
 	h.onEvaluationJobUpdated(
 		context.Background(),
 		storage,
-		func() (*api.EvaluationJobResource, error) { return storage.job, nil },
+		func(context.Context) (*api.EvaluationJobResource, error) { return storage.job, nil },
 		api.OverallStatePending,
 		nil,
 	)
@@ -106,7 +106,7 @@ func TestOnEvaluationJobUpdatedSkipsExportWhenTerminalStateUnchanged(t *testing.
 	h.onEvaluationJobUpdated(
 		context.Background(),
 		storage,
-		func() (*api.EvaluationJobResource, error) { return storage.job, nil },
+		func(context.Context) (*api.EvaluationJobResource, error) { return storage.job, nil },
 		api.OverallStateCompleted,
 		nil,
 	)
@@ -132,7 +132,7 @@ func TestOnEvaluationJobUpdatedSkipsExportOnFailedTransition(t *testing.T) {
 	h.onEvaluationJobUpdated(
 		context.Background(),
 		storage,
-		func() (*api.EvaluationJobResource, error) { return storage.job, nil },
+		func(context.Context) (*api.EvaluationJobResource, error) { return storage.job, nil },
 		api.OverallStateRunning,
 		nil,
 	)
@@ -150,7 +150,7 @@ func TestOnEvaluationJobUpdatedSkipsWhenGetJobFails(t *testing.T) {
 	h.onEvaluationJobUpdated(
 		context.Background(),
 		&terminalTestStorage{},
-		func() (*api.EvaluationJobResource, error) { return nil, errors.New("load failed") },
+		func(context.Context) (*api.EvaluationJobResource, error) { return nil, errors.New("load failed") },
 		api.OverallStateRunning,
 		nil,
 	)
@@ -168,7 +168,7 @@ func TestOnEvaluationJobUpdatedSkipsWhenJobNil(t *testing.T) {
 	h.onEvaluationJobUpdated(
 		context.Background(),
 		&terminalTestStorage{},
-		func() (*api.EvaluationJobResource, error) { return nil, nil },
+		func(context.Context) (*api.EvaluationJobResource, error) { return nil, nil },
 		api.OverallStateRunning,
 		nil,
 	)
@@ -342,7 +342,7 @@ func TestOnEvaluationJobUpdatedFiresThresholdViolations(t *testing.T) {
 	h.onEvaluationJobUpdated(
 		context.Background(),
 		&terminalTestStorage{job: job},
-		func() (*api.EvaluationJobResource, error) { return job, nil },
+		func(context.Context) (*api.EvaluationJobResource, error) { return job, nil },
 		api.OverallStateRunning,
 		logger,
 	)
@@ -364,7 +364,7 @@ func TestOnEvaluationJobUpdatedSkipsThresholdWhenNilResults(t *testing.T) {
 	h.onEvaluationJobUpdated(
 		context.Background(),
 		&terminalTestStorage{job: job},
-		func() (*api.EvaluationJobResource, error) { return job, nil },
+		func(context.Context) (*api.EvaluationJobResource, error) { return job, nil },
 		api.OverallStateRunning,
 		nil,
 	)

@@ -112,11 +112,21 @@ func (f *ociPublisherFactory) NewPublisher(ctx context.Context, job *api.Evaluat
 	}
 
 	export := job.Exports.OCI
-	creds, err := f.credentialResolver.Resolve(ctx, oci.OCICredentialRequest{
+	// The async export worker has already detached its context from the request.
+	// Apply the configured HTTP timeout to credential lookup through the Kubernetes
+	// client. The push gets a separate deadline after credential lookup completes.
+	timeout := f.httpClient.Timeout
+	if timeout <= 0 {
+		timeout = defaultOCIHTTPTimeout
+	}
+	credentialCtx, cancelCredentials := context.WithTimeout(ctx, timeout)
+	defer cancelCredentials()
+	creds, err := f.credentialResolver.Resolve(credentialCtx, oci.OCICredentialRequest{
 		RegistryHost: export.Coordinates.OCIHost,
 		Tenant:       job.Resource.Tenant.String(),
 		Connection:   export.K8s,
 	})
+	cancelCredentials()
 	if err != nil {
 		return nil, err
 	}

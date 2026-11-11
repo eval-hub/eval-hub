@@ -36,8 +36,9 @@ make build-mcp          # evalhub-mcp only
 
 ```bash
 make test               # unit tests (internal, cmd, pkg, …)
+make test-scripts       # Python regression tests for scripts/ (kind mock protocol and dev runtime resolution)
 make test-fvt           # godog FVT (tests/features)
-make test-all           # unit + FVT + FVT against started server
+make test-all           # unit + script regressions + FVT + FVT against started server
 make test-coverage      # HTML under bin/
 
 go test -v ./internal/eval_hub/handlers -run TestHandleName
@@ -56,11 +57,22 @@ make vet                # Run go vet (same as lint)
 
 **Always run `make fmt lint` after file changes and before committing.** This ensures consistent formatting and catches issues early.
 
-`make lint` and `make vet` static-analyse with the Go toolchain declared in `go.mod` (`GOTOOLCHAIN=go<version>`, `GO_TOOLCHAIN` in the Makefile), not the Go installed on the machine, so every contributor and CI type-check against the same standard library. Always lint through `make lint` (pre-commit does the same) rather than a globally installed `golangci-lint` from Homebrew or a distro package: the linter bundles an export-data importer that only understands standard-library data up to the Go release it shipped with, so a newer local Go fails with `cannot decode "internal/goarch", export data version N is greater than maximum supported version M`. When `go.mod` is bumped (see **Go Version**), bump `GOLANGCI_LINT_VERSION` in the Makefile and `version` in `.github/workflows/golangci-lint.yml` together.
+`make lint` and `make vet` static-analyse with the Go toolchain declared in `go.mod` (`GOTOOLCHAIN=go<version>`, `GO_TOOLCHAIN` in the Makefile), not the Go installed on the machine, so every contributor and CI type-check against the same standard library. Always lint through `make lint` (pre-commit does the same) rather than a globally installed `golangci-lint` from Homebrew or a distro package: the linter bundles an export-data importer that only understands standard-library data up to the Go release it shipped with, so a newer local Go fails with `cannot decode "internal/goarch", export data version N is greater than maximum supported version M`. When `go.mod` is bumped (see **Go Version**), bump `GOLANGCI_LINT_VERSION` in the Makefile and `version` in `.github/workflows/golangci-lint.yml` together, and move the other two standard-library-parsing pins in the same PR: `GOVULNCHECK_VERSION` in the Makefile and the pinned `securego/gosec` action image in `.github/workflows/ci.yml`. A pin that predates the toolchain either panics in the SSA builder (`govulncheck`) or reports `cannot decode "<pkg>", export data version N is greater than maximum supported version M` (`gosec`).
 
 If a `.pre-commit-config.yaml` file exists, run `pre-commit install && pre-commit install --hook-type commit-msg` before making any commits. This automatically enforces formatting, linting, and commit message conventions on every commit.
 
 **Do not use `#nosec` or `//gosec:disable` annotations in Go files.** CI rejects any PR that contains either inline suppression form. Fix the underlying code instead (e.g. use `os.OpenInRoot` for path-traversal-safe file access). If a gosec finding cannot be structurally fixed, add a path-scoped `--exclude-rules` entry in the Gosec Security Scanner step of `.github/workflows/ci.yml`.
+
+#### Vulnerability waivers (govulncheck)
+
+`make govulncheck` has no way to silence a finding — upstream govulncheck states there is "no support for silencing vulnerability findings" ([go.dev/issue/61211](https://go.dev/issue/61211)) — and it exits 0 whenever `-format=json`, `-format=sarif` or `-format=openvex` is requested. The target therefore runs govulncheck in JSON mode and pipes the report through `scripts/check_govulncheck_waivers.py`, which re-implements the exit status from the report plus the dated `[[IgnoredVulns]]` waivers in `osv-scanner.toml`.
+
+Rules for a waiver:
+
+- It is only for a fix that **already exists upstream** but is not yet in the toolchain or module we consume — for example `GO-2026-6859` (`net/http` HTTP/1 `MaxBytesReader` header race) is fixed in go1.27.4/go1.26.11, which `registry.access.redhat.com/ubi10/go-toolset` does not publish yet, so `go.mod` cannot move (see **Go Version**).
+- Every entry needs `ignoreUntil` (a TOML date) and `reason`. The gate **fails** once `ignoreUntil` passes, so a waiver cannot be forgotten, and it warns when an entry no longer matches any finding (stale).
+- Never bypass the gate instead: do not add `|| true`, do not drop the step, and do not point `GOTOOLCHAIN` at a toolchain we do not ship just to make the scan green.
+- Removal trigger for the current entry: run `podman run --rm registry.access.redhat.com/ubi10/go-toolset:1.27 go version`. When it reports go1.27.4 or newer, bump `go.mod` and `Containerfile`, delete the `GO-2026-6859` entry, and confirm `make govulncheck` still passes.
 
 ### Go Version
 

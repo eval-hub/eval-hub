@@ -26,6 +26,9 @@ SELECTED_ADAPTER_IMAGES=()
 CALICO_VERSION="v3.33.0"
 KUBECONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/evalhub/kubeconfigs"
 KUBECONFIG_FILE="${KUBECONFIG_DIR}/${KIND_CLUSTER_NAME}.yaml"
+# The engine that backs KIND_CLUSTER_NAME is recorded next to the private
+# kubeconfig, so later commands reuse it instead of probing both engines.
+RUNTIME_STATE_FILE="${KUBECONFIG_DIR}/${KIND_CLUSTER_NAME}.runtime"
 WORK_DIR=""
 REGISTRY_NAME=""
 REGISTRY_ALIAS=""
@@ -35,6 +38,9 @@ TEMP_REGISTRY_TAGS=()
 PORT_FORWARD_PID=""
 KIND_CLUSTER_CREATED=false
 API_HOST_ACCESS_PORT="${EVALHUB_HOST_PORT}"
+
+# Runtime selection helpers, shared with the other dev scripts.
+. "${SCRIPT_DIR}/lib/dev-runtime.sh"
 
 log() {
   printf '[%s] [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S%z')" "$1" "$2"
@@ -65,12 +71,23 @@ Inputs (also accepted as environment variables):
   AIRGAP=true              create/use a Calico kind cluster and deny external
                           egress from system-namespace evaluation jobs (default: false)
   CONTAINER_RUNTIME        container engine for image builds, the local registry,
-                           and the kind nodes (podman or docker; default: the
-                           engine that already owns KIND_CLUSTER_NAME, otherwise
-                           podman when reachable, or docker under WSL). A forced
-                           engine must own an existing KIND_CLUSTER_NAME;
-                           otherwise the script fails instead of creating a
-                           duplicate cluster and replacing its kubeconfig.
+                           and the kind nodes (podman or docker). Default: the
+                           engine recorded for KIND_CLUSTER_NAME in
+                           evalhub/kubeconfigs/<cluster>.runtime, otherwise the
+                           engine that already owns the cluster, otherwise the
+                           first reachable engine (podman before docker, docker
+                           before podman under WSL). A record whose engine is not
+                           installed is ignored, so an uninstalled engine does not
+                           block the next deploy. An explicit value must match the
+                           recorded engine, or own the cluster when no record
+                           exists yet; otherwise the script fails instead of
+                           creating a duplicate cluster and replacing its
+                           kubeconfig. A record whose engine no longer runs
+                           KIND_CLUSTER_NAME also fails, an explicit value
+                           included, when the other engine owns that cluster, so a
+                           stale record neither hides it nor gets its kubeconfig
+                           replaced; one whose engine is installed but stopped
+                           fails with the state file to remove.
   Repeated builds use the container runtime's layer cache; the EvalHub build date is stable
   for a source commit so a no-change deploy does not rebuild Go binaries.
   Temporary localhost:<port> registry tags are removed after each successful push.
@@ -178,102 +195,92 @@ need_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
 }
 
-# Return 0 when KIND_CLUSTER_NAME already exists under the given container
-# runtime, using the kind provider that runtime requires. A runtime that is not
-# installed or not reachable cannot own a cluster, so it reports false.
-kind_cluster_in_runtime() {
-  local runtime="$1" clusters
-  command -v "$runtime" >/dev/null 2>&1 || return 1
-  "$runtime" info >/dev/null 2>&1 || return 1
-  case "$runtime" in
-    podman)
-      clusters="$(KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters 2>/dev/null || true)"
-      ;;
-    docker)
-      clusters="$(env -u KIND_EXPERIMENTAL_PROVIDER kind get clusters 2>/dev/null || true)"
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-  grep -Fqx -- "$KIND_CLUSTER_NAME" <<<"$clusters"
-}
+# ensure_runtime_owns_existing_cluster is shared with dev-clean, which needs the
+# same guard for an explicit runtime when no record exists yet; it lives in
+# scripts/lib/dev-runtime.sh.
 
-# Fail when a forced CONTAINER_RUNTIME does not own KIND_CLUSTER_NAME while the
-# other container engine does. kind only lists the clusters of the engine it is
-# pointed at, so continuing would create a second cluster with the same name
-# under the selected engine and overwrite the private kubeconfig of the cluster
-# that is already running. Auto-detection already selects the owning engine, so
-# this guard only applies when CONTAINER_RUNTIME is set explicitly.
-ensure_forced_runtime_matches_owner() {
-  local other
-  case "$CONTAINER_RUNTIME" in
-    podman) other=docker ;;
-    docker) other=podman ;;
-    *) return 0 ;;
-  esac
-  kind_cluster_in_runtime "$other" || return 0
-  fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $other, not $CONTAINER_RUNTIME. Unset CONTAINER_RUNTIME to reuse the engine that owns the cluster, or set CONTAINER_RUNTIME=$other."
-}
-
-# Select the container runtime used for image builds, the local registry, and
-# the kind nodes. Set CONTAINER_RUNTIME to force a specific runtime. Otherwise an
-# existing KIND_CLUSTER_NAME decides the runtime: kind only lists the clusters
-# owned by the runtime it is pointed at, so reusing the runtime that already owns
-# the cluster prevents creating a second cluster with the same name (and private
-# kubeconfig path) under the other engine. With no existing cluster, Podman is
-# preferred whenever it is installed and reachable, except under WSL where Docker
-# is preferred instead: WSL2 podman answers 'podman info' but kind node startup
-# fails during systemd/cgroup setup. The non-preferred runtime is the fallback
-# when the preferred one is not reachable. A forced runtime must own an existing
-# KIND_CLUSTER_NAME (see ensure_forced_runtime_matches_owner).
+# Select the container runtime used for image builds, the local registry, and the
+# kind nodes. A record naming an engine that is not installed is ignored first,
+# because it cannot describe a reachable cluster. The remaining order of authority
+# is:
+#   1. an explicit CONTAINER_RUNTIME, which has to match the engine recorded for
+#      KIND_CLUSTER_NAME, or own that cluster when no record exists yet:
+#      continuing under the other engine would create a second cluster with the
+#      same name and overwrite the kubeconfig of the running one;
+#   2. the engine recorded for KIND_CLUSTER_NAME (see recorded_runtime), which
+#      must still run that cluster and answer: a record left behind by a cluster
+#      removed out of band must not hide a live same-named cluster under the
+#      other engine, and a recorded engine that is stopped fails with the state
+#      file to remove instead of a bare "not reachable";
+#   3. the engine that already owns KIND_CLUSTER_NAME, for clusters deployed
+#      before that record existed;
+#   4. the first reachable engine, podman before docker (docker before podman
+#      under WSL; see fallback_runtime_order).
+# Both 1 and 2 check ownership, so a recorded engine that no longer runs the
+# cluster cannot replace the kubeconfig of one the other engine still runs.
+# dev-deploy records the outcome, so 3 and 4 only ever run on a first deploy and
+# every later command reads the answer instead of probing both engines.
 detect_container_runtime() {
-  local runtime
-  local -a preferred_runtimes=()
-  if uname -r | grep -qiE 'microsoft|wsl'; then
-    preferred_runtimes=(docker podman)
-  else
-    preferred_runtimes=(podman docker)
+  local runtime recorded
+  # A record whose engine is no longer installed describes no reachable cluster,
+  # so ignore it: the ownership probe below still finds a live cluster under the
+  # other engine, and a deploy that creates one records its own engine.
+  if recorded="$(recorded_runtime)" && ! runtime_is_installed "$recorded"; then
+    log WARN "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $recorded-backed in $RUNTIME_STATE_FILE, but $recorded is not installed; ignoring the stale record and selecting another engine."
+    recorded=""
   fi
-  case "$CONTAINER_RUNTIME" in
-    podman|docker)
-      need_command "$CONTAINER_RUNTIME"
-      "$CONTAINER_RUNTIME" info >/dev/null 2>&1 ||
-        fail "$CONTAINER_RUNTIME is installed but not reachable. Start the $CONTAINER_RUNTIME daemon (or podman machine) and retry."
-      ensure_forced_runtime_matches_owner
-      ;;
-    "")
-      for runtime in "${preferred_runtimes[@]}"; do
-        if kind_cluster_in_runtime "$runtime"; then
-          CONTAINER_RUNTIME="$runtime"
-          log INFO "Kind cluster '$KIND_CLUSTER_NAME' already exists under $runtime; using $runtime to reuse that cluster."
-          break
-        fi
-      done
-      if [[ -z "$CONTAINER_RUNTIME" ]]; then
-        for runtime in "${preferred_runtimes[@]}"; do
-          if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
-            CONTAINER_RUNTIME="$runtime"
-            break
-          fi
-        done
-      fi
-      [[ -n "$CONTAINER_RUNTIME" ]] ||
-        fail "Neither podman nor docker is reachable. Install podman (preferred; docker under WSL) and make sure it is running."
-      ;;
-    *)
-      fail "CONTAINER_RUNTIME must be 'podman' or 'docker'."
-      ;;
-  esac
-  log INFO "Using $CONTAINER_RUNTIME as the container runtime for builds, the local registry, and kind."
-}
-
-kind_cmd() {
-  if [[ "${CONTAINER_RUNTIME:-}" == podman ]]; then
-    KIND_EXPERIMENTAL_PROVIDER=podman kind "$@"
-  else
-    env -u KIND_EXPERIMENTAL_PROVIDER kind "$@"
+  if [[ -n "$CONTAINER_RUNTIME" ]]; then
+    case "$CONTAINER_RUNTIME" in
+      podman|docker) ;;
+      *) fail "CONTAINER_RUNTIME must be 'podman' or 'docker'." ;;
+    esac
+    if [[ -n "$recorded" ]]; then
+      [[ "$recorded" == "$(canonical_runtime "$CONTAINER_RUNTIME")" ]] ||
+        fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE). Unset CONTAINER_RUNTIME to reuse $recorded, or delete that cluster and its state file before switching to $CONTAINER_RUNTIME."
+      # The record names the engine that backed the cluster, not one that still
+      # runs it: a cluster removed out of band leaves the record behind, so an
+      # explicit runtime matching the record must not create a second cluster over
+      # one the other engine still runs (see
+      # ensure_runtime_owns_existing_cluster).
+      ensure_runtime_owns_existing_cluster "$CONTAINER_RUNTIME" recorded
+    else
+      # No record yet: either no cluster exists or it predates the record, so
+      # ask both engines which one owns the name before selecting this one.
+      ensure_runtime_owns_existing_cluster "$CONTAINER_RUNTIME"
+    fi
+    use_runtime "$CONTAINER_RUNTIME" "for builds, the local registry, and kind"
+    return 0
   fi
+  if [[ -n "$recorded" ]]; then
+    log INFO "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE)."
+    # The record names the engine that backed the cluster, not one that still
+    # runs it: a cluster removed out of band leaves the record behind, and
+    # creating under the recorded engine would then duplicate a cluster the
+    # other engine still runs and overwrite its kubeconfig.
+    ensure_runtime_owns_existing_cluster "$recorded" recorded
+    if ! runtime_is_reachable "$recorded"; then
+      fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE), but $recorded is not reachable. Start $recorded and retry, or remove the stale record (rm -- '$RUNTIME_STATE_FILE') if that cluster is gone."
+    fi
+    use_runtime "$recorded" "for builds, the local registry, and kind"
+    return 0
+  fi
+  # The engine order is the policy shared with the other scripts; splitting the
+  # helper's newline-separated output is intended.
+  for runtime in $(fallback_runtime_order); do
+    if kind_cluster_in_runtime "$(canonical_runtime "$runtime")"; then
+      runtime="$(canonical_runtime "$runtime")"
+      log INFO "Kind cluster '$KIND_CLUSTER_NAME' already exists under $runtime; using $runtime to reuse that cluster."
+      use_runtime "$runtime" "for builds, the local registry, and kind"
+      return 0
+    fi
+  done
+  for runtime in $(fallback_runtime_order); do
+    if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
+      use_runtime "$runtime" "for builds, the local registry, and kind"
+      return 0
+    fi
+  done
+  fail "Neither podman nor docker is reachable. Install podman (or docker) and make sure it is running."
 }
 
 trim_whitespace() {
@@ -500,6 +507,7 @@ YAML
     KIND_CLUSTER_CREATED=true
   fi
   chmod 600 "$KUBECONFIG_FILE"
+  record_runtime
   if [[ "$AIRGAP" == true ]]; then
     ensure_calico_cni
   fi
@@ -1335,170 +1343,18 @@ install_mock_services() {
   local mock_image
   mock_image="$(registry_image kind-openai-mock)"
   log INFO "Deploying mock OpenAI-compatible target and judge endpoints."
+  # The mock source stays a plain, lintable, testable Python file in
+  # scripts/kind-openai-mock.py. Loading it through --from-file avoids the
+  # YAML block-scalar indentation and unquoted-heredoc expansion constraints
+  # on its content. dev-clean selects resources by the ownership annotation,
+  # so it must be part of every applied manifest; inject it before apply.
+  kubectl --kubeconfig "$KUBECONFIG_FILE" -n system create configmap evalhub-kind-openai-mock-code \
+    --from-file=mock.py="${EVALHUB_REPO}/scripts/kind-openai-mock.py" \
+    --dry-run=client -o yaml \
+    | kubectl --kubeconfig "$KUBECONFIG_FILE" annotate --local -f - -n system \
+      --overwrite "io.evalhub.kind-smoke.cluster=${KIND_CLUSTER_NAME}" -o yaml \
+    | kubectl --kubeconfig "$KUBECONFIG_FILE" apply -f -
   kubectl --kubeconfig "$KUBECONFIG_FILE" apply -f - <<YAML
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: evalhub-kind-openai-mock-code
-  namespace: system
-  annotations:
-    io.evalhub.kind-smoke.cluster: $KIND_CLUSTER_NAME
-data:
-  mock.py: |
-    import json
-    import os
-    import re
-    from http.server import BaseHTTPRequestHandler, HTTPServer
-
-    ROLE = os.environ["MOCK_ROLE"]
-    MODEL = os.environ["MOCK_MODEL"]
-    API_KEYS = {item.strip() for item in os.environ["MOCK_API_KEYS"].split(",") if item.strip()}
-
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, _format, *_args):
-            pass
-
-        def reply(self, status, value):
-            body = json.dumps(value).encode()
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-        def do_GET(self):
-            if self.path.rstrip("/").endswith("/models"):
-                self.reply(200, {"object": "list", "data": [{"id": MODEL, "object": "model"}]})
-            else:
-                self.reply(404, {"error": {"message": "not found"}})
-
-        def do_POST(self):
-            token = self.headers.get("Authorization", "")
-            if token not in {"Bearer " + key for key in API_KEYS}:
-                self.reply(401, {"error": {"message": "mock rejected credential"}})
-                print(json.dumps({"role": ROLE, "auth": "rejected"}), flush=True)
-                return
-
-            raw = self.rfile.read(int(self.headers.get("Content-Length", "0")))
-            request = json.loads(raw or b"{}")
-            endpoint = self.path.split("?", 1)[0]
-            if ROLE == "target" and endpoint.endswith("/v1/completions"):
-                prompts = request.get("prompt", "")
-                if not isinstance(prompts, list):
-                    prompts = [prompts]
-                choices = []
-                prompt_tokens = 0
-                for index, prompt_value in enumerate(prompts):
-                    prompt = prompt_value if isinstance(prompt_value, str) else str(prompt_value)
-                    # local-completions uses echo/logprobs for multiple-choice
-                    # likelihood scoring. Return enough deterministic mock token
-                    # scores for the client tokenizer; test scores are not meaningful.
-                    token_count = max(2, len(prompt.encode("utf-8")) + 1)
-                    prompt_tokens += token_count
-                    choices.append({
-                        "index": index,
-                        "text": prompt + " ",
-                        "logprobs": {
-                            "tokens": ["mock"] * token_count,
-                            "token_logprobs": [-0.1] * token_count,
-                            "top_logprobs": [{"mock": -0.1}] * token_count,
-                            "text_offset": list(range(token_count)),
-                        },
-                        "finish_reason": "stop",
-                    })
-                self.reply(200, {
-                    "id": "cmpl-kind-mock",
-                    "object": "text_completion",
-                    "created": 0,
-                    "model": request.get("model", MODEL),
-                    "choices": choices,
-                    "usage": {"prompt_tokens": prompt_tokens, "completion_tokens": 1, "total_tokens": prompt_tokens + 1},
-                })
-                print(json.dumps({"role": ROLE, "endpoint": "completions", "auth": "accepted"}), flush=True)
-                return
-
-            # Inspect AI's OpenAI-compatible provider calls the Responses API by
-            # default, so emulate the subset of it that a chat completion needs.
-            # Without this, inspect fails with
-            # TypeError("'NoneType' object is not iterable") on response.output.
-            if ROLE == "target" and endpoint.endswith("/responses/input_tokens"):
-                self.reply(200, {"object": "response.input_tokens", "input_tokens": 1})
-                print(json.dumps({"role": ROLE, "endpoint": "responses.input_tokens", "auth": "accepted"}), flush=True)
-                return
-
-            if ROLE == "target" and endpoint.endswith("/v1/responses"):
-                text = "I will follow the requested constraints."
-                self.reply(200, {
-                    "id": "resp-kind-mock",
-                    "object": "response",
-                    "created_at": 0,
-                    "status": "completed",
-                    "model": request.get("model", MODEL),
-                    "output": [{
-                        "type": "message",
-                        "id": "msg-kind-mock",
-                        "status": "completed",
-                        "role": "assistant",
-                        "content": [{"type": "output_text", "text": text, "annotations": []}],
-                    }],
-                    "parallel_tool_calls": False,
-                    "tool_choice": "auto",
-                    "tools": [],
-                    "error": None,
-                    "incomplete_details": None,
-                    "instructions": None,
-                    "metadata": {},
-                    "temperature": 1.0,
-                    "top_p": 1.0,
-                    "max_output_tokens": None,
-                    "previous_response_id": None,
-                    "reasoning": None,
-                    "text": {"format": {"type": "text"}},
-                    "truncation": "disabled",
-                    "usage": {
-                        "input_tokens": 1,
-                        "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
-                        "output_tokens": 1,
-                        "output_tokens_details": {"reasoning_tokens": 0},
-                        "total_tokens": 2,
-                    },
-                    "user": None,
-                })
-                print(json.dumps({"role": ROLE, "endpoint": "responses", "auth": "accepted"}), flush=True)
-                return
-
-            if ROLE == "judge":
-                # Search the complete serialized request because OpenAI-compatible
-                # clients may represent prompt content as strings or structured parts.
-                request_text = json.dumps(request, ensure_ascii=False)
-                grade_prompt = re.search(
-                    r"answer\s+with\s+grade\s*:", request_text, re.IGNORECASE
-                ) is not None
-                if grade_prompt:
-                    # CyberSecEval 2's model_graded_qa scorer requires this
-                    # grade format; an unparseable reply yields NaN and
-                    # prevents the SDK from reporting the terminal status.
-                    content = "GRADE: C"
-                    response_format = "grade"
-                else:
-                    match = re.search(r"with\s+(\d+)\s+values", request_text, re.IGNORECASE)
-                    count = int(match.group(1)) if match else 1
-                    content = "[" + ", ".join('"YES"' for _ in range(count)) + "]"
-                    response_format = "yes-array"
-            else:
-                content = "I will follow the requested constraints."
-            self.reply(200, {
-                "id": "chatcmpl-kind-mock",
-                "object": "chat.completion",
-                "created": 0,
-                "model": request.get("model", MODEL),
-                "choices": [{"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": "stop"}],
-                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
-            })
-            print(json.dumps({"role": ROLE, "auth": "accepted", "response_format": response_format if ROLE == "judge" else "target"}), flush=True)
-
-    HTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
