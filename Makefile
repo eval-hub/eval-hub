@@ -69,7 +69,7 @@ assisted-by-trailer: ## Print the Assisted-by trailer for the current AI session
 #                           make install-dev-skills DEV_SKILLS_TARGET_DIR=~/.agents/skills
 DEV_SKILLS_REF ?=
 DEV_SKILLS_CLONE_DIR ?=
-DEV_SKILLS_TARGET_DIR ?=
+DEV_SKILLS_TARGET_DIR ?= ~/.agents/skills
 
 .PHONY: install-dev-skills uninstall-dev-skills
 install-dev-skills: ## Install dev skills from eval-hub/eval-hub-skills (into ~/.claude/skills; Codex CLI: DEV_SKILLS_TARGET_DIR=~/.agents/skills)
@@ -287,7 +287,15 @@ start-inspector-mcp:
 
 lint: vet golangci-lint ## Lint the code (go vet + golangci-lint)
 
-GOLANGCI_LINT_VERSION ?= v2.12.2
+# Pinned for the Go toolchain declared in go.mod, currently go 1.27.3: v2.15.0
+# bundles golang.org/x/tools v0.52.0, which understands Go 1.27 export data
+# (version 5). v2.12.2 and v2.13.x predate that support and fail under
+# GOTOOLCHAIN=go1.27.3 with "cannot decode ... export data version 5 is greater
+# than maximum supported version 4"; v2.14.0 is the oldest release that works, so
+# this pin must not be downgraded below v2.14.0 while go.mod targets go 1.27.3.
+# Keep in sync with .github/workflows/golangci-lint.yml (see AGENTS.md -> Code
+# Quality): bump both when go.mod or this version changes.
+GOLANGCI_LINT_VERSION ?= v2.15.0
 # Tool binaries live under bin/tools, keyed on the tool version *and* the go.mod
 # toolchain (the same pattern as GOTESTSUM below). An install into a shared
 # GOPATH/bin would be overwritten by another checkout with a different go.mod
@@ -313,7 +321,14 @@ $(GOLANGCI_LINT):
 	@echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION) with $(GO_TOOLCHAIN) into $(dir $(GOLANGCI_LINT))..."
 	GOBIN='$(dir $(GOLANGCI_LINT))' GOTOOLCHAIN=$(GO_TOOLCHAIN) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
-GOVULNCHECK_VERSION ?= v1.1.4
+# Pinned for the Go toolchain declared in go.mod, currently go 1.27.3: v1.9.0
+# bundles golang.org/x/tools v0.52.0. v1.1.4 (x/tools v0.29.0) panics in the SSA
+# builder with `panic: unexpected expr: *ast.KeyValueExpr` while analysing the
+# linux-tagged standard-library sources under go1.27.3, so it fails on the Linux
+# CI runner even though it can pass on macOS with the same binary. Like
+# golangci-lint this tool parses the standard library, so the pin must move with
+# go.mod (see AGENTS.md -> Code Quality).
+GOVULNCHECK_VERSION ?= v1.9.0
 # Checkout-local and keyed on version + toolchain for the same reason as the
 # linter above: a toolchain bump installs a fresh binary instead of reusing one
 # built for another Go version.

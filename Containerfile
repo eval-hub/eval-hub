@@ -1,6 +1,6 @@
 # Multi-stage build for the evaluation hub Go service
 # Build stage
-FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi10/go-toolset:1.26 AS builder
+FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi10/go-toolset:1.27 AS builder
 
 ARG TARGETARCH
 
