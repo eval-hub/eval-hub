@@ -140,6 +140,10 @@ jobs:
       # inline gosec suppressions" CI step; all exclusions must be managed
       # here via --exclude-rules with a path-scoped regex.  Rules are grouped
       # as "path:rule1,rule2" with ';' between paths.
+      # G101 is excluded only for shared/data_sources.go: PostProcessorSecretRoot
+      # is a filesystem mount path, not a hardcoded credential.
+      # The action splits args without shell quote parsing; keep the combined
+      # exclusion value unquoted so quote characters do not enter the regexes.
       #
       # G402 (InsecureSkipVerify) is suppressed only for
       # internal/eval_runtime_sidecar/proxy/http_client.go: buildTLSConfig turns
@@ -164,7 +168,7 @@ jobs:
         args: >-
           -fmt sarif -out gosec-results.sarif -stdout -verbose=text
           -exclude-dir=tests
-          --exclude-rules=internal/eval_hub/runtimes/local/local_runtime\.go:G204;internal/eval_runtime_sidecar/proxy/http_client\.go:G402
+          --exclude-rules=internal/eval_hub/runtimes/local/local_runtime\.go:G204;internal/eval_runtime_sidecar/proxy/http_client\.go:G402;internal/eval_hub/runtimes/shared/data_sources\.go:G101
           ./...
 
     - name: Upload SARIF file to GitHub Security tab

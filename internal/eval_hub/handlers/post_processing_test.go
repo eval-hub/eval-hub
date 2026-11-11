@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
@@ -515,4 +516,47 @@ func marshalPostProcessingRequest(t *testing.T, evalJob *api.EvaluationJobDataRe
 
 func intPointer(value int) *int {
 	return &value
+}
+
+// TestPostProcessingInvalidSourcesReturnBadRequest verifies that nested source
+// validation returns a message-coded 400 before persistence or runtime creation.
+func TestPostProcessingInvalidSourcesReturnBadRequest(t *testing.T) {
+	for _, role := range []string{"results", "calibration"} {
+		for _, bad := range []string{"/data", "../data", ".", "data/.", "invalid-secret"} {
+			t.Run(role+":"+bad, func(t *testing.T) {
+				var payload api.StandalonePostProcessingRequest
+				if err := json.Unmarshal(marshalPostProcessingRequest(t, nil, nil), &payload); err != nil {
+					t.Fatal(err)
+				}
+				ci := payload.Operations.ConfidenceInterval
+				pvc := &api.PVCTestDataRef{ClaimName: "data", SubPath: bad}
+				var s3 *api.S3TestDataRef
+				if bad == "invalid-secret" {
+					pvc = nil
+					s3 = &api.S3TestDataRef{Bucket: "data", Key: "samples.jsonl", SecretRef: "Bad_Name"}
+				}
+				if role == "results" {
+					ci.ResultsDataRef.PVC, ci.ResultsDataRef.S3 = pvc, s3
+				} else {
+					ci.CalibrationDataRef[0].PVC, ci.CalibrationDataRef[0].S3 = pvc, s3
+				}
+				body, err := json.Marshal(payload)
+				if err != nil {
+					t.Fatal(err)
+				}
+				storage := newPostProcessingHandlerStorage()
+				handler := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, nil)
+				recorder := httptest.NewRecorder()
+				request := &bodyRequest{MockRequest: createMockRequest(http.MethodPost, "/api/v1/evaluations/post-processing"), body: body}
+				ctx := executioncontext.NewExecutionContext(context.Background(), "invalid-source", slog.New(slog.NewTextHandler(io.Discard, nil)), "user", "tenant")
+				handler.HandleCreatePostProcessing(ctx, request, MockResponseWrapper{recorder: recorder})
+				if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "request_validation_failed") {
+					t.Fatalf("expected message-coded 400, got %d: %s", recorder.Code, recorder.Body.String())
+				}
+				if storage.createdJob != nil {
+					t.Fatal("invalid request was persisted")
+				}
+			})
+		}
+	}
 }

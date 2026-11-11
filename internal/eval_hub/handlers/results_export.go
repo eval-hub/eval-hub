@@ -11,6 +11,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/evalcards"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/otel"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -20,7 +21,7 @@ import (
 const exportStorageTimeout = 30 * time.Second
 
 func (h *Handlers) exportEvaluationResultsAsync(ctx context.Context, storage abstractions.Storage, job *api.EvaluationJobResource, logger *slog.Logger) {
-	if !api.IsResultsExportEligible(job) {
+	if !api.IsResultsExportEligible(job) || postprocessing.IsPostProcessingJob(&job.EvaluationJobConfig) {
 		return
 	}
 	// The handler continues reading the original job for threshold notifications
@@ -43,6 +44,11 @@ func (h *Handlers) exportEvaluationResultsAsync(ctx context.Context, storage abs
 }
 
 func (h *Handlers) exportEvaluationResults(ctx context.Context, storage abstractions.Storage, job *api.EvaluationJobResource, logger *slog.Logger) {
+	// Post-processing reuses OCI exports only for sidecar input access. It must
+	// never publish evaluation cards or write export status to the source job.
+	if job == nil || postprocessing.IsPostProcessingJob(&job.EvaluationJobConfig) {
+		return
+	}
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
