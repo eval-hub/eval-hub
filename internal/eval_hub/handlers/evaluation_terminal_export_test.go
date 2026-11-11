@@ -120,7 +120,7 @@ func TestHandleUpdateEvaluationExportsCardOnTerminalTransition(t *testing.T) {
 	}
 }
 
-func TestHandleUpdateEvaluationExportsCardOnFailedTransition(t *testing.T) {
+func TestHandleUpdateEvaluationSkipsCardExportOnFailedTransition(t *testing.T) {
 	t.Parallel()
 	exporter := &recordingResultsExporter{cardURL: "https://example.com/card.json"}
 	storage := &terminalExportStorage{
@@ -153,8 +153,8 @@ func TestHandleUpdateEvaluationExportsCardOnFailedTransition(t *testing.T) {
 	if recorder.Code != 204 {
 		t.Fatalf("expected status 204, got %d body %s", recorder.Code, recorder.Body.String())
 	}
-	if !exporter.called {
-		t.Fatal("expected card export when job transitions to failed")
+	if exporter.called {
+		t.Fatal("expected card export to be skipped when job transitions to failed")
 	}
 }
 

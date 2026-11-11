@@ -155,6 +155,14 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 		if profile == "concurrent" || profile == "constant" || profile == "poisson" {
 			p["rate"] = 1
 		}
+		// A single request can leave GuideLLM without a usable throughput
+		// measurement window. Keep this smoke fixture small, but let it complete
+		// enough requests to produce metrics.
+		if benchmark == "throughput" {
+			p["num_examples"], p["max_requests"], p["max_seconds"] = 10, 10, 30
+			// GuideLLM's throughput profile requires an explicit request rate.
+			p["rate"] = 1
+		}
 	case "databench", "ifbench", "followbench":
 		p["num_examples"], p["max_tokens"], p["temperature"], p["request_timeout"] = 1, 128, 0, 60
 		if provider == "ifbench" {

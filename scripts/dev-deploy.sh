@@ -12,7 +12,7 @@ KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-evalhub-dev}"
 IMAGE_TAG="${IMAGE_TAG:-kind-${KIND_CLUSTER_NAME}}"
 SKIP_BUILD="${SKIP_BUILD:-false}"
 AIRGAP="${AIRGAP:-false}"
-ADAPTERS="${ADAPTERS:-all}"
+ADAPTERS="${ADAPTERS:-inspect,lm-evaluation-harness,followbench}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-}"
 EVALHUB_HOST_PORT="${EVALHUB_HOST_PORT:-18443}"
 EVALHUB_NODE_PORT="${EVALHUB_NODE_PORT:-30443}"
@@ -26,6 +26,9 @@ SELECTED_ADAPTER_IMAGES=()
 CALICO_VERSION="v3.33.0"
 KUBECONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/evalhub/kubeconfigs"
 KUBECONFIG_FILE="${KUBECONFIG_DIR}/${KIND_CLUSTER_NAME}.yaml"
+# The engine that backs KIND_CLUSTER_NAME is recorded next to the private
+# kubeconfig, so later commands reuse it instead of probing both engines.
+RUNTIME_STATE_FILE="${KUBECONFIG_DIR}/${KIND_CLUSTER_NAME}.runtime"
 WORK_DIR=""
 REGISTRY_NAME=""
 REGISTRY_ALIAS=""
@@ -35,6 +38,9 @@ TEMP_REGISTRY_TAGS=()
 PORT_FORWARD_PID=""
 KIND_CLUSTER_CREATED=false
 API_HOST_ACCESS_PORT="${EVALHUB_HOST_PORT}"
+
+# Runtime selection helpers, shared with the other dev scripts.
+. "${SCRIPT_DIR}/lib/dev-runtime.sh"
 
 log() {
   printf '[%s] [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S%z')" "$1" "$2"
@@ -59,17 +65,29 @@ Inputs (also accepted as environment variables):
   IMAGE_TAG               tag for all locally built images (default: kind-<cluster>)
   SKIP_BUILD=true         reuse locally built images with IMAGE_TAG for EvalHub,
                           the operator, and selected adapters
-  ADAPTERS=all             comma-separated adapter images to build and use
-                          (default: all): inspect, lm-evaluation-harness, followbench
+  ADAPTERS=all             build all six curated adapter images
+  ADAPTERS=<list>          comma-separated selection (default: inspect,lm-evaluation-harness,followbench):
+                          inspect, lm-evaluation-harness, lighteval, ruler, ifbench, followbench
   AIRGAP=true              create/use a Calico kind cluster and deny external
                           egress from system-namespace evaluation jobs (default: false)
   CONTAINER_RUNTIME        container engine for image builds, the local registry,
-                           and the kind nodes (podman or docker; default: the
-                           engine that already owns KIND_CLUSTER_NAME, otherwise
-                           podman when reachable, or docker under WSL). A forced
-                           engine must own an existing KIND_CLUSTER_NAME;
-                           otherwise the script fails instead of creating a
-                           duplicate cluster and replacing its kubeconfig.
+                           and the kind nodes (podman or docker). Default: the
+                           engine recorded for KIND_CLUSTER_NAME in
+                           evalhub/kubeconfigs/<cluster>.runtime, otherwise the
+                           engine that already owns the cluster, otherwise the
+                           first reachable engine (podman before docker, docker
+                           before podman under WSL). A record whose engine is not
+                           installed is ignored, so an uninstalled engine does not
+                           block the next deploy. An explicit value must match the
+                           recorded engine, or own the cluster when no record
+                           exists yet; otherwise the script fails instead of
+                           creating a duplicate cluster and replacing its
+                           kubeconfig. A record whose engine no longer runs
+                           KIND_CLUSTER_NAME also fails, an explicit value
+                           included, when the other engine owns that cluster, so a
+                           stale record neither hides it nor gets its kubeconfig
+                           replaced; one whose engine is installed but stopped
+                           fails with the state file to remove.
   Repeated builds use the container runtime's layer cache; the EvalHub build date is stable
   for a source commit so a no-change deploy does not rebuild Go binaries.
   Temporary localhost:<port> registry tags are removed after each successful push.
@@ -177,102 +195,92 @@ need_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
 }
 
-# Return 0 when KIND_CLUSTER_NAME already exists under the given container
-# runtime, using the kind provider that runtime requires. A runtime that is not
-# installed or not reachable cannot own a cluster, so it reports false.
-kind_cluster_in_runtime() {
-  local runtime="$1" clusters
-  command -v "$runtime" >/dev/null 2>&1 || return 1
-  "$runtime" info >/dev/null 2>&1 || return 1
-  case "$runtime" in
-    podman)
-      clusters="$(KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters 2>/dev/null || true)"
-      ;;
-    docker)
-      clusters="$(env -u KIND_EXPERIMENTAL_PROVIDER kind get clusters 2>/dev/null || true)"
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-  grep -Fqx -- "$KIND_CLUSTER_NAME" <<<"$clusters"
-}
+# ensure_runtime_owns_existing_cluster is shared with dev-clean, which needs the
+# same guard for an explicit runtime when no record exists yet; it lives in
+# scripts/lib/dev-runtime.sh.
 
-# Fail when a forced CONTAINER_RUNTIME does not own KIND_CLUSTER_NAME while the
-# other container engine does. kind only lists the clusters of the engine it is
-# pointed at, so continuing would create a second cluster with the same name
-# under the selected engine and overwrite the private kubeconfig of the cluster
-# that is already running. Auto-detection already selects the owning engine, so
-# this guard only applies when CONTAINER_RUNTIME is set explicitly.
-ensure_forced_runtime_matches_owner() {
-  local other
-  case "$CONTAINER_RUNTIME" in
-    podman) other=docker ;;
-    docker) other=podman ;;
-    *) return 0 ;;
-  esac
-  kind_cluster_in_runtime "$other" || return 0
-  fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $other, not $CONTAINER_RUNTIME. Unset CONTAINER_RUNTIME to reuse the engine that owns the cluster, or set CONTAINER_RUNTIME=$other."
-}
-
-# Select the container runtime used for image builds, the local registry, and
-# the kind nodes. Set CONTAINER_RUNTIME to force a specific runtime. Otherwise an
-# existing KIND_CLUSTER_NAME decides the runtime: kind only lists the clusters
-# owned by the runtime it is pointed at, so reusing the runtime that already owns
-# the cluster prevents creating a second cluster with the same name (and private
-# kubeconfig path) under the other engine. With no existing cluster, Podman is
-# preferred whenever it is installed and reachable, except under WSL where Docker
-# is preferred instead: WSL2 podman answers 'podman info' but kind node startup
-# fails during systemd/cgroup setup. The non-preferred runtime is the fallback
-# when the preferred one is not reachable. A forced runtime must own an existing
-# KIND_CLUSTER_NAME (see ensure_forced_runtime_matches_owner).
+# Select the container runtime used for image builds, the local registry, and the
+# kind nodes. A record naming an engine that is not installed is ignored first,
+# because it cannot describe a reachable cluster. The remaining order of authority
+# is:
+#   1. an explicit CONTAINER_RUNTIME, which has to match the engine recorded for
+#      KIND_CLUSTER_NAME, or own that cluster when no record exists yet:
+#      continuing under the other engine would create a second cluster with the
+#      same name and overwrite the kubeconfig of the running one;
+#   2. the engine recorded for KIND_CLUSTER_NAME (see recorded_runtime), which
+#      must still run that cluster and answer: a record left behind by a cluster
+#      removed out of band must not hide a live same-named cluster under the
+#      other engine, and a recorded engine that is stopped fails with the state
+#      file to remove instead of a bare "not reachable";
+#   3. the engine that already owns KIND_CLUSTER_NAME, for clusters deployed
+#      before that record existed;
+#   4. the first reachable engine, podman before docker (docker before podman
+#      under WSL; see fallback_runtime_order).
+# Both 1 and 2 check ownership, so a recorded engine that no longer runs the
+# cluster cannot replace the kubeconfig of one the other engine still runs.
+# dev-deploy records the outcome, so 3 and 4 only ever run on a first deploy and
+# every later command reads the answer instead of probing both engines.
 detect_container_runtime() {
-  local runtime
-  local -a preferred_runtimes=()
-  if uname -r | grep -qiE 'microsoft|wsl'; then
-    preferred_runtimes=(docker podman)
-  else
-    preferred_runtimes=(podman docker)
+  local runtime recorded
+  # A record whose engine is no longer installed describes no reachable cluster,
+  # so ignore it: the ownership probe below still finds a live cluster under the
+  # other engine, and a deploy that creates one records its own engine.
+  if recorded="$(recorded_runtime)" && ! runtime_is_installed "$recorded"; then
+    log WARN "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $recorded-backed in $RUNTIME_STATE_FILE, but $recorded is not installed; ignoring the stale record and selecting another engine."
+    recorded=""
   fi
-  case "$CONTAINER_RUNTIME" in
-    podman|docker)
-      need_command "$CONTAINER_RUNTIME"
-      "$CONTAINER_RUNTIME" info >/dev/null 2>&1 ||
-        fail "$CONTAINER_RUNTIME is installed but not reachable. Start the $CONTAINER_RUNTIME daemon (or podman machine) and retry."
-      ensure_forced_runtime_matches_owner
-      ;;
-    "")
-      for runtime in "${preferred_runtimes[@]}"; do
-        if kind_cluster_in_runtime "$runtime"; then
-          CONTAINER_RUNTIME="$runtime"
-          log INFO "Kind cluster '$KIND_CLUSTER_NAME' already exists under $runtime; using $runtime to reuse that cluster."
-          break
-        fi
-      done
-      if [[ -z "$CONTAINER_RUNTIME" ]]; then
-        for runtime in "${preferred_runtimes[@]}"; do
-          if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
-            CONTAINER_RUNTIME="$runtime"
-            break
-          fi
-        done
-      fi
-      [[ -n "$CONTAINER_RUNTIME" ]] ||
-        fail "Neither podman nor docker is reachable. Install podman (preferred; docker under WSL) and make sure it is running."
-      ;;
-    *)
-      fail "CONTAINER_RUNTIME must be 'podman' or 'docker'."
-      ;;
-  esac
-  log INFO "Using $CONTAINER_RUNTIME as the container runtime for builds, the local registry, and kind."
-}
-
-kind_cmd() {
-  if [[ "${CONTAINER_RUNTIME:-}" == podman ]]; then
-    KIND_EXPERIMENTAL_PROVIDER=podman kind "$@"
-  else
-    env -u KIND_EXPERIMENTAL_PROVIDER kind "$@"
+  if [[ -n "$CONTAINER_RUNTIME" ]]; then
+    case "$CONTAINER_RUNTIME" in
+      podman|docker) ;;
+      *) fail "CONTAINER_RUNTIME must be 'podman' or 'docker'." ;;
+    esac
+    if [[ -n "$recorded" ]]; then
+      [[ "$recorded" == "$(canonical_runtime "$CONTAINER_RUNTIME")" ]] ||
+        fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE). Unset CONTAINER_RUNTIME to reuse $recorded, or delete that cluster and its state file before switching to $CONTAINER_RUNTIME."
+      # The record names the engine that backed the cluster, not one that still
+      # runs it: a cluster removed out of band leaves the record behind, so an
+      # explicit runtime matching the record must not create a second cluster over
+      # one the other engine still runs (see
+      # ensure_runtime_owns_existing_cluster).
+      ensure_runtime_owns_existing_cluster "$CONTAINER_RUNTIME" recorded
+    else
+      # No record yet: either no cluster exists or it predates the record, so
+      # ask both engines which one owns the name before selecting this one.
+      ensure_runtime_owns_existing_cluster "$CONTAINER_RUNTIME"
+    fi
+    use_runtime "$CONTAINER_RUNTIME" "for builds, the local registry, and kind"
+    return 0
   fi
+  if [[ -n "$recorded" ]]; then
+    log INFO "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE)."
+    # The record names the engine that backed the cluster, not one that still
+    # runs it: a cluster removed out of band leaves the record behind, and
+    # creating under the recorded engine would then duplicate a cluster the
+    # other engine still runs and overwrite its kubeconfig.
+    ensure_runtime_owns_existing_cluster "$recorded" recorded
+    if ! runtime_is_reachable "$recorded"; then
+      fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE), but $recorded is not reachable. Start $recorded and retry, or remove the stale record (rm -- '$RUNTIME_STATE_FILE') if that cluster is gone."
+    fi
+    use_runtime "$recorded" "for builds, the local registry, and kind"
+    return 0
+  fi
+  # The engine order is the policy shared with the other scripts; splitting the
+  # helper's newline-separated output is intended.
+  for runtime in $(fallback_runtime_order); do
+    if kind_cluster_in_runtime "$(canonical_runtime "$runtime")"; then
+      runtime="$(canonical_runtime "$runtime")"
+      log INFO "Kind cluster '$KIND_CLUSTER_NAME' already exists under $runtime; using $runtime to reuse that cluster."
+      use_runtime "$runtime" "for builds, the local registry, and kind"
+      return 0
+    fi
+  done
+  for runtime in $(fallback_runtime_order); do
+    if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
+      use_runtime "$runtime" "for builds, the local registry, and kind"
+      return 0
+    fi
+  done
+  fail "Neither podman nor docker is reachable. Install podman (or docker) and make sure it is running."
 }
 
 trim_whitespace() {
@@ -290,13 +298,21 @@ adapter_selected() {
   return 1
 }
 
+contrib_adapter_selected() {
+  local adapter
+  for adapter in inspect followbench lighteval ruler ifbench; do
+    adapter_selected "$adapter" && return 0
+  done
+  return 1
+}
+
 parse_adapters() {
   local requested adapter image
   local -a requested_adapters=()
 
   ADAPTERS="$(trim_whitespace "$ADAPTERS")"
   if [[ "$ADAPTERS" == all ]]; then
-    requested_adapters=(inspect followbench lm-evaluation-harness)
+    requested_adapters=(inspect lm-evaluation-harness lighteval ruler ifbench followbench)
   else
     [[ -n "$ADAPTERS" ]] || fail "ADAPTERS must be 'all' or a comma-separated list of supported adapters."
     IFS=, read -r -a requested_adapters <<<"$ADAPTERS"
@@ -310,8 +326,11 @@ parse_adapters() {
       inspect) image=community-inspect ;;
       followbench) image=community-followbench ;;
       lm-evaluation-harness) image=community-lmes ;;
-      "") fail "ADAPTERS contains an empty entry. Use inspect, followbench, or lm-evaluation-harness." ;;
-      *) fail "Unsupported adapter '$adapter' in ADAPTERS. Supported values: inspect, followbench, lm-evaluation-harness." ;;
+      lighteval) image=community-lighteval ;;
+      ruler) image=community-ruler ;;
+      ifbench) image=community-ifbench ;;
+      "") fail "ADAPTERS contains an empty entry. Use one or more supported adapter names." ;;
+      *) fail "Unsupported adapter '$adapter' in ADAPTERS. Supported values: inspect, lm-evaluation-harness, lighteval, ruler, ifbench, followbench." ;;
     esac
     adapter_selected "$adapter" && fail "ADAPTERS contains duplicate entry '$adapter'."
     SELECTED_ADAPTERS+=("$adapter")
@@ -488,6 +507,7 @@ YAML
     KIND_CLUSTER_CREATED=true
   fi
   chmod 600 "$KUBECONFIG_FILE"
+  record_runtime
   if [[ "$AIRGAP" == true ]]; then
     ensure_calico_cni
   fi
@@ -591,6 +611,18 @@ build_images() {
       lm-evaluation-harness)
         build_image community-lmes "$LMES_REPO" \
           "$LMES_REPO/Dockerfile.lmes-job" "$target_arch"
+        ;;
+      lighteval)
+        build_image community-lighteval "$CONTRIB_REPO/adapters/lighteval" \
+          "$CONTRIB_REPO/adapters/lighteval/Containerfile" "$target_arch"
+        ;;
+      ruler)
+        build_image community-ruler "$CONTRIB_REPO/adapters/ruler" \
+          "$CONTRIB_REPO/adapters/ruler/Containerfile" "$target_arch"
+        ;;
+      ifbench)
+        build_image community-ifbench "$CONTRIB_REPO/adapters/ifbench" \
+          "$CONTRIB_REPO/adapters/ifbench/Containerfile" "$target_arch"
         ;;
     esac
   done
@@ -726,19 +758,29 @@ replace_env_value() {
   mv -- "$output" "$file"
 }
 
-set_lmes_provider_image_pull_policy() {
-  local file="$1" output="$WORK_DIR/provider-lmes.yaml.tmp"
-  awk '
-    index($0, "image: $(lmes-pod-image)") > 0 {
+set_provider_image_pull_policy() {
+  local file="$1" placeholder="$2" output="$WORK_DIR/provider-image-policy.yaml.tmp"
+  local needle="image: \$(${placeholder})"
+  awk -v needle="$needle" '
+    index($0, needle) > 0 {
       print
-      match($0, /[^ ]/)
-      print substr($0, 1, RSTART - 1) "image_pull_policy: always"
+      indent = substr($0, 1, index($0, "image:") - 1)
+      if (getline next_line) {
+        if (index(next_line, "image_pull_policy:") > 0) {
+          print indent "image_pull_policy: always"
+        } else {
+          print indent "image_pull_policy: always"
+          print next_line
+        }
+      } else {
+        print indent "image_pull_policy: always"
+      }
       found = 1
       next
     }
     { print }
     END { if (!found) exit 1 }
-  ' "$file" >"$output" || fail "Could not set LMES provider image_pull_policy in $file."
+  ' "$file" >"$output" || fail "Could not set image_pull_policy for $placeholder in $file."
   mv -- "$output" "$file"
 }
 
@@ -857,24 +899,51 @@ prepare_namespace_and_certificates() {
 
 render_operator_overlay() {
   local config_root="$WORK_DIR/operator-config" params overlay manifest
+  local adapter image_name image_parameter provider_config
   mkdir -p -- "$config_root"
   cp -a "$OPERATOR_REPO/config/." "$config_root/"
   params="$config_root/base/params.env"
   replace_env_value "$params" trustyaiOperatorImage "$(registry_image trustyai-service-operator)"
   replace_env_value "$params" evalHubImage "$(registry_image eval-hub)"
-  if adapter_selected inspect; then
-    replace_env_value "$params" evalhub-provider-inspect-image "$(registry_image community-inspect)"
-    set_inspect_provider_memory_for_kind \
-      "$config_root/configmaps/evalhub/provider-inspect.yaml"
-  fi
-  if adapter_selected followbench; then
-    replace_env_value "$params" evalhub-provider-followbench-image "$(registry_image community-followbench)"
-  fi
-  if adapter_selected lm-evaluation-harness; then
-    replace_env_value "$params" lmes-pod-image "$(registry_image community-lmes)"
-    set_lmes_provider_image_pull_policy \
-      "$config_root/configmaps/evalhub/provider-lm-evaluation-harness.yaml"
-  fi
+  for adapter in "${SELECTED_ADAPTERS[@]}"; do
+    case "$adapter" in
+      inspect)
+        image_name=community-inspect
+        image_parameter=evalhub-provider-inspect-image
+        provider_config=provider-inspect.yaml
+        ;;
+      lm-evaluation-harness)
+        image_name=community-lmes
+        image_parameter=lmes-pod-image
+        provider_config=provider-lm-evaluation-harness.yaml
+        ;;
+      lighteval)
+        image_name=community-lighteval
+        image_parameter=evalhub-provider-lighteval-image
+        provider_config=provider-lighteval.yaml
+        ;;
+      ruler)
+        image_name=community-ruler
+        image_parameter=evalhub-provider-ruler-image
+        provider_config=provider-ruler.yaml
+        ;;
+      ifbench)
+        image_name=community-ifbench
+        image_parameter=evalhub-provider-ifbench-image
+        provider_config=provider-ifbench.yaml
+        ;;
+      followbench)
+        image_name=community-followbench
+        image_parameter=evalhub-provider-followbench-image
+        provider_config=provider-followbench.yaml
+        ;;
+    esac
+    replace_env_value "$params" "$image_parameter" "$(registry_image "$image_name")"
+    set_provider_image_pull_policy "$config_root/configmaps/evalhub/$provider_config" "$image_parameter"
+    if [[ "$adapter" == inspect ]]; then
+      set_inspect_provider_memory_for_kind "$config_root/configmaps/evalhub/$provider_config"
+    fi
+  done
   replace_env_value "$params" kube-rbac-proxy "localhost:${REGISTRY_PORT}/opendatahub/odh-kube-rbac-proxy:odh-stable"
 
   overlay="$config_root/overlays/evalhub-kind"
@@ -938,20 +1007,12 @@ YAML
     fail "Rendered operator deployment does not use the local operator image."
   grep -Fq "evalHubImage: $(registry_image eval-hub)" "$manifest" ||
     fail "Rendered operator config does not use the local EvalHub image."
-  if adapter_selected inspect; then
-    grep -Fq "image: $(registry_image community-inspect)" "$manifest" ||
-      fail "Rendered provider config does not use the local Inspect image."
-  fi
-  if adapter_selected followbench; then
-    grep -Fq "image: $(registry_image community-followbench)" "$manifest" ||
-      fail "Rendered provider config does not use the local FollowBench image."
-  fi
-  if adapter_selected lm-evaluation-harness; then
-    grep -Fq "image: $(registry_image community-lmes)" "$manifest" ||
-      fail "Rendered LMES provider config does not use the locally built image."
-    grep -Fq 'image_pull_policy: always' "$manifest" ||
-      fail "Rendered LMES provider config does not pull the current local image."
-  fi
+  local index
+  for index in "${!SELECTED_ADAPTER_IMAGES[@]}"; do
+    image_name="${SELECTED_ADAPTER_IMAGES[$index]}"
+    grep -Fq "image: $(registry_image "$image_name")" "$manifest" ||
+      fail "Rendered provider config does not use the selected local image for ${SELECTED_ADAPTERS[$index]}: $image_name."
+  done
   grep -Fq "kube-rbac-proxy: localhost:${REGISTRY_PORT}/opendatahub/odh-kube-rbac-proxy:odh-stable" "$manifest" ||
     fail "Rendered operator config does not use the local kube-rbac-proxy image."
   grep -Fq 'name: trustyai-service-operator-controller-manager' "$manifest" ||
@@ -1067,6 +1128,71 @@ YAML
     --for=jsonpath='{.status.ready}'=True evalhub/evalhub-local --timeout=300s
   kubectl --kubeconfig "$KUBECONFIG_FILE" -n system rollout status deployment/evalhub-local --timeout=300s
   log PASS "EvalHub custom resource and service deployment are Ready."
+}
+
+git_source_revision() {
+  git -C "$1" rev-parse HEAD 2>/dev/null || printf 'unknown'
+}
+
+git_source_dirty() {
+  local status
+  if ! command -v git >/dev/null 2>&1 || ! git -C "$1" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    printf 'unknown'
+    return 0
+  fi
+  if ! status="$(git -C "$1" status --porcelain 2>/dev/null)"; then
+    printf 'unknown'
+    return 0
+  fi
+  if [[ -n "$status" ]]; then
+    printf 'true'
+  else
+    printf 'false'
+  fi
+}
+
+record_deployment_manifest() {
+  local adapter image_name repo
+  local -a data_args=(
+    --from-literal=schema_version=1
+    --from-literal=cluster_name="$KIND_CLUSTER_NAME"
+    --from-literal=airgap="$AIRGAP"
+    --from-literal=image_tag="$IMAGE_TAG"
+    --from-literal=container_runtime="$CONTAINER_RUNTIME"
+    --from-literal=selected_adapters="$(IFS=,; printf '%s' "${SELECTED_ADAPTERS[*]}")"
+    --from-literal=source.eval-hub.revision="$(git_source_revision "$EVALHUB_REPO")"
+    --from-literal=source.eval-hub.dirty="$(git_source_dirty "$EVALHUB_REPO")"
+    --from-literal=source.trustyai-service-operator.revision="$(git_source_revision "$OPERATOR_REPO")"
+    --from-literal=source.trustyai-service-operator.dirty="$(git_source_dirty "$OPERATOR_REPO")"
+  )
+
+  if contrib_adapter_selected; then
+    data_args+=(
+      --from-literal=source.eval-hub-contrib.revision="$(git_source_revision "$CONTRIB_REPO")"
+      --from-literal=source.eval-hub-contrib.dirty="$(git_source_dirty "$CONTRIB_REPO")"
+    )
+  fi
+  for adapter in "${SELECTED_ADAPTERS[@]}"; do
+    case "$adapter" in
+      lm-evaluation-harness) image_name=community-lmes; repo="$LMES_REPO" ;;
+      *) image_name="community-$adapter"; repo="$CONTRIB_REPO" ;;
+    esac
+    data_args+=(
+      --from-literal="image.$adapter=$(registry_image "$image_name")"
+      --from-literal="source.$adapter.revision=$(git_source_revision "$repo")"
+      --from-literal="source.$adapter.dirty=$(git_source_dirty "$repo")"
+    )
+  done
+
+  check_resource_ownership configmap evalhub-dev-deploy-manifest system
+  kubectl --kubeconfig "$KUBECONFIG_FILE" -n system create configmap evalhub-dev-deploy-manifest \
+    "${data_args[@]}" --dry-run=client -o yaml |
+    kubectl --kubeconfig "$KUBECONFIG_FILE" apply -f - >/dev/null
+  kubectl --kubeconfig "$KUBECONFIG_FILE" -n system label configmap evalhub-dev-deploy-manifest \
+    app.kubernetes.io/managed-by=evalhub-dev-deploy --overwrite >/dev/null
+  kubectl --kubeconfig "$KUBECONFIG_FILE" -n system annotate configmap evalhub-dev-deploy-manifest \
+    "io.evalhub.kind-smoke.cluster=$KIND_CLUSTER_NAME" --overwrite >/dev/null
+  log PASS "Recorded adapter selection, source revisions, and image references in system/evalhub-dev-deploy-manifest."
 }
 
 # deployment_pod_selector prints a label selector for the pods a Deployment owns.
@@ -1217,157 +1343,18 @@ install_mock_services() {
   local mock_image
   mock_image="$(registry_image kind-openai-mock)"
   log INFO "Deploying mock OpenAI-compatible target and judge endpoints."
+  # The mock source stays a plain, lintable, testable Python file in
+  # scripts/kind-openai-mock.py. Loading it through --from-file avoids the
+  # YAML block-scalar indentation and unquoted-heredoc expansion constraints
+  # on its content. dev-clean selects resources by the ownership annotation,
+  # so it must be part of every applied manifest; inject it before apply.
+  kubectl --kubeconfig "$KUBECONFIG_FILE" -n system create configmap evalhub-kind-openai-mock-code \
+    --from-file=mock.py="${EVALHUB_REPO}/scripts/kind-openai-mock.py" \
+    --dry-run=client -o yaml \
+    | kubectl --kubeconfig "$KUBECONFIG_FILE" annotate --local -f - -n system \
+      --overwrite "io.evalhub.kind-smoke.cluster=${KIND_CLUSTER_NAME}" -o yaml \
+    | kubectl --kubeconfig "$KUBECONFIG_FILE" apply -f -
   kubectl --kubeconfig "$KUBECONFIG_FILE" apply -f - <<YAML
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: evalhub-kind-openai-mock-code
-  namespace: system
-  annotations:
-    io.evalhub.kind-smoke.cluster: $KIND_CLUSTER_NAME
-data:
-  mock.py: |
-    import json
-    import os
-    import re
-    from http.server import BaseHTTPRequestHandler, HTTPServer
-
-    ROLE = os.environ["MOCK_ROLE"]
-    MODEL = os.environ["MOCK_MODEL"]
-    API_KEYS = {item.strip() for item in os.environ["MOCK_API_KEYS"].split(",") if item.strip()}
-
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, _format, *_args):
-            pass
-
-        def reply(self, status, value):
-            body = json.dumps(value).encode()
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-        def do_GET(self):
-            if self.path.rstrip("/").endswith("/models"):
-                self.reply(200, {"object": "list", "data": [{"id": MODEL, "object": "model"}]})
-            else:
-                self.reply(404, {"error": {"message": "not found"}})
-
-        def do_POST(self):
-            token = self.headers.get("Authorization", "")
-            if token not in {"Bearer " + key for key in API_KEYS}:
-                self.reply(401, {"error": {"message": "mock rejected credential"}})
-                print(json.dumps({"role": ROLE, "auth": "rejected"}), flush=True)
-                return
-
-            raw = self.rfile.read(int(self.headers.get("Content-Length", "0")))
-            request = json.loads(raw or b"{}")
-            endpoint = self.path.split("?", 1)[0]
-            if ROLE == "target" and endpoint.endswith("/v1/completions"):
-                prompts = request.get("prompt", "")
-                if not isinstance(prompts, list):
-                    prompts = [prompts]
-                choices = []
-                prompt_tokens = 0
-                for index, prompt_value in enumerate(prompts):
-                    prompt = prompt_value if isinstance(prompt_value, str) else str(prompt_value)
-                    # local-completions uses echo/logprobs for multiple-choice
-                    # likelihood scoring. Return enough deterministic mock token
-                    # scores for the client tokenizer; test scores are not meaningful.
-                    token_count = max(2, len(prompt.encode("utf-8")) + 1)
-                    prompt_tokens += token_count
-                    choices.append({
-                        "index": index,
-                        "text": prompt + " ",
-                        "logprobs": {
-                            "tokens": ["mock"] * token_count,
-                            "token_logprobs": [-0.1] * token_count,
-                            "top_logprobs": [{"mock": -0.1}] * token_count,
-                            "text_offset": list(range(token_count)),
-                        },
-                        "finish_reason": "stop",
-                    })
-                self.reply(200, {
-                    "id": "cmpl-kind-mock",
-                    "object": "text_completion",
-                    "created": 0,
-                    "model": request.get("model", MODEL),
-                    "choices": choices,
-                    "usage": {"prompt_tokens": prompt_tokens, "completion_tokens": 1, "total_tokens": prompt_tokens + 1},
-                })
-                print(json.dumps({"role": ROLE, "endpoint": "completions", "auth": "accepted"}), flush=True)
-                return
-
-            # Inspect AI's OpenAI-compatible provider calls the Responses API by
-            # default, so emulate the subset of it that a chat completion needs.
-            # Without this, inspect fails with
-            # TypeError("'NoneType' object is not iterable") on response.output.
-            if ROLE == "target" and endpoint.endswith("/responses/input_tokens"):
-                self.reply(200, {"object": "response.input_tokens", "input_tokens": 1})
-                print(json.dumps({"role": ROLE, "endpoint": "responses.input_tokens", "auth": "accepted"}), flush=True)
-                return
-
-            if ROLE == "target" and endpoint.endswith("/v1/responses"):
-                text = "I will follow the requested constraints."
-                self.reply(200, {
-                    "id": "resp-kind-mock",
-                    "object": "response",
-                    "created_at": 0,
-                    "status": "completed",
-                    "model": request.get("model", MODEL),
-                    "output": [{
-                        "type": "message",
-                        "id": "msg-kind-mock",
-                        "status": "completed",
-                        "role": "assistant",
-                        "content": [{"type": "output_text", "text": text, "annotations": []}],
-                    }],
-                    "parallel_tool_calls": False,
-                    "tool_choice": "auto",
-                    "tools": [],
-                    "error": None,
-                    "incomplete_details": None,
-                    "instructions": None,
-                    "metadata": {},
-                    "temperature": 1.0,
-                    "top_p": 1.0,
-                    "max_output_tokens": None,
-                    "previous_response_id": None,
-                    "reasoning": None,
-                    "text": {"format": {"type": "text"}},
-                    "truncation": "disabled",
-                    "usage": {
-                        "input_tokens": 1,
-                        "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
-                        "output_tokens": 1,
-                        "output_tokens_details": {"reasoning_tokens": 0},
-                        "total_tokens": 2,
-                    },
-                    "user": None,
-                })
-                print(json.dumps({"role": ROLE, "endpoint": "responses", "auth": "accepted"}), flush=True)
-                return
-
-            if ROLE == "judge":
-                prompt = " ".join(str(message.get("content", "")) for message in request.get("messages", []))
-                match = re.search(r"with\s+(\d+)\s+values", prompt, re.IGNORECASE)
-                count = int(match.group(1)) if match else 1
-                content = "[" + ", ".join('"YES"' for _ in range(count)) + "]"
-            else:
-                content = "I will follow the requested constraints."
-            self.reply(200, {
-                "id": "chatcmpl-kind-mock",
-                "object": "chat.completion",
-                "created": 0,
-                "model": request.get("model", MODEL),
-                "choices": [{"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": "stop"}],
-                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
-            })
-            print(json.dumps({"role": ROLE, "auth": "accepted"}), flush=True)
-
-    HTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -1528,9 +1515,10 @@ spec:
 YAML
 
   # The mock source is mounted from a ConfigMap, but Python has already loaded
-  # the old module in a running process. Restart the target so completions
-  # support is active after every dev-deploy.
-  kubectl --kubeconfig "$KUBECONFIG_FILE" -n system rollout restart deployment/evalhub-kind-mock-target
+  # the old module in a running process. Restart both mocks so source changes
+  # are active after every dev-deploy.
+  kubectl --kubeconfig "$KUBECONFIG_FILE" -n system rollout restart \
+    deployment/evalhub-kind-mock-target deployment/evalhub-kind-mock-judge
   kubectl --kubeconfig "$KUBECONFIG_FILE" -n system rollout status deployment/evalhub-kind-mock-target --timeout=180s
   kubectl --kubeconfig "$KUBECONFIG_FILE" -n system rollout status deployment/evalhub-kind-mock-judge --timeout=180s
   log PASS "Mock target and judge deployments are Ready."
@@ -1676,6 +1664,7 @@ verify_deployment() {
 }
 
 main() {
+  local adapter contrib_required_file
   if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then
     usage
     return 0
@@ -1690,17 +1679,18 @@ main() {
   check_repository eval-hub "$EVALHUB_REPO" Containerfile
   OPERATOR_REPO="$(find_repo_checkout trustyai-service-operator Dockerfile)"
   check_repository trustyai-service-operator "$OPERATOR_REPO" Dockerfile
-  if adapter_selected inspect || adapter_selected followbench; then
-    if adapter_selected inspect; then
-      CONTRIB_REPO="$(find_repo_checkout eval-hub-contrib adapters/inspect/Containerfile)"
-      check_repository eval-hub-contrib "$CONTRIB_REPO" adapters/inspect/Containerfile
-    else
-      CONTRIB_REPO="$(find_repo_checkout eval-hub-contrib adapters/followbench/Containerfile)"
-      check_repository eval-hub-contrib "$CONTRIB_REPO" adapters/followbench/Containerfile
-    fi
-    if adapter_selected inspect && adapter_selected followbench; then
-      check_repository eval-hub-contrib "$CONTRIB_REPO" adapters/followbench/Containerfile
-    fi
+  if contrib_adapter_selected; then
+    for adapter in "${SELECTED_ADAPTERS[@]}"; do
+      case "$adapter" in
+        inspect|followbench|lighteval|ruler|ifbench)
+          contrib_required_file="adapters/$adapter/Containerfile"
+          if [[ -z "$CONTRIB_REPO" ]]; then
+            CONTRIB_REPO="$(find_repo_checkout eval-hub-contrib "$contrib_required_file")"
+          fi
+          check_repository eval-hub-contrib "$CONTRIB_REPO" "$contrib_required_file"
+          ;;
+      esac
+    done
   fi
   if adapter_selected lm-evaluation-harness; then
     LMES_REPO="$(find_repo_checkout lm-evaluation-harness Dockerfile.lmes-job)"
@@ -1723,6 +1713,7 @@ main() {
   install_mock_services
   configure_airgap_job_egress
   verify_deployment
+  record_deployment_manifest
 
   kubectl --kubeconfig "$KUBECONFIG_FILE" -n system get pods,services,evalhub
   log PASS "EvalHub development environment is deployed."

@@ -16,7 +16,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+      uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
       with:
         egress-policy: audit
 
@@ -72,6 +72,14 @@ jobs:
     - name: Check benchmark provider fixture counts
       run: go test ./tests/features -run '^TestBenchmarkProviderFixtureCounts$'
 
+    - name: Check disconnected e2e unit tests
+      run: >-
+        go test ./tests/e2e -run
+        '^(TestCuratedBenchmarkMatrixComplete|TestCuratedBenchmarkMatrixMatchesRepositoryConfigs|TestCasesWithCatalogEntriesSeparatesMissingRows|TestRefreshDeploymentTestAPIClientRenewsToken|TestDiscoverDeploymentManifest|TestDeploymentManifestAdapterSelection|TestDeploymentManifestVerifiesProviderImage|TestSelectedAdapterProviderMappingsCoverSupportedAdapters|TestLightEvalStagerCanWriteItsRegistryAsset|TestIsTerminalEvaluationPod|TestFilterCuratedCasesForHFToken|TestHFStagerEnvUsesOptionalSecretReference|TestEvaluationJobStatusDetailsHandlesMissingStatus|TestDiscoverManagedDeploymentNamespaces|TestAdapterImageDetails|TestAdapterIDsForCasesCoversEverySelectedProvider|TestCuratedEvaluationBenchmarkDoesNotMutateCatalog)$'
+
+    - name: Run development script regression tests
+      run: make test-scripts
+
     - name: Run all tests (unit and integration) with coverage
       run: |
         make clean build test-all-coverage
@@ -104,7 +112,7 @@ jobs:
       actions: read
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+      uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
       with:
         egress-policy: audit
 
@@ -148,7 +156,7 @@ jobs:
           ./...
 
     - name: Upload SARIF file to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
       if: always()
       with:
         sarif_file: gosec-results.sarif
@@ -168,7 +176,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+      uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
       with:
         egress-policy: audit
 
@@ -202,7 +210,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+      uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
       with:
         egress-policy: audit
 
@@ -217,7 +225,7 @@ jobs:
       uses: docker/setup-buildx-action@594f3bf4285d9ea8dc53c9a0c9c4092420091003 # v4.4.0
 
     - name: Log in to Quay.io
-      uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+      uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
       with:
         registry: ${{ env.IMAGE_REGISTRY }}
         username: ${{ secrets.QUAY_USERNAME }}

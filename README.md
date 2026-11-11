@@ -244,18 +244,36 @@ or **Docker**), kind, kubectl, Make, Git, curl, OpenSSL, and Python 3. Install
 `jq` as well to use the API demo and curl examples. The runtime must be running
 (for podman on macOS, start the podman machine first). These scripts use the
 container runtime to build images, run the kind nodes, and manage the local
-image registry. Podman is used in preference to Docker when it is installed and
-reachable, except under WSL where Docker is preferred (WSL2 podman can pass
-`podman info` but fail during kind node startup); set `CONTAINER_RUNTIME`
-(for example `make dev-deploy CONTAINER_RUNTIME=docker`) to force a specific
-runtime. When a kind cluster named `KIND_CLUSTER_NAME` already exists, its
-runtime is selected automatically by `make dev-deploy`, `make dev-clean`, and
-`make dev-demo`, so later commands keep using the engine that backed the
-existing cluster (passing `CONTAINER_RUNTIME` explicitly remains supported and
-must match that engine). If a forced `CONTAINER_RUNTIME` does not own an
-existing `KIND_CLUSTER_NAME` while the other engine does, `make dev-deploy` and
-`make dev-clean` fail instead of creating a duplicate cluster or cleaning up
-and deleting the kubeconfig of the cluster that is still running.
+image registry. `make dev-deploy` records the engine it used for
+`KIND_CLUSTER_NAME` in
+`${XDG_CONFIG_HOME:-$HOME/.config}/evalhub/kubeconfigs/<cluster>.runtime`, and
+`make dev-clean`, `make dev-demo`, and `make clean-container-storage` reuse that
+record, so a later command needs no second input. Set `CONTAINER_RUNTIME` (for
+example `make dev-deploy CONTAINER_RUNTIME=docker`) to choose the engine for a
+new cluster. When an explicit value differs from the recorded engine,
+`make dev-deploy` and `make dev-clean` fail instead of creating a duplicate
+cluster or cleaning up and deleting the kubeconfig of the cluster that is still
+running, while `make dev-demo` follows the record and
+`make clean-container-storage` keeps the explicit engine with a warning,
+because neither can destroy the deployment. For a cluster deployed before that
+record existed the engine that already owns `KIND_CLUSTER_NAME` is used, and
+`make dev-deploy` and `make dev-clean` also fail when an explicit value does not
+own that cluster, instead of creating a second one or reporting a cleanup that
+skipped it; a first deploy with neither a record nor a cluster falls back to the
+first reachable engine, podman before docker (or docker before podman under WSL,
+where podman passes `podman info`
+but fails kind node startup). A record whose engine no longer runs the cluster
+is not trusted: `make dev-deploy` fails when the other engine owns that cluster,
+an explicit matching value included, instead of creating a second one,
+`make dev-demo` falls back to the engine that owns the cluster, and
+`make dev-clean` drops the record (with or without `DELETE_CLUSTER=true`) once
+the cluster is gone from the recorded engine. A record whose engine is no longer
+installed cannot describe a reachable cluster, so `make dev-deploy` ignores it
+and `make dev-clean` drops it; a recorded engine that is installed but stopped
+fails with the state file to remove. Deleting the cluster with `make dev-clean
+DELETE_CLUSTER=true` removes the record, and removes the kubeconfig with it only
+when that kubeconfig targets the deleted cluster and no engine still lists or
+answers for a cluster of that name; otherwise the kubeconfig is preserved.
 
 Deploy the local EvalHub service, operator, adapters, and mock target/judge
 services:
@@ -272,9 +290,10 @@ lm-evaluation-harness checkout is the fork at
 alongside EvalHub on its `incubation` (or `stable`) branch, since only those
 branches provide the `Dockerfile.lmes-job` used for the LMES adapter image,
 not the default `main` branch. The operator
-checkout is always required; the contrib and lm-evaluation-harness checkouts
-are needed for the adapter images selected by the default `ADAPTERS=all` —
-narrow `ADAPTERS` to skip either. Each repository is searched as a sibling of
+checkout is always required. By default, `ADAPTERS` selects Inspect, LM
+Evaluation Harness, and FollowBench; their contrib and lm-evaluation-harness
+checkouts are needed. Set `ADAPTERS=all` to build all six curated adapters, or
+select a smaller list. Each repository is searched as a sibling of
 the EvalHub checkout first and then as `<parent>/<repo>` under each
 colon-separated `DEV_REPO_PARENT_PATHS` entry (default `~/code`); set that
 variable when the repositories live elsewhere. The command
@@ -384,11 +403,14 @@ make test-benchmarks-kind
 ```
 
 This deploys (or reuses) the kind cluster via `make dev-deploy` — pass
-`SKIP_BUILD=true` to reuse previously built images — mints a short-lived token
-for the local EvalHub service account, and points the suite at the loopback API
-URL with the in-cluster mock target as the model. By default it runs only the
-providers whose adapter images the deployment builds (Inspect, FollowBench, and
-LM Evaluation Harness); the remaining benchmark-test inputs are unchanged:
+`SKIP_BUILD=true` to reuse previously built images — builds every curated
+adapter image unless `ADAPTERS` is set, mints a short-lived token for the local
+EvalHub service account, and points the suite at the loopback API URL with the
+in-cluster mock target as the model. By default it runs the whole catalog the
+deployed stack discovers, so every configured provider is exercised; narrow it
+with `BENCHMARK_RUN` (or `KIND_BENCHMARK_RUN`) when iterating, and size a full
+run with `BENCHMARK_PARALLEL` and `BENCHMARK_TIMEOUT` (the token it mints is
+derived from that deadline, so it cannot expire mid-run):
 
 ```bash
 make test-benchmarks-kind BENCHMARK_RUN='TestBenchmarkSmoke/inspect/'

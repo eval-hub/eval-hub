@@ -53,12 +53,39 @@ help: ## Display this help message
 assisted-by-trailer: ## Print the Assisted-by trailer for the current AI session
 	@bash scripts/assisted-by-trailer.sh
 
+# Development skills (evalhub-bug-review, fix-fvt-test, golang-toolchain-update,
+# release-notes) are maintained in https://github.com/eval-hub/eval-hub-skills so
+# they can be shared by every eval-hub repository. This clones that repository
+# into a cache directory and symlinks the skills into ~/.claude/skills, where
+# agent harnesses load them by name. See AGENTS.md -> Development Skills.
+#
+# Overrides:
+#   DEV_SKILLS_REF        branch, tag, or commit to check out (default: main)
+#   DEV_SKILLS_CLONE_DIR  shallow clone location (default: ~/.cache/eval-hub-skills);
+#                         uninstall-dev-skills only removes links pointing into it
+#   DEV_SKILLS_TARGET_DIR harness skills directory to link into (default:
+#                         ~/.claude/skills). Codex CLI loads user skills from
+#                         ~/.agents/skills, so install for it with:
+#                           make install-dev-skills DEV_SKILLS_TARGET_DIR=~/.agents/skills
+DEV_SKILLS_REF ?=
+DEV_SKILLS_CLONE_DIR ?=
+DEV_SKILLS_TARGET_DIR ?=
+
+.PHONY: install-dev-skills uninstall-dev-skills
+install-dev-skills: ## Install dev skills from eval-hub/eval-hub-skills (into ~/.claude/skills; Codex CLI: DEV_SKILLS_TARGET_DIR=~/.agents/skills)
+	@bash scripts/install-dev-skills.sh $(if $(DEV_SKILLS_REF),--ref "$(DEV_SKILLS_REF)",) $(if $(DEV_SKILLS_CLONE_DIR),--dir "$(DEV_SKILLS_CLONE_DIR)",) $(if $(DEV_SKILLS_TARGET_DIR),--target "$(DEV_SKILLS_TARGET_DIR)",)
+
+uninstall-dev-skills: ## Remove the dev skill symlinks installed by install-dev-skills (honours DEV_SKILLS_TARGET_DIR and DEV_SKILLS_CLONE_DIR)
+	@bash scripts/install-dev-skills.sh --uninstall $(if $(DEV_SKILLS_CLONE_DIR),--dir "$(DEV_SKILLS_CLONE_DIR)",) $(if $(DEV_SKILLS_TARGET_DIR),--target "$(DEV_SKILLS_TARGET_DIR)",)
+
 
 KIND_CLUSTER_NAME ?= evalhub-dev
 IMAGE_TAG ?= kind-$(KIND_CLUSTER_NAME)
 SKIP_BUILD ?= false
 AIRGAP ?= false
-ADAPTERS ?= all
+# Keep the default comparable to the existing small local workflow. Use
+# ADAPTERS=all when you explicitly want the full curated-adapter image set.
+ADAPTERS ?= inspect,lm-evaluation-harness,followbench
 EVALHUB_HOST_PORT ?= 18443
 EVALHUB_NODE_PORT ?= 30443
 EVALHUB_HOST_BIND_ADDRESS ?= 127.0.0.1
@@ -72,13 +99,14 @@ EVALHUB_KUBECONFIG_FILE ?=
 # colon-separated DEV_REPO_PARENT_PATHS entry (default: ~/code):
 #
 #   trustyai-service-operator  requires Dockerfile                         always required
-#   eval-hub-contrib           requires adapters/inspect/Containerfile     ADAPTERS includes inspect
-#                              requires adapters/followbench/Containerfile ADAPTERS includes followbench
+#   eval-hub-contrib           requires the Containerfile for each selected adapter:
+#                              inspect, followbench, lighteval, ruler, or ifbench
 #   lm-evaluation-harness      requires Dockerfile.lmes-job                ADAPTERS includes lm-evaluation-harness
 #
-# With the default ADAPTERS=all all three checkouts must be accessible; narrow
-# ADAPTERS (comma-separated) to skip repositories you do not need. Nothing is
-# cloned automatically; the lm-evaluation-harness checkout is the fork at
+# ADAPTERS=all builds all six curated adapter images. The default builds the
+# existing Inspect, LMES, and FollowBench set. Narrow ADAPTERS (comma-separated)
+# to build only what you need. Nothing is cloned automatically; the
+# lm-evaluation-harness checkout is the fork at
 # https://github.com/opendatahub-io/lm-evaluation-harness.git, checked out on
 # its incubation (or stable) branch — the default main branch does not contain
 # the required Dockerfile.lmes-job.
@@ -318,6 +346,9 @@ vet: ## Run go vet (go.mod toolchain)
 # Prefer Nx so CI finishes deterministically; seed corpora also run under plain go test.
 FUZZTIME ?= 10000x
 GO_TEST_TIMEOUT ?= 10m
+# The full disconnected curated-collection suite stages four adapter bundles
+# and submits benchmark jobs serially; allow enough time for all 24 smoke cases.
+E2E_TEST_TIMEOUT ?= 480m
 # Packages that define Fuzz* tests. Keep in sync when adding new fuzz targets.
 FUZZ_PACKAGES ?= ./internal/eval_hub/runtimes/k8s ./pkg/ociclient ./pkg/mlflowclient ./pkg/api ./internal/eval_hub/handlers ./internal/eval_hub/storage/sql/shared ./internal/eval_hub/config ./internal/eval_runtime_sidecar/handlers ./internal/eval_runtime_sidecar/proxy ./internal/evalhub_mcp/server ./internal/safefile ./cmd/eval_runtime_init
 
@@ -328,7 +359,7 @@ test: ## Run unit tests (including fuzz seed corpora and a short fuzzing pass)
 	@echo "Unit tests complete"
 
 test-e2e: ## Auto-discover and run applicable end-to-end tests against the current Kubernetes context
-	@go test -v -count=1 -timeout=75m ./tests/e2e/...
+	@go test -v -count=1 -timeout=$(E2E_TEST_TIMEOUT) ./tests/e2e/...
 
 test-fuzz: ## Run mutational fuzzing briefly for each Fuzz* test
 	@echo "Running fuzz tests (fuzztime=$(FUZZTIME))..."
@@ -356,10 +387,21 @@ test-coverage: $(BIN_DIR) ## Run unit tests with coverage
 	@go tool cover -html=$(BIN_DIR)/coverage-init.out -o $(BIN_DIR)/coverage-init.html
 	@echo "Coverage report generated: $(BIN_DIR)/coverage.html and $(BIN_DIR)/coverage-init.html"
 
-test-all: test test-fvt test-fvt-server test-mcp-fvt ## Run all tests (unit + FVT)
+test-all: test test-scripts test-fvt test-fvt-server test-mcp-fvt ## Run all tests (unit + script regressions + FVT)
 
 test-help: ## Display Go test flags documentation
 	@go help testflag
+
+## ------------------------------------------------------------------------------------------------
+## Script regression tests
+## ------------------------------------------------------------------------------------------------
+
+.PHONY: test-scripts
+test-scripts: ## Run the Python regression tests for the development scripts (scripts/*.py)
+	@echo "Running development script regression tests..."
+	@command -v python3 >/dev/null 2>&1 || { echo "Error: Python 3 is required for make test-scripts. Install python3 and retry."; exit 1; }
+	@python3 -m unittest discover -s scripts -v
+	@echo "Development script regression tests complete"
 
 SERVER_URL ?= http://localhost:8080
 
@@ -372,7 +414,7 @@ FVT_OUTPUT ?= --godog.format=junit:${PWD}/$(BIN_DIR)/junit-fvt-report.xml,pretty
 FVT_TAGS ?= --godog.tags=~@ignore && ~@mlflow && ~@cluster && ~@local_runtime && ~@benchmark_providers
 FVT_CONCURRENCY ?= 1
 
-.PHONY: test-benchmarks test-benchmarks-kind generate-benchmark-configs
+.PHONY: test-benchmarks test-benchmarks-kind test-benchmarks-kind-deploy test-benchmarks-kind-token-check generate-benchmark-configs
 BENCHMARK_PARALLEL ?= 2
 BENCHMARK_TIMEOUT ?= 30m
 BENCHMARK_RUN ?= TestBenchmarkSmoke
@@ -395,13 +437,30 @@ test-benchmarks: $(GOTESTSUM) ## Run live benchmark smoke tests (requires SERVER
 # for the local EvalHub service account, and evaluation jobs use the in-cluster
 # mock target model.
 #
-# The default selection is one representative benchmark set per adapter that
-# dev-deploy builds: every provider here runs against mock OpenAI-compatible
-# endpoints, so benchmarks whose fixtures require a sandbox, external services,
-# or a capable judge/auditor model are excluded. Set BENCHMARK_RUN (or
-# KIND_BENCHMARK_RUN) to widen or narrow it, for example
-#   KIND_BENCHMARK_RUN='TestBenchmarkSmoke/(inspect|followbench|lm_evaluation_harness)/'
-# to run a provider's full catalog.
+# The default selection is the whole catalog the deployed EvalHub discovers, so
+# a run exercises every benchmark of every configured provider. Every provider
+# here runs against mock OpenAI-compatible endpoints, so benchmarks whose
+# fixtures require a sandbox, external services, or a capable judge/auditor
+# model report failures or prerequisite skips instead of being silently left out
+# of the run. Narrow the selection with BENCHMARK_RUN (or KIND_BENCHMARK_RUN)
+# when iterating, for example
+#   KIND_BENCHMARK_RUN='TestBenchmarkSmoke/inspect/'
+# for a single provider, or
+#   KIND_BENCHMARK_RUN='TestBenchmarkSmoke/(followbench|lm_evaluation_harness|inspect)/'
+# for the providers whose adapter images dev-deploy builds.
+#
+# A run builds every curated adapter image (ADAPTERS=all) unless ADAPTERS is
+# set, so the catalogs it exercises come from this checkout instead of from
+# operator-packaged images; SKIP_BUILD=true reuses images that are already
+# built. garak and garak-kfp are not curated adapters, so they keep their
+# operator-packaged image either way.
+#
+# A full run is large, so KIND_BENCHMARK_PARALLEL bounds how many evaluation
+# jobs run at once and KIND_BENCHMARK_TIMEOUT bounds total wall time; lower the
+# concurrency and raise the deadline on a small kind cluster. The token that
+# authenticates the run is minted once and reused for every request, so
+# KIND_BENCHMARK_TOKEN_DURATION follows the deadline (plus
+# KIND_BENCHMARK_TOKEN_MARGIN) instead of expiring while the suite is running.
 #
 # The kind cluster also runs mock judge and target OpenAI-compatible endpoints.
 # Judge and grader credentials/URLs are provisioned in the model auth Secret;
@@ -410,21 +469,54 @@ test-benchmarks: $(GOTESTSUM) ## Run live benchmark smoke tests (requires SERVER
 # the model endpoint, so the target supplies LM_EVAL_TOKENIZER for fixtures that
 # do not pin one.
 KIND_KUBECONFIG ?= $(if $(XDG_CONFIG_HOME),$(XDG_CONFIG_HOME),$(HOME)/.config)/evalhub/kubeconfigs/$(KIND_CLUSTER_NAME).yaml
-KIND_BENCHMARK_RUN ?= TestBenchmarkSmoke/(followbench|lm_evaluation_harness|inspect)\z/(followbench|arc_easy|lambada_openai|leaderboard_mmlu_pro|inspect)\z/(gsm8k|arc|mmlu|hellaswag|winogrande|truthfulqa)\z
+KIND_BENCHMARK_RUN ?= $(BENCHMARK_RUN)
 KIND_BENCHMARK_SERVER_URL ?= https://127.0.0.1:$(EVALHUB_HOST_PORT)
 KIND_BENCHMARK_TENANT ?= system
 KIND_BENCHMARK_MODEL_NAME ?= kind-target-model
 KIND_BENCHMARK_MODEL_URL ?= http://evalhub-kind-mock-target.system.svc.cluster.local:8000/v1
 KIND_BENCHMARK_MODEL_SECRET ?= evalhub-kind-demo-auth
 KIND_BENCHMARK_OWNERSHIP_ANNOTATION ?= io.evalhub.kind-smoke.cluster
-KIND_BENCHMARK_TOKEN_DURATION ?= 1h
-KIND_BENCHMARK_TIMEOUT ?= 2h
+# One token is minted for the whole run and every request in the sub-make reuses
+# it, so the token has to outlive the suite: derive its lifetime from the
+# deadline plus a cleanup margin instead of pinning an hour that a longer
+# deadline outlasts. An explicit value still wins, but
+# test-benchmarks-kind-token-check rejects one that cannot cover the deadline
+# plus KIND_BENCHMARK_SETUP_MARGIN rather than letting the run fail with 401s.
+KIND_BENCHMARK_TOKEN_MARGIN ?= 1h
+KIND_BENCHMARK_TOKEN_DURATION ?= $(shell bash scripts/go-duration.sh add $(KIND_BENCHMARK_TIMEOUT) $(KIND_BENCHMARK_TOKEN_MARGIN))
+# An explicit BENCHMARK_PARALLEL/BENCHMARK_TIMEOUT (command line or environment)
+# sizes a kind run as well, as documented; the larger kind defaults below apply
+# while those shared settings keep their standalone defaults.
+KIND_BENCHMARK_PARALLEL ?= $(if $(filter command line environment,$(origin BENCHMARK_PARALLEL)),$(BENCHMARK_PARALLEL),8)
+KIND_BENCHMARK_TIMEOUT ?= $(if $(filter command line environment,$(origin BENCHMARK_TIMEOUT)),$(BENCHMARK_TIMEOUT),4h)
+# The token is minted before `make test-benchmarks` installs gotestsum and
+# compiles the Go tests, so that setup is charged against the token lifetime. The
+# guard requires the token to cover the deadline plus this bounded preparation
+# allowance instead of only matching the deadline.
+KIND_BENCHMARK_SETUP_MARGIN ?= 15m
+KIND_BENCHMARK_REQUIRED_TOKEN_DURATION ?= $(shell bash scripts/go-duration.sh add $(KIND_BENCHMARK_TIMEOUT) $(KIND_BENCHMARK_SETUP_MARGIN))
+# dev-deploy's own ADAPTERS default is the small set used for manual work; a
+# benchmark run needs every curated adapter, so default the deployment to
+# ADAPTERS=all and keep an explicit ADAPTERS (command line or environment).
+KIND_BENCHMARK_ADAPTERS ?= $(if $(filter command line environment,$(origin ADAPTERS)),$(ADAPTERS),all)
 KIND_BENCHMARK_JUDGE_MODEL_NAME ?= kind-judge-model
 KIND_BENCHMARK_JUDGE_URL ?= http://evalhub-kind-mock-judge.system.svc.cluster.local:8000/v1
 KIND_BENCHMARK_JUDGE_API_KEY ?= judge-test-token
 KIND_BENCHMARK_LM_EVAL_TOKENIZER ?= hf-internal-testing/llama-tokenizer
 
-test-benchmarks-kind: dev-deploy ## Run benchmark smoke tests against the local kind cluster (deploys it first; SKIP_BUILD=true reuses built images)
+# Reject a token lifetime that cannot cover the suite before the (long) image
+# builds start, so a bad explicit KIND_BENCHMARK_TOKEN_DURATION fails in seconds
+# instead of after dev-deploy has built every curated adapter image.
+test-benchmarks-kind-token-check:
+	@bash scripts/go-duration.sh at-least "$(KIND_BENCHMARK_TOKEN_DURATION)" "$(KIND_BENCHMARK_REQUIRED_TOKEN_DURATION)" || \
+		{ echo "FAIL: KIND_BENCHMARK_TOKEN_DURATION=$(KIND_BENCHMARK_TOKEN_DURATION) must be a Go duration at least as long as KIND_BENCHMARK_TIMEOUT=$(KIND_BENCHMARK_TIMEOUT) plus KIND_BENCHMARK_SETUP_MARGIN=$(KIND_BENCHMARK_SETUP_MARGIN) (= $(KIND_BENCHMARK_REQUIRED_TOKEN_DURATION)); the minted token would expire while the suite is still running and requests would start failing with HTTP 401."; exit 1; }
+
+# Deploy (or reuse) the kind cluster with the adapter set the benchmark run
+# needs; `make dev-deploy` on its own keeps its smaller ADAPTERS default.
+test-benchmarks-kind-deploy: test-benchmarks-kind-token-check
+	@ADAPTERS="$(KIND_BENCHMARK_ADAPTERS)" $(MAKE) dev-deploy
+
+test-benchmarks-kind: test-benchmarks-kind-deploy ## Run benchmark smoke tests against the local kind cluster (deploys it first; SKIP_BUILD=true reuses built images)
 	@set -eu; \
 	if [ ! -f "$(KIND_KUBECONFIG)" ]; then \
 		echo "FAIL: private dev-deploy kubeconfig not found: $(KIND_KUBECONFIG). Run make dev-deploy first."; exit 1; \
@@ -449,8 +541,9 @@ test-benchmarks-kind: dev-deploy ## Run benchmark smoke tests against the local 
 		'  grader_url: $(KIND_BENCHMARK_JUDGE_URL)' \
 		| kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" apply -f - >/dev/null; \
 	echo "Applied the dev-deploy-owned mock-auth Secret $(KIND_BENCHMARK_MODEL_SECRET) with the mock target, judge, and grader keys."; \
-	token="$$(kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" create token evalhub-local-service --duration=$(KIND_BENCHMARK_TOKEN_DURATION))"; \
-	echo "Running benchmark smoke tests against $(KIND_BENCHMARK_SERVER_URL) with model $(KIND_BENCHMARK_MODEL_NAME)."; \
+	token_duration="$(KIND_BENCHMARK_TOKEN_DURATION)"; \
+	token="$$(kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" create token evalhub-local-service --duration="$$token_duration")"; \
+	echo "Running benchmark smoke tests against $(KIND_BENCHMARK_SERVER_URL) with model $(KIND_BENCHMARK_MODEL_NAME) and a $$token_duration token for the $(KIND_BENCHMARK_TIMEOUT) deadline."; \
 	SERVER_URL="$(KIND_BENCHMARK_SERVER_URL)" \
 	EVALHUB_TOKEN="$$token" \
 	X_TENANT="$(KIND_BENCHMARK_TENANT)" \
@@ -460,6 +553,7 @@ test-benchmarks-kind: dev-deploy ## Run benchmark smoke tests against the local 
 	JUDGE_MODEL_NAME="$(KIND_BENCHMARK_JUDGE_MODEL_NAME)" \
 	JUDGE_BASE_URL="$(KIND_BENCHMARK_JUDGE_URL)" \
 	LM_EVAL_TOKENIZER="$(KIND_BENCHMARK_LM_EVAL_TOKENIZER)" \
+	BENCHMARK_PARALLEL="$(KIND_BENCHMARK_PARALLEL)" \
 	BENCHMARK_TIMEOUT="$(KIND_BENCHMARK_TIMEOUT)" \
 	BENCHMARK_RUN="$(KIND_BENCHMARK_RUN)" \
 	$(MAKE) test-benchmarks

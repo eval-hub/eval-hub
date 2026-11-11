@@ -127,6 +127,19 @@ func runInspectBFCLAirgapCase(
 ) {
 	t.Helper()
 
+	manifest, err := discoverDeploymentManifest(parentCtx, kube, instance.namespace)
+	if err != nil {
+		t.Fatalf("discover dev-deploy selection in namespace %q: %v", instance.namespace, err)
+	}
+	if !manifest.adapterSelected("inspect") {
+		t.Skipf("Inspect was not selected by dev-deploy in cluster %q", manifest.clusterName)
+	}
+	requireDisconnectedDeployment(t, manifest)
+	if manifest.managed {
+		t.Skip("the full curated benchmark matrix covers BFCL for dev-deploy clusters")
+	}
+	logDeployedAdapter(t, manifest, "inspect")
+
 	forwardCtx, cancelForward := context.WithCancel(parentCtx)
 	baseURL, stopForward, err := startPortForward(forwardCtx, contextName, instance)
 	if err != nil {
@@ -162,7 +175,6 @@ func runInspectBFCLAirgapCase(
 		WithTenant(instance.namespace).
 		WithHTTPClient(httpClient).
 		WithTimeout(5 * time.Second).
-		WithMaxRetries(0).
 		WithContext(parentCtx)
 
 	provider, err := findInspectBFCLProvider(parentCtx, connection.client)
@@ -170,7 +182,15 @@ func runInspectBFCLAirgapCase(
 		t.Fatalf("read providers from EvalHub API in namespace %q: %v", instance.namespace, err)
 	}
 	if provider == nil {
+		if manifest.managed {
+			t.Fatalf("dev-deploy selected Inspect, but EvalHub %s/%s has no Kubernetes provider exposing %q", instance.namespace, instance.serviceName, bfclBenchmarkID)
+			return
+		}
 		t.Skipf("EvalHub %s/%s has no Kubernetes Inspect provider exposing %q; this test does not apply", instance.namespace, instance.serviceName, bfclBenchmarkID)
+		return
+	}
+	if err := manifest.verifyProviderImage("inspect", provider.Runtime.K8s.Image); err != nil {
+		t.Fatalf("selected Inspect provider image does not match the deployment manifest: %v", err)
 	}
 
 	policies, err := kube.NetworkingV1().NetworkPolicies(instance.namespace).List(parentCtx, metav1.ListOptions{})
@@ -179,6 +199,9 @@ func runInspectBFCLAirgapCase(
 	}
 	policyNames, restricted, reason := inspectAirgapPolicies(policies.Items)
 	if !restricted {
+		if manifest.managed && manifest.airgap {
+			t.Fatalf("dev-deploy manifest says AIRGAP=true, but no restrictive evaluation-job egress policy applies: %s", reason)
+		}
 		t.Skipf("EvalHub %s/%s is not configured for this disconnected test: %s", instance.namespace, instance.serviceName, reason)
 	}
 	t.Logf("detected restrictive evaluation-job egress policies: %s", strings.Join(policyNames, ", "))
@@ -188,6 +211,9 @@ func runInspectBFCLAirgapCase(
 		t.Fatalf("discover mock target service in namespace %q: %v", instance.namespace, err)
 	}
 	if targetService == nil {
+		if manifest.managed {
+			t.Fatal("dev-deploy cluster is missing the required mock target service")
+		}
 		t.Skipf("no ready mock target Service is available in namespace %q; this e2e case needs the dev-deploy mock target", instance.namespace)
 	}
 	targetPort, err := servicePort(targetService, "http", 8000)
@@ -338,6 +364,22 @@ func runInspectBFCLAirgapCase(
 				logText := getBenchmarkLogs(parentCtx, connection, jobID, 40)
 				t.Fatalf("BFCL benchmark status is not completed: %+v\nadapter log tail:\n%s", status, logText)
 			}
+			pod, podErr := findEvaluationAdapterPod(parentCtx, kube, instance.namespace, jobID)
+			if podErr != nil {
+				t.Fatalf("inspect completed BFCL evaluation pod: %v", podErr)
+			}
+			if pod == nil {
+				t.Fatal("BFCL job completed but its evaluation pod could not be found")
+			}
+			adapterImage, adapterImageID := adapterImageDetails(pod)
+			if adapterImage != provider.Runtime.K8s.Image {
+				t.Fatalf("BFCL pod used adapter image %q, provider config specifies %q", adapterImage, provider.Runtime.K8s.Image)
+				return
+			}
+			if adapterImageID == "" {
+				t.Fatalf("completed BFCL pod has no adapter imageID: %+v", pod.Status.ContainerStatuses)
+			}
+			t.Logf("Inspect adapter image: %s (%s)", adapterImage, adapterImageID)
 			t.Logf("BFCL benchmark completed successfully (score is not asserted; this test verifies offline asset consumption and execution)")
 			return
 		}
@@ -984,14 +1026,14 @@ func waitForPVCBound(ctx context.Context, kube kubernetes.Interface, namespace, 
 	for {
 		pvc, err := kube.CoreV1().PersistentVolumeClaims(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
-			return fmt.Errorf("get temporary BFCL PVC %s/%s: %w", namespace, name, err)
+			return fmt.Errorf("get asset-staging PVC %s/%s: %w", namespace, name, err)
 		}
 		if pvc.Status.Phase == corev1.ClaimBound {
 			return nil
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("temporary BFCL PVC %s/%s did not bind (phase %q): %w; check that the cluster has a default StorageClass", namespace, name, pvc.Status.Phase, ctx.Err())
+			return fmt.Errorf("asset-staging PVC %s/%s did not bind (phase %q): %w; check that the cluster has a default StorageClass", namespace, name, pvc.Status.Phase, ctx.Err())
 		case <-ticker.C:
 		}
 	}
