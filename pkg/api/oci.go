@@ -35,7 +35,8 @@ func IsOCIProcessingTerminalState(state OCIProcessingState) bool {
 
 // OCIProcessingStatus reports actual card, bundle, and signing workflow information.
 // It has no default state or message.
-// Workflow reporting uses running followed by completed or failed.
+// Workflow reporting normally uses running followed by completed or failed.
+// Status may remain absent or running after interruption or persistence failure.
 type OCIProcessingStatus struct {
 	State   OCIProcessingState `json:"state" validate:"required,oneof=running failed completed"`
 	Message *MessageInfo       `json:"message" validate:"required"`

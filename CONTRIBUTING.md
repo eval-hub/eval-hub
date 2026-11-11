@@ -477,7 +477,7 @@ Beyond "does it work", check the invariants CI cannot see:
 - **Behaviour and tests**: the change does what the description claims, tests cover the new path and would fail without it, and no unrelated refactors are smuggled in.
 - **Request identity and tenant scoping**: in cluster mode handlers trust the `X-Tenant` / `X-User` headers forwarded by kube-rbac-proxy, so new handlers, storage queries and job paths must scope by tenant and user, and `GET /api/v1/health` must stay unauthenticated (`AGENTS.md` → Request identity).
 - **Generated files stay generated**: `docs/openapi*.yaml|json` and `docs/index*.html` come from `docs/src/openapi.yaml` — ask for `make documentation` rather than hand edits. A version bump touches exactly `VERSION`, `cmd/eval_hub/main.go`, both `BUILD_NUMBER` ARGs in `Containerfile`, and `docs/src/openapi.yaml` (`AGENTS.md` → Version Bumps).
-- **Toolchain-pinned quality gates**: `make fmt lint` is the standard, because it uses the `go.mod` toolchain; a globally installed `golangci-lint` is not equivalent. `#nosec` and `//gosec:disable` annotations must never appear — CI rejects them (`AGENTS.md` → Code Quality).
+- **Toolchain-pinned quality gates**: `make fmt lint` is the standard, because it uses the `go.mod` toolchain; a globally installed `golangci-lint` is not equivalent. `#nosec` and `//gosec:disable` annotations must never appear — CI rejects them (`AGENTS.md` → Code Quality). `make govulncheck` applies the dated `[[IgnoredVulns]]` waivers in `osv-scanner.toml` and fails once one expires, so a waiver is not a way to hide a reachable finding (`AGENTS.md` → Vulnerability waivers).
 - **Catalogs**: provider and collection YAML changes are validated with `make validate-configs`.
 - **Tests actually exercised**: default `make test-fvt` excludes `@local_runtime`, `@cluster`, `@mlflow` and `@benchmark_providers` via `FVT_TAGS`, so a green CI run does not prove those paths. For runtime, job-execution or MLflow changes, ask for the tagged run; for changes on benchmark-provider paths (provider catalog entries, benchmark fixtures, `evaluation_jobs_for_benchmark_providers.feature`), ask for an explicit `@benchmark_providers` run (those scenarios also carry `@cluster`, so it needs a cluster; see `tests/features/README.md`).
 - **Commit hygiene**: Conventional Commit subject (commitlint enforces it), exactly one `Assisted-by` trailer naming the model and the harness, DCO sign-off from `git commit -s`, and a rebased branch rather than a merge-heavy history.
@@ -519,7 +519,7 @@ When reporting bugs, include:
 
 **Environment**:
 - OS: [e.g. Ubuntu 22.04]
-- Go Version: [e.g. 1.26.0]
+- Go Version: [e.g. 1.27.0]
 - eval-hub Version: [e.g. 0.1.1]
 - Kubernetes Version: [e.g. 1.28]
 
