@@ -147,7 +147,8 @@ Local mode connects directly to the API without kube-rbac-proxy and runs each ad
 
 - Go 1.26+
 - Make
-- Python 3 (for `make test` and `make test-scripts`; used by scripts/grcat for colored output and by the `make govulncheck` waiver gate)
+- Python 3.11+ for `make govulncheck` and `make test-scripts` (the waiver gate imports `tomllib`, and the script regression tests import that gate; set `PYTHON=python3.12` to use a newer interpreter not on `PATH` as `python3`)
+- Python 3 for `make test` and `make install-deps` (any Python 3; `scripts/grcat` only needs colored output)
 - [uv](https://docs.astral.sh/uv/) (manages the Python venv required by `make start-service` and FVT tests; run `make venv` to create it)
 - Podman (for container builds)
 - Access to an OpenShift or Kubernetes cluster (for deployment)

@@ -325,12 +325,28 @@ GOVULNCHECK := $(abspath $(BIN_DIR)/tools/govulncheck-$(GOVULNCHECK_VERSION)-$(G
 GOVULNCHECK_REPORT ?= $(abspath $(BIN_DIR)/govulncheck.json)
 GOVULNCHECK_WAIVERS ?= osv-scanner.toml
 
+# The waiver gate imports tomllib, which entered the standard library in Python
+# 3.11, and make test-scripts imports that gate, so both targets need at least
+# $(PYTHON_MIN_VERSION). Targets that only shell out to scripts/grcat (make test,
+# make install-deps) keep working with any Python 3.
+PYTHON ?= python3
+PYTHON_MIN_VERSION ?= 3.11
+
+# $(call require-python,<target>) fails with an actionable message unless
+# $(PYTHON) exists and is at least $(PYTHON_MIN_VERSION). Override PYTHON, for
+# example `make govulncheck PYTHON=python3.12`, to use a newer interpreter that
+# is not on PATH as python3.
+define require-python
+@command -v $(PYTHON) >/dev/null 2>&1 || { echo "Error: Python $(PYTHON_MIN_VERSION)+ is required for make $(1) (no $(PYTHON) on PATH). Install Python $(PYTHON_MIN_VERSION) or newer and retry."; exit 1; }
+@$(PYTHON) -c 'import sys; sys.exit(0 if sys.version_info[:2] >= tuple(int(part) for part in "$(PYTHON_MIN_VERSION)".split(".")) else 1)' || { echo "Error: Python $(PYTHON_MIN_VERSION)+ is required for make $(1), but $(PYTHON) is $$($(PYTHON) --version 2>&1). Install Python $(PYTHON_MIN_VERSION) or newer and retry."; exit 1; }
+endef
+
 govulncheck: $(GOVULNCHECK) ## Run govulncheck (waived findings in osv-scanner.toml, dated)
-	@command -v python3 >/dev/null 2>&1 || { echo "Error: Python 3 is required for make govulncheck (waiver gate). Install python3 and retry."; exit 1; }
+	$(call require-python,govulncheck)
 	@mkdir -p $(dir $(GOVULNCHECK_REPORT))
 	@echo "Running govulncheck (json) with $(GO_TOOLCHAIN)..."
 	@GOTOOLCHAIN=$(GO_TOOLCHAIN) '$(GOVULNCHECK)' -format=json ./... > '$(GOVULNCHECK_REPORT)'
-	@python3 scripts/check_govulncheck_waivers.py --report '$(GOVULNCHECK_REPORT)' --waivers '$(GOVULNCHECK_WAIVERS)'
+	@$(PYTHON) scripts/check_govulncheck_waivers.py --report '$(GOVULNCHECK_REPORT)' --waivers '$(GOVULNCHECK_WAIVERS)'
 
 $(GOVULNCHECK):
 	@mkdir -p '$(dir $(GOVULNCHECK))'
@@ -407,8 +423,8 @@ test-help: ## Display Go test flags documentation
 .PHONY: test-scripts
 test-scripts: ## Run the Python regression tests for the development scripts (scripts/*.py)
 	@echo "Running development script regression tests..."
-	@command -v python3 >/dev/null 2>&1 || { echo "Error: Python 3 is required for make test-scripts. Install python3 and retry."; exit 1; }
-	@python3 -m unittest discover -s scripts -v
+	$(call require-python,test-scripts)
+	@$(PYTHON) -m unittest discover -s scripts -v
 	@echo "Development script regression tests complete"
 
 SERVER_URL ?= http://localhost:8080
