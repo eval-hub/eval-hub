@@ -2,12 +2,42 @@ package validation
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
+
+func TestValidateEvaluationOCITagScope(t *testing.T) {
+	for _, cfg := range []*api.EvaluationJobConfig{nil, {}, {Exports: &api.EvaluationExports{}}} {
+		if err := ValidateEvaluationOCITag(cfg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tag := range []string{strings.Repeat("a", 129), "existing/tag", " literal "} {
+		coordinates := api.OCICoordinates{OCIHost: "quay.io", OCIRepository: "team/results", OCITag: tag}
+		input := api.OCIDataRef{Coordinates: coordinates, ArtifactPath: "results.json"}
+		if err := newTestValidator(t).Struct(input); err != nil {
+			t.Fatalf("literal OCI input behavior changed: %v", err)
+		}
+		cfg := &api.EvaluationJobConfig{Exports: &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{Coordinates: coordinates}}}
+		err := ValidateEvaluationOCITag(cfg)
+		if tag == strings.Repeat("a", 129) {
+			if err != nil {
+				t.Fatalf("long export prefix rejected: %v", err)
+			}
+			continue
+		}
+		var serviceErr abstractions.ServiceError
+		if !errors.As(err, &serviceErr) || serviceErr.MessageCode() != messages.RequestValidationFailed {
+			t.Fatalf("export syntax error = %v, want RequestValidationFailed", err)
+		}
+	}
+}
 
 func TestOCISigningRequestContract(t *testing.T) {
 	validate := newTestValidator(t)
