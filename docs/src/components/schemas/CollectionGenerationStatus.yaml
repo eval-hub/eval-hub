@@ -1,9 +1,6 @@
 type: object
 title: CollectionGenerationStatus
-description: |
-  Durable generation lifecycle state from the backing evaluation job. Progress
-  is optional while running and reports trusted phase/activity timestamps; it
-  is not a percentage, ETA, or heartbeat.
+description: Durable generation lifecycle state from the backing evaluation job.
 required:
   - state
 properties:
