@@ -289,7 +289,7 @@ exported environment value with a direct Go invocation:
 
 ```bash
 export MLFLOW_EXPERIMENT_NAME=benchmark-smoke
-BENCHMARK_SMOKE=1 go test ./tests/benchmarks -run TestBenchmarkSmoke -v
+BENCHMARK_SMOKE=1 go test ./tests/benchmarks -run TestBenchmarkSmoke -timeout=30m -v
 ```
 
 The environment variable alone does not change fixtures: they must reference it

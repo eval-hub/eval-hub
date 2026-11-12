@@ -93,7 +93,10 @@ func TestBenchmarkSmoke(t *testing.T) {
 				progress.selected.Add(1)
 				t.Parallel()
 				progress.running.Add(1)
-				defer progress.finish(t)
+				// Registered before the other cleanups below so it runs last
+				// (cleanups are LIFO): the outcome then includes failures from
+				// cleanups such as cleanupJob, which a defer would precede.
+				t.Cleanup(func() { progress.finish(t) })
 				path := fixturePath(fixtureRoot, provider.Resource.ID, benchmark.ID)
 				fixture, err := loadFixture(path, smokeEnv)
 				if errors.Is(err, os.ErrNotExist) {
@@ -180,8 +183,8 @@ type benchmarkProgress struct {
 }
 
 // finish records a benchmark's outcome and logs the updated counts. It is
-// deferred before the subtest's other cleanup so it also runs for skipped and
-// failed benchmarks.
+// registered as the subtest's first cleanup, so it runs after every later
+// cleanup (LIFO) and also runs for skipped and failed benchmarks.
 func (p *benchmarkProgress) finish(t *testing.T) {
 	p.finished.Add(1)
 	p.running.Add(-1)
