@@ -182,12 +182,22 @@ cluster_owner() {
   return 1
 }
 
-# resolve_runtime_decision [fallback|query] resolves which engine a dev script
-# should use and the evidence it rests on, without logging, exiting, or acting.
-# That decision is written once here; each script's detect_container_runtime is a
-# policy table over the evidence, because the same fact means "fail before you
-# create a duplicate cluster" to a deploy, "fall back to the owner" to a query,
-# and "prune the explicit engine" to a storage cleanup.
+# resolve_runtime_decision [fallback|query|prune] resolves which engine a dev
+# script should use and the evidence it rests on, without logging, exiting, or
+# acting. That decision is written once here; each script's
+# detect_container_runtime is a policy table over the evidence, because the same
+# fact means "fail before you create a duplicate cluster" to a deploy, "fall back
+# to the owner" to a query, and "prune the engine the caller named" to a storage
+# cleanup.
+#
+# $1 is what the caller needs to know. "fallback" (the default) probes for the
+# engine that runs the cluster, and "query" asks docker before podman (the order
+# dev-demo probes with to report a missing cluster). "prune" is for a storage
+# cleanup, which cannot duplicate or destroy a cluster, so an explicit engine is
+# taken as given and no engine is probed for ownership: an engine that stops
+# answering (for example a wedged Docker Desktop) must not hold up reclaiming
+# space. Prune mode therefore asks only whether the engine it was given answers
+# and whether the recorded one is installed, never which cluster either runs.
 #
 # The caller sets KIND_CLUSTER_NAME, RUNTIME_STATE_FILE and (optionally)
 # CONTAINER_RUNTIME, and reads back:
@@ -196,11 +206,16 @@ cluster_owner() {
 #   RESOLVED_EVIDENCE      one term from the table below
 #   RESOLVED_OWNER         engine that runs the cluster when a probe found it
 #   RESOLVED_RECORDED      canonical engine named by the record, if any
-#   RESOLVED_RECORD_STATE  none | uninstalled | stopped | owned | stale | gone
+#   RESOLVED_RECORD_STATE  none | uninstalled | stopped | owned | stale | gone,
+#                          or unchecked in prune mode, where an installed
+#                          recorded engine is not probed
 #
 # Explicit CONTAINER_RUNTIME:
 #   explicit-invalid             not podman or docker
 #   explicit-missing             that engine is not installed or not reachable
+#   explicit-requested           prune mode: it is installed and reachable, so it
+#                                is used as given, with no ownership probe of
+#                                either engine
 #   explicit-owned               it runs the cluster
 #   explicit-no-owner            nothing runs the cluster; it is used
 #   explicit-other-owns          no usable record; the other engine runs it
@@ -246,6 +261,30 @@ resolve_runtime_decision() {
         return 0
         ;;
     esac
+  fi
+
+  if [[ -n "$explicit" && "$order" == prune ]]; then
+    # A storage cleanup reclaims space from the engine it was given and cannot
+    # duplicate or destroy a cluster, so ownership corroboration would buy it
+    # nothing: the other engine -- possibly the one that never answers -- is not
+    # probed, and neither is kind. The record is still read, because its engine
+    # name is worth a warning when the caller asked for another one.
+    RESOLVED_RUNTIME="$explicit"
+    if recorded="$(recorded_runtime)"; then
+      recorded="$(canonical_runtime "$recorded")"
+      RESOLVED_RECORDED="$recorded"
+      if runtime_is_installed "$recorded"; then
+        RESOLVED_RECORD_STATE=unchecked
+      else
+        RESOLVED_RECORD_STATE=uninstalled
+      fi
+    fi
+    if runtime_is_reachable "$explicit"; then
+      RESOLVED_EVIDENCE=explicit-requested
+    else
+      RESOLVED_EVIDENCE=explicit-missing
+    fi
+    return 0
   fi
 
   if recorded="$(recorded_runtime)"; then

@@ -52,7 +52,9 @@ Inputs (also accepted as environment variables):
                      engine, podman before docker, docker before podman under
                      WSL). An explicit value is always pruned, with a warning
                      when it differs from the record, so storage can be
-                     reclaimed from either engine.
+                     reclaimed from either engine. The other engine is not
+                     probed for an explicit value, so a runtime that is not
+                     answering cannot delay the cleanup.
   KIND_CLUSTER_NAME  cluster used to select that engine (default: evalhub-dev)
   ALL                true to also remove unused (non-dangling) images such as
                      cached base images and previous dev image tags (default:
@@ -83,24 +85,27 @@ USAGE
 }
 
 # Container runtime policy for a storage prune. resolve_runtime_decision (in
-# scripts/lib/dev-runtime.sh) works out which engine runs KIND_CLUSTER_NAME and
-# why; this table decides which engine is pruned. Pruning cannot destroy the
-# cluster, so an explicit value is never a hard error and a recorded engine that
+# scripts/lib/dev-runtime.sh), asked in prune mode, works out which engine to
+# clean and why; this table decides what the prune does about it. Pruning cannot
+# duplicate or destroy the cluster, so an explicit value is never a hard error,
+# and prune mode takes it as given without probing the other engine: an engine
+# that stops answering must not hold up reclaiming storage. A recorded engine that
 # answers is followed even when it no longer runs the cluster; but a stopped or
 # uninstalled recorded engine must not make storage unreclaimable, so the script
 # falls back to the engine that owns the cluster, then to the first reachable one.
 detect_container_runtime() {
   local runtime
-  resolve_runtime_decision fallback
+  resolve_runtime_decision prune
   case "$RESOLVED_EVIDENCE" in
     explicit-invalid)
       fail "CONTAINER_RUNTIME must be 'podman' or 'docker'."
       ;;
-    explicit-mismatch|explicit-mismatch-stale|explicit-mismatch-gone)
-      log WARN "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $RESOLVED_RECORDED (see $RUNTIME_STATE_FILE); pruning $RESOLVED_RUNTIME as requested."
-      use_runtime "$RESOLVED_RUNTIME"
-      ;;
-    explicit-*)
+    explicit-missing|explicit-requested)
+      # The record still names the engine that backed the deployment, even when
+      # that engine is no longer installed, which is worth a warning either way.
+      if [[ -n "$RESOLVED_RECORDED" && "$RESOLVED_RECORDED" != "$RESOLVED_RUNTIME" ]]; then
+        log WARN "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $RESOLVED_RECORDED (see $RUNTIME_STATE_FILE); pruning $RESOLVED_RUNTIME as requested."
+      fi
       use_runtime "$RESOLVED_RUNTIME"
       ;;
     recorded-owned|recorded-stale|recorded-gone)
