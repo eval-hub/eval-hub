@@ -423,19 +423,62 @@ func (s *Server) setupCollectionRoutes(h *handlers.Handlers, router *http.ServeM
 }
 
 func (s *Server) setupCollectionClonesRoutes(h *handlers.Handlers, router *http.ServeMux) {
-	s.handleFunc(router, fmt.Sprintf("/api/v1/evaluations/collections/{%s}/clones", constants.PathParameterCollectionID), func(w http.ResponseWriter, r *http.Request) {
+	s.handleFunc(router, fmt.Sprintf("POST /api/v1/evaluations/collections/{%s}/clones", constants.PathParameterCollectionID), func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
 		req := s.newRequestWrapper(w, r)
 		if !s.canContinueRequest(ctx, resp) {
 			return
 		}
-		switch r.Method {
-		case http.MethodPost:
-			h.HandleCloneCollection(ctx, req, resp)
-		default:
-			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
+		h.HandleCloneCollection(ctx, req, resp)
+	})
+}
+
+func (s *Server) setupCollectionGenerationRoutes(h *handlers.Handlers, router *http.ServeMux) {
+	// Register the literal models path before the generation ID pattern. ServeMux
+	// selects the more specific literal route, and this order keeps that intent clear.
+	s.handleFunc(router, "GET /api/v1/evaluations/collections/generation/models", func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := s.newRequestWrapper(w, r)
+		if !s.canContinueRequest(ctx, resp) {
+			return
 		}
+		h.HandleListCollectionGenerationModels(ctx, req, resp)
+	})
+
+	s.handleFunc(router, "/api/v1/evaluations/collections/generation", func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := s.newRequestWrapper(w, r)
+		if !s.canContinueRequest(ctx, resp) {
+			return
+		}
+		if r.Method != http.MethodPost {
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
+			return
+		}
+		h.HandleCreateCollectionGeneration(ctx, req, resp)
+	})
+
+	s.handleFunc(router, "GET /api/v1/evaluations/collections/generation/{id}", func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := s.newRequestWrapper(w, r)
+		if !s.canContinueRequest(ctx, resp) {
+			return
+		}
+		h.HandleGetCollectionGeneration(ctx, req, resp)
+	})
+
+	s.handleFunc(router, "DELETE /api/v1/evaluations/collections/generation/{id}", func(w http.ResponseWriter, r *http.Request) {
+		ctx := s.newExecutionContext(r)
+		resp := NewRespWrapper(w, ctx)
+		req := s.newRequestWrapper(w, r)
+		if !s.canContinueRequest(ctx, resp) {
+			return
+		}
+		h.HandleDeleteCollectionGeneration(ctx, req, resp)
 	})
 }
 
@@ -544,6 +587,7 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	s.setupCollectionsRoutes(h, router)
 	s.setupCollectionRoutes(h, router)
 	s.setupCollectionClonesRoutes(h, router)
+	s.setupCollectionGenerationRoutes(h, router)
 
 	// Providers endpoints
 	s.setupProvidersRoutes(h, router)

@@ -113,6 +113,12 @@ SCRIPT_FUNCTIONS = {
         "need_command",
         "detect_container_runtime",
     ],
+    "dev-generation-demo.sh": [
+        "log",
+        "fail",
+        "need_command",
+        "detect_container_runtime",
+    ],
     "clean-container-storage.sh": ["log", "fail", "detect_container_runtime"],
 }
 
@@ -700,6 +706,47 @@ class DemoResolutionTests(RuntimeResolutionTestCase):
         )
         self.assertEqual(code, 0, output)
         self.assertEqual(resolved, "podman", output)
+
+
+class GenerationDemoResolutionTests(RuntimeResolutionTestCase):
+    """The generation demo queries kind using the runtime that owns the cluster."""
+
+    def test_recorded_runtime_is_reused(self):
+        self.assert_resolves(
+            "dev-generation-demo.sh", "podman", recorded="podman", podman_clusters=CLUSTER + "\n"
+        )
+
+    def test_stale_record_uses_cluster_owner(self):
+        output = self.assert_resolves(
+            "dev-generation-demo.sh",
+            "docker",
+            recorded="podman",
+            docker_clusters=CLUSTER + "\n",
+        )
+        self.assertIn("current owner 'docker'", output)
+
+    def test_explicit_runtime_conflict_uses_recorded_owner(self):
+        output = self.assert_resolves(
+            "dev-generation-demo.sh",
+            "podman",
+            explicit="docker",
+            recorded="podman",
+            podman_clusters=CLUSTER + "\n",
+        )
+        self.assertIn("using the recorded runtime", output)
+
+    def test_podman_docker_shim_uses_podman_provider(self):
+        self.assert_resolves(
+            "dev-generation-demo.sh", "podman", explicit="docker", shim=True
+        )
+
+    def test_missing_cluster_falls_back_to_docker_for_diagnostic(self):
+        self.assert_resolves("dev-generation-demo.sh", "docker")
+
+    def test_invalid_runtime_is_rejected(self):
+        code, _, output = self.resolve("dev-generation-demo.sh", explicit="containerd")
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("CONTAINER_RUNTIME must be", output)
 
 
 class DeleteClusterRecordTests(RuntimeResolutionTestCase):

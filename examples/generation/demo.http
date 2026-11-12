@@ -1,0 +1,49 @@
+### Collection-generation API fixture demo
+###
+### Prerequisites: the EvalHub service/API and the compatible operator route/RBAC
+### mapping are deployed in the local kind cluster. Export a short-lived token
+### as API_TOKEN, for example from `kubectl create token`; do not put token text
+### in this file. Set API_BASE_URL if the dev-deploy NodePort differs.
+
+@baseUrl = {{$processEnv EVALHUB_API_BASE_URL}}
+@token = {{$processEnv API_TOKEN}}
+@generationId = 550e8400-e29b-41d4-a716-446655440099
+
+### Without mock=true the temporary API returns 503 collection_generation_not_configured.
+GET {{baseUrl}}/api/v1/evaluations/collections/generation/models
+Authorization: Bearer {{token}}
+X-Tenant: system
+
+### The fixture exposes one selectable generator profile.
+GET {{baseUrl}}/api/v1/evaluations/collections/generation/models?mock=true
+Authorization: Bearer {{token}}
+X-Tenant: system
+
+### Start a stateless fixture generation. The response includes a relative Location.
+POST {{baseUrl}}/api/v1/evaluations/collections/generation?mock=true
+Authorization: Bearer {{token}}
+X-Tenant: system
+Content-Type: application/json
+
+{
+  "evaluation_goal": "Assess safe tool use and reasoning",
+  "max_benchmarks": 2,
+  "strictness": "moderate",
+  "generator_model_id": "mock-generator",
+  "generation_effort": "standard"
+}
+
+### Poll the fixed completed fixture (the POST Location uses this same path).
+GET {{baseUrl}}/api/v1/evaluations/collections/generation/{{generationId}}?mock=true
+Authorization: Bearer {{token}}
+X-Tenant: system
+
+### Fixture deletion is an idempotent no-op; the fixture remains readable.
+DELETE {{baseUrl}}/api/v1/evaluations/collections/generation/{{generationId}}?mock=true
+Authorization: Bearer {{token}}
+X-Tenant: system
+
+### Unknown fixture IDs return 404.
+GET {{baseUrl}}/api/v1/evaluations/collections/generation/not-a-fixture?mock=true
+Authorization: Bearer {{token}}
+X-Tenant: system

@@ -26,6 +26,18 @@ var (
 		"The {{.Type}} resource '{{.ResourceId}}' was not found.",
 		"resource_not_found",
 	)
+	// CollectionGenerationNotConfigured The temporary generation API implementation is not active without mock=true.
+	CollectionGenerationNotConfigured = createMessage(
+		constants.HTTPCodeServiceUnavailable,
+		"Collection generation is not configured.",
+		"collection_generation_not_configured",
+	)
+	// InvalidGeneratorModel The requested fixture model is not available.
+	InvalidGeneratorModel = createMessage(
+		constants.HTTPCodeBadRequest,
+		"The requested generation model is not available.",
+		"invalid_generator_model",
+	)
 
 	// QueryParameterRequired The query parameter '{{.ParameterName}}' is required.
 	QueryParameterRequired = createMessage(
