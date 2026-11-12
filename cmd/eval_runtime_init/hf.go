@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gomlx/go-huggingface/hub"
 
@@ -58,7 +59,7 @@ func (d downloader) runHF() error {
 
 	commitSHA, err := d.downloadHFRepo(ctx, repoID, revision, subPath, token)
 	if err != nil {
-		return failHF(wrapInitTimeout("huggingface download", timeout, err))
+		return failHF(formatHFDownloadError(ctx, timeout, err))
 	}
 
 	if err := d.writeGitMetadata(commitSHA); err != nil {
@@ -67,6 +68,16 @@ func (d downloader) runHF() error {
 
 	slog.Info("hf source ready", "dest", d.destDir, "commit_sha", commitSHA)
 	return nil
+}
+
+func formatHFDownloadError(ctx context.Context, timeout time.Duration, err error) error {
+	if err == nil {
+		return nil
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		err = fmt.Errorf("%w: %v", ctxErr, err)
+	}
+	return wrapInitTimeout("huggingface download", timeout, err)
 }
 
 // resolveHFToken reads the Hugging Face token when secret_ref mounted the credentials

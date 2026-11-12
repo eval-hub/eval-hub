@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gomlx/go-huggingface/hub"
 )
@@ -221,6 +222,21 @@ func TestClassifyHFError(t *testing.T) {
 	raw := errors.New("connection reset by peer")
 	if classifyHFError("org/repo", false, raw) != raw {
 		t.Fatalf("expected unclassified error to pass through unchanged")
+	}
+}
+
+func TestFormatHFDownloadErrorUsesContextDeadline(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+
+	err := formatHFDownloadError(ctx, 5*time.Second, errors.New("failed to download repository org/repo from Hugging Face Hub"))
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected deadline cause, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "huggingface download timed out after 5s") {
+		t.Fatalf("expected timeout message, got %v", err)
 	}
 }
 
