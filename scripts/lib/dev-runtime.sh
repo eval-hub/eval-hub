@@ -204,7 +204,10 @@ cluster_owner() {
 #
 #   RESOLVED_RUNTIME       canonical engine for the decision, or empty
 #   RESOLVED_EVIDENCE      one term from the table below
-#   RESOLVED_OWNER         engine that runs the cluster when a probe found it
+#   RESOLVED_OWNER         the engine kind listed KIND_CLUSTER_NAME for, when a
+#                          probe found it; while a record's engine is stopped that
+#                          proves only that the other engine lists a cluster of
+#                          that name, not that it is the cluster the record names
 #   RESOLVED_RECORDED      canonical engine named by the record, if any
 #   RESOLVED_RECORD_STATE  none | uninstalled | stopped | owned | stale | gone,
 #                          or unchecked in prune mode, where an installed
@@ -223,7 +226,8 @@ cluster_owner() {
 #                                the cluster; the other engine does
 #   explicit-recorded-unverified it matches a record whose engine is stopped, so
 #                                the record cannot be checked; RESOLVED_OWNER is
-#                                set when the other engine runs the cluster
+#                                set when the other engine lists a cluster of that
+#                                name, which may not be the recorded one
 #   explicit-mismatch            it differs from a trusted record (owned/stopped)
 #   explicit-mismatch-stale      it differs from a record that no longer runs the
 #                                cluster, while the other engine does
@@ -235,15 +239,16 @@ cluster_owner() {
 #   recorded-gone                the recorded engine runs no cluster of that name
 #   recorded-stopped             the recorded engine is installed but not
 #                                reachable, so the record cannot be checked;
-#                                RESOLVED_OWNER is set when the other engine runs
-#                                the cluster
+#                                RESOLVED_OWNER is set when the other engine lists
+#                                a cluster of that name, which may not be the
+#                                recorded one: this record is unverified, not stale
 #   owner                        no usable record; this engine runs the cluster
 #   no-owner                     nothing runs the cluster (or could be probed)
 #
 # A record whose engine is installed and runs the cluster answers the ownership
 # question, so the other engine is not probed: that is the point of the record.
 # The other engine is probed only to tell a stale record from a gone cluster, to
-# name the engine that runs the cluster while the recorded one is stopped, or
+# name the engine that lists the name while the recorded one is stopped, or
 # when no usable record exists.
 resolve_runtime_decision() {
   local order="${1:-fallback}" explicit="" recorded="" other="" record_state=none
@@ -297,8 +302,12 @@ resolve_runtime_decision() {
       recorded=""
     elif ! runtime_is_reachable "$recorded"; then
       # The recorded engine cannot be asked, so the record itself cannot be
-      # checked -- but the other engine can still report that it runs the
-      # cluster, which a deploy has to name and a prune has to choose.
+      # checked -- but the other engine can still list a cluster of that name,
+      # which a deploy has to name and a prune has to choose. That list does not
+      # prove the recorded cluster is gone: stopping a podman machine stops its
+      # VM, while kind keeps cluster state in node containers, so the recorded
+      # cluster is usually still there. This record is unverified, not stale, and
+      # a caller must not advise removing it.
       record_state=stopped
       other="$(runtime_other "$recorded")"
       if kind_cluster_in_runtime "$other"; then

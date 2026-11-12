@@ -72,15 +72,17 @@ Inputs (also accepted as environment variables):
                      not installed, so neither a cluster removed out of band nor
                      an uninstalled engine leaves a record that rejects a later
                      command; a recorded engine that is installed but stopped
-                     fails with the state file to remove. The private kubeconfig
-                     is used only when it targets the selected engine's cluster;
-                     one pointing at another cluster is preserved, and cleanup
-                     uses a temporary exported kubeconfig instead. With
-                     DELETE_CLUSTER=true the kubeconfig is removed only when the
-                     cluster is gone from the selected engine, the other engine
-                     can be shown not to hold a cluster of that name, and its API
-                     server no longer answers; an unreachable other engine or a
-                     live API server preserves it.
+                     fails with the state file to remove, because the record
+                     cannot be verified while that engine is unreachable and a
+                     stopped engine may still own its cluster. The private
+                     kubeconfig is used only when it targets the selected
+                     engine's cluster; one pointing at another cluster is
+                     preserved, and cleanup uses a temporary exported kubeconfig
+                     instead. With DELETE_CLUSTER=true the kubeconfig is removed
+                     only when the cluster is gone from the selected engine, the
+                     other engine can be shown not to hold a cluster of that
+                     name, and its API server no longer answers; an unreachable
+                     other engine or a live API server preserves it.
 
 The system namespace is retained to avoid deleting unrelated resources that may
 have been added there. Deployment resources are removed only when their ownership
@@ -162,7 +164,7 @@ detect_container_runtime() {
       fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $RESOLVED_OWNER, not $RESOLVED_RUNTIME. Unset CONTAINER_RUNTIME to clean up with the engine that owns the cluster, or set CONTAINER_RUNTIME=$RESOLVED_OWNER."
       ;;
     recorded-stopped)
-      fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $RESOLVED_RUNTIME (see $RUNTIME_STATE_FILE), but $RESOLVED_RUNTIME is not reachable. Start $RESOLVED_RUNTIME and retry, or remove the stale record (rm -- '$RUNTIME_STATE_FILE') if that cluster is gone."
+      fail "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $RESOLVED_RECORDED-backed in $RUNTIME_STATE_FILE, but $RESOLVED_RECORDED is not reachable, so the record cannot be verified. Start $RESOLVED_RECORDED and retry; remove the record (rm -- '$RUNTIME_STATE_FILE') only once you have confirmed that cluster is gone."
       ;;
     recorded-owned|recorded-stale|recorded-gone)
       log INFO "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $RESOLVED_RUNTIME (see $RUNTIME_STATE_FILE); cleaning up with $RESOLVED_RUNTIME."

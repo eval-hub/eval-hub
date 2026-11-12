@@ -32,18 +32,24 @@ A record is only an answer to "which engine backed this cluster", not proof that
 it still does: the stale-record cases check that dev-deploy fails instead of
 creating a second cluster over one the other engine still runs, that dev-demo
 queries the engine that owns the cluster instead, and that dev-clean drops the
-record for a cluster that is already gone. The unreachable-record cases check
-that a stopped recorded engine is still queried by dev-demo and cannot stop
-clean-container-storage from pruning, because a stopped or uninstalled engine
-must not make storage unreclaimable.
+record for a cluster that is already gone. A record whose engine is stopped is
+not stale but unverified: the other engine listing the name says nothing about
+the recorded cluster, which a shut-down podman VM still holds, so those cases
+check that dev-deploy fails without calling the record stale or advising its
+removal, keeps it, and names the other engine only as the cluster the user may
+choose to keep. The unreachable-record cases also check that a stopped recorded
+engine is still queried by dev-demo and cannot stop clean-container-storage from
+pruning, because a stopped or uninstalled engine must not make storage
+unreclaimable.
 
 A record whose engine is no longer installed cannot describe a reachable cluster,
 so it must not keep a command from running: the missing-engine cases check that
 dev-deploy and dev-demo ignore such a record, that dev-clean drops it (also when
 the explicit engine names another one), and that a recorded engine which is
-installed but stopped fails with the state file to remove. The explicit cases also
-check that an explicit CONTAINER_RUNTIME matching the record still has to own the
-cluster, so naming the recorded engine cannot skip that guard.
+installed but stopped fails with the state file to check and the record intact.
+The explicit cases also check that an explicit CONTAINER_RUNTIME matching the
+record still has to own the cluster, so naming the recorded engine cannot skip
+that guard.
 
 The podman-docker shim cases check that a `docker` that is really podman is
 resolved to podman for every script, so kind uses the podman provider and
@@ -458,20 +464,24 @@ class DeployResolutionTests(RuntimeResolutionTestCase):
         self.assertIn("not installed; ignoring the stale record", output)
 
     def test_stopped_recorded_engine_names_the_state_file(self):
-        """A stopped engine fails with the record to remove, not a bare probe error."""
+        """A stopped engine fails with the record to check, not a bare probe error."""
         code, _, output = self.resolve(
             "dev-deploy.sh", recorded="podman", podman_reachable=False
         )
         self.assertNotEqual(code, 0, output)
         self.assertIn(f"{CLUSTER}.runtime", output)
+        self.assertIn("cannot be verified", output)
         self.assertIn("rm -- ", output)
 
-    def test_stopped_record_names_the_engine_that_owns_the_cluster(self):
-        """A stopped recorded engine must not hide the engine that runs the cluster.
+    def test_stopped_record_names_the_engine_that_lists_the_cluster(self):
+        """A stopped recorded engine must not hide the engine that lists the cluster.
 
-        The record says podman, the podman machine is shut down, and docker has a
-        cluster of that name: a deploy has to fail with the stale record to remove
-        and the engine that owns it, not with "start podman".
+        The record says podman, the podman machine is shut down, and docker lists a
+        cluster of that name: a deploy has to fail naming docker, but the record is
+        only unverified, never stale. Stopping a podman machine stops its VM while
+        kind keeps cluster state in node containers, so the recorded cluster may
+        still exist; advising its removal would let a later deploy record docker and
+        leave the podman cluster untracked.
         """
         code, _, output = self.resolve(
             "dev-deploy.sh",
@@ -480,9 +490,27 @@ class DeployResolutionTests(RuntimeResolutionTestCase):
             docker_clusters=CLUSTER + "\n",
         )
         self.assertNotEqual(code, 0, output)
+        self.assertIn("cannot be verified", output)
+        self.assertIn("docker also lists a cluster of that name", output)
+        self.assertIn("to keep the docker cluster instead", output)
+        self.assertNotIn("no longer runs it", output)
+        self.assertNotIn("Remove the stale record", output)
+        self.assertIn("only then remove the record", output)
+        self.assertTrue((self.work_dir / f"{CLUSTER}.runtime").exists(), output)
+
+    def test_stale_record_is_described_as_stale(self):
+        """A record whose engine answers and does not list the cluster is stale.
+
+        Stopping an engine leaves the record unverified, but an engine that
+        answers without the cluster rules the record out, so that remedy removes it.
+        """
+        code, _, output = self.resolve(
+            "dev-deploy.sh", recorded="podman", docker_clusters=CLUSTER + "\n"
+        )
+        self.assertNotEqual(code, 0, output)
         self.assertIn("no longer runs it and docker does", output)
-        self.assertIn("rm -- ", output)
-        self.assertNotIn("Start podman and retry", output)
+        self.assertIn("Remove the stale record", output)
+        self.assertNotIn("cannot be verified", output)
 
 
 class CleanResolutionTests(RuntimeResolutionTestCase):
@@ -554,12 +582,13 @@ class CleanResolutionTests(RuntimeResolutionTestCase):
         self.assertEqual(resolved, "docker", output)
 
     def test_stopped_recorded_engine_names_the_state_file(self):
-        """A stopped engine fails with the record to remove and keeps it."""
+        """A stopped engine fails with the record to check and keeps it."""
         code, _, output = self.resolve(
             "dev-clean.sh", recorded="podman", podman_reachable=False
         )
         self.assertNotEqual(code, 0, output)
         self.assertIn(f"{CLUSTER}.runtime", output)
+        self.assertIn("cannot be verified", output)
         self.assertIn("rm -- ", output)
         self.assertTrue((self.work_dir / f"{CLUSTER}.runtime").exists(), output)
 

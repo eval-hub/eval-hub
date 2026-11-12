@@ -87,7 +87,12 @@ Inputs (also accepted as environment variables):
                            included, when the other engine owns that cluster, so a
                            stale record neither hides it nor gets its kubeconfig
                            replaced; one whose engine is installed but stopped
-                           fails with the state file to remove.
+                           fails too, as unverified rather than stale, and keeps
+                           the record, because a stopped engine may still own its
+                           cluster. Start that engine and retry to reuse the
+                           recorded cluster, or delete that cluster first and only
+                           then remove the record (rm -- <cluster>.runtime) to keep
+                           the other engine's cluster.
   Repeated builds use the container runtime's layer cache; the EvalHub build date is stable
   for a source commit so a no-change deploy does not rebuild Go binaries.
   Temporary localhost:<port> registry tags are removed after each successful push.
@@ -203,6 +208,13 @@ need_command() {
 # the engine to use, and an explicit value that contradicts a trusted record
 # fails instead of proceeding. dev-deploy records the outcome, so the owner and
 # fallback rows only run on a first deploy.
+#
+# A record whose engine no longer lists the cluster is stale and says so; a
+# record whose engine is stopped is only unverified, because a stopped engine
+# (a podman machine with its VM shut down) can still own its kind cluster and
+# another cluster of the same name can exist under the other engine. The two
+# fail differently on purpose: the stale record's remedy is to remove it, while
+# the unverified one is kept until the user has confirmed which cluster to keep.
 detect_container_runtime() {
   local runtime
   resolve_runtime_decision fallback
@@ -220,14 +232,25 @@ detect_container_runtime() {
     explicit-mismatch|explicit-mismatch-stale|explicit-mismatch-gone)
       fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $RESOLVED_RECORDED (see $RUNTIME_STATE_FILE). Unset CONTAINER_RUNTIME to reuse $RESOLVED_RECORDED, or delete that cluster and its state file before switching to $RESOLVED_RUNTIME."
       ;;
-    explicit-recorded-stale|recorded-stale|recorded-stopped|explicit-recorded-unverified)
-      # A recorded engine that is stopped cannot run the cluster, so an engine
-      # found running it is the owner: report it with the stale-record remedy
-      # instead of sending the user to start an engine that will not have it.
+    explicit-recorded-stale|recorded-stale)
+      # Both terms are only reported after the other engine listed the cluster,
+      # so RESOLVED_OWNER names it: the record is stale, and removing it is the
+      # remedy.
+      fail "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $RESOLVED_RECORDED-backed in $RUNTIME_STATE_FILE, but $RESOLVED_RECORDED no longer runs it and $RESOLVED_OWNER does. Remove the stale record (rm -- '$RUNTIME_STATE_FILE') to reuse the $RESOLVED_OWNER cluster with this script, or remove it and run 'make dev-clean CONTAINER_RUNTIME=$RESOLVED_OWNER DELETE_CLUSTER=true' to delete that cluster."
+      ;;
+    recorded-stopped|explicit-recorded-unverified)
+      # The recorded engine is installed but not reachable, so the record cannot
+      # be verified either way. An engine that lists the name proves only that a
+      # cluster of that name exists under it, not that the recorded engine's
+      # cluster was deleted: stopping a podman machine stops its VM, while kind
+      # keeps cluster state in node containers, so the recorded cluster is
+      # usually still there. Removing the record here would let a later deploy
+      # record $RESOLVED_OWNER and leave that cluster untracked, so the record is
+      # kept and the choice is left to the user.
       if [[ -n "$RESOLVED_OWNER" ]]; then
-        fail "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $RESOLVED_RECORDED-backed in $RUNTIME_STATE_FILE, but $RESOLVED_RECORDED no longer runs it and $RESOLVED_OWNER does. Remove the stale record (rm -- '$RUNTIME_STATE_FILE') to reuse the $RESOLVED_OWNER cluster with this script, or remove it and run 'make dev-clean CONTAINER_RUNTIME=$RESOLVED_OWNER DELETE_CLUSTER=true' to delete that cluster."
+        fail "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $RESOLVED_RECORDED-backed in $RUNTIME_STATE_FILE, but $RESOLVED_RECORDED is not reachable, so the record cannot be verified; $RESOLVED_OWNER also lists a cluster of that name, which may or may not be the recorded one. Start $RESOLVED_RECORDED and retry to reuse the recorded cluster, or, to keep the $RESOLVED_OWNER cluster instead, delete the $RESOLVED_RECORDED one first (start $RESOLVED_RECORDED and run 'make dev-clean CONTAINER_RUNTIME=$RESOLVED_RECORDED DELETE_CLUSTER=true'), and only then remove the record if it is still there (rm -f -- '$RUNTIME_STATE_FILE'). The record is left in place so a stopped $RESOLVED_RECORDED cluster cannot be left untracked."
       fi
-      fail "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $RESOLVED_RUNTIME (see $RUNTIME_STATE_FILE), but $RESOLVED_RUNTIME is not reachable. Start $RESOLVED_RUNTIME and retry, or remove the stale record (rm -- '$RUNTIME_STATE_FILE') if that cluster is gone."
+      fail "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $RESOLVED_RECORDED-backed in $RUNTIME_STATE_FILE, but $RESOLVED_RECORDED is not reachable, so the record cannot be verified. Start $RESOLVED_RECORDED and retry; remove the record (rm -- '$RUNTIME_STATE_FILE') only once you have confirmed that cluster is gone."
       ;;
     explicit-other-owns)
       fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $RESOLVED_OWNER, not $RESOLVED_RUNTIME. Unset CONTAINER_RUNTIME to reuse the engine that owns the cluster, or set CONTAINER_RUNTIME=$RESOLVED_OWNER."
