@@ -2074,6 +2074,13 @@ paths:
                   strictness: moderate
                   generator_model_id: generation-default
                   generation_effort: standard
+              goal_defaults:
+                summary: Let the service resolve the default generator and effort
+                value:
+                  evaluation_goal: Assess agent safety and tool-use risks
+                  provider_filter: inspect
+                  max_benchmarks: 12
+                  strictness: moderate
       responses:
         '202':
           description: Generation admitted; poll the Location URL for state and result.
@@ -2093,6 +2100,24 @@ paths:
                   value:
                     resource:
                       id: 550e8400-e29b-41d4-a716-446655440000
+                      tenant: team-a
+                      owner: user-a
+                      created_at: '2026-10-29T12:00:00Z'
+                      updated_at: '2026-10-29T12:00:00Z'
+                    request:
+                      evaluation_goal: Assess agent safety and tool-use risks
+                      provider_filter: inspect
+                      max_benchmarks: 12
+                      strictness: moderate
+                      generator_model_id: generation-default
+                      generation_effort: standard
+                    status:
+                      state: pending
+                pending_defaults:
+                  summary: Defaults resolved and included in the normalized request
+                  value:
+                    resource:
+                      id: 550e8400-e29b-41d4-a716-446655440001
                       tenant: team-a
                       owner: user-a
                       created_at: '2026-10-29T12:00:00Z'
@@ -2239,7 +2264,7 @@ paths:
                       tenant: team-a
                       owner: user-a
                       created_at: '2026-10-29T12:00:00Z'
-                      updated_at: '2026-10-29T12:00:01Z'
+                      updated_at: '2026-10-29T12:00:15Z'
                     request:
                       evaluation_goal: Assess agent safety and tool-use risks
                       provider_filter: inspect
@@ -5841,6 +5866,7 @@ components:
           type: string
           minLength: 1
           maxLength: 128
+          pattern: \S
           description: Stable opaque profile ID accepted by generator_model_id.
         display_name:
           type: string

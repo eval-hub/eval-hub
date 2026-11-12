@@ -67,7 +67,7 @@ get:
                   tenant: team-a
                   owner: user-a
                   created_at: '2026-10-29T12:00:00Z'
-                  updated_at: '2026-10-29T12:00:01Z'
+                  updated_at: '2026-10-29T12:00:15Z'
                 request:
                   evaluation_goal: Assess agent safety and tool-use risks
                   provider_filter: inspect

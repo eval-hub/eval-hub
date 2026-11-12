@@ -10,6 +10,7 @@ properties:
     type: string
     minLength: 1
     maxLength: 128
+    pattern: '\S'
     description: Stable opaque profile ID accepted by generator_model_id.
   display_name:
     type: string
