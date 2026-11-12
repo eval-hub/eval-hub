@@ -8,6 +8,7 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+// TestToEvaluationJobCopiesExternalOCIConfiguration keeps sidecar connection settings independent of the caller's request.
 func TestToEvaluationJobCopiesExternalOCIConfiguration(t *testing.T) {
 	source := &api.OCIDataRef{
 		Coordinates: api.OCICoordinates{OCIHost: "quay.io", OCIRepository: "org/repo", OCITag: "source", Annotations: map[string]string{"purpose": "source"}},

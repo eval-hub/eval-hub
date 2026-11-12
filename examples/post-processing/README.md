@@ -3,15 +3,20 @@
 ## Data preparation in Kubernetes
 
 Post-processing reuses the same `/app/eval-runtime-init` executable and configured
-init image as evaluation jobs. For S3, Git and Hugging Face references, eval-hub
+init image as evaluation jobs. Set `service.eval_init_image` to a build containing
+this staging support; Kubernetes S3/Git/HF post-processing now requires it. For S3, Git and Hugging Face references, eval-hub
 mounts the existing `job.json` into one container named `init`, which runs
 before the computation adapter. Init reads the results and calibration references
 from `parameters.operations.confidence_interval` and calls the existing downloaders
-directly, using separate configuration and destinations for each input. Source credentials are mounted
-only in init, while the adapter receives read-only staged data.
+directly, using separate configuration and destinations for each input. S3/Git/HF
+credentials are mounted only in init, while the adapter receives read-only staged data.
 
 PVC references use direct read-only mounts with Kubernetes applying `sub_path`.
 References sharing a claim share its volume but retain independent mounts.
+`sub_path` must be relative and contain no `.` or `..` segments; omit it to
+mount the claim root. S3 `secret_ref` must be a Kubernetes Secret name.
+The staging volume retains the existing 5 GiB limit, shared by all staged inputs;
+use PVC references when larger local datasets are needed.
 
 The internal `EVALHUB_POST_PROCESSOR_DATA_PATHS` JSON environment variable maps
 `results` and zero-based `calibration-N` names to their local paths. For example:
@@ -27,7 +32,10 @@ This is an internal runtime contract, not a new public API field. Existing
 source references and data-format mappings remain unchanged. Git/HF revision
 metadata and HF caches are kept outside the consumed dataset directories.
 MLflow/OCI results continue to download on demand through the sidecar, including
-artifacts resolved from `eval_job` references; they are not init-staged.
+artifacts resolved from `eval_job` references; they are not init-staged. OCI registry
+credentials retain their existing projection into the sidecar and adapter; the
+init-only credential isolation above applies to S3/Git/HF. OCI input configuration
+does not enable publishing evaluation cards or post-processing results.
 
 Deploy the corresponding contrib post-processor together with the enhanced
 eval-hub service/init image. Local post-processor execution retains its existing

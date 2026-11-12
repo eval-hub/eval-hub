@@ -16,7 +16,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+      uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
       with:
         egress-policy: audit
 
@@ -32,7 +32,7 @@ jobs:
         cache: true
 
     - name: Install uv
-      uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       with:
         # uv tool/package cache only (keys derived from uv lockfiles); Go uses setup-go above.
         enable-cache: true
@@ -72,6 +72,14 @@ jobs:
     - name: Check benchmark provider fixture counts
       run: go test ./tests/features -run '^TestBenchmarkProviderFixtureCounts$'
 
+    - name: Check disconnected e2e unit tests
+      run: >-
+        go test ./tests/e2e -run
+        '^(TestCuratedBenchmarkMatrixComplete|TestCuratedBenchmarkMatrixMatchesRepositoryConfigs|TestCasesWithCatalogEntriesSeparatesMissingRows|TestRefreshDeploymentTestAPIClientRenewsToken|TestDiscoverDeploymentManifest|TestDeploymentManifestAdapterSelection|TestDeploymentManifestVerifiesProviderImage|TestSelectedAdapterProviderMappingsCoverSupportedAdapters|TestLightEvalStagerCanWriteItsRegistryAsset|TestIsTerminalEvaluationPod|TestFilterCuratedCasesForHFToken|TestHFStagerEnvUsesOptionalSecretReference|TestEvaluationJobStatusDetailsHandlesMissingStatus|TestDiscoverManagedDeploymentNamespaces|TestAdapterImageDetails|TestAdapterIDsForCasesCoversEverySelectedProvider|TestCuratedEvaluationBenchmarkDoesNotMutateCatalog)$'
+
+    - name: Run development script regression tests
+      run: make test-scripts
+
     - name: Run all tests (unit and integration) with coverage
       run: |
         make clean build test-all-coverage
@@ -104,7 +112,7 @@ jobs:
       actions: read
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+      uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
       with:
         egress-policy: audit
 
@@ -130,21 +138,41 @@ jobs:
       # commands (exec.Command("sh", "-c", …)); there is no structural
       # alternative.  Inline #nosec annotations are banned by the "Reject
       # inline gosec suppressions" CI step; all exclusions must be managed
-      # here via --exclude-rules with a path-scoped regex.
+      # here via --exclude-rules with a path-scoped regex.  Rules are grouped
+      # as "path:rule1,rule2" with ';' between paths.
+      # G101 is excluded only for shared/data_sources.go: PostProcessorSecretRoot
+      # is a filesystem mount path, not a hardcoded credential.
+      # The action splits args without shell quote parsing; keep the combined
+      # exclusion value unquoted so quote characters do not enter the regexes.
+      #
+      # G402 (InsecureSkipVerify) is suppressed only for
+      # internal/eval_runtime_sidecar/proxy/http_client.go: buildTLSConfig turns
+      # verification off only when sidecar_config.json explicitly sets
+      # insecure_skip_verify for a local/dev endpoint with a self-signed
+      # certificate; it refuses to do so in FIPS mode (platform.IsFIPS /
+      # fips140.Enabled) and the MLflow and OCI callers always pass false.
       env:
         # make sure that we use the golang version required by the project
-        GOSECGOVERSION: go1.26.10
-        GOTOOLCHAIN: go1.26.10
-      uses: securego/gosec@5eb1d104ef85ff2c905c877eb600e8c1dee33a22 # v2.30.0
+        GOSECGOVERSION: go1.27.3
+        GOTOOLCHAIN: go1.27.3
+      # Pinned past the v2.30.0 tag on purpose: the tag commit's action.yml still
+      # resolved the gosec 2.29.0 image (sha256:a6cd2f30…), which bundles
+      # golang.org/x/tools v0.49.0 and cannot read Go 1.27 export data
+      # ("cannot decode \"fmt\", export data version 5 is greater than maximum
+      # supported version 4").  4504603 is upstream's "Fix the tag in the action",
+      # the first commit whose action.yml references the gosec 2.30.0 image
+      # (x/tools v0.52.0, export data version 5).  Move to v2.30.1 or later once
+      # a tag publishes that image, and keep this pin in step with go.mod.
+      uses: securego/gosec@4504603eddc5a91a7b7713932d6d1d3792126103 # v2.30.0 image
       with:
         args: >-
           -fmt sarif -out gosec-results.sarif -stdout -verbose=text
           -exclude-dir=tests
-          --exclude-rules=internal/eval_hub/runtimes/local/local_runtime\.go:G204
+          --exclude-rules=internal/eval_hub/runtimes/local/local_runtime\.go:G204;internal/eval_runtime_sidecar/proxy/http_client\.go:G402;internal/eval_hub/runtimes/shared/data_sources\.go:G101
           ./...
 
     - name: Upload SARIF file to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
       if: always()
       with:
         sarif_file: gosec-results.sarif
@@ -164,7 +192,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+      uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
       with:
         egress-policy: audit
 
@@ -198,7 +226,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+      uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
       with:
         egress-policy: audit
 
@@ -213,7 +241,7 @@ jobs:
       uses: docker/setup-buildx-action@594f3bf4285d9ea8dc53c9a0c9c4092420091003 # v4.4.0
 
     - name: Log in to Quay.io
-      uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+      uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
       with:
         registry: ${{ env.IMAGE_REGISTRY }}
         username: ${{ secrets.QUAY_USERNAME }}

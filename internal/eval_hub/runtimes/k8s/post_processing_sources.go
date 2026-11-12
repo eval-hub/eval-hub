@@ -17,6 +17,7 @@ const (
 	postProcessorDataVolumeName     = "post-processor-data"
 )
 
+// postProcessorReferences reads local inputs only for the internal post-processing workload.
 func postProcessorReferences(evaluation *api.EvaluationJobResource) ([]shared.NamedDataSource, error) {
 	if evaluation == nil || !postprocessing.IsPostProcessingJob(&evaluation.EvaluationJobConfig) {
 		return nil, nil
@@ -28,6 +29,7 @@ func postProcessorReferences(evaluation *api.EvaluationJobResource) ([]shared.Na
 	return refs, nil
 }
 
+// postProcessorDownloadSources excludes direct PVC mounts and sources downloaded through the sidecar.
 func postProcessorDownloadSources(evaluation *api.EvaluationJobResource) ([]shared.NamedDataSource, error) {
 	refs, err := postProcessorReferences(evaluation)
 	if err != nil {
@@ -45,6 +47,7 @@ func postProcessorDownloadSources(evaluation *api.EvaluationJobResource) ([]shar
 	return sources, nil
 }
 
+// postProcessorInitContainer reuses eval-runtime-init with job.json and init-only source credentials.
 func postProcessorInitContainer(cfg *jobConfig, resources corev1.ResourceRequirements) (*corev1.Container, []corev1.Volume, error) {
 	if cfg.postProcessorDownloads == nil {
 		return nil, nil, nil
@@ -52,11 +55,13 @@ func postProcessorInitContainer(cfg *jobConfig, resources corev1.ResourceRequire
 	if cfg.testDataInitImage == "" {
 		return nil, nil, fmt.Errorf("init image is required for post-processing source staging")
 	}
+	// Init writes the shared data volume; the adapter receives a read-only mount.
 	volumes := []corev1.Volume{{Name: postProcessorDataVolumeName, VolumeSource: corev1.VolumeSource{EmptyDir: testDataEmptyDirVolumeSource()}}}
 	mounts := []corev1.VolumeMount{
 		{Name: postProcessorDataVolumeName, MountPath: shared.PostProcessorStagingRoot},
 		{Name: jobSpecVolumeName, MountPath: "/meta/" + jobSpecFileName, SubPath: jobSpecFileName, ReadOnly: true},
 	}
+	// Project each deduplicated Secret once, without exposing it to the adapter.
 	for i, name := range cfg.postProcessorSecrets {
 		volume := fmt.Sprintf("%s%d", postProcessorSecretVolumePrefix, i)
 		volumes = append(volumes, corev1.Volume{Name: volume, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: name}}})
@@ -85,6 +90,7 @@ func postProcessorSecretNames(evaluation *api.EvaluationJobResource) ([]string, 
 		return nil, fmt.Errorf("read post-processing source secrets: %w", err)
 	}
 	var names []string
+	// Collect source credentials separately from OCI's sidecar connection Secret.
 	addRefs := func(s3 *api.S3TestDataRef, git *api.GitTestDataRef, hf *api.HFTestDataRef) {
 		if s3 != nil {
 			names = append(names, s3.SecretRef)
@@ -104,6 +110,7 @@ func postProcessorSecretNames(evaluation *api.EvaluationJobResource) ([]string, 
 		addRefs(ref.S3, ref.Git, ref.HF)
 	}
 	var secrets []string
+	// A Secret may be shared by multiple inputs, but needs only one projection.
 	seen := make(map[string]bool)
 	for _, name := range names {
 		name = strings.TrimSpace(name)

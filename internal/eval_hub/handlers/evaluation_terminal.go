@@ -12,21 +12,30 @@ import (
 func (h *Handlers) onEvaluationJobUpdated(
 	ctx context.Context,
 	storage abstractions.Storage,
-	getJob func() (*api.EvaluationJobResource, error),
+	getJob func(context.Context) (*api.EvaluationJobResource, error),
 	previousState api.OverallState,
 	logger *slog.Logger,
 ) {
-	recordEvaluationJobTerminalStateAfterUpdate(ctx, getJob, previousState)
-
-	job, err := getJob()
-	if err != nil || job == nil || job.Status == nil {
+	// The update is committed. Cancellation of the event request must not cancel
+	// the handoff read; retain identity and tracing values with a separate bound.
+	readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), exportStorageTimeout)
+	job, err := getJob(readCtx)
+	cancel()
+	recordEvaluationJobTerminalStateAfterUpdate(ctx, func() (*api.EvaluationJobResource, error) { return job, err }, previousState)
+	if err != nil {
+		if logger != nil {
+			logger.Error("Failed to read evaluation job after update", "error", err)
+		}
+		return
+	}
+	if job == nil || job.Status == nil {
 		return
 	}
 	if !job.Status.State.IsTerminalState() || previousState == job.Status.State {
 		return
 	}
 
-	h.exportEvaluationResults(ctx, job, logger)
+	h.exportEvaluationResultsAsync(ctx, storage, job, logger)
 
 	if h.runtime != nil && job.Results != nil {
 		h.notifyThresholdViolations(ctx, job, logger)

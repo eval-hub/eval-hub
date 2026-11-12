@@ -60,6 +60,7 @@ func main() {
 	logger.Info("eval-runtime-init completed")
 }
 
+// run selects job-based staging when requested, otherwise preserving evaluation source precedence.
 func run() error {
 	if path := os.Getenv(shared.InitJobSpecPathEnv); path != "" {
 		return runJobSources(path, shared.PostProcessorStagingRoot, shared.PostProcessorSecretRoot)

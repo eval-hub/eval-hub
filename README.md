@@ -145,9 +145,10 @@ Local mode connects directly to the API without kube-rbac-proxy and runs each ad
 
 ### Prerequisites
 
-- Go 1.26+
+- Go 1.27+
 - Make
-- Python 3 (for `make test`; used by scripts/grcat for colored output)
+- Python 3.11+ for `make govulncheck` and `make test-scripts` (the waiver gate imports `tomllib`, and the script regression tests import that gate; set `PYTHON=python3.12` to use a newer interpreter not on `PATH` as `python3`)
+- Python 3 for `make test` and `make install-deps` (any Python 3; `scripts/grcat` only needs colored output)
 - [uv](https://docs.astral.sh/uv/) (manages the Python venv required by `make start-service` and FVT tests; run `make venv` to create it)
 - Podman (for container builds)
 - Access to an OpenShift or Kubernetes cluster (for deployment)
@@ -237,6 +238,283 @@ make lint                   # go vet
 make fmt                    # go fmt
 ```
 
+### Local kind debugging
+
+The local deployment and demo scripts require a container runtime (**podman**
+or **Docker**), kind, kubectl, Make, Git, curl, OpenSSL, and Python 3. Install
+`jq` as well to use the API demo and curl examples. The runtime must be running
+(for podman on macOS, start the podman machine first). These scripts use the
+container runtime to build images, run the kind nodes, and manage the local
+image registry. `make dev-deploy` records the engine it used for
+`KIND_CLUSTER_NAME` in
+`${XDG_CONFIG_HOME:-$HOME/.config}/evalhub/kubeconfigs/<cluster>.runtime`, and
+`make dev-clean`, `make dev-demo`, and `make clean-container-storage` reuse that
+record, so a later command needs no second input. Set `CONTAINER_RUNTIME` (for
+example `make dev-deploy CONTAINER_RUNTIME=docker`) to choose the engine for a
+new cluster. When an explicit value differs from the recorded engine,
+`make dev-deploy` and `make dev-clean` fail instead of creating a duplicate
+cluster or cleaning up and deleting the kubeconfig of the cluster that is still
+running, while `make dev-demo` follows the record and
+`make clean-container-storage` keeps the explicit engine with a warning,
+because neither can destroy the deployment. For a cluster deployed before that
+record existed the engine that already owns `KIND_CLUSTER_NAME` is used, and
+`make dev-deploy` and `make dev-clean` also fail when an explicit value does not
+own that cluster, instead of creating a second one or reporting a cleanup that
+skipped it; a first deploy with neither a record nor a cluster falls back to the
+first reachable engine, podman before docker (or docker before podman under WSL,
+where podman passes `podman info`
+but fails kind node startup). A record whose engine no longer runs the cluster
+is not trusted: `make dev-deploy` fails when the other engine owns that cluster,
+an explicit matching value included, instead of creating a second one,
+`make dev-demo` falls back to the engine that owns the cluster, and
+`make dev-clean` drops the record (with or without `DELETE_CLUSTER=true`) once
+the cluster is gone from the recorded engine. A record whose engine is no longer
+installed cannot describe a reachable cluster, so `make dev-deploy` ignores it
+and `make dev-clean` drops it; a recorded engine that is installed but stopped
+fails with the state file to remove. Deleting the cluster with `make dev-clean
+DELETE_CLUSTER=true` removes the record, and removes the kubeconfig with it only
+when that kubeconfig targets the deleted cluster and no engine still lists or
+answers for a cluster of that name; otherwise the kubeconfig is preserved.
+
+Deploy the local EvalHub service, operator, adapters, and mock target/judge
+services:
+
+```bash
+make dev-deploy
+```
+
+By default this creates or reuses the `evalhub-dev` kind cluster and builds the
+images from the EvalHub repository plus sibling `../trustyai-service-operator`,
+`../eval-hub-contrib`, and `../lm-evaluation-harness` checkouts. The
+lm-evaluation-harness checkout is the fork at
+<https://github.com/opendatahub-io/lm-evaluation-harness.git> — clone it
+alongside EvalHub on its `incubation` (or `stable`) branch, since only those
+branches provide the `Dockerfile.lmes-job` used for the LMES adapter image,
+not the default `main` branch. The operator
+checkout is always required. By default, `ADAPTERS` selects Inspect, LM
+Evaluation Harness, and FollowBench; their contrib and lm-evaluation-harness
+checkouts are needed. Set `ADAPTERS=all` to build all six curated adapters, or
+select a smaller list. Each repository is searched as a sibling of
+the EvalHub checkout first and then as `<parent>/<repo>` under each
+colon-separated `DEV_REPO_PARENT_PATHS` entry (default `~/code`); set that
+variable when the repositories live elsewhere. The command
+prints the private kubeconfig path and API URL. It does not change the current
+kubectl context; use the private kubeconfig explicitly:
+
+```bash
+KIND_CLUSTER_NAME=evalhub-dev
+KCFG="${XDG_CONFIG_HOME:-$HOME/.config}/evalhub/kubeconfigs/${KIND_CLUSTER_NAME}.yaml"
+KUBECONFIG="$KCFG" kubectl get pods -n system
+```
+
+Remove the EvalHub deployment and keep the kind cluster for later use:
+
+```bash
+make dev-clean
+```
+
+Delete the deployment and the selected cluster as well:
+
+```bash
+make dev-clean DELETE_CLUSTER=true
+```
+
+Both cleanup modes retain the local build image tags and the container runtime's
+build cache.
+They remove temporary `localhost:<port>` tags used only to push images into the
+kind registry. Repeated deploys of unchanged EvalHub source reuse the Go build
+layers. `make dev-deploy-help` and `make dev-clean-help` list the settings.
+
+Repeated deploys accumulate dangling images, build containers, and unused
+volumes in the container runtime, and an image build eventually fails with
+`no space left on device`. Reclaim that storage for podman or Docker:
+
+```bash
+make clean-container-storage                        # stopped containers, build containers, dangling images
+make clean-container-storage ALL=true               # also unused images (cached base images, old dev tags)
+make clean-container-storage ALL=true VOLUMES=true  # also unused volumes
+make clean-container-storage DRY_RUN=true           # print the commands only
+```
+
+Images and volumes used by running containers — the kind node and the local
+registry — are never removed, so the cluster keeps working. Their space is
+released only by `make dev-clean DELETE_CLUSTER=true`. If a container for the
+kind cluster is stopped (for example after restarting the podman machine), the
+target fails before pruning instead of deleting it, because pruning removes
+stopped containers and takes the cluster's data with them. `VOLUMES=true` prunes
+unused named volumes as well as anonymous ones on both podman and Docker. The
+target reports `system df` and free space before and after cleanup and warns when
+less than `MIN_FREE_GB` (default 15) remains. Free space is read where the
+runtime keeps its storage: on the host, in the podman machine's disk, or, for
+Docker Desktop, in its VM (through a running container, or else the host
+filesystem holding its disk image). On macOS, grow podman storage by enlarging
+the machine's disk image while the machine is stopped, then growing the guest
+filesystem inside the machine:
+
+```bash
+podman machine stop
+podman machine set --disk-size 200      # only grows the disk image
+podman machine start
+podman machine ssh 'sudo growpart /dev/vda 4 && sudo xfs_growfs /'
+```
+
+`podman machine set --disk-size` can resize the disk image in place only for
+providers that support it: the QEMU provider, plus the `applehv` and `libkrun`
+providers used on Apple silicon by current Podman releases (the
+`podman-machine-set` man page still documents the option as QEMU-only). When the
+provider or Podman version cannot resize in place, recreate the machine with a
+larger disk instead and redeploy; the machine's images and volumes are discarded:
+
+```bash
+podman machine rm
+podman machine init --disk-size 200
+make dev-deploy
+```
+
+Docker Desktop storage is sized in its own settings.
+`make clean-container-storage-help` lists the settings.
+
+Run the API demo against the deployed cluster:
+
+```bash
+make dev-demo
+```
+
+The demo lists system collections and recent jobs, clones
+`instruction-output-v1` with a single FollowBench benchmark, submits a one-example
+job to the local mock target and judge, and polls until the job completes. It
+mints a short-lived token for the local EvalHub service account unless `API_TOKEN`
+is supplied. It creates a Secret containing only the mock services' test keys;
+no external model credentials are used. The cloned collection and job remain for
+inspection. The demo Secret is removed by `make dev-clean`.
+
+To use a different system collection as the clone source or change the polling
+timeout:
+
+```bash
+make dev-demo DEMO_SOURCE_COLLECTION_ID=instruction-output-v1 DEMO_JOB_TIMEOUT_SECONDS=900
+make dev-demo-help
+```
+
+Run the benchmark smoke tests from `tests/benchmarks` against the deployed
+cluster:
+
+```bash
+make test-benchmarks-kind
+```
+
+This deploys (or reuses) the kind cluster via `make dev-deploy` — pass
+`SKIP_BUILD=true` to reuse previously built images — builds every curated
+adapter image unless `ADAPTERS` is set, mints a short-lived token for the local
+EvalHub service account, and points the suite at the loopback API URL with the
+in-cluster mock target as the model. By default it runs the whole catalog the
+deployed stack discovers, so every configured provider is exercised; narrow it
+with `BENCHMARK_RUN` (or `KIND_BENCHMARK_RUN`) when iterating, and size a full
+run with `BENCHMARK_PARALLEL` and `BENCHMARK_TIMEOUT` (the token it mints is
+derived from that deadline, so it cannot expire mid-run):
+
+```bash
+make test-benchmarks-kind BENCHMARK_RUN='TestBenchmarkSmoke/inspect/'
+make test-benchmarks-kind SKIP_BUILD=true BENCHMARK_TIMEOUT=1h
+```
+
+The mock-auth Secret it creates is the same one `make dev-demo` uses, and
+`make dev-clean` removes it. The target re-applies the Secret's mock target and
+judge keys on every run, but only when an existing `KIND_BENCHMARK_MODEL_SECRET`
+is annotated as owned by dev-deploy for this kind cluster; otherwise it fails
+instead of running with unrelated credentials. Point
+`KIND_BENCHMARK_MODEL_SECRET` at an unused name to use a different Secret.
+
+#### Calling the API with curl
+
+These commands use the local self-signed TLS certificate. Create a short-lived
+token and keep it in a private curl config file so the token is not placed in
+curl's process arguments:
+
+```bash
+KIND_CLUSTER_NAME=evalhub-dev
+KCFG="${XDG_CONFIG_HOME:-$HOME/.config}/evalhub/kubeconfigs/${KIND_CLUSTER_NAME}.yaml"
+API_BASE=https://127.0.0.1:18443
+API_TOKEN="$(kubectl --kubeconfig "$KCFG" -n system create token evalhub-local-service --duration=1h)"
+CURL_CONFIG="$(mktemp)"
+chmod 600 "$CURL_CONFIG"
+printf 'header = "Authorization: Bearer %s"\nheader = "X-Tenant: system"\nheader = "Content-Type: application/json"\n' "$API_TOKEN" >"$CURL_CONFIG"
+unset API_TOKEN
+trap 'rm -f -- "$CURL_CONFIG"' EXIT
+```
+
+Check health and list collections and jobs:
+
+```bash
+curl --silent --show-error --insecure "$API_BASE/api/v1/health" | jq .
+curl --silent --show-error --insecure --config "$CURL_CONFIG" \
+  "$API_BASE/api/v1/evaluations/collections?scope=system&limit=100" | jq .
+curl --silent --show-error --insecure --config "$CURL_CONFIG" \
+  "$API_BASE/api/v1/evaluations/jobs?limit=20" | jq .
+```
+
+The demo Secret can be created directly if you want to run the clone/job calls
+without `make dev-demo`. These are fake keys accepted only by the local mocks:
+
+```bash
+kubectl --kubeconfig "$KCFG" -n system create secret generic evalhub-kind-demo-auth \
+  --from-literal=api-key=target-test-token \
+  --from-literal=judge_api-key=judge-test-token \
+  --from-literal=judge_url=http://evalhub-kind-mock-judge.system.svc.cluster.local:8000/v1 \
+  --dry-run=client -o yaml | kubectl --kubeconfig "$KCFG" apply -f -
+kubectl --kubeconfig "$KCFG" -n system annotate secret evalhub-kind-demo-auth \
+  "io.evalhub.kind-smoke.cluster=$KIND_CLUSTER_NAME" --overwrite
+```
+
+Clone the system collection, narrowed to one FollowBench example:
+
+```bash
+CLONE_JSON="$(curl --silent --show-error --insecure --config "$CURL_CONFIG" \
+  --data-binary '{"name":"kind-curl-demo","benchmarks":[{"id":"followbench","provider_id":"followbench","parameters":{"judge_model":"kind-judge-model","num_examples":1,"max_tokens":64,"temperature":0,"request_timeout":60}}]}' \
+  "$API_BASE/api/v1/evaluations/collections/instruction-output-v1/clones")"
+CLONE_ID="$(jq -r '.resource.id' <<<"$CLONE_JSON")"
+printf 'Created collection %s\n' "$CLONE_ID"
+```
+
+Submit the job using the cloned collection and mock models, then retrieve its
+status using the returned job ID:
+
+```bash
+JOB_JSON="$(curl --silent --show-error --insecure --config "$CURL_CONFIG" \
+  --data-binary @- "$API_BASE/api/v1/evaluations/jobs" <<JSON
+{
+  "name": "kind-curl-demo-job",
+  "model": {
+    "url": "http://evalhub-kind-mock-target.system.svc.cluster.local:8000/v1",
+    "name": "kind-target-model",
+    "auth": {"secret_ref": "evalhub-kind-demo-auth"}
+  },
+  "collection": {
+    "id": "$CLONE_ID",
+    "benchmarks": [{
+      "id": "followbench",
+      "provider_id": "followbench",
+      "parameters": {
+        "judge_model": "kind-judge-model",
+        "num_examples": 1,
+        "max_tokens": 64,
+        "temperature": 0,
+        "request_timeout": 60
+      }
+    }]
+  }
+}
+JSON
+)"
+JOB_ID="$(jq -r '.resource.id' <<<"$JOB_JSON")"
+printf 'Created job %s\n' "$JOB_ID"
+curl --silent --show-error --insecure --config "$CURL_CONFIG" \
+  "$API_BASE/api/v1/evaluations/jobs/$JOB_ID" | jq '{id: .resource.id, name, state: .status.state}'
+rm -f -- "$CURL_CONFIG"
+```
+
+For API request and response details, see the [OpenAPI reference](docs/src/openapi.yaml).
+
 For local post-processing, the runtime launches the real adapter from a sibling
 `../eval-hub-contrib/adapters/evalhub-post-processor` checkout. Install that
 adapter's `requirements.txt` in its `.venv` before starting EvalHub from this
@@ -263,7 +541,16 @@ make build-wheel
 Developers can use `scripts/test-local-oci-export.sh` to simulate a quick OCI evaluation card
 generation during development. It runs an evaluation with the local test adapter,
 downloads the exported card from a local OCI registry, and verifies it against
-the completed job. No model server is required.
+the completed job, including the OCI export status and artifact reference.
+No model server is required.
+
+Check `results.oci.status.state` for the OCI export status: `running`, `completed`,
+or `failed`. After a successful export, `results.oci.evaluation_card` provides the
+manifest digest and digest-qualified reference for retrieving the card. An OCI
+export failure leaves the evaluation's completed status and benchmark results intact.
+
+OCI export currently supports evaluation cards. Evaluation bundles, signing,
+and automatic export retries are not currently supported.
 
 Install these dependencies before starting:
 
@@ -401,8 +688,16 @@ Configuration is loaded from `config/config.yaml`, overridden by environment var
 | `DB_URL` | Database connection string | SQLite in-memory |
 | `MLFLOW_TRACKING_URI` | MLflow tracking server | `http://localhost:5000` |
 | `MLFLOW_CA_CERT_PATH` | PEM CA bundle for MLflow TLS verification | (system roots) |
+| `OCI_PUSH_TIMEOUT` | Overall API-service registry push deadline (`sidecar.oci.push_timeout`); omitted or `0` uses the default | `5m` |
 | `LOG_LEVEL` | Logging level | `INFO` |
 | `EVALHUB_HARDWARE_PROFILES_NAMESPACE` | Platform namespace where OpenDataHub `HardwareProfile` CRs are fetched (Kubernetes runtime). Required for `hardware_config.hardware_profile_name` evaluations; typically `opendatahub` or `redhat-ods-applications`. Set by the TrustyAI Service Operator deployment. | _(unset — hardware profile lookups fail)_ |
+
+Evaluation-result exports run asynchronously after the job reaches an eligible terminal state.
+The OCI push deadline starts after credential resolution and excludes MLflow export and status
+persistence. The independent `sidecar.oci.http_timeout` bounds each registry HTTP request
+and the API service's credential lookup. Export workers
+are not drained during shutdown; interruption or persistence failures may leave OCI status
+absent or `running`.
 
 Provider configurations live in `config/providers/` as YAML files. The default set includes lm-evaluation-harness (167 benchmarks), RAGAS, Garak, GuideLLM, LightEval, and MTEB.
 
@@ -481,7 +776,7 @@ eval-hub/
 ├── config/                # config.yaml and provider definitions
 ├── docs/src/              # OpenAPI 3.1.0 specification (source of truth)
 ├── tests/features/        # BDD tests (godog)
-├── Containerfile          # Multi-stage UBI9 container build
+├── Containerfile          # Multi-stage ubi10 container build
 └── Makefile               # Build, test, and dev targets
 ```
 

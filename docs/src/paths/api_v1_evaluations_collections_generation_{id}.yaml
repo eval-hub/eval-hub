@@ -1,0 +1,208 @@
+get:
+  tags:
+    - Collections
+  summary: Get Collection Generation
+  description: |
+    Poll a dry-run generation. An authorized user in the same tenant may read
+    the resource; a user in another tenant cannot. The request summary is
+    tenant-visible and contains normalized search options, never credentials.
+    Only completed resources contain result. Its collection is a postable
+    CollectionConfig, and result.yaml describes that same config. Catalog
+    changes between generation and the later collection-create POST may make
+    the proposal invalid. Generation results remain readable after the pod
+    exits until configured retention expires or the resource is deleted.
+
+    Unknown IDs, backing jobs of a different workload type, expired resources,
+    and jobs outside the caller's tenant return 404. In cluster mode, requests
+    require authenticated/authorized access and X-Tenant; kube-rbac-proxy sets
+    X-User from the authenticated caller, not from a client assertion.
+  operationId: get_collection_generation
+  parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID of the backing collection-generation evaluation job.
+      schema:
+        type: string
+  responses:
+    '200':
+      description: Current generation state and, when completed, the proposal.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/CollectionGenerationResource.yaml
+          examples:
+            pending:
+              summary: Accepted but not started
+              value:
+                resource:
+                  id: 550e8400-e29b-41d4-a716-446655440000
+                  tenant: team-a
+                  owner: user-a
+                  created_at: '2026-10-29T12:00:00Z'
+                  updated_at: '2026-10-29T12:00:00Z'
+                request:
+                  evaluation_goal: Assess agent safety and tool-use risks
+                  provider_filter: inspect
+                  max_benchmarks: 12
+                  strictness: moderate
+                status:
+                  state: pending
+            running:
+              summary: Runner is working
+              value:
+                resource:
+                  id: 550e8400-e29b-41d4-a716-446655440000
+                  tenant: team-a
+                  owner: user-a
+                  created_at: '2026-10-29T12:00:00Z'
+                  updated_at: '2026-10-29T12:00:01Z'
+                request:
+                  evaluation_goal: Assess agent safety and tool-use risks
+                  provider_filter: inspect
+                  max_benchmarks: 12
+                  strictness: moderate
+                status:
+                  state: running
+                  started_at: '2026-10-29T12:00:01Z'
+            completed:
+              summary: Validated collection proposal with explanations
+              value:
+                resource:
+                  id: 550e8400-e29b-41d4-a716-446655440000
+                  tenant: team-a
+                  owner: user-a
+                  created_at: '2026-10-29T12:00:00Z'
+                  updated_at: '2026-10-29T12:00:30Z'
+                request:
+                  evaluation_goal: Assess agent safety and tool-use risks
+                  provider_filter: inspect
+                  max_benchmarks: 12
+                  strictness: moderate
+                status:
+                  state: completed
+                  started_at: '2026-10-29T12:00:01Z'
+                  completed_at: '2026-10-29T12:00:30Z'
+                result:
+                  collection:
+                    name: Agent safety checks
+                    domains: [trustworthiness]
+                    benchmarks:
+                      - provider_id: inspect
+                        id: inspect/agentharm
+                  yaml: |
+                    name: Agent safety checks
+                    domains:
+                      - trustworthiness
+                    benchmarks:
+                      - provider_id: inspect
+                        id: inspect/agentharm
+                  rationale: The chosen benchmark addresses the requested agent safety goal.
+                  explanation:
+                    selected_benchmarks:
+                      - provider_id: inspect
+                        id: inspect/agentharm
+                        reason: Exercises agent behavior under harmful tool-use requests.
+                    rejected_benchmarks:
+                      - provider_id: inspect
+                        id: inspect/cyberseceval-2-pi
+                        reason: Focuses on prompt injection rather than broad agent harm.
+                  actions:
+                    - name: search_benchmarks
+                      outcome: success
+                      summary: Searched the visible catalog for agent safety benchmarks.
+            failed_guardrail_rejected:
+              summary: Input rejected by the guardrail gate after admission
+              value:
+                resource:
+                  id: 550e8400-e29b-41d4-a716-446655440000
+                  tenant: team-a
+                  owner: user-a
+                  created_at: '2026-10-29T12:00:00Z'
+                  updated_at: '2026-10-29T12:00:02Z'
+                request:
+                  evaluation_goal: Assess agent safety and tool-use risks
+                  provider_filter: inspect
+                  max_benchmarks: 12
+                  strictness: moderate
+                status:
+                  state: failed
+                  started_at: '2026-10-29T12:00:01Z'
+                  completed_at: '2026-10-29T12:00:02Z'
+                  error:
+                    code: guardrails_rejected
+                    category: topic_relevance
+                    message: The evaluation goal could not be accepted.
+            failed_guardrail_unavailable:
+              summary: Guardrail service unavailable after admission
+              value:
+                resource:
+                  id: 550e8400-e29b-41d4-a716-446655440000
+                  tenant: team-a
+                  owner: user-a
+                  created_at: '2026-10-29T12:00:00Z'
+                  updated_at: '2026-10-29T12:00:02Z'
+                request:
+                  evaluation_goal: Assess agent safety and tool-use risks
+                  provider_filter: inspect
+                  max_benchmarks: 12
+                  strictness: moderate
+                status:
+                  state: failed
+                  started_at: '2026-10-29T12:00:01Z'
+                  completed_at: '2026-10-29T12:00:02Z'
+                  error:
+                    code: guardrails_unavailable
+                    message: The evaluation goal could not be checked.
+            cancelled:
+              summary: Generation cancelled before completion
+              value:
+                resource:
+                  id: 550e8400-e29b-41d4-a716-446655440000
+                  tenant: team-a
+                  owner: user-a
+                  created_at: '2026-10-29T12:00:00Z'
+                  updated_at: '2026-10-29T12:00:03Z'
+                request:
+                  evaluation_goal: Assess agent safety and tool-use risks
+                  provider_filter: inspect
+                  max_benchmarks: 12
+                  strictness: moderate
+                status:
+                  state: cancelled
+                  started_at: '2026-10-29T12:00:01Z'
+                  completed_at: '2026-10-29T12:00:03Z'
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml
+delete:
+  tags:
+    - Collections
+  summary: Delete Collection Generation
+  description: |
+    Cancel an active generation and remove its retained resource. A delayed
+    callback cannot recreate a deleted or cancelled result. A second DELETE
+    or an unknown, wrong-type, expired, or cross-tenant ID returns 404.
+    Any authorized user in the same tenant may delete the resource. Cluster
+    requests require the existing authenticated/authorized X-Tenant context.
+    Kubernetes Job TTL and API-result retention are separate.
+  operationId: delete_collection_generation
+  parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID of the backing collection-generation evaluation job.
+      schema:
+        type: string
+  responses:
+    '204':
+      description: Generation cancelled, if active, and retained state removed. No response body.
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml
+    '404':
+      $ref: ../components/responses/NotFound.yaml

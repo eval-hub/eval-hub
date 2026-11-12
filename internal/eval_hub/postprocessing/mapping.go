@@ -92,8 +92,10 @@ func ToEvaluationJob(request *api.StandalonePostProcessingRequest) *api.Evaluati
 	}
 	var exports *api.EvaluationExports
 	if ci := request.Operations.ConfidenceInterval; ci != nil && ci.ResultsDataRef != nil && ci.ResultsDataRef.OCI != nil {
-		// The adapter downloads through the sidecar, whose registry target and
-		// credentials use the same exports configuration as evaluation jobs.
+		// Reuse exports.oci only to configure the sidecar's input registry and
+		// credential projection: the existing proxy reads its target from there.
+		// The handler excludes internal post-processing jobs from evaluation-card
+		// export, so this input configuration never enables output persistence.
 		source := ci.ResultsDataRef.OCI
 		coordinates := source.Coordinates
 		coordinates.Annotations = maps.Clone(source.Coordinates.Annotations)

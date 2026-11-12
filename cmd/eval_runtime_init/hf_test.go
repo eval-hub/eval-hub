@@ -17,6 +17,17 @@ import (
 
 const testHFCommitSHA = "aabbccddeeff00112233445566778899aabbccdd"
 
+// TestDownloadHFRepoRejectsCacheOnlyData prevents an internal cache directory from counting as staged input.
+func TestDownloadHFRepoRejectsCacheOnlyData(t *testing.T) {
+	server := newMockHFServer(t, "org/cache-only", map[string]string{hfCacheDirName + "/cached.txt": "not dataset content"}, http.StatusOK)
+	defer server.Close()
+	t.Setenv("HF_ENDPOINT", server.URL)
+	d := downloader{destDir: t.TempDir(), hfCacheDir: t.TempDir()}
+	if _, err := d.downloadHFRepo(context.Background(), "org/cache-only", "", "", ""); err == nil || !strings.Contains(err.Error(), "no files were staged") {
+		t.Fatalf("cache-only repository accepted as input: %v", err)
+	}
+}
+
 type hfRepoInfoResponse struct {
 	ID       string `json:"id"`
 	SHA      string `json:"sha"`

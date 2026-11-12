@@ -89,6 +89,7 @@ func buildEnvVars(jc *jobConfig, serviceConfig *config.Config) []corev1.EnvVar {
 	}
 
 	if jc.postProcessorDownloads != nil || len(jc.postProcessorPVCs) > 0 {
+		// Map input roles to final local paths; the adapter must not reapply subpaths.
 		mountPaths := map[string]string{}
 		if jc.postProcessorDownloads != nil {
 			for _, source := range jc.postProcessorDownloads {
