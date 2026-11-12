@@ -11,10 +11,34 @@ post:
     for this resource and cannot address a collection by ID. If a guardrail or
     runner failure occurs after admission, poll for its safe terminal error.
 
+    Use GET /api/v1/evaluations/collections/generation/models to discover
+    approved generator-model profiles. generator_model_id selects the model
+    that creates the proposal; it is distinct from the future evaluation target
+    and from any guardrail model. The caller may provide only a profile ID, not
+    an endpoint, model name, credential, or Secret reference. If omitted, the
+    tenant's eligible default is resolved and included in the returned request
+    summary. An unknown or inaccessible supplied profile returns a safe 400
+    without revealing private profile details. If no selectable profile exists,
+    or no eligible default exists when the field is omitted, return 503 before
+    admission.
+
+    generation_effort selects server-capped iteration, token, and deadline
+    budgets. It is independent of strictness and does not promise a completion
+    time. A model-specific reasoning control is used only when supported by the
+    selected profile. The running status may expose trusted progress phases and
+    activity timestamps; it does not expose a model-generated percentage or ETA.
+
+    The POST response's resource.id and Location are the tracking contract.
+    Clients should retain the Location and poll it. The ordinary
+    /api/v1/evaluations/jobs list excludes collection-generation workloads and
+    cannot recover a lost generation ID. The generation resource is visible to
+    authorized callers in the same tenant until its configured retention expires
+    or it is deleted.
+
     In cluster mode, the caller must be authenticated and authorized through
     kube-rbac-proxy and supply the tenant context via X-Tenant. X-User is set by
     the trusted proxy from the authenticated caller; clients cannot use it to
-    impersonate another user. The model endpoint and credentials are configured
+    impersonate another user. Model endpoints and credentials remain
     server-side and cannot be supplied in this request.
   operationId: create_collection_generation
   requestBody:
@@ -31,6 +55,8 @@ post:
               provider_filter: inspect
               max_benchmarks: 12
               strictness: moderate
+              generator_model_id: generation-default
+              generation_effort: standard
   responses:
     '202':
       description: Generation admitted; poll the Location URL for state and result.
@@ -59,10 +85,22 @@ post:
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
+                  generator_model_id: generation-default
+                  generation_effort: standard
                 status:
                   state: pending
     '400':
-      $ref: ../components/responses/BadRequest.yaml
+      description: Invalid request or generator-model profile that is unknown, ineligible, or inaccessible to the tenant.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/Error.yaml
+          examples:
+            unavailable_profile:
+              summary: The requested profile is not selectable
+              value:
+                message_code: invalid_generator_model
+                message: The requested generation model is not available.
     '401':
       $ref: ../components/responses/Unauthorized.yaml
     '403':

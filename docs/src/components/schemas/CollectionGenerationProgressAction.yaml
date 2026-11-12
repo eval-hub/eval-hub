@@ -1,0 +1,22 @@
+type: object
+title: CollectionGenerationProgressAction
+description: Name and completion timestamp for the last trusted runner action.
+required:
+  - name
+  - completed_at
+properties:
+  name:
+    type: string
+    enum:
+      - guardrails_check
+      - search_benchmarks
+      - get_provider_details
+      - list_collections
+      - validate_proposal
+      - calibrate_proposal
+      - finalize_proposal
+    description: Allowlisted action name. No arguments or action output are included.
+  completed_at:
+    type: string
+    format: date-time
+additionalProperties: false

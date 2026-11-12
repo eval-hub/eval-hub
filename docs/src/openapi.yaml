@@ -60,6 +60,8 @@ paths:
     $ref: paths/api_v1_evaluations_collections.yaml
   /api/v1/evaluations/collections/generation:
     $ref: paths/api_v1_evaluations_collections_generation.yaml
+  /api/v1/evaluations/collections/generation/models:
+    $ref: paths/api_v1_evaluations_collections_generation_models.yaml
   /api/v1/evaluations/collections/generation/{id}:
     $ref: paths/api_v1_evaluations_collections_generation_{id}.yaml
   /api/v1/evaluations/collections/{id}:

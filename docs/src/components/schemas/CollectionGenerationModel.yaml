@@ -1,0 +1,22 @@
+type: object
+title: CollectionGenerationModel
+description: Tenant-selectable, server-configured generator-model profile.
+required:
+  - id
+  - display_name
+  - is_default
+properties:
+  id:
+    type: string
+    minLength: 1
+    maxLength: 128
+    description: Stable opaque profile ID accepted by generator_model_id.
+  display_name:
+    type: string
+    minLength: 1
+    maxLength: 128
+    description: Non-secret display name for the model profile.
+  is_default:
+    type: boolean
+    description: True for the tenant's default eligible generation model; at most one item is true.
+additionalProperties: false

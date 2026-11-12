@@ -1,0 +1,44 @@
+get:
+  tags:
+    - Collections
+  summary: List Collection Generation Models
+  description: |
+    List the server-configured generation-model profiles that the authenticated
+    tenant may select. A profile is returned only when it is configured and
+    supports the required OpenAI-compatible tool-call contract. This list
+    reports eligibility, not real-time endpoint health. It never returns model
+    URLs, Secret names, credentials, or private configuration. If no profile is
+    available, return an empty items array. The selected model is the LLM that
+    generates a collection proposal; this endpoint does not list evaluation
+    target or guardrail models.
+
+    In cluster mode, access uses the authenticated tenant context and normal
+    kube-rbac-proxy authorization. Clients cannot use X-User to impersonate a
+    caller.
+  operationId: list_collection_generation_models
+  responses:
+    '200':
+      description: Eligible model profiles for this tenant; the array may be empty.
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/CollectionGenerationModelList.yaml
+          examples:
+            available:
+              summary: One eligible tenant default and an alternate
+              value:
+                items:
+                  - id: generation-default
+                    display_name: Collection Generation Model
+                    is_default: true
+                  - id: generation-alternate
+                    display_name: Alternate Generation Model
+                    is_default: false
+            none:
+              summary: No generation model is configured for this tenant
+              value:
+                items: []
+    '401':
+      $ref: ../components/responses/Unauthorized.yaml
+    '403':
+      $ref: ../components/responses/Forbidden.yaml

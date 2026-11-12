@@ -3,8 +3,8 @@ title: CollectionGenerationRequest
 description: |
   Goal and search options for a dry-run collection proposal. The service trims
   the goal and normalizes the options before persisting the generation job.
-  The model connection and credentials are configured server-side, not supplied
-  in this request.
+  The caller may select an approved generator-model profile by ID. Its model
+  connection and credentials are configured server-side, not supplied here.
 required:
   - evaluation_goal
 properties:
@@ -29,4 +29,24 @@ properties:
     enum: [lenient, moderate, strict]
     default: moderate
     description: How conservatively the runner selects and calibrates benchmarks.
+  generator_model_id:
+    type: string
+    minLength: 1
+    maxLength: 128
+    pattern: '\S'
+    description: >
+      Optional opaque ID of an approved generator-model profile returned by
+      GET /api/v1/evaluations/collections/generation/models. If omitted, the
+      tenant's configured eligible default is selected. This identifies the
+      LLM generating the proposal, not the evaluation target or guardrail model.
+      Do not provide a model URL, name, credential, or Secret reference here.
+  generation_effort:
+    type: string
+    enum: [low, standard, high]
+    default: standard
+    description: >
+      Requested generation-effort preset. The service maps this to server-capped
+      iteration, token, and deadline budgets. It may set a model-specific
+      reasoning control only when the selected profile supports it. Presets do
+      not promise a fixed completion time and are independent of strictness.
 additionalProperties: false

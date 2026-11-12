@@ -1870,10 +1870,34 @@ paths:
         for this resource and cannot address a collection by ID. If a guardrail or
         runner failure occurs after admission, poll for its safe terminal error.
 
+        Use GET /api/v1/evaluations/collections/generation/models to discover
+        approved generator-model profiles. generator_model_id selects the model
+        that creates the proposal; it is distinct from the future evaluation target
+        and from any guardrail model. The caller may provide only a profile ID, not
+        an endpoint, model name, credential, or Secret reference. If omitted, the
+        tenant's eligible default is resolved and included in the returned request
+        summary. An unknown or inaccessible supplied profile returns a safe 400
+        without revealing private profile details. If no selectable profile exists,
+        or no eligible default exists when the field is omitted, return 503 before
+        admission.
+
+        generation_effort selects server-capped iteration, token, and deadline
+        budgets. It is independent of strictness and does not promise a completion
+        time. A model-specific reasoning control is used only when supported by the
+        selected profile. The running status may expose trusted progress phases and
+        activity timestamps; it does not expose a model-generated percentage or ETA.
+
+        The POST response's resource.id and Location are the tracking contract.
+        Clients should retain the Location and poll it. The ordinary
+        /api/v1/evaluations/jobs list excludes collection-generation workloads and
+        cannot recover a lost generation ID. The generation resource is visible to
+        authorized callers in the same tenant until its configured retention expires
+        or it is deleted.
+
         In cluster mode, the caller must be authenticated and authorized through
         kube-rbac-proxy and supply the tenant context via X-Tenant. X-User is set by
         the trusted proxy from the authenticated caller; clients cannot use it to
-        impersonate another user. The model endpoint and credentials are configured
+        impersonate another user. Model endpoints and credentials remain
         server-side and cannot be supplied in this request.
       operationId: create_collection_generation
       requestBody:
@@ -1890,6 +1914,8 @@ paths:
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
+                  generator_model_id: generation-default
+                  generation_effort: standard
       responses:
         '202':
           description: Generation admitted; poll the Location URL for state and result.
@@ -1918,16 +1944,73 @@ paths:
                       provider_filter: inspect
                       max_benchmarks: 12
                       strictness: moderate
+                      generator_model_id: generation-default
+                      generation_effort: standard
                     status:
                       state: pending
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: Invalid request or generator-model profile that is unknown, ineligible, or inaccessible to the tenant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                unavailable_profile:
+                  summary: The requested profile is not selectable
+                  value:
+                    message_code: invalid_generator_model
+                    message: The requested generation model is not available.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/evaluations/collections/generation/models:
+    get:
+      tags:
+        - Collections
+      summary: List Collection Generation Models
+      description: |
+        List the server-configured generation-model profiles that the authenticated
+        tenant may select. A profile is returned only when it is configured and
+        supports the required OpenAI-compatible tool-call contract. This list
+        reports eligibility, not real-time endpoint health. It never returns model
+        URLs, Secret names, credentials, or private configuration. If no profile is
+        available, return an empty items array. The selected model is the LLM that
+        generates a collection proposal; this endpoint does not list evaluation
+        target or guardrail models.
+
+        In cluster mode, access uses the authenticated tenant context and normal
+        kube-rbac-proxy authorization. Clients cannot use X-User to impersonate a
+        caller.
+      operationId: list_collection_generation_models
+      responses:
+        '200':
+          description: Eligible model profiles for this tenant; the array may be empty.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionGenerationModelList'
+              examples:
+                available:
+                  summary: One eligible tenant default and an alternate
+                  value:
+                    items:
+                      - id: generation-default
+                        display_name: Collection Generation Model
+                        is_default: true
+                      - id: generation-alternate
+                        display_name: Alternate Generation Model
+                        is_default: false
+                none:
+                  summary: No generation model is configured for this tenant
+                  value:
+                    items: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /api/v1/evaluations/collections/generation/{id}:
     get:
       tags:
@@ -1936,12 +2019,21 @@ paths:
       description: |
         Poll a dry-run generation. An authorized user in the same tenant may read
         the resource; a user in another tenant cannot. The request summary is
-        tenant-visible and contains normalized search options, never credentials.
+        tenant-visible and contains normalized search options and the resolved
+        generator profile ID, never credentials or endpoint configuration.
         Only completed resources contain result. Its collection is a postable
         CollectionConfig, and result.yaml describes that same config. Catalog
         changes between generation and the later collection-create POST may make
         the proposal invalid. Generation results remain readable after the pod
         exits until configured retention expires or the resource is deleted.
+
+        While running, status.progress may report a trusted phase and the timestamp
+        of the last completed allowlisted runner action. This is durable activity
+        information, not a percentage, ETA, or heartbeat. The ordinary
+        /api/v1/evaluations/jobs list excludes generation workloads; retain the
+        POST Location URL to continue polling. Catalog validity at finalization does
+        not guarantee that a benchmark can execute with a particular evaluation
+        model, judge, dataset, tokenizer, adapter image, or disconnected setup.
 
         Unknown IDs, backing jobs of a different workload type, expired resources,
         and jobs outside the caller's tenant return 404. In cluster mode, requests
@@ -1977,6 +2069,8 @@ paths:
                       provider_filter: inspect
                       max_benchmarks: 12
                       strictness: moderate
+                      generator_model_id: generation-default
+                      generation_effort: standard
                     status:
                       state: pending
                 running:
@@ -1993,9 +2087,17 @@ paths:
                       provider_filter: inspect
                       max_benchmarks: 12
                       strictness: moderate
+                      generator_model_id: generation-default
+                      generation_effort: standard
                     status:
                       state: running
                       started_at: '2026-10-29T12:00:01Z'
+                      progress:
+                        phase: catalog_discovery
+                        updated_at: '2026-10-29T12:00:15Z'
+                        last_completed_action:
+                          name: search_benchmarks
+                          completed_at: '2026-10-29T12:00:15Z'
                 completed:
                   summary: Validated collection proposal with explanations
                   value:
@@ -2010,6 +2112,8 @@ paths:
                       provider_filter: inspect
                       max_benchmarks: 12
                       strictness: moderate
+                      generator_model_id: generation-default
+                      generation_effort: standard
                     status:
                       state: completed
                       started_at: '2026-10-29T12:00:01Z'
@@ -2057,6 +2161,8 @@ paths:
                       provider_filter: inspect
                       max_benchmarks: 12
                       strictness: moderate
+                      generator_model_id: generation-default
+                      generation_effort: standard
                     status:
                       state: failed
                       started_at: '2026-10-29T12:00:01Z'
@@ -2079,6 +2185,8 @@ paths:
                       provider_filter: inspect
                       max_benchmarks: 12
                       strictness: moderate
+                      generator_model_id: generation-default
+                      generation_effort: standard
                     status:
                       state: failed
                       started_at: '2026-10-29T12:00:01Z'
@@ -2100,6 +2208,8 @@ paths:
                       provider_filter: inspect
                       max_benchmarks: 12
                       strictness: moderate
+                      generator_model_id: generation-default
+                      generation_effort: standard
                     status:
                       state: cancelled
                       started_at: '2026-10-29T12:00:01Z'
@@ -4920,8 +5030,8 @@ components:
       description: |
         Goal and search options for a dry-run collection proposal. The service trims
         the goal and normalizes the options before persisting the generation job.
-        The model connection and credentials are configured server-side, not supplied
-        in this request.
+        The caller may select an approved generator-model profile by ID. Its model
+        connection and credentials are configured server-side, not supplied here.
       required:
         - evaluation_goal
       properties:
@@ -4949,6 +5059,22 @@ components:
             - strict
           default: moderate
           description: How conservatively the runner selects and calibrates benchmarks.
+        generator_model_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: \S
+          description: |
+            Optional opaque ID of an approved generator-model profile returned by GET /api/v1/evaluations/collections/generation/models. If omitted, the tenant's configured eligible default is selected. This identifies the LLM generating the proposal, not the evaluation target or guardrail model. Do not provide a model URL, name, credential, or Secret reference here.
+        generation_effort:
+          type: string
+          enum:
+            - low
+            - standard
+            - high
+          default: standard
+          description: |
+            Requested generation-effort preset. The service maps this to server-capped iteration, token, and deadline budgets. It may set a model-specific reasoning control only when the selected profile supports it. Presets do not promise a fixed completion time and are independent of strictness.
       additionalProperties: false
     CollectionGenerationRequestSummary:
       title: CollectionGenerationRequestSummary
@@ -4959,6 +5085,8 @@ components:
           required:
             - max_benchmarks
             - strictness
+            - generator_model_id
+            - generation_effort
     CollectionGenerationStatusError:
       type: object
       title: CollectionGenerationStatusError
@@ -5007,10 +5135,60 @@ components:
           required:
             - category
       additionalProperties: false
+    CollectionGenerationProgressAction:
+      type: object
+      title: CollectionGenerationProgressAction
+      description: Name and completion timestamp for the last trusted runner action.
+      required:
+        - name
+        - completed_at
+      properties:
+        name:
+          type: string
+          enum:
+            - guardrails_check
+            - search_benchmarks
+            - get_provider_details
+            - list_collections
+            - validate_proposal
+            - calibrate_proposal
+            - finalize_proposal
+          description: Allowlisted action name. No arguments or action output are included.
+        completed_at:
+          type: string
+          format: date-time
+      additionalProperties: false
+    CollectionGenerationProgress:
+      type: object
+      title: CollectionGenerationProgress
+      description: Trusted, bounded progress information for a running generation.
+      required:
+        - phase
+        - updated_at
+      properties:
+        phase:
+          type: string
+          enum:
+            - guardrails
+            - catalog_discovery
+            - model_generation
+            - validation
+            - finalization
+          description: Current runner phase. Model generation and validation may recur during correction.
+        updated_at:
+          type: string
+          format: date-time
+          description: Time of the last durable progress update; this is not an ETA or heartbeat.
+        last_completed_action:
+          $ref: '#/components/schemas/CollectionGenerationProgressAction'
+      additionalProperties: false
     CollectionGenerationStatus:
       type: object
       title: CollectionGenerationStatus
-      description: Durable generation lifecycle state from the backing evaluation job.
+      description: |
+        Durable generation lifecycle state from the backing evaluation job. Progress
+        is optional while running and reports trusted phase/activity timestamps; it
+        is not a percentage, ETA, or heartbeat.
       required:
         - state
       properties:
@@ -5030,22 +5208,81 @@ components:
           type: string
           format: date-time
           description: Set when the workload reaches a terminal state.
+        progress:
+          $ref: '#/components/schemas/CollectionGenerationProgress'
+          description: Present only while running; describes the most recent durable progress update.
         error:
           $ref: '#/components/schemas/CollectionGenerationStatusError'
           description: Required for failed generations; absent in every other state.
-      if:
-        properties:
-          state:
-            const: failed
-        required:
-          - state
-      then:
-        required:
-          - error
-      else:
-        not:
+      oneOf:
+        - properties:
+            state:
+              const: pending
           required:
+            - state
+          not:
+            anyOf:
+              - properties:
+                  error: {}
+                required:
+                  - error
+              - properties:
+                  progress: {}
+                required:
+                  - progress
+        - properties:
+            state:
+              const: running
+          required:
+            - state
+          not:
+            properties:
+              error: {}
+            required:
+              - error
+        - properties:
+            state:
+              const: completed
+          required:
+            - state
+          not:
+            anyOf:
+              - properties:
+                  error: {}
+                required:
+                  - error
+              - properties:
+                  progress: {}
+                required:
+                  - progress
+        - properties:
+            state:
+              const: failed
+            error:
+              $ref: '#/components/schemas/CollectionGenerationStatusError'
+          required:
+            - state
             - error
+          not:
+            properties:
+              progress: {}
+            required:
+              - progress
+        - properties:
+            state:
+              const: cancelled
+          required:
+            - state
+          not:
+            anyOf:
+              - properties:
+                  error: {}
+                required:
+                  - error
+              - properties:
+                  progress: {}
+                required:
+                  - progress
       additionalProperties: false
     CollectionGenerationBenchmarkReason:
       type: object
@@ -5132,7 +5369,11 @@ components:
         Completed dry-run proposal. Generation does not create this collection; the
         caller reviews and separately submits collection to POST /api/v1/evaluations/collections.
         The YAML and JSON describe the same postable CollectionConfig. A later catalog
-        change may make the proposal invalid at collection-create time.
+        change may make the proposal invalid at collection-create time. Passing catalog
+        validation means the selected provider/benchmark pairs and collection shape
+        were valid against the tenant-visible catalog at finalization; it does not
+        guarantee execution with a particular target model, judge, dataset, tokenizer,
+        adapter image, or disconnected-cluster setup.
       required:
         - collection
         - yaml
@@ -5243,6 +5484,43 @@ components:
         not:
           required:
             - result
+      additionalProperties: false
+    CollectionGenerationModel:
+      type: object
+      title: CollectionGenerationModel
+      description: Tenant-selectable, server-configured generator-model profile.
+      required:
+        - id
+        - display_name
+        - is_default
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Stable opaque profile ID accepted by generator_model_id.
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Non-secret display name for the model profile.
+        is_default:
+          type: boolean
+          description: True for the tenant's default eligible generation model; at most one item is true.
+      additionalProperties: false
+    CollectionGenerationModelList:
+      type: object
+      title: CollectionGenerationModelList
+      description: Approved generator-model profiles selectable by the authenticated tenant.
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          description: |
+            Eligible profiles only. An empty list means there is no selectable profile. The list is not a real-time health check of the model endpoint.
+          items:
+            $ref: '#/components/schemas/CollectionGenerationModel'
       additionalProperties: false
     CollectionCloneRequest:
       type: object
