@@ -482,7 +482,18 @@ func sameConfiguredParameters(left, right map[string]any) bool {
 	if len(left) == 0 && len(right) == 0 {
 		return true
 	}
-	return reflect.DeepEqual(left, right)
+	// Candidate configs are copied through JSON before calibration, while
+	// catalog sources may return concrete numeric Go types. Compare both sides
+	// in the API's JSON representation so int(5) and float64(5) are equivalent.
+	normalizedLeft, err := cloneJSONMap(left)
+	if err != nil {
+		return false
+	}
+	normalizedRight, err := cloneJSONMap(right)
+	if err != nil {
+		return false
+	}
+	return reflect.DeepEqual(normalizedLeft, normalizedRight)
 }
 
 func sameBenchmarkSelection(left, right api.CollectionBenchmarkConfig) bool {

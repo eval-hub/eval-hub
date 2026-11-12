@@ -743,12 +743,12 @@ func TestCalibrateProposalWeightUsesOnlyComparableReferences(t *testing.T) {
 	provider := testProvider("p1", "b1", []string{"accuracy"}, &api.PrimaryScore{Metric: "accuracy"}, nil)
 	candidate := validProposal()
 	candidateBenchmark := &candidate.Benchmarks[0]
-	candidateBenchmark.Parameters = map[string]any{"task": "gsm8k"}
+	candidateBenchmark.Parameters = map[string]any{"task": "gsm8k", "fewshot": float64(5)}
 	candidateBenchmark.TestDataRef = &api.TestDataRef{PVC: &api.PVCTestDataRef{ClaimName: "data-gsm8k"}}
 
 	reference := func(collectionID, task, key string, weight float32) api.CollectionResource {
 		benchmark := testBenchmarkWithWeight("p1", "b1", weight)
-		benchmark.Parameters = map[string]any{"task": task}
+		benchmark.Parameters = map[string]any{"task": task, "fewshot": 5}
 		benchmark.TestDataRef = &api.TestDataRef{PVC: &api.PVCTestDataRef{ClaimName: key}}
 		return systemReference(collectionID, benchmark)
 	}
