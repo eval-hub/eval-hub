@@ -342,6 +342,31 @@ class JudgeMockTests(MockServerTestCase):
         self.assertEqual(arguments["tags"], [])
         self.assertEqual(arguments["nested"], {"score": 2})
 
+    def test_answer_tool_any_of_values(self):
+        """A property with no top-level type uses its first non-null anyOf branch."""
+        completion = self.post("/v1/chat/completions", {
+            "model": self.model,
+            "messages": [{"role": "user", "content": "answer"}],
+            "tools": [{
+                "type": "function",
+                "function": {
+                    "name": "answer",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "score": {"anyOf": [{"type": "integer", "minimum": 4, "maximum": 9}, {"type": "null"}]},
+                            "note": {"anyOf": [{"type": "null"}, {"type": "boolean"}]},
+                            "label": {"type": "string"},
+                        },
+                    },
+                },
+            }],
+        })
+        arguments = json.loads(completion["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"])
+        self.assertEqual(arguments["score"], 4)
+        self.assertIs(arguments["note"], True)
+        self.assertEqual(arguments["label"], "mock answer")
+
     def test_flattened_answer_tool_declaration(self):
         """A flattened {"name": "answer", "parameters": ...} declaration is accepted."""
         completion = self.post("/v1/chat/completions", {
@@ -533,6 +558,34 @@ class TargetAnswerToolTests(MockServerTestCase):
         })["choices"][0]["message"]
         self.assertEqual(message["content"], "I will follow the requested constraints.")
         self.assertNotIn("tool_calls", message)
+
+    def test_tool_choice_none_keeps_plain_text(self):
+        """tool_choice "none" forbids calls, including the declared answer tool."""
+        tools = [{
+            "type": "function",
+            "function": {
+                "name": "answer",
+                "parameters": {"type": "object", "properties": {"verdict": {"type": "boolean"}}},
+            },
+        }]
+        message = self.post("/v1/chat/completions", {
+            "model": self.model,
+            "messages": [{"role": "user", "content": "score this transcript"}],
+            "tools": tools,
+            "tool_choice": "none",
+        })["choices"][0]["message"]
+        self.assertEqual(message["content"], "I will follow the requested constraints.")
+        self.assertNotIn("tool_calls", message)
+
+        response = self.post("/v1/responses", {
+            "model": self.model,
+            "input": "score this transcript",
+            "tools": tools,
+            "tool_choice": "none",
+        })
+        item = response["output"][0]
+        self.assertEqual(item["type"], "message")
+        self.assertEqual(item["content"][0]["text"], "I will follow the requested constraints.")
 
 
 if __name__ == "__main__":

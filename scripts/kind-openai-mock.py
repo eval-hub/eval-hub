@@ -130,6 +130,18 @@ def schema_conforming_value(schema):
     enum = schema.get("enum")
     if isinstance(enum, list) and enum:
         return enum[0]
+    if "type" not in schema and isinstance(schema.get("anyOf"), list):
+        # Optional and union properties often carry no top-level type, for
+        # example {"anyOf": [{"type": "integer"}, {"type": "null"}]}. Pick the
+        # first non-null branch and synthesize its value so the argument
+        # conforms to that branch; recursion covers nested anyOf schemas.
+        branch = next(
+            (item for item in schema["anyOf"]
+             if not (isinstance(item, dict) and item.get("type") == "null")),
+            None,
+        )
+        if branch is not None:
+            return schema_conforming_value(branch)
     kind = schema.get("type", "string")
     if isinstance(kind, list):
         kind = next((item for item in kind if item != "null"), "string")
@@ -351,7 +363,9 @@ class Handler(BaseHTTPRequestHandler):
 
         if endpoint.endswith("/v1/responses"):
             forced = forced_tool(request.get("tool_choice"), request.get("tools"))
-            answer_tool = declared_answer_tool(request.get("tools"))
+            # tool_choice "none" forbids tool calls, so a declared answer tool
+            # must be answered with text like any other unselected tool.
+            answer_tool = None if request.get("tool_choice") == "none" else declared_answer_tool(request.get("tools"))
             tool = forced if forced is not None else answer_tool
             if tool is not None:
                 self.reply(200, responses_tool_call(request, tool))
@@ -407,7 +421,9 @@ class Handler(BaseHTTPRequestHandler):
             print(json.dumps({"role": ROLE, "auth": "accepted", "response_format": "forced-tool"}), flush=True)
             return
 
-        answer_tool = declared_answer_tool(request.get("tools"))
+        # tool_choice "none" forbids tool calls, so reply with text instead of
+        # auto-calling the declared answer tool.
+        answer_tool = None if request.get("tool_choice") == "none" else declared_answer_tool(request.get("tools"))
         if answer_tool is not None:
             # Structured-answer contract (inspect_scout's generate_answer,
             # used by Petri/Bloom judges and similar graders): the framework
