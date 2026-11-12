@@ -560,3 +560,91 @@ func TestPostProcessingInvalidSourcesReturnBadRequest(t *testing.T) {
 		}
 	}
 }
+
+// TestPostProcessingRecordsPathRequests exercises JSONPath through HTTP decoding,
+// nested validation, persistence mapping, and the public submission response.
+func TestPostProcessingRecordsPathRequests(t *testing.T) {
+	for _, perBenchmark := range []bool{false, true} {
+		for _, tc := range []struct {
+			name, descriptor, selector string
+			invalid                    bool
+		}{
+			{name: "nested JSON records", descriptor: `{"format":"json","records_path":"$.benchmarks[0].requests.successful"}`, selector: "$.benchmarks[0].requests.successful"},
+			{name: "auto format bracket selector", descriptor: `{"format":"auto","records_path":"$['records']"}`, selector: "$['records']"},
+			{name: "inferred format root selector", descriptor: `{"records_path":"$"}`, selector: "$"},
+			{name: "legacy descriptor without selector", descriptor: `{"format":"jsonl"}`},
+			{name: "missing root", descriptor: `{"format":"json","records_path":"records"}`, invalid: true},
+			{name: "empty selector", descriptor: `{"format":"json","records_path":""}`, invalid: true},
+			{name: "JSONL with selector", descriptor: `{"format":"jsonl","records_path":"$.records"}`, invalid: true},
+			{name: "CSV with selector", descriptor: `{"format":"csv","records_path":"$.records"}`, invalid: true},
+			{name: "Parquet with selector", descriptor: `{"format":"parquet","records_path":"$.records"}`, invalid: true},
+		} {
+			form := "single"
+			if perBenchmark {
+				form = "per-benchmark"
+			}
+			t.Run(form+"/"+tc.name, func(t *testing.T) {
+				var payload map[string]any
+				if err := json.Unmarshal(marshalPostProcessingRequest(t, nil, nil), &payload); err != nil {
+					t.Fatal(err)
+				}
+				var descriptor map[string]any
+				if err := json.Unmarshal([]byte(tc.descriptor), &descriptor); err != nil {
+					t.Fatal(err)
+				}
+				var dataConfig any = descriptor
+				if perBenchmark {
+					descriptor["selection"] = map[string]string{"provider_id": "guidellm"}
+					dataConfig = []any{descriptor}
+				}
+				operations := payload["operations"].(map[string]any)
+				ci := operations["confidence_interval"].(map[string]any)
+				ci["results_data_ref"].(map[string]any)["data_config"] = dataConfig
+				body, err := json.Marshal(payload)
+				if err != nil {
+					t.Fatal(err)
+				}
+				storage := newPostProcessingHandlerStorage()
+				handler := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, nil)
+				recorder := httptest.NewRecorder()
+				request := &bodyRequest{MockRequest: createMockRequest(http.MethodPost, "/api/v1/evaluations/post-processing"), body: body}
+				ctx := executioncontext.NewExecutionContext(context.Background(), "records-path", slog.New(slog.NewTextHandler(io.Discard, nil)), "user", "tenant")
+				handler.HandleCreatePostProcessing(ctx, request, MockResponseWrapper{recorder: recorder})
+				if tc.invalid {
+					if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "request_validation_failed") || !strings.Contains(recorder.Body.String(), "records_path") {
+						t.Fatalf("expected records_path validation error, got %d: %s", recorder.Code, recorder.Body.String())
+					}
+					if storage.createdJob != nil {
+						t.Fatal("invalid selector was persisted")
+					}
+					return
+				}
+				if recorder.Code != http.StatusAccepted || storage.createdJob == nil {
+					t.Fatalf("expected persisted request, got %d: %s", recorder.Code, recorder.Body.String())
+				}
+				stored := storage.createdJob.Benchmarks[0].Parameters["operations"].(api.StandalonePostProcessingOperations).ConfidenceInterval.ResultsDataRef.DataConfig
+				entry := stored.Single
+				if perBenchmark {
+					if len(stored.PerBenchmark) != 1 || stored.PerBenchmark[0].Selection["provider_id"] != "guidellm" {
+						t.Fatalf("benchmark selection lost: %#v", stored)
+					}
+					entry = &stored.PerBenchmark[0]
+				}
+				if tc.selector == "" {
+					if entry.RecordsPath != nil {
+						t.Fatal("omitted selector became explicit")
+					}
+				} else if entry.RecordsPath == nil || *entry.RecordsPath != tc.selector {
+					t.Fatalf("selector lost: %#v", entry)
+				}
+				var response api.PostProcessingResource
+				if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(response.Operations.ConfidenceInterval.ResultsDataRef.DataConfig, stored) {
+					t.Fatal("response and persisted data configs differ")
+				}
+			})
+		}
+	}
+}
