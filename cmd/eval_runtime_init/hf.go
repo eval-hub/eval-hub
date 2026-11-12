@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -389,6 +390,10 @@ func classifyHFError(repoID string, authenticated bool, err error) error {
 	}
 
 	slog.Error("hugging face hub error", "repo_id", repoID, "error", err)
+
+	if errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf("failed to download repository %s from Hugging Face Hub: %w", repoID, context.DeadlineExceeded)
+	}
 
 	lower := strings.ToLower(err.Error())
 	// HF returns 401 for missing and private datasets without a token; 404 when the repo

@@ -492,6 +492,26 @@ func TestRunGit_HappyPathAndSubPath(t *testing.T) {
 	}
 }
 
+func TestRunGit_TimeoutMessage(t *testing.T) {
+	repoDir := newLocalBareRepo(t)
+	dest := t.TempDir()
+	meta := t.TempDir()
+	secret := filepath.Join(t.TempDir(), "missing-secret")
+	withRunGitTestEnv(t, dest, meta, secret)
+
+	t.Setenv(envGitURL, "file://"+repoDir)
+	t.Setenv(envGitRef, "master")
+	t.Setenv(envInitTimeout, "1ns")
+
+	err := downloaderFromEnv().runGit()
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("runGit() error = %v, want deadline exceeded", err)
+	}
+	if !strings.Contains(err.Error(), "git clone timed out") {
+		t.Fatalf("runGit() error = %v, want timeout wording", err)
+	}
+}
+
 func TestRunGit_ValidationErrors(t *testing.T) {
 	dest := t.TempDir()
 	meta := t.TempDir()

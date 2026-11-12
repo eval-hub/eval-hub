@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -17,7 +18,42 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 )
+
+const envRunMainFailureSubprocess = "EVAL_RUNTIME_INIT_TEST_MAIN_FAILURE"
+
+func TestMainFailureWritesTerminationMessage(t *testing.T) {
+	if os.Getenv(envRunMainFailureSubprocess) == "1" {
+		main()
+		panic("main returned")
+	}
+
+	path := filepath.Join(t.TempDir(), "termination-log")
+	cmd := exec.Command(os.Args[0], "-test.run=^TestMainFailureWritesTerminationMessage$")
+	cmd.Env = append(os.Environ(),
+		envRunMainFailureSubprocess+"=1",
+		"TERMINATION_MESSAGE_PATH="+path,
+		shared.InitJobSpecPathEnv+"=",
+		envHFRepoID+"=",
+		envGitURL+"=",
+		envGitRef+"=",
+		envBucket+"=",
+		envKey+"=",
+	)
+
+	if err := cmd.Run(); err == nil {
+		t.Fatal("main() exited successfully, want failure")
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(%q): %v", path, err)
+	}
+	if got := string(content); !strings.Contains(got, envBucket) || !strings.Contains(got, envKey) {
+		t.Fatalf("termination message = %q, want missing S3 env failure", got)
+	}
+}
 
 func TestRelativeDestPath(t *testing.T) {
 	t.Parallel()
@@ -296,12 +332,25 @@ func TestResolveInitTimeout(t *testing.T) {
 		}
 	})
 	t.Run("default timeout", func(t *testing.T) {
+		t.Setenv(envInitTimeout, "")
 		got, err := resolveInitTimeout()
 		if err != nil {
 			t.Fatalf("resolveInitTimeout() error = %v", err)
 		}
 		if got != defaultTimeout {
 			t.Fatalf("resolveInitTimeout() = %v, want %v", got, defaultTimeout)
+		}
+	})
+	t.Run("invalid timeout", func(t *testing.T) {
+		t.Setenv(envInitTimeout, "not-a-duration")
+		if _, err := resolveInitTimeout(); err == nil {
+			t.Fatal("resolveInitTimeout() error = nil, want invalid duration error")
+		}
+	})
+	t.Run("non-positive timeout", func(t *testing.T) {
+		t.Setenv(envInitTimeout, "0s")
+		if _, err := resolveInitTimeout(); err == nil {
+			t.Fatal("resolveInitTimeout() error = nil, want positive duration error")
 		}
 	})
 }

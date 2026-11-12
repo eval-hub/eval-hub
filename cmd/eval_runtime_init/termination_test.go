@@ -46,6 +46,13 @@ func TestWrapInitTimeout_Passthrough(t *testing.T) {
 	}
 }
 
+func TestWrapInitTimeout_Nil(t *testing.T) {
+	t.Parallel()
+	if got := wrapInitTimeout("git clone", time.Second, nil); got != nil {
+		t.Fatalf("wrapInitTimeout nil = %v, want nil", got)
+	}
+}
+
 func TestReportInitFailure_WritesTimeoutMessage(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "termination-log")
 	t.Setenv("TERMINATION_MESSAGE_PATH", path)
@@ -61,5 +68,15 @@ func TestReportInitFailure_WritesTimeoutMessage(t *testing.T) {
 	}
 	if !strings.Contains(text, "s3 download") {
 		t.Fatalf("termination message missing operation: %q", text)
+	}
+}
+
+func TestWriteTerminationMessage_DropsWriteFailure(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing", "termination-log")
+	t.Setenv("TERMINATION_MESSAGE_PATH", path)
+
+	writeTerminationMessage("init failed")
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("expected no termination message file after write failure, got stat error %v", err)
 	}
 }

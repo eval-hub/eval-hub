@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -204,6 +205,17 @@ func TestClassifyHFError(t *testing.T) {
 	}
 	if strings.Contains(authFailed.Error(), "not found or is private") {
 		t.Fatalf("expected not to classify authenticated 401 as missing/private, got %v", authFailed)
+	}
+
+	deadline := classifyHFError("org/repo", false, fmt.Errorf(
+		`while downloading "https://huggingface.co/api/datasets/org/repo": %w`,
+		context.DeadlineExceeded,
+	))
+	if !errors.Is(deadline, context.DeadlineExceeded) {
+		t.Fatalf("expected deadline cause, got %v", deadline)
+	}
+	if strings.Contains(deadline.Error(), "huggingface.co") {
+		t.Fatalf("expected sanitized deadline message, got %v", deadline)
 	}
 
 	raw := errors.New("connection reset by peer")
