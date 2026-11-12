@@ -810,6 +810,29 @@ func TestCalibrateProposalDoesNotUseUnadvertisedDefaultMetric(t *testing.T) {
 	}
 }
 
+func TestCalibrateProposalRequiresDefaultForSelectedMetric(t *testing.T) {
+	t.Parallel()
+	provider := testProvider("p1", "b1", []string{"accuracy", "loss"}, &api.PrimaryScore{Metric: "accuracy"}, nil)
+	candidate := proposalWithBenchmarks(testBenchmarkWithScore("p1", "b1", "loss", false))
+	source := &fakeCatalogSource{
+		providers: []api.ProviderResource{provider},
+		collections: []api.CollectionResource{
+			systemReference("accuracy-reference", testBenchmarkWithScoreAndThreshold("p1", "b1", "accuracy", false, 0.8)),
+		},
+	}
+
+	got, decisions, err := CalibrateProposal(context.Background(), source, proposalTestOptions(t, "", 2, StrictnessModerate), candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Benchmarks[0].PassCriteria != nil {
+		t.Fatalf("threshold was calibrated for a metric without a matching provider default: %+v", got.Benchmarks[0].PassCriteria)
+	}
+	if !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "candidate primary score does not match the provider-advertised metric and direction") {
+		t.Fatalf("missing no-calibration reason for a non-default metric: %+v", decisions)
+	}
+}
+
 func TestCalibrateProposalMissingEvidenceAndWeightConsensus(t *testing.T) {
 	t.Parallel()
 	provider := testProvider("p1", "b1", []string{"accuracy"}, &api.PrimaryScore{Metric: "accuracy"}, nil)
