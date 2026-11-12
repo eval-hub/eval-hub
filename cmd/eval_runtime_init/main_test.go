@@ -310,7 +310,7 @@ func TestRunHF_RejectsNonPositiveTimeout(t *testing.T) {
 	for _, raw := range []string{"0s", "-1s", "0"} {
 		t.Run(raw, func(t *testing.T) {
 			t.Setenv(envHFTimeout, raw)
-			err := runHF()
+			err := downloaderFromEnv().runHF()
 			if err == nil {
 				t.Fatal("runHF() = nil, want error for non-positive timeout")
 			}
@@ -335,7 +335,7 @@ func TestRunS3_MissingSecretAccessKey(t *testing.T) {
 	scrtDir = dir
 	t.Cleanup(func() { scrtDir = orig })
 
-	err := runS3()
+	err := downloaderFromEnv().runS3()
 	if err == nil {
 		t.Fatal("runS3() = nil, want missing secret access key error")
 	}
@@ -350,7 +350,7 @@ func TestRunS3_RejectsNonPositiveTimeout(t *testing.T) {
 	for _, raw := range []string{"0s", "-1s", "0"} {
 		t.Run(raw, func(t *testing.T) {
 			t.Setenv(envS3Timeout, raw)
-			err := runS3()
+			err := downloaderFromEnv().runS3()
 			if err == nil {
 				t.Fatal("runS3() = nil, want error for non-positive timeout")
 			}
@@ -421,7 +421,7 @@ func TestReadOptionalSecret(t *testing.T) {
 	scrtDir = secret
 	t.Cleanup(func() { scrtDir = orig })
 
-	got, err := readOptionalSecret("token")
+	got, err := downloaderFromEnv().readOptionalSecret("token")
 	if err != nil {
 		t.Fatalf("readOptionalSecret: %v", err)
 	}
@@ -429,7 +429,7 @@ func TestReadOptionalSecret(t *testing.T) {
 		t.Errorf("readOptionalSecret = %q, want hf_abc", got)
 	}
 
-	got, err = readOptionalSecret("missing")
+	got, err = downloaderFromEnv().readOptionalSecret("missing")
 	if err != nil {
 		t.Fatalf("readOptionalSecret(missing): %v", err)
 	}
@@ -439,7 +439,7 @@ func TestReadOptionalSecret(t *testing.T) {
 
 	missingDir := filepath.Join(t.TempDir(), "absent")
 	scrtDir = missingDir
-	got, err = readOptionalSecret("token")
+	got, err = downloaderFromEnv().readOptionalSecret("token")
 	if err != nil {
 		t.Fatalf("readOptionalSecret(missing dir): %v", err)
 	}
@@ -452,7 +452,7 @@ func TestReadOptionalSecret(t *testing.T) {
 		t.Fatal(err)
 	}
 	scrtDir = badDir
-	_, err = readOptionalSecret("token")
+	_, err = downloaderFromEnv().readOptionalSecret("token")
 	if err == nil {
 		t.Fatal("readOptionalSecret(invalid dir) = nil, want open error")
 	}
