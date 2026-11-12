@@ -163,7 +163,7 @@ jobs:
       # the first commit whose action.yml references the gosec 2.30.0 image
       # (x/tools v0.52.0, export data version 5).  Move to v2.30.1 or later once
       # a tag publishes that image, and keep this pin in step with go.mod.
-      uses: securego/gosec@4504603eddc5a91a7b7713932d6d1d3792126103 # v2.30.0 image
+      uses: securego/gosec@1626c864cbed572a70fca73952e11824746f7aff # v2.30.0 image
       with:
         args: >-
           -fmt sarif -out gosec-results.sarif -stdout -verbose=text
