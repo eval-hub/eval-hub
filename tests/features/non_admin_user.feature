@@ -20,6 +20,7 @@ Feature: Evaluation Hub RBAC for an evalhub user
 
   @mlflow
   Scenario: User can create, get, and list MLflow experiments but cannot update or delete them
+    # The scenario After hook removes the temporary experiment with MLFLOW_CLEANUP_TOKEN.
     Given the service is running
     When I create an MLflow experiment as the current user
     Then the current user can get the created MLflow experiment

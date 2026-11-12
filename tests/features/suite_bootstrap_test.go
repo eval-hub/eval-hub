@@ -602,6 +602,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Before(tc.saveScenarioName)
 	ctx.Before(tc.requireMetricsURLForRemoteServer)
 	ctx.After(tc.assetCleanup)
+	ctx.After(tc.cleanupMLflowExperimentAfterScenario)
 
 	ctx.Step(`^the service is running$`, tc.theServiceIsRunning)
 	ctx.Step(`^OCI is configured$`, tc.ociIsConfigured)

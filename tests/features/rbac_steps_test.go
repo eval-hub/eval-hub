@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/cucumber/godog"
 )
 
 // setResourceIDFromEnvironment supplies an existing resource ID to RBAC
@@ -48,13 +50,21 @@ type mlflowExperimentListResponse struct {
 // sendMLflowRBACRequest calls the MLflow endpoint with the same bearer token and
 // tenant workspace used by the current non-admin identity.
 func (tc *scenarioConfig) sendMLflowRBACRequest(method, path string, payload any) (int, []byte, error) {
+	token := strings.TrimSpace(os.Getenv("AUTH_TOKEN"))
+	if token == "" {
+		return 0, nil, fmt.Errorf("AUTH_TOKEN is required for direct MLflow RBAC checks")
+	}
+	return tc.sendMLflowRBACRequestWithToken(method, path, payload, token)
+}
+
+func (tc *scenarioConfig) sendMLflowRBACRequestWithToken(method, path string, payload any, token string) (int, []byte, error) {
 	baseURL, err := mlflowBaseURL()
 	if err != nil {
 		return 0, nil, err
 	}
-	token := strings.TrimSpace(os.Getenv("AUTH_TOKEN"))
+	token = strings.TrimSpace(token)
 	if token == "" {
-		return 0, nil, fmt.Errorf("AUTH_TOKEN is required for direct MLflow RBAC checks")
+		return 0, nil, fmt.Errorf("bearer token is required for direct MLflow RBAC checks")
 	}
 
 	var body io.Reader
@@ -155,7 +165,16 @@ func (tc *scenarioConfig) viewerCannotAccessMLflowExperiments() error {
 }
 
 func (tc *scenarioConfig) createMLflowExperimentAsCurrentUser() error {
+	cleanupToken := strings.TrimSpace(os.Getenv("MLFLOW_CLEANUP_TOKEN"))
+	if cleanupToken == "" {
+		return tc.logError(fmt.Errorf("MLFLOW_CLEANUP_TOKEN is required to clean up the temporary MLflow experiment"))
+	}
+	if cleanupToken == strings.TrimSpace(os.Getenv("AUTH_TOKEN")) {
+		return tc.logError(fmt.Errorf("MLFLOW_CLEANUP_TOKEN must be a separate credential with MLflow experiment delete permission"))
+	}
+
 	name := fmt.Sprintf("evalhub-nonadmin-rbac-%d", time.Now().UTC().UnixNano())
+	tc.values["user_mlflow_experiment_name"] = name
 	status, body, err := tc.sendMLflowRBACRequest(http.MethodPost, "/api/2.0/mlflow/experiments/create", map[string]any{"name": name})
 	if err != nil {
 		return tc.logError(err)
@@ -170,14 +189,68 @@ func (tc *scenarioConfig) createMLflowExperimentAsCurrentUser() error {
 	if response.ExperimentID == "" {
 		return tc.logError(fmt.Errorf("MLflow create response did not include experiment_id: %s", body))
 	}
-	tc.values["user_mlflow_experiment_id"] = response.ExperimentID
-	tc.values["user_mlflow_experiment_name"] = name
+	tc.values["non_admin_mlflow_experiment_id"] = response.ExperimentID
 	tc.logDebug("Created MLflow experiment %q as the current user\n", name)
 	return nil
 }
 
+// cleanupMLflowExperimentAfterScenario removes the experiment created by the
+// non-admin RBAC scenario, even when an assertion fails after creation.
+func (tc *scenarioConfig) cleanupMLflowExperimentAfterScenario(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
+	name := strings.TrimSpace(tc.values["user_mlflow_experiment_name"])
+	if name == "" {
+		return ctx, nil
+	}
+
+	token := strings.TrimSpace(os.Getenv("MLFLOW_CLEANUP_TOKEN"))
+	if token == "" {
+		return ctx, tc.logError(fmt.Errorf("MLFLOW_CLEANUP_TOKEN is required to clean up MLflow experiment %q", name))
+	}
+
+	experimentIDs := make([]string, 0, 1)
+	if experimentID := strings.TrimSpace(tc.values["non_admin_mlflow_experiment_id"]); experimentID != "" {
+		experimentIDs = append(experimentIDs, experimentID)
+	} else {
+		// If creation succeeded remotely but its response could not be decoded,
+		// find the unique test experiment by name so it can still be removed.
+		filter := "name = '" + strings.ReplaceAll(name, "'", "\\'") + "'"
+		status, body, err := tc.sendMLflowRBACRequestWithToken(http.MethodPost, "/api/2.0/mlflow/experiments/search", map[string]any{
+			"filter":      filter,
+			"max_results": 100,
+		}, token)
+		if err != nil {
+			return ctx, tc.logError(fmt.Errorf("search for temporary MLflow experiment %q during cleanup: %w", name, err))
+		}
+		if status != http.StatusOK {
+			return ctx, tc.logError(fmt.Errorf("search for temporary MLflow experiment %q during cleanup returned HTTP %d: %s", name, status, body))
+		}
+		var response mlflowExperimentListResponse
+		if err := json.Unmarshal(body, &response); err != nil {
+			return ctx, tc.logError(fmt.Errorf("decode temporary MLflow experiment search during cleanup: %w", err))
+		}
+		for _, experiment := range response.Experiments {
+			if experiment.Name == name && experiment.ExperimentID != "" {
+				experimentIDs = append(experimentIDs, experiment.ExperimentID)
+			}
+		}
+	}
+
+	for _, experimentID := range experimentIDs {
+		status, body, err := tc.sendMLflowRBACRequestWithToken(http.MethodPost, "/api/2.0/mlflow/experiments/delete", map[string]any{"experiment_id": experimentID}, token)
+		if err != nil {
+			return ctx, tc.logError(fmt.Errorf("delete temporary MLflow experiment %q during cleanup: %w", experimentID, err))
+		}
+		if status != http.StatusOK && status != http.StatusNotFound {
+			return ctx, tc.logError(fmt.Errorf("cleanup of temporary MLflow experiment %q returned HTTP %d: %s", experimentID, status, body))
+		}
+		tc.logDebug("Deleted temporary MLflow experiment %q with cleanup credentials\n", experimentID)
+	}
+
+	return ctx, nil
+}
+
 func (tc *scenarioConfig) currentUserCanGetCreatedMLflowExperiment() error {
-	experimentID := tc.values["user_mlflow_experiment_id"]
+	experimentID := tc.values["non_admin_mlflow_experiment_id"]
 	if experimentID == "" {
 		return tc.logError(fmt.Errorf("created MLflow experiment ID is missing"))
 	}
@@ -200,7 +273,7 @@ func (tc *scenarioConfig) currentUserCanGetCreatedMLflowExperiment() error {
 }
 
 func (tc *scenarioConfig) currentUserCanListCreatedMLflowExperiment() error {
-	experimentID := tc.values["user_mlflow_experiment_id"]
+	experimentID := tc.values["non_admin_mlflow_experiment_id"]
 	name := tc.values["user_mlflow_experiment_name"]
 	if experimentID == "" || name == "" {
 		return tc.logError(fmt.Errorf("created MLflow experiment ID or name is missing"))
@@ -226,7 +299,7 @@ func (tc *scenarioConfig) currentUserCanListCreatedMLflowExperiment() error {
 }
 
 func (tc *scenarioConfig) currentUserCannotUpdateCreatedMLflowExperiment() error {
-	experimentID := tc.values["user_mlflow_experiment_id"]
+	experimentID := tc.values["non_admin_mlflow_experiment_id"]
 	name := tc.values["user_mlflow_experiment_name"]
 	if experimentID == "" || name == "" {
 		return tc.logError(fmt.Errorf("created MLflow experiment ID or name is missing"))
@@ -258,7 +331,7 @@ func (tc *scenarioConfig) currentUserCannotUpdateCreatedMLflowExperiment() error
 }
 
 func (tc *scenarioConfig) currentUserCannotDeleteCreatedMLflowExperiment() error {
-	experimentID := tc.values["user_mlflow_experiment_id"]
+	experimentID := tc.values["non_admin_mlflow_experiment_id"]
 	if experimentID == "" {
 		return tc.logError(fmt.Errorf("created MLflow experiment ID is missing"))
 	}

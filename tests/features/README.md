@@ -189,6 +189,23 @@ go test ./tests/features -run '^TestBenchmarkProviderFixtureCounts$'
 | `@hf` | Evaluation jobs that download offline test data from Hugging Face Hub (`evaluation_jobs.feature`). Defaults: `TEST_DATA_HF_REPO_ID`=`eval-hub-test/evalhub-offline-testdata`, `TEST_DATA_HF_REVISION`=`main`, nested `truthfulqa_mc1` via `TEST_DATA_HF_NESTED_SUB_PATH`=`staging_sub_path` (public mirror of `tests/git-testdata` on HF). One happy-path job runs `arc_easy` (full repo, branch revision) + `truthfulqa_mc1` (nested `sub_path`) and asserts `resolved_sha` is absent on create then populated after completion; set `TEST_DATA_HF_SHA_REVISION` to a real hex commit SHA to exercise pinned revision on `arc_easy` without a separate scenario. Runtime failures: one job covers invalid `repo_id` + bad `revision`; missing `sub_path` stays a separate job. Optional env: `TEST_DATA_HF_BAD_REPO_ID` (default `eval-hub-test/invalid-db`), `TEST_DATA_HF_BAD_REVISION`, `TEST_DATA_HF_BAD_SUB_PATH`. Job-wait negatives poll every 10s for up to 5m; API-only negatives return 400 immediately. Requires cluster egress to huggingface.co (or configure the init image with `HF_ENDPOINT` for a mirror). Opt in with `GODOG_TAGS="@hf"`. |
 | `@gha-wheel-sanity` | Local-runtime wheel validation scenario run by `scripts/gha_wheel_sanity_test.sh` during GHA wheel checks |
 
+### Non-admin MLflow experiment cleanup
+
+The `@non-admin_user` MLflow RBAC scenario creates a uniquely named experiment
+with `AUTH_TOKEN`, verifies the restricted user cannot update or delete it, and
+then removes it in a scenario teardown using `MLFLOW_CLEANUP_TOKEN`. Set that
+variable to a separate credential authorized to delete experiments in the same
+MLflow workspace. The scenario fails before creating an experiment if the
+cleanup credential is missing or matches `AUTH_TOKEN`; cleanup also runs when
+an assertion fails after creation. For a local run, set the token from the
+approved cleanup identity without printing it:
+
+```bash
+export MLFLOW_CLEANUP_TOKEN="$(oc whoami -t)"
+```
+
+The cleanup token is never logged.
+
 ### Disconnected benchmark fixture assets
 
 In disconnected mode, the shared Jsonnet `benchmark()` helper assigns each benchmark a separate S3 bundle prefix:
