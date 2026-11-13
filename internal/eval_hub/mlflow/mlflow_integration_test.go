@@ -1,12 +1,14 @@
 package mlflow
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -55,25 +57,67 @@ func repoBinDir() string {
 	}
 }
 
-// MLflow versions and startup options exercised against a real tracking server.
-var mlflowIntegrationCases = []struct {
+// firstIntegrationPort is the port handed to the first integration case.
+const firstIntegrationPort = 5010
+
+type mlflowIntegrationCase struct {
 	name             string
 	version          string
 	enableWorkspaces bool
 	port             int
-}{
-	{name: "v3.8.1-default", version: "3.8.1", enableWorkspaces: false, port: 5010},
-	{name: "v3.9.0-default", version: "3.9.0", enableWorkspaces: false, port: 5011},
-	{name: "v3.10.1-default", version: "3.10.1", enableWorkspaces: false, port: 5012},
-	{name: "v3.11.1-default", version: "3.11.1", enableWorkspaces: false, port: 5013},
-	{name: "v3.12.0-default", version: "3.12.0", enableWorkspaces: false, port: 5014},
-	{name: "v3.12.0-workspaces", version: "3.12.0", enableWorkspaces: true, port: 5015},
-	{name: "v3.13.0-default", version: "3.13.0", enableWorkspaces: false, port: 5016},
-	{name: "v3.13.0-workspaces", version: "3.13.0", enableWorkspaces: true, port: 5017},
+}
+
+// mlflowIntegrationCases resolves the MLflow releases to exercise at run time:
+// every minor release line from testutil.MinVersion (3.8.1) to the newest stable
+// release published on GitHub, using that line's newest patch. Each release runs
+// twice — workspaces disabled and enabled — starting at
+// testutil.WorkspacesMinVersion (3.10.0), the first release whose
+// `mlflow server` accepts --enable-workspaces.
+//
+// When the GitHub API cannot be reached (offline, CI, rate limited) the pinned
+// fallback list is used instead of failing.
+func mlflowIntegrationCases(t *testing.T, logger *slog.Logger) []mlflowIntegrationCase {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	versions, err := testutil.Versions(ctx, testutil.MinVersion)
+	switch {
+	case err != nil:
+		logger.Warn("Could not resolve MLflow versions from GitHub; using pinned fallback list", "error", err.Error())
+		t.Logf("Could not resolve MLflow versions from GitHub (%v); using pinned fallback list", err)
+		versions = testutil.FallbackVersions()
+	case len(versions) == 0:
+		logger.Warn("GitHub returned no MLflow versions; using pinned fallback list")
+		t.Logf("GitHub returned no MLflow versions; using pinned fallback list")
+		versions = testutil.FallbackVersions()
+	}
+
+	var cases []mlflowIntegrationCase
+	for _, version := range versions {
+		cases = append(cases, mlflowIntegrationCase{
+			name:    "v" + version + "-default",
+			version: version,
+			port:    firstIntegrationPort + len(cases),
+		})
+		if testutil.VersionAtLeast(version, testutil.WorkspacesMinVersion) {
+			cases = append(cases, mlflowIntegrationCase{
+				name:             "v" + version + "-workspaces",
+				version:          version,
+				enableWorkspaces: true,
+				port:             firstIntegrationPort + len(cases),
+			})
+		}
+	}
+
+	logger.Info("Resolved MLflow integration versions", "versions", versions, "cases", len(cases))
+	t.Logf("Running %d MLflow integration cases for versions %v", len(cases), versions)
+	return cases
 }
 
 func TestMLFlowIntegration(t *testing.T) {
-	for _, tc := range mlflowIntegrationCases {
+	for _, tc := range mlflowIntegrationCases(t, testLogger()) {
 		logger := testLogger()
 		logger.Info("Starting mlflow test", "name", tc.name, "version", tc.version, "enableWorkspaces", tc.enableWorkspaces, "port", tc.port)
 		t.Run(tc.name, func(t *testing.T) {
