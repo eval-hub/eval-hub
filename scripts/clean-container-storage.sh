@@ -52,7 +52,9 @@ Inputs (also accepted as environment variables):
                      engine, podman before docker, docker before podman under
                      WSL). An explicit value is always pruned, with a warning
                      when it differs from the record, so storage can be
-                     reclaimed from either engine.
+                     reclaimed from either engine. The other engine is not
+                     probed for an explicit value, so a runtime that is not
+                     answering cannot delay the cleanup.
   KIND_CLUSTER_NAME  cluster used to select that engine (default: evalhub-dev)
   ALL                true to also remove unused (non-dangling) images such as
                      cached base images and previous dev image tags (default:
@@ -82,54 +84,52 @@ DRY_RUN=true reports the stopped containers without stopping.
 USAGE
 }
 
-# Select the runtime to clean, in order of authority: an explicit
-# CONTAINER_RUNTIME (used even when the record names another engine, with a
-# warning), the engine dev-deploy recorded for KIND_CLUSTER_NAME (see
-# recorded_runtime), the engine that owns the cluster, and finally the first
-# reachable engine, podman before docker (docker before podman under WSL). Unlike
-# dev-deploy and dev-clean an explicit value is never a hard error, because
-# pruning cannot destroy the deployment; and a recorded engine that is stopped,
-# uninstalled, or behind an unmounted podman machine is skipped rather than
-# fatal, so storage is still reclaimed after the deployment moved to the other
-# engine.
+# Container runtime policy for a storage prune. resolve_runtime_decision (in
+# scripts/lib/dev-runtime.sh), asked in prune mode, works out which engine to
+# clean and why; this table decides what the prune does about it. Pruning cannot
+# duplicate or destroy the cluster, so an explicit value is never a hard error,
+# and prune mode takes it as given without probing the other engine: an engine
+# that stops answering must not hold up reclaiming storage. A recorded engine that
+# answers is followed even when it no longer runs the cluster; but a stopped or
+# uninstalled recorded engine must not make storage unreclaimable, so the script
+# falls back to the engine that owns the cluster, then to the first reachable one.
 detect_container_runtime() {
-  local runtime recorded
-  if [[ -n "$CONTAINER_RUNTIME" ]]; then
-    case "$CONTAINER_RUNTIME" in
-      podman|docker) ;;
-      *) fail "CONTAINER_RUNTIME must be 'podman' or 'docker'." ;;
-    esac
-    if recorded="$(recorded_runtime)" && [[ "$recorded" != "$(canonical_runtime "$CONTAINER_RUNTIME")" ]]; then
-      log WARN "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE); pruning $CONTAINER_RUNTIME as requested."
-    fi
-    use_runtime "$CONTAINER_RUNTIME"
-    return 0
-  fi
-  if recorded="$(recorded_runtime)"; then
-    if runtime_is_reachable "$recorded"; then
-      log INFO "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded (see $RUNTIME_STATE_FILE); pruning $recorded."
-      use_runtime "$recorded"
-      return 0
-    fi
-    log WARN "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $recorded, but $recorded is not reachable; selecting another engine to prune."
-  fi
-  # The engine order is the policy shared with the other scripts; splitting the
-  # helper's newline-separated output is intended.
-  for runtime in $(fallback_runtime_order); do
-    if kind_cluster_in_runtime "$(canonical_runtime "$runtime")"; then
-      runtime="$(canonical_runtime "$runtime")"
-      log INFO "Kind cluster '$KIND_CLUSTER_NAME' exists under $runtime; pruning $runtime."
+  local runtime
+  resolve_runtime_decision prune
+  case "$RESOLVED_EVIDENCE" in
+    explicit-invalid)
+      fail "CONTAINER_RUNTIME must be 'podman' or 'docker'."
+      ;;
+    explicit-missing|explicit-requested)
+      # The record still names the engine that backed the deployment, even when
+      # that engine is no longer installed, which is worth a warning either way.
+      if [[ -n "$RESOLVED_RECORDED" && "$RESOLVED_RECORDED" != "$RESOLVED_RUNTIME" ]]; then
+        log WARN "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $RESOLVED_RECORDED (see $RUNTIME_STATE_FILE); pruning $RESOLVED_RUNTIME as requested."
+      fi
+      use_runtime "$RESOLVED_RUNTIME"
+      ;;
+    recorded-owned|recorded-stale|recorded-gone)
+      log INFO "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $RESOLVED_RUNTIME (see $RUNTIME_STATE_FILE); pruning $RESOLVED_RUNTIME."
+      use_runtime "$RESOLVED_RUNTIME"
+      ;;
+    *)
+      # A stopped or unusable record, or no record at all: prune an engine that is
+      # there. The record names the engine that backed the deployment even when
+      # that engine can no longer be reached, which is worth a warning.
+      if [[ "$RESOLVED_RECORD_STATE" == stopped || "$RESOLVED_RECORD_STATE" == uninstalled ]]; then
+        log WARN "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $RESOLVED_RECORDED, but $RESOLVED_RECORDED is not reachable; selecting another engine to prune."
+      fi
+      runtime="$RESOLVED_OWNER"
+      if [[ -n "$runtime" ]]; then
+        log INFO "Kind cluster '$KIND_CLUSTER_NAME' exists under $runtime; pruning $runtime."
+        use_runtime "$runtime"
+        return 0
+      fi
+      runtime="$(first_reachable_runtime)" ||
+        fail "Neither podman nor docker is reachable. Install podman (or docker) and make sure it is running."
       use_runtime "$runtime"
-      return 0
-    fi
-  done
-  for runtime in $(fallback_runtime_order); do
-    if command -v "$runtime" >/dev/null 2>&1 && "$runtime" info >/dev/null 2>&1; then
-      use_runtime "$runtime"
-      return 0
-    fi
-  done
-  fail "Neither podman nor docker is reachable. Install podman (or docker) and make sure it is running."
+      ;;
+  esac
 }
 
 validate_inputs() {
