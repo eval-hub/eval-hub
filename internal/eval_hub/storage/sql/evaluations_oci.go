@@ -25,7 +25,7 @@ func ociArtifactReferencesEquivalent(a, b *api.OCIArtifactReference) bool {
 // this method checks status presence and workflow eligibility, not field validity.
 // A nil card preserves the existing reference; a supplied card replaces it
 // (last-write-wins) when the update is accepted.
-func (s *sqlStorage) UpdateEvaluationJobOCI(id string, status *api.OCIProcessingStatus, card *api.OCIArtifactReference) error {
+func (s *sqlStorage) UpdateEvaluationJobOCI(id string, status *api.OCIProcessingStatus, card, bundle *api.OCIArtifactReference) error {
 	if status == nil {
 		return se.NewServiceError(messages.InternalServerError, "Error", "OCI processing status is required")
 	}
@@ -55,7 +55,8 @@ func (s *sqlStorage) UpdateEvaluationJobOCI(id string, status *api.OCIProcessing
 			results := job.Results.OCI
 			sameStatus := results.Status != nil && results.Status.State == status.State &&
 				messageInfosEquivalent(results.Status.Message, status.Message)
-			if sameStatus && (card == nil || ociArtifactReferencesEquivalent(results.EvaluationCard, card)) {
+			if sameStatus && (card == nil || ociArtifactReferencesEquivalent(results.EvaluationCard, card)) &&
+				(bundle == nil || ociArtifactReferencesEquivalent(results.EvaluationBundle, bundle)) {
 				return nil
 			}
 			// Completed and failed are terminal OCI outcomes: there are no workflow
@@ -64,7 +65,7 @@ func (s *sqlStorage) UpdateEvaluationJobOCI(id string, status *api.OCIProcessing
 				return se.NewServiceError(messages.JobCanNotBeUpdated, "Id", id, "NewStatus", status.State, "Status", results.Status.State)
 			}
 		}
-		job.Results = api.UpdateOCIResults(job.Results, status, card)
+		job.Results = api.UpdateOCIResults(job.Results, status, card, bundle)
 		return s.updateEvaluationJobTxn(txn, id, job.Status.State, &EvaluationJobEntity{
 			Config: &job.EvaluationJobConfig, Status: job.Status, Results: job.Results,
 		})
