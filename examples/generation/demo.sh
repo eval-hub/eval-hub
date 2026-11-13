@@ -200,7 +200,7 @@ create_generation() {
     "$WORK_DIR/generation-create.json" >/dev/null || fail "POST response did not match the pending CollectionGenerationResource contract."
   local location
   location="$(awk 'tolower($1) == "location:" { sub(/\r$/, "", $2); print $2; exit }' "$WORK_DIR/headers")"
-  [[ "$location" == /api/v1/evaluations/collections/generation/*\?mock=true ]] ||
+  [[ "$location" == /api/v1/evaluations/collections/generation/*\?mock=complete ]] ||
     fail "POST response Location is missing or is not a mock polling URL."
   log PASS "POST returned HTTP 202 with normalized request, pending state, and a Location polling URL."
   printf '%s\n' "$location" >"$WORK_DIR/location"
@@ -209,6 +209,19 @@ create_generation() {
 poll_generation() {
   local location
   location="$(<"$WORK_DIR/location")"
+
+  api_request GET "/api/v1/evaluations/collections/generation/550e8400-e29b-41d4-a716-446655440099?mock=progress" 200 \
+    "$WORK_DIR/generation-progress.json"
+  jq -e '
+    .status.state == "running" and .status.started_at != null and
+    .status.progress.phase == "model_generation" and
+    .status.progress.updated_at != null and
+    .status.progress.last_completed_action.name == "search_benchmarks" and
+    (.result | not)
+  ' "$WORK_DIR/generation-progress.json" >/dev/null ||
+    fail "GET progress response did not match the running CollectionGenerationResource contract."
+  log PASS "GET mock=progress returned a running resource with trusted progress details."
+
   api_request GET "$location" 200 "$WORK_DIR/generation-get.json"
   jq -e '
     .resource.id != null and .request.model.name == "fixture-generator" and .request.model.url == "https://generator.example/v1" and
@@ -221,7 +234,7 @@ poll_generation() {
     (.status | has("progress") | not) and (.status | has("error") | not)
   ' "$WORK_DIR/generation-get.json" >/dev/null ||
     fail "GET response did not match the completed CollectionGenerationResource contract."
-  log PASS "Location polling returned the completed proposal and aligned explanations."
+  log PASS "GET mock=complete returned the completed proposal and aligned explanations."
   jq '{id:.resource.id,state:.status.state,collection:.result.collection.name,benchmarks:[.result.collection.benchmarks[] | {provider_id,id}]}' \
     "$WORK_DIR/generation-get.json"
 }

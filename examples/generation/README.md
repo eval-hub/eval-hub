@@ -40,40 +40,45 @@ an evaluation job.
 
 The demo verifies these fixture-only behaviors:
 
-1. Omitting `mock=true` returns HTTP 503 with
+1. Omitting the mock parameter returns HTTP 503 with
    `message_code: collection_generation_not_configured`.
 2. `POST .../generation?mock=true` accepts a caller-supplied generator model
    connection and returns HTTP 202 with normalized request defaults,
-   pending status, and a relative `Location` ending in `?mock=true`.
-3. Polling `Location` returns the static completed proposal. The JSON collection,
-   YAML serialization, selected benchmark explanations, and action summaries
-   are checked by the Go tests.
-4. `DELETE` is a repeatable no-op for the fixed fixture ID; unknown IDs return
+   pending status, and a relative `Location` ending in `?mock=complete`.
+3. `GET ...?mock=progress` returns a fixed running response with the API's
+   `status.progress` object and last completed action.
+4. `GET ...?mock=complete` (the value used by `Location`) returns a completed
+   response with two selected benchmarks, two rejected benchmarks, an
+   explanation for each, and several action summaries. Completed status omits
+   `status.progress`, as required by the API contract. The JSON collection,
+   YAML serialization, explanations, and both status shapes are checked by tests.
+5. `DELETE` is a repeatable no-op for the fixed fixture ID; unknown IDs return
    404.
 
-The mock switch must be exactly the single query value `true`. Other values or
-repeated `mock` parameters return HTTP 400. This fixture is not a real generation
-implementation: it stores no request, has no running phase or progress, and
-returns the same completed proposal on every poll.
+`POST` and `DELETE` require exactly one `mock=true` query value. `GET` accepts
+exactly one of `mock=progress`, `mock=complete`, or the compatibility alias
+`mock=true` (which returns the completed fixture). Other values or repeated
+`mock` parameters return HTTP 400. These responses are static examples, not a
+real generation lifecycle: polling does not advance the resource from running
+to completed, and the fixture stores no request or state.
 The fixture accepts a model URL and name but never calls that endpoint or reads
 its optional Secret reference. Its fixed GET response contains an example model
 and does not retain the model submitted in POST.
 
 ## Send the requests manually
 
-`demo.http` contains equivalent REST Client requests. Set the environment
-variables consumed by the file; do not paste a token into the file:
+`demo.http` contains equivalent REST Client requests. Replace the two marked
+placeholders in that file with the values from these commands:
 
 ```bash
-export EVALHUB_API_BASE_URL=https://127.0.0.1:18443
-export API_TOKEN="$(kubectl --kubeconfig "$HOME/.config/evalhub/kubeconfigs/evalhub-dev.yaml" \
-  -n system create token evalhub-local-service --duration=1h)"
+printf '%s\n' 'https://127.0.0.1:18443'
+KIND_CLUSTER_NAME=evalhub-dev
+KCFG="${XDG_CONFIG_HOME:-$HOME/.config}/evalhub/kubeconfigs/${KIND_CLUSTER_NAME}.yaml"
+kubectl --kubeconfig "$KCFG" -n system create token evalhub-local-service --duration=1h
 ```
 
-Open `demo.http` in a REST Client-compatible editor and run the requests in
-order. The POST response's `Location` is the polling URL. For cleanup, remove
-the token from the shell:
-
-```bash
-unset API_TOKEN
-```
+Use the first command's output for `@baseUrl` and the last command's output for
+`@token`. For a custom dev-deploy host port or cluster name, substitute the
+values used for that deployment. Do not commit the populated token; restore the
+placeholder after the demo. Run the POST, progress GET, complete GET, and DELETE
+requests in order.

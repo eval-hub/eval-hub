@@ -59,7 +59,7 @@ func TestCollectionGenerationMockMatchesOpenAPIContract(t *testing.T) {
 			t.Fatalf("POST status = %d, body = %s", response.Code, response.Body.String())
 		}
 		assertMockHeaders(t, response)
-		if got, want := response.Header().Get("Location"), "/api/v1/evaluations/collections/generation/"+collectionGenerationMockID+"?mock=true"; got != want {
+		if got, want := response.Header().Get("Location"), "/api/v1/evaluations/collections/generation/"+collectionGenerationMockID+"?mock=complete"; got != want {
 			t.Fatalf("Location = %q, want %q", got, want)
 		}
 		var body map[string]any
@@ -101,12 +101,34 @@ func TestCollectionGenerationMockMatchesOpenAPIContract(t *testing.T) {
 		withoutMock := serveGenerationRequest(handler, http.MethodGet, path, "", "")
 		assertMessageCode(t, withoutMock, "collection_generation_not_configured")
 
-		unknown := serveGenerationRequest(handler, http.MethodGet, "/api/v1/evaluations/collections/generation/unknown?mock=true", "", "")
+		unknown := serveGenerationRequest(handler, http.MethodGet, "/api/v1/evaluations/collections/generation/unknown?mock=complete", "", "")
 		if unknown.Code != http.StatusNotFound {
 			t.Fatalf("unknown generation GET status = %d, body = %s", unknown.Code, unknown.Body.String())
 		}
 
-		response := serveGenerationRequest(handler, http.MethodGet, path+"?mock=true", "", "")
+		invalidMock := serveGenerationRequest(handler, http.MethodGet, path+"?mock=other", "", "")
+		assertMessageCode(t, invalidMock, "query_parameter_value_invalid")
+
+		progressResponse := serveGenerationRequest(handler, http.MethodGet, path+"?mock=progress", "", "")
+		if progressResponse.Code != http.StatusOK {
+			t.Fatalf("progress GET status = %d, body = %s", progressResponse.Code, progressResponse.Body.String())
+		}
+		assertMockHeaders(t, progressResponse)
+		var progressBody map[string]any
+		if err := json.Unmarshal(progressResponse.Body.Bytes(), &progressBody); err != nil {
+			t.Fatalf("decode progress GET response: %v", err)
+		}
+		progressStatus := progressBody["status"].(map[string]any)
+		progress := progressStatus["progress"].(map[string]any)
+		lastAction := progress["last_completed_action"].(map[string]any)
+		if progressStatus["state"] != "running" || progressStatus["started_at"] == nil || progress["phase"] != "model_generation" || progress["updated_at"] == nil || lastAction["name"] != "search_benchmarks" || lastAction["completed_at"] == nil {
+			t.Fatalf("progress GET response does not match the running status contract: %#v", progressStatus)
+		}
+		if _, exists := progressBody["result"]; exists {
+			t.Fatal("running resource must not include result")
+		}
+
+		response := serveGenerationRequest(handler, http.MethodGet, path+"?mock=complete", "", "")
 		if response.Code != http.StatusOK {
 			t.Fatalf("GET status = %d, body = %s", response.Code, response.Body.String())
 		}
@@ -135,10 +157,10 @@ func TestCollectionGenerationMockMatchesOpenAPIContract(t *testing.T) {
 		if body.Status["state"] != "completed" || body.Status["started_at"] == nil || body.Status["completed_at"] == nil || body.Status["progress"] != nil || body.Status["error"] != nil {
 			t.Fatalf("GET status does not match completed status schema: %#v", body.Status)
 		}
-		if body.Request["evaluation_goal"] == nil || body.Request["max_benchmarks"] == nil || body.Request["strictness"] == nil || body.Request["model"] == nil || body.Request["generation_effort"] == nil {
+		if body.Request["evaluation_goal"] != "Assess safe tool use and reasoning" || body.Request["max_benchmarks"] != float64(2) || body.Request["strictness"] == nil || body.Request["model"] == nil || body.Request["generation_effort"] == nil {
 			t.Fatalf("GET request omits normalized required fields: %#v", body.Request)
 		}
-		if body.Result.Rationale == "" || len(body.Result.Explanation.Selected) == 0 || len(body.Result.Actions) == 0 {
+		if body.Result.Rationale == "" || len(body.Result.Explanation.Selected) != 2 || len(body.Result.Explanation.Rejected) != 2 || len(body.Result.Actions) < 2 {
 			t.Fatalf("GET result omits required fields: %+v", body.Result)
 		}
 		var yamlCollection map[string]any
@@ -157,6 +179,14 @@ func TestCollectionGenerationMockMatchesOpenAPIContract(t *testing.T) {
 			if selected["id"] != benchmark["id"] || selected["provider_id"] != benchmark["provider_id"] || selected["reason"] == "" {
 				t.Fatalf("selected explanation %d does not describe collection benchmark: %#v vs %#v", i, selected, benchmark)
 			}
+		}
+		for i, rejected := range body.Result.Explanation.Rejected {
+			if rejected["id"] == "" || rejected["provider_id"] == "" || rejected["reason"] == "" {
+				t.Fatalf("rejected explanation %d is incomplete: %#v", i, rejected)
+			}
+		}
+		if len(body.Result.Actions) < 5 {
+			t.Fatalf("GET result should demonstrate several actions; got %d", len(body.Result.Actions))
 		}
 
 		deleteNoMock := serveGenerationRequest(handler, http.MethodDelete, path, "", "")
