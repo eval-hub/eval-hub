@@ -52,7 +52,7 @@
       "get": {
         "x-internal": true,
         "summary": "Service information",
-        "description": "Returns build metadata and enabled hardware profiles from\nEVALHUB_HARDWARE_PROFILES_NAMESPACE. Queue-backed profiles are visible only\nwhen their LocalQueue exists in the caller's X-Tenant namespace, regardless\nof queue active state. Each profile includes resource identifiers and its\nconfigured scheduling type. Queue-backed profiles also include the tenant\nLocalQueue Active condition in queue_availability. Node-scheduled profiles are shared across tenants.\nUsers in the same tenant see the same profiles, matching evaluation job\nvisibility. Local runtimes return an empty hardware_profiles array.\nX-Tenant and X-User are required in cluster mode, as for evaluation jobs.\n",
+        "description": "Returns build metadata and enabled hardware profiles from\nEVALHUB_HARDWARE_PROFILES_NAMESPACE. Queue-backed profiles are visible only\nwhen their LocalQueue exists in the caller's X-Tenant namespace, regardless\nof queue active state. Each profile includes resource identifiers and its\nconfigured scheduling type. Queue-backed profiles also include the tenant\nLocalQueue Active condition in queue_availability. Node-scheduled profiles are shared across tenants.\nUsers in the same tenant see the same profiles, matching evaluation job\nvisibility. Local runtimes return an empty hardware_profiles array, and so do\nclusters without hardware profile support: when\nEVALHUB_HARDWARE_PROFILES_NAMESPACE is not set, or when the HardwareProfile\nCRD (`hardwareprofiles.infrastructure.opendatahub.io`) is not installed.\nOnly failures to read existing profiles, such as an RBAC denial, return 500,\nso build metadata stays available on clusters that cannot serve hardware\nprofiles.\nX-Tenant and X-User are required in cluster mode, as for evaluation jobs.\n",
         "operationId": "get_info",
         "tags": [
           "Health"
@@ -3928,7 +3928,7 @@
           },
           "hardware_profiles": {
             "type": "array",
-            "description": "Enabled hardware profiles available to the caller's tenant, sorted by name.",
+            "description": "Enabled hardware profiles available to the caller's tenant, sorted by name. Empty when the cluster does not install the HardwareProfile CRD or EVALHUB_HARDWARE_PROFILES_NAMESPACE is not configured.",
             "items": {
               "type": "object",
               "required": [

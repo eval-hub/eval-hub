@@ -16,7 +16,7 @@ properties:
     type: string
   hardware_profiles:
     type: array
-    description: Enabled hardware profiles available to the caller's tenant, sorted by name.
+    description: Enabled hardware profiles available to the caller's tenant, sorted by name. Empty when the cluster does not install the HardwareProfile CRD or EVALHUB_HARDWARE_PROFILES_NAMESPACE is not configured.
     items:
       type: object
       required:

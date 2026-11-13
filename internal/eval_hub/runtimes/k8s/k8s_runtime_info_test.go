@@ -1,12 +1,20 @@
 package k8s
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
+	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -66,10 +74,23 @@ func TestListHardwareProfilesErrors(t *testing.T) {
 	if _, err := runtime.ListHardwareProfiles(context.Background(), ""); err == nil {
 		t.Fatal("expected missing tenant error")
 	}
-	t.Run("missing platform namespace", func(t *testing.T) {
+	t.Run("missing platform namespace disables discovery", func(t *testing.T) {
 		t.Setenv(hardwareProfilesNamespaceEnv, "")
-		if _, err := runtime.ListHardwareProfiles(context.Background(), "tenant-a"); err == nil {
-			t.Fatal("expected missing platform namespace error")
+		var logs bytes.Buffer
+		r := &K8sRuntime{
+			logger: slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
+			helper: &KubernetesHelper{dynamicClient: client},
+		}
+		got, err := r.ListHardwareProfiles(context.Background(), "tenant-a")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got == nil || len(got) != 0 {
+			t.Fatalf("profiles = %#v, want empty array", got)
+		}
+		want := "hardware profile discovery is not configured"
+		if !strings.Contains(logs.String(), want) {
+			t.Fatalf("expected debug log containing %q, got %q", want, logs.String())
 		}
 	})
 	t.Run("missing client", func(t *testing.T) {
@@ -85,6 +106,74 @@ func TestListHardwareProfilesErrors(t *testing.T) {
 			t.Fatalf("error = %v", err)
 		}
 	})
+}
+
+// TestListHardwareProfilesWithoutCRD covers clusters that do not serve the
+// HardwareProfile API (for example the kind dev stack): /api/v1/info must still
+// return build metadata with an empty hardware_profiles array.
+func TestListHardwareProfilesWithoutCRD(t *testing.T) {
+	t.Setenv(hardwareProfilesNamespaceEnv, "platform")
+	for _, tc := range []struct {
+		name string
+		err  error
+		// withoutLogger keeps the degraded path covered for runtimes built by
+		// hand (tests, embedders) that carry no logger.
+		withoutLogger bool
+	}{
+		{
+			name: "api server reports the resource is missing",
+			err: &apierrors.StatusError{ErrStatus: metav1.Status{
+				Status:  metav1.StatusFailure,
+				Code:    http.StatusNotFound,
+				Reason:  metav1.StatusReasonNotFound,
+				Message: "the server could not find the requested resource",
+			}},
+		},
+		{
+			name: "wrapped not found error",
+			err:  fmt.Errorf("list hardware profiles: %w", apierrors.NewNotFound(hardwareProfileGVR.GroupResource(), "")),
+		},
+		{
+			name: "kind is absent from discovery",
+			err: &meta.NoKindMatchError{
+				GroupKind:        schema.GroupKind{Group: hardwareProfileAPIGroup, Kind: "HardwareProfile"},
+				SearchedVersions: []string{hardwareProfileAPIVersion},
+			},
+		},
+		{
+			name:          "not found without a logger",
+			err:           apierrors.NewNotFound(hardwareProfileGVR.GroupResource(), ""),
+			withoutLogger: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := fake.NewSimpleDynamicClientWithCustomListKinds(k8sruntime.NewScheme(), map[schema.GroupVersionResource]string{
+				hardwareProfileGVR: "HardwareProfileList",
+			})
+			client.PrependReactor("list", hardwareProfileResource, func(k8stesting.Action) (bool, k8sruntime.Object, error) {
+				return true, nil, tc.err
+			})
+			var logs bytes.Buffer
+			r := &K8sRuntime{helper: &KubernetesHelper{dynamicClient: client}}
+			if !tc.withoutLogger {
+				r.logger = slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+			}
+			got, err := r.ListHardwareProfiles(context.Background(), "tenant-a")
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got == nil || len(got) != 0 {
+				t.Fatalf("profiles = %#v, want empty array", got)
+			}
+			if tc.withoutLogger {
+				return
+			}
+			want := "hardware profile CRD is not installed"
+			if !strings.Contains(logs.String(), want) {
+				t.Fatalf("expected debug log containing %q, got %q", want, logs.String())
+			}
+		})
+	}
 }
 
 func TestListHardwareProfilesEdgeCases(t *testing.T) {
