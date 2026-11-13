@@ -542,6 +542,7 @@ KIND_BENCHMARK_JUDGE_MODEL_NAME ?= kind-judge-model
 KIND_BENCHMARK_JUDGE_URL ?= http://evalhub-kind-mock-judge.system.svc.cluster.local:8000/v1
 KIND_BENCHMARK_JUDGE_API_KEY ?= judge-test-token
 KIND_BENCHMARK_LM_EVAL_TOKENIZER ?= hf-internal-testing/llama-tokenizer
+KIND_BENCHMARK_RULER_TOKENIZER ?= hf-internal-testing/llama-tokenizer
 
 # Reject a token lifetime that cannot cover the suite before the (long) image
 # builds start, so a bad explicit KIND_BENCHMARK_TOKEN_DURATION fails in seconds
@@ -592,6 +593,7 @@ test-benchmarks-kind: test-benchmarks-kind-deploy ## Run benchmark smoke tests a
 	JUDGE_MODEL_NAME="$(KIND_BENCHMARK_JUDGE_MODEL_NAME)" \
 	JUDGE_BASE_URL="$(KIND_BENCHMARK_JUDGE_URL)" \
 	LM_EVAL_TOKENIZER="$(KIND_BENCHMARK_LM_EVAL_TOKENIZER)" \
+	RULER_TOKENIZER="$(KIND_BENCHMARK_RULER_TOKENIZER)" \
 	BENCHMARK_PARALLEL="$(KIND_BENCHMARK_PARALLEL)" \
 	BENCHMARK_TIMEOUT="$(KIND_BENCHMARK_TIMEOUT)" \
 	BENCHMARK_RUN="$(KIND_BENCHMARK_RUN)" \
