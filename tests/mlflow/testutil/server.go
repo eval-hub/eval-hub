@@ -175,10 +175,15 @@ func (opts ServerOptions) withAvailablePort(t *testing.T) ServerOptions {
 	return opts
 }
 
+// listenTCP opens a TCP listener and is net.Listen in production. Tests replace
+// it with a controllable binder so port availability assertions do not depend on
+// a released real socket staying free until the assertion runs.
+var listenTCP = net.Listen
+
 // PortAvailable reports whether a TCP listener can be bound to host:port, which
 // is the precondition for `mlflow server --host host --port port`.
 func PortAvailable(host string, port int) bool {
-	listener, err := net.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+	listener, err := listenTCP("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
 	if err != nil {
 		return false
 	}
