@@ -2,14 +2,18 @@
 
 dev-deploy records the engine that backs a kind cluster next to the private
 kubeconfig, and dev-deploy, dev-clean, dev-demo, and clean-container-storage
-resolve the runtime from that record instead of probing both engines. These tests
-extract the real function bodies from each script, stub podman, docker, and kind
-on PATH, and check the resolution order:
+resolve the runtime from that record instead of probing both engines. The
+resolution itself lives once, in resolve_runtime_decision
+(scripts/lib/dev-runtime.sh): these tests extract the real function bodies, stub
+podman, docker, and kind on PATH, and check the evidence it reports alongside
+what each script does with it. Each detect_container_runtime is a policy table
+over that evidence, so the same evidence is pinned per script:
 
   1. an explicit CONTAINER_RUNTIME: dev-deploy and dev-clean reject a value that
      does not match the record, and one that does not own an unrecorded cluster,
-     while clean-container-storage warns when it differs from the record and
-     keeps the explicit engine;
+     while clean-container-storage warns when it differs from the record (even
+     when the recorded engine is no longer installed), keeps the explicit engine,
+     and probes no other engine;
   2. the recorded engine, which dev-deploy and dev-demo use only while it still
      runs the cluster (see the stale-record cases);
   3. the engine that owns KIND_CLUSTER_NAME (clusters deployed before the record);
@@ -17,22 +21,35 @@ on PATH, and check the resolution order:
      owning engine then docker (dev-demo), and podman before docker, or docker
      before podman under WSL.
 
+The mapping is deliberately not shared: a deploy must fail before it can
+duplicate a cluster, a cleanup must not skip the cluster it was asked to clean, a
+read-only query should fall back to the owner, and a prune must not be blocked by
+an unreachable engine or wait for one that never answers, so an explicit prune
+touches only the engine it was given. Those divergences are asserted per script,
+so a policy edit cannot silently change another command.
+
 A record is only an answer to "which engine backed this cluster", not proof that
 it still does: the stale-record cases check that dev-deploy fails instead of
 creating a second cluster over one the other engine still runs, that dev-demo
 queries the engine that owns the cluster instead, and that dev-clean drops the
-record for a cluster that is already gone. The unreachable-record cases check
-that a stopped recorded engine is still queried by dev-demo and cannot stop
-clean-container-storage from pruning, because a stopped or uninstalled engine
-must not make storage unreclaimable.
+record for a cluster that is already gone. A record whose engine is stopped is
+not stale but unverified: the other engine listing the name says nothing about
+the recorded cluster, which a shut-down podman VM still holds, so those cases
+check that dev-deploy fails without calling the record stale or advising its
+removal, keeps it, and names the other engine only as the cluster the user may
+choose to keep. The unreachable-record cases also check that a stopped recorded
+engine is still queried by dev-demo and cannot stop clean-container-storage from
+pruning, because a stopped or uninstalled engine must not make storage
+unreclaimable.
 
 A record whose engine is no longer installed cannot describe a reachable cluster,
 so it must not keep a command from running: the missing-engine cases check that
 dev-deploy and dev-demo ignore such a record, that dev-clean drops it (also when
 the explicit engine names another one), and that a recorded engine which is
-installed but stopped fails with the state file to remove. The explicit cases also
-check that an explicit CONTAINER_RUNTIME matching the record still has to own the
-cluster, so naming the recorded engine cannot skip that guard.
+installed but stopped fails with the state file to check and the record intact.
+The explicit cases also check that an explicit CONTAINER_RUNTIME matching the
+record still has to own the cluster, so naming the recorded engine cannot skip
+that guard.
 
 The podman-docker shim cases check that a `docker` that is really podman is
 resolved to podman for every script, so kind uses the podman provider and
@@ -71,12 +88,15 @@ LIB_FUNCTIONS = [
     "kind_cmd",
     "canonical_runtime",
     "kind_cluster_in_runtime",
-    "ensure_runtime_owns_existing_cluster",
     "recorded_runtime",
     "record_runtime",
     "runtime_is_installed",
     "runtime_is_reachable",
     "fallback_runtime_order",
+    "runtime_other",
+    "first_reachable_runtime",
+    "cluster_owner",
+    "resolve_runtime_decision",
     "use_runtime",
 ]
 SCRIPT_FUNCTIONS = {
@@ -91,7 +111,6 @@ SCRIPT_FUNCTIONS = {
         "log",
         "fail",
         "need_command",
-        "recorded_runtime_if_trusted",
         "detect_container_runtime",
     ],
     "clean-container-storage.sh": ["log", "fail", "detect_container_runtime"],
@@ -100,6 +119,9 @@ SCRIPT_FUNCTIONS = {
 CLUSTER = "probe-cluster"
 
 PODMAN_FAKE = """#!/usr/bin/env bash
+if [[ -n "${FAKE_CALL_LOG_DIR:-}" ]]; then
+  printf '%s\\n' "podman $*" >>"${FAKE_CALL_LOG_DIR}/podman"
+fi
 case "${1:-}" in
   info) [[ "${FAKE_PODMAN_REACHABLE:-1}" == 1 ]] && exit 0 || exit 1 ;;
   --version|-v) echo "podman version 5.0.0" ;;
@@ -108,6 +130,9 @@ exit 0
 """
 
 DOCKER_FAKE = """#!/usr/bin/env bash
+if [[ -n "${FAKE_CALL_LOG_DIR:-}" ]]; then
+  printf '%s\\n' "docker $*" >>"${FAKE_CALL_LOG_DIR}/docker"
+fi
 case "${1:-}" in
   info) [[ "${FAKE_DOCKER_REACHABLE:-1}" == 1 ]] && exit 0 || exit 1 ;;
   --version) echo "${FAKE_DOCKER_VERSION:-Docker version 27.0.3, build test}" ;;
@@ -118,6 +143,9 @@ exit 0
 # kind lists the clusters of the engine it is pointed at, which is what makes
 # "the other engine owns this name" invisible to a probe under the wrong engine.
 KIND_FAKE = """#!/usr/bin/env bash
+if [[ -n "${FAKE_CALL_LOG_DIR:-}" ]]; then
+  printf '%s\\n' "${KIND_EXPERIMENTAL_PROVIDER:-docker} kind $*" >>"${FAKE_CALL_LOG_DIR}/kind"
+fi
 if [[ "${1:-}" == get && "${2:-}" == clusters ]]; then
   if [[ -n "${KIND_EXPERIMENTAL_PROVIDER:-}" ]]; then
     printf '%s' "${FAKE_PODMAN_CLUSTERS:-}"
@@ -265,6 +293,12 @@ class RuntimeResolutionTestCase(unittest.TestCase):
             state_path.unlink()
         if recorded:
             state_path.write_text(recorded + "\n")
+        # The stubs append every invocation here, so a case can assert that an
+        # engine was not asked to do something (a probe that would hang a real
+        # engine) rather than only that it answered.
+        call_log_dir = self.work_dir / "calls"
+        shutil.rmtree(call_log_dir, ignore_errors=True)
+        call_log_dir.mkdir()
         harness = self.work_dir / "case.sh"
         harness.write_text(
             "#!/usr/bin/env bash\n"
@@ -281,6 +315,7 @@ class RuntimeResolutionTestCase(unittest.TestCase):
         env = {
             "PATH": self.engine_path(missing),
             "HOME": str(self.work_dir),
+            "FAKE_CALL_LOG_DIR": str(call_log_dir),
             "FAKE_PODMAN_CLUSTERS": podman_clusters,
             "FAKE_DOCKER_CLUSTERS": docker_clusters,
             "FAKE_PODMAN_REACHABLE": "1" if podman_reachable else "0",
@@ -307,6 +342,16 @@ class RuntimeResolutionTestCase(unittest.TestCase):
         self.assertEqual(code, 0, output)
         self.assertEqual(resolved, expected, output)
         return output
+
+    def engine_calls(self, engine):
+        """Return the commands the stub `engine` ran during the last case.
+
+        `resolve` clears the log first, so this reports the last scenario only.
+        """
+        log = self.work_dir / "calls" / engine
+        if not log.exists():
+            return []
+        return log.read_text().splitlines()
 
 
 class EnginePathTests(RuntimeResolutionTestCase):
@@ -419,13 +464,53 @@ class DeployResolutionTests(RuntimeResolutionTestCase):
         self.assertIn("not installed; ignoring the stale record", output)
 
     def test_stopped_recorded_engine_names_the_state_file(self):
-        """A stopped engine fails with the record to remove, not a bare probe error."""
+        """A stopped engine fails with the record to check, not a bare probe error."""
         code, _, output = self.resolve(
             "dev-deploy.sh", recorded="podman", podman_reachable=False
         )
         self.assertNotEqual(code, 0, output)
         self.assertIn(f"{CLUSTER}.runtime", output)
+        self.assertIn("cannot be verified", output)
         self.assertIn("rm -- ", output)
+
+    def test_stopped_record_names_the_engine_that_lists_the_cluster(self):
+        """A stopped recorded engine must not hide the engine that lists the cluster.
+
+        The record says podman, the podman machine is shut down, and docker lists a
+        cluster of that name: a deploy has to fail naming docker, but the record is
+        only unverified, never stale. Stopping a podman machine stops its VM while
+        kind keeps cluster state in node containers, so the recorded cluster may
+        still exist; advising its removal would let a later deploy record docker and
+        leave the podman cluster untracked.
+        """
+        code, _, output = self.resolve(
+            "dev-deploy.sh",
+            recorded="podman",
+            podman_reachable=False,
+            docker_clusters=CLUSTER + "\n",
+        )
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("cannot be verified", output)
+        self.assertIn("docker also lists a cluster of that name", output)
+        self.assertIn("to keep the docker cluster instead", output)
+        self.assertNotIn("no longer runs it", output)
+        self.assertNotIn("Remove the stale record", output)
+        self.assertIn("only then remove the record", output)
+        self.assertTrue((self.work_dir / f"{CLUSTER}.runtime").exists(), output)
+
+    def test_stale_record_is_described_as_stale(self):
+        """A record whose engine answers and does not list the cluster is stale.
+
+        Stopping an engine leaves the record unverified, but an engine that
+        answers without the cluster rules the record out, so that remedy removes it.
+        """
+        code, _, output = self.resolve(
+            "dev-deploy.sh", recorded="podman", docker_clusters=CLUSTER + "\n"
+        )
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("no longer runs it and docker does", output)
+        self.assertIn("Remove the stale record", output)
+        self.assertNotIn("cannot be verified", output)
 
 
 class CleanResolutionTests(RuntimeResolutionTestCase):
@@ -497,12 +582,13 @@ class CleanResolutionTests(RuntimeResolutionTestCase):
         self.assertEqual(resolved, "docker", output)
 
     def test_stopped_recorded_engine_names_the_state_file(self):
-        """A stopped engine fails with the record to remove and keeps it."""
+        """A stopped engine fails with the record to check and keeps it."""
         code, _, output = self.resolve(
             "dev-clean.sh", recorded="podman", podman_reachable=False
         )
         self.assertNotEqual(code, 0, output)
         self.assertIn(f"{CLUSTER}.runtime", output)
+        self.assertIn("cannot be verified", output)
         self.assertIn("rm -- ", output)
         self.assertTrue((self.work_dir / f"{CLUSTER}.runtime").exists(), output)
 
@@ -585,6 +671,18 @@ class DemoResolutionTests(RuntimeResolutionTestCase):
             recorded="docker",
             shim=True,
             podman_clusters=CLUSTER + "\n",
+        )
+
+    def test_stopped_shim_over_an_explicit_shim_still_resolves_to_podman(self):
+        """An engine that answers nothing is still queried by its canonical name.
+
+        With the podman machine shut down, `CONTAINER_RUNTIME=docker` on a
+        podman-docker shim is reported as an unavailable engine; leaving the raw
+        value in CONTAINER_RUNTIME would send kind_cmd to the docker provider for a
+        podman-backed cluster.
+        """
+        self.assert_resolves(
+            "dev-demo.sh", "podman", explicit="docker", shim=True, podman_reachable=False
         )
 
     def test_uninstalled_recorded_engine_falls_back_to_the_owner(self):
@@ -787,6 +885,49 @@ class StorageCleanupResolutionTests(RuntimeResolutionTestCase):
         self.assertIn("was deployed with podman", output)
         self.assertIn("pruning docker as requested", output)
 
+    def test_uninstalled_record_still_warns_for_an_explicit_engine(self):
+        """The record names the engine that backed the deployment either way.
+
+        The warning must not depend on the recorded engine still being installed,
+        because a prune never asks it anything.
+        """
+        output = self.assert_resolves(
+            "clean-container-storage.sh",
+            "docker",
+            explicit="docker",
+            recorded="podman",
+            missing=("podman",),
+        )
+        self.assertIn("was deployed with podman", output)
+        self.assertIn("pruning docker as requested", output)
+
+    def test_explicit_engine_matching_the_record_does_not_warn(self):
+        """Naming the recorded engine is not a mismatch."""
+        output = self.assert_resolves(
+            "clean-container-storage.sh", "docker", explicit="docker", recorded="docker"
+        )
+        self.assertNotIn("was deployed with", output)
+
+    def test_explicit_engine_is_not_delayed_by_the_other_engine(self):
+        """A prune must not wait for an engine that may never answer.
+
+        Docker Desktop can wedge so that `docker info` never returns, so an
+        explicit podman prune asks docker nothing and lets kind probe neither
+        engine for the cluster: only the engine it was given is touched.
+        """
+        output = self.assert_resolves(
+            "clean-container-storage.sh", "podman", explicit="podman", recorded="docker"
+        )
+        self.assertIn("was deployed with docker", output)
+        self.assertNotIn("docker info", self.engine_calls("docker"), output)
+        self.assertEqual(self.engine_calls("kind"), [], output)
+
+    def test_explicit_engine_without_a_record_probes_no_other_engine(self):
+        """With no record the explicit engine is used as given, ownership unprobed."""
+        self.assert_resolves("clean-container-storage.sh", "podman", explicit="podman")
+        self.assertNotIn("docker info", self.engine_calls("docker"))
+        self.assertEqual(self.engine_calls("kind"), [])
+
     def test_unrecorded_cluster_selects_its_owning_engine(self):
         """A cluster deployed before the record existed still selects its engine."""
         self.assert_resolves("clean-container-storage.sh", "docker", docker_clusters=CLUSTER + "\n")
@@ -816,6 +957,17 @@ class StorageCleanupResolutionTests(RuntimeResolutionTestCase):
             podman_reachable=False,
         )
         self.assertIn("selecting another engine to prune", output)
+
+    def test_stopped_record_prunes_the_engine_that_owns_the_cluster(self):
+        """A stopped recorded engine must not hide the engine that owns the cluster."""
+        output = self.assert_resolves(
+            "clean-container-storage.sh",
+            "docker",
+            recorded="podman",
+            podman_reachable=False,
+            docker_clusters=CLUSTER + "\n",
+        )
+        self.assertIn("exists under docker; pruning docker", output)
 
     def test_wsl_prefers_docker_on_a_first_clean(self):
         """The WSL engine order is shared with dev-deploy."""
