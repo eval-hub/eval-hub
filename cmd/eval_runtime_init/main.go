@@ -253,7 +253,7 @@ func copyFileBetweenRoots(ctx context.Context, srcRoot, dstRoot *os.Root, rel st
 	return out.Close()
 }
 
-func copyWithContext(ctx context.Context, dst io.Writer, src io.Reader) (int64, error) {
+func copyWithContext(ctx context.Context, dst, src *os.File) (int64, error) {
 	buf := make([]byte, 32*1024)
 	var written int64
 	for {
