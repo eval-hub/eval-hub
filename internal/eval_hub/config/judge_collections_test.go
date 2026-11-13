@@ -9,7 +9,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/testhelpers"
 )
 
-func TestBundledJudgeCollectionsDeclareFlatInputs(t *testing.T) {
+func TestBundledCollectionsDeclareFlatInputs(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	collections, err := config.LoadCollectionConfigs(logger, testhelpers.NewValidator(t), "../../../config")
 	if err != nil {
@@ -48,4 +48,19 @@ func TestBundledJudgeCollectionsDeclareFlatInputs(t *testing.T) {
 			t.Errorf("benchmark %s/%s not found", tt.providerID, tt.benchmarkID)
 		})
 	}
+
+	collection, ok := collections["trustworthiness-v1"]
+	if !ok {
+		t.Fatal("collection trustworthiness-v1 not loaded")
+	}
+	for _, benchmark := range collection.Benchmarks {
+		if benchmark.ProviderID != "lm_evaluation_harness" || benchmark.ID != "truthfulqa_mc1" {
+			continue
+		}
+		if value, ok := benchmark.Parameters["tokenizer"]; !ok || value != "" {
+			t.Errorf("tokenizer = %v (present %t), want an empty string form field", value, ok)
+		}
+		return
+	}
+	t.Fatal("benchmark lm_evaluation_harness/truthfulqa_mc1 not found in trustworthiness-v1")
 }

@@ -68,6 +68,8 @@ benchmarks:
       threshold: 0.40
     parameters:
       num_few_shot: 0
+      # Optional tokenizer override for models whose IDs are not tokenizer IDs.
+      tokenizer: ""
 
 documentation:
   purpose: >-
