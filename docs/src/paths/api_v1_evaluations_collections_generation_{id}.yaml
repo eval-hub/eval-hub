@@ -5,8 +5,9 @@ get:
   description: |
     Poll a dry-run generation. An authorized user in the same tenant may read
     the resource; a user in another tenant cannot. The request summary is
-    tenant-visible and contains normalized search options and the resolved
-    generator profile ID, never credentials or endpoint configuration.
+    tenant-visible and contains normalized search options and the generator
+    model connection (including its endpoint and optional Secret reference),
+    never Secret contents.
     Only completed resources contain result. Its collection is a postable
     CollectionConfig, and result.yaml describes that same config. Catalog
     changes between generation and the later collection-create POST may make
@@ -55,7 +56,11 @@ get:
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
-                  generator_model_id: generation-default
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                    auth:
+                      secret_ref: generator-credentials
                   generation_effort: standard
                 status:
                   state: pending
@@ -73,7 +78,11 @@ get:
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
-                  generator_model_id: generation-default
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                    auth:
+                      secret_ref: generator-credentials
                   generation_effort: standard
                 status:
                   state: running
@@ -98,7 +107,11 @@ get:
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
-                  generator_model_id: generation-default
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                    auth:
+                      secret_ref: generator-credentials
                   generation_effort: standard
                 status:
                   state: completed
@@ -146,7 +159,11 @@ get:
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
-                  generator_model_id: generation-default
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                    auth:
+                      secret_ref: generator-credentials
                   generation_effort: standard
                 status:
                   state: failed
@@ -170,7 +187,11 @@ get:
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
-                  generator_model_id: generation-default
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                    auth:
+                      secret_ref: generator-credentials
                   generation_effort: standard
                 status:
                   state: failed
@@ -193,7 +214,11 @@ get:
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
-                  generator_model_id: generation-default
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                    auth:
+                      secret_ref: generator-credentials
                   generation_effort: standard
                 status:
                   state: cancelled

@@ -10,12 +10,7 @@
 @generationId = 550e8400-e29b-41d4-a716-446655440099
 
 ### Without mock=true the temporary API returns 503 collection_generation_not_configured.
-GET {{baseUrl}}/api/v1/evaluations/collections/generation/models
-Authorization: Bearer {{token}}
-X-Tenant: system
-
-### The fixture exposes one selectable generator profile.
-GET {{baseUrl}}/api/v1/evaluations/collections/generation/models?mock=true
+GET {{baseUrl}}/api/v1/evaluations/collections/generation/{{generationId}}
 Authorization: Bearer {{token}}
 X-Tenant: system
 
@@ -27,9 +22,12 @@ Content-Type: application/json
 
 {
   "evaluation_goal": "Assess safe tool use and reasoning",
+  "model": {
+    "name": "fixture-generator",
+    "url": "https://generator.example/v1"
+  },
   "max_benchmarks": 2,
   "strictness": "moderate",
-  "generator_model_id": "mock-generator",
   "generation_effort": "standard"
 }
 

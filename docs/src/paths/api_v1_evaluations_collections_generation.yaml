@@ -4,28 +4,26 @@ post:
   summary: Start Collection Generation
   description: |
     Start an asynchronous, dry-run collection proposal from an evaluation goal.
-    The service validates the request and required feature, image, model, and
+    The service validates the request and required feature, image, model connection, and
     guardrail configuration before admission, persists a tenant-scoped backing
     evaluation job, and returns promptly. It does not wait for model work and
     does not create a collection. The literal generation segment is reserved
     for this resource and cannot address a collection by ID. If a guardrail or
     runner failure occurs after admission, poll for its safe terminal error.
 
-    Use GET /api/v1/evaluations/collections/generation/models to discover
-    approved generator-model profiles. generator_model_id selects the model
-    that creates the proposal; it is distinct from the future evaluation target
-    and from any guardrail model. The caller may provide only a profile ID, not
-    an endpoint, model name, credential, or Secret reference. If omitted, the
-    tenant's eligible default is resolved and included in the returned request
-    summary. An unknown or inaccessible supplied profile returns a safe 400
-    without revealing private profile details. If no selectable profile exists,
-    or no eligible default exists when the field is omitted, return 503 before
-    admission.
+    The required model object names the generator and supplies its endpoint,
+    using the same shape as an evaluation job's model. It is distinct from the
+    future evaluation target and any guardrail model. Supply credentials through
+    model.auth.secret_ref, which names a Secret accessible in the tenant; never
+    put API keys in the request or in model.parameters. There is no server-side
+    generator-model registry, default selection, or generation-model discovery
+    endpoint. Invalid model connections or inaccessible Secret references fail
+    admission without exposing credential values.
 
     generation_effort selects server-capped iteration, token, and deadline
     budgets. It is independent of strictness and does not promise a completion
     time. A model-specific reasoning control is used only when supported by the
-    selected profile. The running status may expose trusted progress phases and
+    selected model/provider. The running status may expose trusted progress phases and
     activity timestamps; it does not expose a model-generated percentage or ETA.
 
     The POST response's resource.id and Location are the tracking contract.
@@ -38,8 +36,9 @@ post:
     In cluster mode, the caller must be authenticated and authorized through
     kube-rbac-proxy and supply the tenant context via X-Tenant. X-User is set by
     the trusted proxy from the authenticated caller; clients cannot use it to
-    impersonate another user. Model endpoints and credentials remain
-    server-side and cannot be supplied in this request.
+    impersonate another user. The model endpoint and Secret reference in the
+    stored request summary are visible to authorized users of that tenant;
+    Secret contents are never returned.
   operationId: create_collection_generation
   requestBody:
     required: true
@@ -55,15 +54,19 @@ post:
               provider_filter: inspect
               max_benchmarks: 12
               strictness: moderate
-              generator_model_id: generation-default
+              model:
+                name: generator-model
+                url: https://generator.example/v1
+                auth:
+                  secret_ref: generator-credentials
               generation_effort: standard
           goal_defaults:
-            summary: Let the service resolve the default generator and effort
+            summary: Let the service default the generation effort and search options
             value:
               evaluation_goal: Assess agent safety and tool-use risks
-              provider_filter: inspect
-              max_benchmarks: 12
-              strictness: moderate
+              model:
+                name: generator-model
+                url: https://generator.example/v1
   responses:
     '202':
       description: Generation admitted; poll the Location URL for state and result.
@@ -92,12 +95,16 @@ post:
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
-                  generator_model_id: generation-default
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                    auth:
+                      secret_ref: generator-credentials
                   generation_effort: standard
                 status:
                   state: pending
             pending_defaults:
-              summary: Defaults resolved and included in the normalized request
+              summary: Search and effort defaults included in the normalized request
               value:
                 resource:
                   id: 550e8400-e29b-41d4-a716-446655440001
@@ -110,22 +117,18 @@ post:
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
-                  generator_model_id: generation-default
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
                   generation_effort: standard
                 status:
                   state: pending
     '400':
-      description: Invalid request or generator-model profile that is unknown, ineligible, or inaccessible to the tenant.
+      description: Invalid request, model connection, or inaccessible model Secret reference.
       content:
         application/json:
           schema:
             $ref: ../components/schemas/Error.yaml
-          examples:
-            unavailable_profile:
-              summary: The requested profile is not selectable
-              value:
-                message_code: invalid_generator_model
-                message: The requested generation model is not available.
     '401':
       $ref: ../components/responses/Unauthorized.yaml
     '403':

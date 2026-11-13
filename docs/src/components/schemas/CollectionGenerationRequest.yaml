@@ -3,10 +3,12 @@ title: CollectionGenerationRequest
 description: |
   Goal and search options for a dry-run collection proposal. The service trims
   the goal and normalizes the options before persisting the generation job.
-  The caller may select an approved generator-model profile by ID. Its model
-  connection and credentials are configured server-side, not supplied here.
+  The caller supplies the generator model's name and endpoint using the same
+  model shape as an evaluation job. When authentication is needed, auth.secret_ref
+  names a Secret in the tenant namespace; do not include credentials in this request.
 required:
   - evaluation_goal
+  - model
 properties:
   evaluation_goal:
     type: string
@@ -14,6 +16,19 @@ properties:
     maxLength: 2000
     pattern: '\S'
     description: Non-blank natural-language evaluation goal, up to 2000 characters; leading and trailing whitespace is trimmed.
+  model:
+    description: >
+      Model that generates the proposal, distinct from any future evaluation
+      target or guardrail model. Both name and url are required for generation;
+      prerecorded evaluation data cannot substitute for a generator connection.
+    allOf:
+      - $ref: ./ModelRef.yaml
+      - type: object
+        required: [url]
+        properties:
+          url:
+            type: string
+            minLength: 1
   provider_filter:
     type: string
     minLength: 1
@@ -29,17 +44,6 @@ properties:
     enum: [lenient, moderate, strict]
     default: moderate
     description: How conservatively the runner selects and calibrates benchmarks.
-  generator_model_id:
-    type: string
-    minLength: 1
-    maxLength: 128
-    pattern: '\S'
-    description: >
-      Optional opaque ID of an approved generator-model profile returned by
-      GET /api/v1/evaluations/collections/generation/models. If omitted, the
-      tenant's configured eligible default is selected. This identifies the
-      LLM generating the proposal, not the evaluation target or guardrail model.
-      Do not provide a model URL, name, credential, or Secret reference here.
   generation_effort:
     type: string
     enum: [low, standard, high]
@@ -47,6 +51,6 @@ properties:
     description: >
       Requested generation-effort preset. The service maps this to server-capped
       iteration, token, and deadline budgets. It may set a model-specific
-      reasoning control only when the selected profile supports it. Presets do
+      reasoning control only when the selected model/provider supports it. Presets do
       not promise a fixed completion time and are independent of strictness.
 additionalProperties: false

@@ -1,18 +1,19 @@
 package handlers
 
 import (
-	"errors"
 	"strings"
 	"testing"
 )
 
+const generationTestModel = `"model":{"name":"generator","url":"https://generator.example/v1"}`
+
 func TestParseCollectionGenerationOptions(t *testing.T) {
 	t.Run("applies documented defaults and trims goal", func(t *testing.T) {
-		options, err := parseCollectionGenerationOptions([]byte(`{"evaluation_goal":"  evaluate safety  "}`))
+		options, err := parseCollectionGenerationOptions([]byte(`{"evaluation_goal":"  evaluate safety  ",` + generationTestModel + `}`))
 		if err != nil {
 			t.Fatalf("parseCollectionGenerationOptions: %v", err)
 		}
-		if options.EvaluationGoal != "evaluate safety" || options.MaxBenchmarks != 12 || options.Strictness != "moderate" || options.GeneratorModelID != collectionGenerationMockModelID || options.GenerationEffort != "standard" {
+		if options.EvaluationGoal != "evaluate safety" || options.Model.Name != "generator" || options.Model.URL != "https://generator.example/v1" || options.MaxBenchmarks != 12 || options.Strictness != "moderate" || options.GenerationEffort != "standard" {
 			t.Fatalf("unexpected normalized options: %+v", options)
 		}
 	})
@@ -21,7 +22,7 @@ func TestParseCollectionGenerationOptions(t *testing.T) {
 		for _, effort := range []string{"low", "standard", "high"} {
 			for _, strictness := range []string{"lenient", "moderate", "strict"} {
 				for _, benchmarkCount := range []string{"1", "1.0", "1e0", "50"} {
-					body := `{"evaluation_goal":"goal","provider_filter":"inspect,lighteval","max_benchmarks":` + benchmarkCount + `,"strictness":"` + strictness + `","generator_model_id":"mock-generator","generation_effort":"` + effort + `"}`
+					body := `{"evaluation_goal":"goal",` + generationTestModel + `,"provider_filter":"inspect,lighteval","max_benchmarks":` + benchmarkCount + `,"strictness":"` + strictness + `","generation_effort":"` + effort + `"}`
 					options, err := parseCollectionGenerationOptions([]byte(body))
 					if err != nil {
 						t.Fatalf("valid request effort=%s strictness=%s max=%s: %v", effort, strictness, benchmarkCount, err)
@@ -42,20 +43,29 @@ func TestParseCollectionGenerationOptions(t *testing.T) {
 		{name: "non-object", body: `[]`},
 		{name: "null object", body: `null`},
 		{name: "missing required goal", body: `{}`},
-		{name: "null goal", body: `{"evaluation_goal":null}`},
-		{name: "blank goal", body: `{"evaluation_goal":" \t\n "}`},
-		{name: "goal too long before trimming", body: `{"evaluation_goal":" ` + strings.Repeat("x", 2000) + ` "}`},
-		{name: "null provider filter", body: `{"evaluation_goal":"goal","provider_filter":null}`},
-		{name: "empty provider filter", body: `{"evaluation_goal":"goal","provider_filter":""}`},
-		{name: "max benchmark below minimum", body: `{"evaluation_goal":"goal","max_benchmarks":0}`},
-		{name: "max benchmark above maximum", body: `{"evaluation_goal":"goal","max_benchmarks":51}`},
-		{name: "fractional max benchmark", body: `{"evaluation_goal":"goal","max_benchmarks":1.5}`},
-		{name: "null max benchmark", body: `{"evaluation_goal":"goal","max_benchmarks":null}`},
-		{name: "string max benchmark", body: `{"evaluation_goal":"goal","max_benchmarks":"12"}`},
-		{name: "invalid strictness", body: `{"evaluation_goal":"goal","strictness":"high"}`},
-		{name: "invalid effort", body: `{"evaluation_goal":"goal","generation_effort":"fast"}`},
-		{name: "unknown field", body: `{"evaluation_goal":"goal","model_url":"https://example.test"}`},
-		{name: "model id too long before trimming", body: `{"evaluation_goal":"goal","generator_model_id":"` + strings.Repeat(" ", 1) + "mock-generator" + strings.Repeat(" ", 116) + `"}`},
+		{name: "null goal", body: `{"evaluation_goal":null,` + generationTestModel + `}`},
+		{name: "blank goal", body: `{"evaluation_goal":" \t\n ",` + generationTestModel + `}`},
+		{name: "goal too long before trimming", body: `{"evaluation_goal":" ` + strings.Repeat("x", 2000) + ` ",` + generationTestModel + `}`},
+		{name: "missing model", body: `{"evaluation_goal":"goal"}`},
+		{name: "null model", body: `{"evaluation_goal":"goal","model":null}`},
+		{name: "model without name", body: `{"evaluation_goal":"goal","model":{"url":"https://generator.example/v1"}}`},
+		{name: "model without url", body: `{"evaluation_goal":"goal","model":{"name":"generator"}}`},
+		{name: "model with embedded credentials", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"https://key:password@generator.example/v1"}}`},
+		{name: "model with unsupported scheme", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"file:///tmp/model"}}`},
+		{name: "model with null auth", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"https://generator.example/v1","auth":null}}`},
+		{name: "model with missing secret ref", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"https://generator.example/v1","auth":{}}}`},
+		{name: "unsupported plaintext credential", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"https://generator.example/v1","auth":{"api_key":"plaintext"}}}`},
+		{name: "null provider filter", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"provider_filter":null}`},
+		{name: "empty provider filter", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"provider_filter":""}`},
+		{name: "max benchmark below minimum", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"max_benchmarks":0}`},
+		{name: "max benchmark above maximum", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"max_benchmarks":51}`},
+		{name: "fractional max benchmark", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"max_benchmarks":1.5}`},
+		{name: "null max benchmark", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"max_benchmarks":null}`},
+		{name: "string max benchmark", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"max_benchmarks":"12"}`},
+		{name: "invalid strictness", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"strictness":"high"}`},
+		{name: "invalid effort", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"generation_effort":"fast"}`},
+		{name: "unknown field", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"model_url":"https://example.test"}`},
+		{name: "old profile field", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"generator_model_id":"old-profile"}`},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -66,7 +76,7 @@ func TestParseCollectionGenerationOptions(t *testing.T) {
 	}
 
 	t.Run("normalizes whitespace-only provider filter to omitted", func(t *testing.T) {
-		options, err := parseCollectionGenerationOptions([]byte(`{"evaluation_goal":"goal","provider_filter":"   "}`))
+		options, err := parseCollectionGenerationOptions([]byte(`{"evaluation_goal":"goal",` + generationTestModel + `,"provider_filter":"   "}`))
 		if err != nil {
 			t.Fatalf("whitespace provider_filter is schema-valid: %v", err)
 		}
@@ -75,10 +85,13 @@ func TestParseCollectionGenerationOptions(t *testing.T) {
 		}
 	})
 
-	t.Run("rejects an unavailable model without exposing configuration", func(t *testing.T) {
-		_, err := parseCollectionGenerationOptions([]byte(`{"evaluation_goal":"goal","generator_model_id":"private-profile"}`))
-		if !errors.Is(err, errInvalidCollectionGenerationModel) {
-			t.Fatalf("error = %v, want errInvalidCollectionGenerationModel", err)
+	t.Run("preserves the caller's model connection and Secret reference", func(t *testing.T) {
+		options, err := parseCollectionGenerationOptions([]byte(`{"evaluation_goal":"goal","model":{"name":"other-generator","url":"http://other.example/v1","auth":{"secret_ref":"generator-credentials"},"parameters":{"temperature":0}}}`))
+		if err != nil {
+			t.Fatalf("parseCollectionGenerationOptions: %v", err)
+		}
+		if options.Model.Name != "other-generator" || options.Model.URL != "http://other.example/v1" || options.Model.Auth == nil || options.Model.Auth.SecretRef != "generator-credentials" || options.Model.Parameters["temperature"] != float64(0) {
+			t.Fatalf("model connection changed: %+v", options.Model)
 		}
 	})
 }

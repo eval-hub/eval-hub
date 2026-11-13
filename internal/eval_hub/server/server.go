@@ -435,18 +435,6 @@ func (s *Server) setupCollectionClonesRoutes(h *handlers.Handlers, router *http.
 }
 
 func (s *Server) setupCollectionGenerationRoutes(h *handlers.Handlers, router *http.ServeMux) {
-	// Register the literal models path before the generation ID pattern. ServeMux
-	// selects the more specific literal route, and this order keeps that intent clear.
-	s.handleFunc(router, "GET /api/v1/evaluations/collections/generation/models", func(w http.ResponseWriter, r *http.Request) {
-		ctx := s.newExecutionContext(r)
-		resp := NewRespWrapper(w, ctx)
-		req := s.newRequestWrapper(w, r)
-		if !s.canContinueRequest(ctx, resp) {
-			return
-		}
-		h.HandleListCollectionGenerationModels(ctx, req, resp)
-	})
-
 	s.handleFunc(router, "/api/v1/evaluations/collections/generation", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)

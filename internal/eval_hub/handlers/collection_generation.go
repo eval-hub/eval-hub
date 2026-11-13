@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -14,41 +15,22 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/httpwrappers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/pkg/api"
 	"go.yaml.in/yaml/v4"
 )
 
 const (
-	collectionGenerationMockID      = "550e8400-e29b-41d4-a716-446655440099"
-	collectionGenerationMockModelID = "mock-generator"
-	collectionGenerationMockPath    = "/api/v1/evaluations/collections/generation"
+	collectionGenerationMockID   = "550e8400-e29b-41d4-a716-446655440099"
+	collectionGenerationMockPath = "/api/v1/evaluations/collections/generation"
 )
-
-var errInvalidCollectionGenerationModel = errors.New("generator model is not available")
 
 type collectionGenerationOptions struct {
 	EvaluationGoal   string
+	Model            api.ModelRef
 	ProviderFilter   string
 	MaxBenchmarks    int
 	Strictness       string
-	GeneratorModelID string
 	GenerationEffort string
-}
-
-// HandleListCollectionGenerationModels returns the single fixture profile when
-// explicitly requested. The real profile discovery endpoint is implemented by
-// the collection-generation service work.
-func (h *Handlers) HandleListCollectionGenerationModels(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, resp httpwrappers.ResponseWrapper) {
-	if !collectionGenerationMockRequested(ctx, req, resp) {
-		return
-	}
-	setCollectionGenerationMockHeaders(resp)
-	resp.WriteJSON(map[string]any{
-		"items": []map[string]any{{
-			"id":           collectionGenerationMockModelID,
-			"display_name": "Mock generator (fixture)",
-			"is_default":   true,
-		}},
-	}, 200)
 }
 
 // HandleCreateCollectionGeneration validates a request and returns a stateless
@@ -65,10 +47,6 @@ func (h *Handlers) HandleCreateCollectionGeneration(ctx *executioncontext.Execut
 	}
 	options, err := parseCollectionGenerationOptions(body)
 	if err != nil {
-		if errors.Is(err, errInvalidCollectionGenerationModel) {
-			resp.ErrorWithMessageCode(ctx.RequestID, messages.InvalidGeneratorModel)
-			return
-		}
 		resp.ErrorWithMessageCode(ctx.RequestID, messages.RequestValidationFailed, "Error", err.Error())
 		return
 	}
@@ -114,11 +92,14 @@ func (h *Handlers) HandleGetCollectionGeneration(ctx *executioncontext.Execution
 			"updated_at": completedAt,
 		},
 		"request": map[string]any{
-			"evaluation_goal":    "Assess model safety and reasoning",
-			"max_benchmarks":     12,
-			"strictness":         "moderate",
-			"generator_model_id": collectionGenerationMockModelID,
-			"generation_effort":  "standard",
+			"evaluation_goal": "Assess model safety and reasoning",
+			"model": map[string]any{
+				"name": "fixture-generator",
+				"url":  "https://generator.example/v1",
+			},
+			"max_benchmarks":    12,
+			"strictness":        "moderate",
+			"generation_effort": "standard",
 		},
 		"status": map[string]any{
 			"state":        "completed",
@@ -184,8 +165,8 @@ func parseCollectionGenerationOptions(body []byte) (collectionGenerationOptions,
 		return collectionGenerationOptions{}, errors.New("request body must be a JSON object")
 	}
 	allowed := map[string]struct{}{
-		"evaluation_goal": {}, "provider_filter": {}, "max_benchmarks": {},
-		"strictness": {}, "generator_model_id": {}, "generation_effort": {},
+		"evaluation_goal": {}, "model": {}, "provider_filter": {},
+		"max_benchmarks": {}, "strictness": {}, "generation_effort": {},
 	}
 	for key := range fields {
 		if _, ok := allowed[key]; !ok {
@@ -196,7 +177,6 @@ func parseCollectionGenerationOptions(body []byte) (collectionGenerationOptions,
 	options := collectionGenerationOptions{
 		MaxBenchmarks:    12,
 		Strictness:       "moderate",
-		GeneratorModelID: collectionGenerationMockModelID,
 		GenerationEffort: "standard",
 	}
 	if raw, ok := fields["evaluation_goal"]; !ok {
@@ -208,6 +188,11 @@ func parseCollectionGenerationOptions(body []byte) (collectionGenerationOptions,
 		return collectionGenerationOptions{}, errors.New("evaluation_goal must contain 1 to 2000 non-whitespace characters")
 	}
 	options.EvaluationGoal = strings.TrimSpace(options.EvaluationGoal)
+	if raw, ok := fields["model"]; !ok {
+		return collectionGenerationOptions{}, errors.New("model is required")
+	} else if err := decodeGenerationModel(raw, &options.Model); err != nil {
+		return collectionGenerationOptions{}, err
+	}
 
 	if raw, ok := fields["provider_filter"]; ok {
 		if err := decodeGenerationString(raw, &options.ProviderFilter); err != nil {
@@ -246,18 +231,6 @@ func parseCollectionGenerationOptions(body []byte) (collectionGenerationOptions,
 			return collectionGenerationOptions{}, errors.New("strictness must be lenient, moderate, or strict")
 		}
 	}
-	if raw, ok := fields["generator_model_id"]; ok {
-		if err := decodeGenerationString(raw, &options.GeneratorModelID); err != nil {
-			return collectionGenerationOptions{}, fmt.Errorf("generator_model_id must be a string: %w", err)
-		}
-		if strings.TrimSpace(options.GeneratorModelID) == "" || utf8.RuneCountInString(options.GeneratorModelID) > 128 {
-			return collectionGenerationOptions{}, errors.New("generator_model_id must contain 1 to 128 non-whitespace characters")
-		}
-		options.GeneratorModelID = strings.TrimSpace(options.GeneratorModelID)
-		if options.GeneratorModelID != collectionGenerationMockModelID {
-			return collectionGenerationOptions{}, errInvalidCollectionGenerationModel
-		}
-	}
 	if raw, ok := fields["generation_effort"]; ok {
 		if err := decodeGenerationString(raw, &options.GenerationEffort); err != nil {
 			return collectionGenerationOptions{}, fmt.Errorf("generation_effort must be a string: %w", err)
@@ -267,6 +240,34 @@ func parseCollectionGenerationOptions(body []byte) (collectionGenerationOptions,
 		}
 	}
 	return options, nil
+}
+
+func decodeGenerationModel(raw json.RawMessage, model *api.ModelRef) error {
+	if isJSONNull(raw) {
+		return errors.New("model must be an object")
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
+		return errors.New("model must be an object")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(model); err != nil {
+		return errors.New("model must match the evaluation job model shape")
+	}
+	if strings.TrimSpace(model.Name) == "" {
+		return errors.New("model.name is required")
+	}
+	parsedURL, err := url.Parse(model.URL)
+	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" || parsedURL.User != nil {
+		return errors.New("model.url must be an HTTP(S) URL without embedded credentials")
+	}
+	if auth, ok := fields["auth"]; ok {
+		if isJSONNull(auth) || model.Auth == nil || strings.TrimSpace(model.Auth.SecretRef) == "" {
+			return errors.New("model.auth.secret_ref is required when model.auth is provided")
+		}
+	}
+	return nil
 }
 
 func decodeGenerationString(raw json.RawMessage, target *string) error {
@@ -282,11 +283,11 @@ func isJSONNull(raw json.RawMessage) bool {
 
 func normalizedCollectionGenerationRequest(options collectionGenerationOptions) map[string]any {
 	request := map[string]any{
-		"evaluation_goal":    options.EvaluationGoal,
-		"max_benchmarks":     options.MaxBenchmarks,
-		"strictness":         options.Strictness,
-		"generator_model_id": options.GeneratorModelID,
-		"generation_effort":  options.GenerationEffort,
+		"evaluation_goal":   options.EvaluationGoal,
+		"model":             options.Model,
+		"max_benchmarks":    options.MaxBenchmarks,
+		"strictness":        options.Strictness,
+		"generation_effort": options.GenerationEffort,
 	}
 	if options.ProviderFilter != "" {
 		request["provider_filter"] = options.ProviderFilter

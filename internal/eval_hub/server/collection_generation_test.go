@@ -23,30 +23,10 @@ func TestCollectionGenerationMockMatchesOpenAPIContract(t *testing.T) {
 		t.Fatalf("SetupRoutes: %v", err)
 	}
 
-	t.Run("models route is distinct and honors mock switch", func(t *testing.T) {
-		withoutMock := serveGenerationRequest(handler, http.MethodGet, "/api/v1/evaluations/collections/generation/models", "", "")
-		assertMessageCode(t, withoutMock, "collection_generation_not_configured")
-
-		invalidMock := serveGenerationRequest(handler, http.MethodGet, "/api/v1/evaluations/collections/generation/models?mock=false", "", "")
-		assertMessageCode(t, invalidMock, "query_parameter_value_invalid")
-
+	t.Run("removed models endpoint is not exposed", func(t *testing.T) {
 		response := serveGenerationRequest(handler, http.MethodGet, "/api/v1/evaluations/collections/generation/models?mock=true", "", "")
-		if response.Code != http.StatusOK {
-			t.Fatalf("models status = %d, body = %s", response.Code, response.Body.String())
-		}
-		assertMockHeaders(t, response)
-		var body struct {
-			Items []struct {
-				ID          string `json:"id"`
-				DisplayName string `json:"display_name"`
-				IsDefault   bool   `json:"is_default"`
-			} `json:"items"`
-		}
-		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
-			t.Fatalf("decode model list: %v", err)
-		}
-		if len(body.Items) != 1 || body.Items[0].ID != "mock-generator" || body.Items[0].DisplayName == "" || !body.Items[0].IsDefault {
-			t.Fatalf("models response does not match CollectionGenerationModelList: %+v", body)
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("models path status = %d, want 404", response.Code)
 		}
 	})
 
@@ -54,10 +34,10 @@ func TestCollectionGenerationMockMatchesOpenAPIContract(t *testing.T) {
 		withoutMock := serveGenerationRequest(handler, http.MethodPost, "/api/v1/evaluations/collections/generation", `{"evaluation_goal":"goal"}`, "application/json")
 		assertMessageCode(t, withoutMock, "collection_generation_not_configured")
 
-		badBody := serveGenerationRequest(handler, http.MethodPost, "/api/v1/evaluations/collections/generation?mock=true", `{"evaluation_goal":"goal","unknown":true}`, "application/json")
+		badBody := serveGenerationRequest(handler, http.MethodPost, "/api/v1/evaluations/collections/generation?mock=true", `{"evaluation_goal":"goal","model":{"name":"generator","url":"https://generator.example/v1"},"unknown":true}`, "application/json")
 		assertMessageCode(t, badBody, "request_validation_failed")
 
-		response := serveGenerationRequest(handler, http.MethodPost, "/api/v1/evaluations/collections/generation?mock=true", `{"evaluation_goal":"  assess safety  ","provider_filter":" inspect ","generator_model_id":"mock-generator","generation_effort":"high"}`, "application/json")
+		response := serveGenerationRequest(handler, http.MethodPost, "/api/v1/evaluations/collections/generation?mock=true", `{"evaluation_goal":"  assess safety  ","model":{"name":"chosen-generator","url":"https://generator.example/v1","auth":{"secret_ref":"generator-credentials"}},"provider_filter":" inspect ","generation_effort":"high"}`, "application/json")
 		if response.Code != http.StatusAccepted {
 			t.Fatalf("POST status = %d, body = %s", response.Code, response.Body.String())
 		}
@@ -74,7 +54,8 @@ func TestCollectionGenerationMockMatchesOpenAPIContract(t *testing.T) {
 			t.Fatalf("POST resource does not match the contract: %#v", resource)
 		}
 		request := body["request"].(map[string]any)
-		if request["evaluation_goal"] != "assess safety" || request["provider_filter"] != "inspect" || request["max_benchmarks"] != float64(12) || request["strictness"] != "moderate" || request["generator_model_id"] != "mock-generator" || request["generation_effort"] != "high" {
+		model := request["model"].(map[string]any)
+		if request["evaluation_goal"] != "assess safety" || request["provider_filter"] != "inspect" || request["max_benchmarks"] != float64(12) || request["strictness"] != "moderate" || model["name"] != "chosen-generator" || model["url"] != "https://generator.example/v1" || model["auth"].(map[string]any)["secret_ref"] != "generator-credentials" || request["generation_effort"] != "high" {
 			t.Fatalf("POST normalized request does not match the OpenAPI summary: %#v", request)
 		}
 		if body["status"].(map[string]any)["state"] != "pending" {
@@ -84,7 +65,7 @@ func TestCollectionGenerationMockMatchesOpenAPIContract(t *testing.T) {
 			t.Fatal("pending resource must not include result")
 		}
 
-		defaults := serveGenerationRequest(handler, http.MethodPost, "/api/v1/evaluations/collections/generation?mock=true", `{"evaluation_goal":"minimal goal"}`, "application/json")
+		defaults := serveGenerationRequest(handler, http.MethodPost, "/api/v1/evaluations/collections/generation?mock=true", `{"evaluation_goal":"minimal goal","model":{"name":"other-generator","url":"http://other.example/v1"}}`, "application/json")
 		if defaults.Code != http.StatusAccepted {
 			t.Fatalf("default POST status = %d, body = %s", defaults.Code, defaults.Body.String())
 		}
@@ -93,7 +74,7 @@ func TestCollectionGenerationMockMatchesOpenAPIContract(t *testing.T) {
 			t.Fatalf("decode default POST response: %v", err)
 		}
 		defaultRequest := defaultsBody["request"].(map[string]any)
-		if defaultRequest["max_benchmarks"] != float64(12) || defaultRequest["strictness"] != "moderate" || defaultRequest["generator_model_id"] != "mock-generator" || defaultRequest["generation_effort"] != "standard" {
+		if defaultRequest["max_benchmarks"] != float64(12) || defaultRequest["strictness"] != "moderate" || defaultRequest["model"].(map[string]any)["name"] != "other-generator" || defaultRequest["generation_effort"] != "standard" {
 			t.Fatalf("defaulted request does not match the OpenAPI defaults: %#v", defaultRequest)
 		}
 	})
@@ -137,7 +118,7 @@ func TestCollectionGenerationMockMatchesOpenAPIContract(t *testing.T) {
 		if body.Status["state"] != "completed" || body.Status["started_at"] == nil || body.Status["completed_at"] == nil || body.Status["progress"] != nil || body.Status["error"] != nil {
 			t.Fatalf("GET status does not match completed status schema: %#v", body.Status)
 		}
-		if body.Request["evaluation_goal"] == nil || body.Request["max_benchmarks"] == nil || body.Request["strictness"] == nil || body.Request["generator_model_id"] == nil || body.Request["generation_effort"] == nil {
+		if body.Request["evaluation_goal"] == nil || body.Request["max_benchmarks"] == nil || body.Request["strictness"] == nil || body.Request["model"] == nil || body.Request["generation_effort"] == nil {
 			t.Fatalf("GET request omits normalized required fields: %#v", body.Request)
 		}
 		if body.Result.Rationale == "" || len(body.Result.Explanation.Selected) == 0 || len(body.Result.Actions) == 0 {

@@ -42,20 +42,22 @@ The demo verifies these fixture-only behaviors:
 
 1. Omitting `mock=true` returns HTTP 503 with
    `message_code: collection_generation_not_configured`.
-2. `GET .../generation/models?mock=true` returns the single
-   `mock-generator` profile.
-3. `POST .../generation?mock=true` returns HTTP 202, normalized request defaults,
+2. `POST .../generation?mock=true` accepts a caller-supplied generator model
+   connection and returns HTTP 202 with normalized request defaults,
    pending status, and a relative `Location` ending in `?mock=true`.
-4. Polling `Location` returns the static completed proposal. The JSON collection,
+3. Polling `Location` returns the static completed proposal. The JSON collection,
    YAML serialization, selected benchmark explanations, and action summaries
    are checked by the Go tests.
-5. `DELETE` is a repeatable no-op for the fixed fixture ID; unknown IDs return
+4. `DELETE` is a repeatable no-op for the fixed fixture ID; unknown IDs return
    404.
 
 The mock switch must be exactly the single query value `true`. Other values or
 repeated `mock` parameters return HTTP 400. This fixture is not a real generation
 implementation: it stores no request, has no running phase or progress, and
 returns the same completed proposal on every poll.
+The fixture accepts a model URL and name but never calls that endpoint or reads
+its optional Secret reference. Its fixed GET response contains an example model
+and does not retain the model submitted in POST.
 
 ## Send the requests manually
 

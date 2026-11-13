@@ -35,7 +35,7 @@ Usage: make dev-generation-demo [VARIABLE=value ...]
 
 Exercises the temporary collection-generation mock API against an already
 deployed EvalHub kind cluster. It checks the documented 503 response when the
-mock switch is absent, lists the mock generator model, submits a generation,
+mock switch is absent, submits a generation with a caller-supplied model,
 polls its Location, and checks delete/unknown-ID behavior. It creates no
 collection or evaluation job and does not build, push, or deploy images.
 
@@ -180,25 +180,18 @@ api_request() {
 }
 
 check_not_configured_response() {
-  api_request GET '/api/v1/evaluations/collections/generation/models' 503 "$WORK_DIR/not-configured.json"
+  api_request GET "/api/v1/evaluations/collections/generation/550e8400-e29b-41d4-a716-446655440099" 503 "$WORK_DIR/not-configured.json"
   jq -e '.message_code == "collection_generation_not_configured"' "$WORK_DIR/not-configured.json" >/dev/null ||
     fail "No-mock response did not match the documented 503 error."
   log PASS "Omitting mock returns the documented 503 collection_generation_not_configured response."
 }
 
-check_model_list() {
-  api_request GET '/api/v1/evaluations/collections/generation/models?mock=true' 200 "$WORK_DIR/models.json"
-  jq -e '(.items | length) == 1 and .items[0].id == "mock-generator" and (.items[0].display_name | length > 0) and .items[0].is_default == true' \
-    "$WORK_DIR/models.json" >/dev/null || fail "Mock model list did not match CollectionGenerationModelList."
-  log PASS "Mock model discovery returned the selectable default profile."
-}
-
 create_generation() {
-  jq -n '{evaluation_goal:"Assess safe tool use and reasoning",max_benchmarks:2,strictness:"moderate",generator_model_id:"mock-generator",generation_effort:"standard"}' \
+  jq -n '{evaluation_goal:"Assess safe tool use and reasoning",model:{name:"fixture-generator",url:"https://generator.example/v1"},max_benchmarks:2,strictness:"moderate",generation_effort:"standard"}' \
     >"$WORK_DIR/generation-request.json"
   api_request POST '/api/v1/evaluations/collections/generation?mock=true' 202 \
     "$WORK_DIR/generation-create.json" "$WORK_DIR/generation-request.json"
-  jq -e '.resource.id != null and .request.evaluation_goal == "Assess safe tool use and reasoning" and .request.max_benchmarks == 2 and .request.strictness == "moderate" and .request.generator_model_id == "mock-generator" and .request.generation_effort == "standard" and .status.state == "pending" and has("result") == false' \
+  jq -e '.resource.id != null and .request.evaluation_goal == "Assess safe tool use and reasoning" and .request.model.name == "fixture-generator" and .request.model.url == "https://generator.example/v1" and .request.max_benchmarks == 2 and .request.strictness == "moderate" and .request.generation_effort == "standard" and .status.state == "pending" and has("result") == false' \
     "$WORK_DIR/generation-create.json" >/dev/null || fail "POST response did not match the pending CollectionGenerationResource contract."
   local location
   location="$(awk 'tolower($1) == "location:" { sub(/\r$/, "", $2); print $2; exit }' "$WORK_DIR/headers")"
@@ -213,7 +206,7 @@ poll_generation() {
   location="$(<"$WORK_DIR/location")"
   api_request GET "$location" 200 "$WORK_DIR/generation-get.json"
   jq -e '
-    .resource.id != null and .request.generator_model_id == "mock-generator" and
+    .resource.id != null and .request.model.name == "fixture-generator" and .request.model.url == "https://generator.example/v1" and
     .request.generation_effort == "standard" and .status.state == "completed" and
     (.result.collection.name | length > 0) and (.result.collection.benchmarks | length > 0) and
     (.result.yaml | length > 0) and (.result.rationale | length > 0) and
@@ -258,7 +251,6 @@ main() {
   check_api_health
   get_api_token
   check_not_configured_response
-  check_model_list
   create_generation
   poll_generation
   check_delete_and_not_found
