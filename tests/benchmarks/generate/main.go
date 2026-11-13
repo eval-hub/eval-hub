@@ -135,6 +135,12 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 	case "garak", "garak-kfp":
 		p["num_examples"] = 1
 		f["notes"] = "One example per probe; broad probe groups still invoke multiple probes. garak-kfp additionally requires Data Science Pipelines."
+		if provider == "garak" {
+			// garak keeps the operator-packaged image instead of a curated one, so
+			// the first kind job also pulls roughly 950MB and the default 5m budget
+			// is spent before the probes start.
+			f["timeout"] = "15m"
+		}
 		if provider == "garak-kfp" {
 			p["kfp_config"] = map[string]any{"endpoint": "${KFP_ENDPOINT}", "namespace": "${KFP_NAMESPACE}", "s3_secret_name": "${KFP_S3_SECRET_NAME}"}
 			f["notes"] = "Requires KFP_ENDPOINT, KFP_NAMESPACE, and KFP_S3_SECRET_NAME for a working Data Science Pipelines deployment and Data Connection Secret. Configure KFP authentication through the model auth Secret. One example per probe; broad groups still invoke multiple probes."
@@ -174,6 +180,11 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 		}
 	case "ruler":
 		p["num_samples"], p["context_lengths"], p["batch_size"], p["tokens_to_generate"] = 1, []int{4096}, 1, 32
+		// The adapter resolves the synthetic-data tokenizer from parameters.tokenizer_path,
+		// falling back to the model name. Smoke endpoints with a non-Hub model name (such
+		// as the kind mock target) supply one through RULER_TOKENIZER; when the variable
+		// is unset the adapter keeps its model-name fallback.
+		f["tokenizer_path_env"] = "RULER_TOKENIZER"
 	case "tooleval":
 		p["num_tasks"], p["tool_server_url"] = 1, "${TOOL_SERVER_URL}"
 		f["notes"] = "Requires a reachable ToolBench tool server and a model supporting tool calls; preserves the benchmark's default step count."
