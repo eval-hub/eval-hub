@@ -159,7 +159,15 @@ def schema_conforming_value(schema):
     if kind == "boolean":
         return True
     if kind == "array":
-        return []
+        # Some answer tools declare a non-empty array, for example simpleqa's
+        # {"type": "array", "minItems": 1, "items": {"type": "string"}}. An
+        # empty list violates that schema, so synthesize minItems values
+        # recursively from ``items``. Without a lower bound the historical
+        # empty list stays, which every array schema accepts.
+        min_items = schema.get("minItems")
+        if not isinstance(min_items, int) or isinstance(min_items, bool) or min_items < 0:
+            min_items = 0
+        return [schema_conforming_value(schema.get("items")) for _ in range(min_items)]
     if kind == "object":
         return schema_conforming_arguments(schema)
     return "mock answer"

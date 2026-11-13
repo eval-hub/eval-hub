@@ -342,6 +342,48 @@ class JudgeMockTests(MockServerTestCase):
         self.assertEqual(arguments["tags"], [])
         self.assertEqual(arguments["nested"], {"score": 2})
 
+    def test_answer_tool_array_values_honour_min_items(self):
+        """Arrays with minItems get that many values synthesized from items.
+
+        An empty list violates a schema such as
+        {"type": "array", "minItems": 1, "items": {"type": "string"}}, so a
+        consumer that validates the tool call rejects it and leaves the sample
+        unscored. Arrays without a lower bound keep the historical empty list.
+        """
+        completion = self.post("/v1/chat/completions", {
+            "model": self.model,
+            "messages": [{"role": "user", "content": "answer"}],
+            "tools": [{
+                "type": "function",
+                "function": {
+                    "name": "answer",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "labels": {"type": "array", "minItems": 2, "items": {"type": "string"}},
+                            "scores": {"type": "array", "minItems": 1, "items": {"type": "integer", "minimum": 3}},
+                            "findings": {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {
+                                    "type": "object",
+                                    "properties": {"verdict": {"type": "string", "enum": ["ok", "bad"]}},
+                                },
+                            },
+                            "unbounded": {"type": "array", "items": {"type": "boolean"}},
+                            "empty": {"type": "array", "minItems": 0, "items": {"type": "string"}},
+                        },
+                    },
+                },
+            }],
+        })
+        arguments = json.loads(completion["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"])
+        self.assertEqual(arguments["labels"], ["mock answer", "mock answer"])
+        self.assertEqual(arguments["scores"], [3])
+        self.assertEqual(arguments["findings"], [{"verdict": "ok"}])
+        self.assertEqual(arguments["unbounded"], [])
+        self.assertEqual(arguments["empty"], [])
+
     def test_answer_tool_any_of_values(self):
         """A property with no top-level type uses its first non-null anyOf branch."""
         completion = self.post("/v1/chat/completions", {

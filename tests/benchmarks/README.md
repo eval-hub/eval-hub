@@ -126,7 +126,8 @@ judges), the tool a request forces through `tool_choice` (inspect_evals'
 shapes CyberSecEval 2 (`GRADE:`), MASK (`Final Answer:`, JSON bounds) and
 agentic-misalignment (its blackmail classifier's `<answer>yes|no</answer>` and
 its deliberation classifier's three-category `<answer>`) require. Arguments and
-replies are synthesized from each request's own declared schema. A plain reply
+replies are synthesized from each request's own declared schema, including
+`minItems` values for array properties. A plain reply
 to any of these leaves the sample unscored; the resulting `NaN` or `inf` metrics
 then break JSON serialization of the results event, the adapter never reports the
 terminal job status, and the job hangs in `post_processing` until its fixture
