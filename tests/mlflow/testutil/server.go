@@ -105,7 +105,7 @@ func (s *Server) stop(t *testing.T) {
 
 func (opts ServerOptions) withDefaults() ServerOptions {
 	if opts.Version == "" {
-		opts.Version = "3.13.0"
+		opts.Version = FallbackLatestVersion
 	}
 	if opts.Host == "" {
 		opts.Host = defaultHost
