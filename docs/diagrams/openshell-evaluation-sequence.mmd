@@ -1,0 +1,85 @@
+sequenceDiagram
+    autonumber
+    actor U as Client / SDK
+    participant E as EvalHub API / runtime
+    participant R as TrustyAI reconciler
+    participant P as Platform sandbox service
+    participant G as OpenShell gateway / driver
+    participant K as Guardrails / K8s controllers
+    participant S as Primary evaluator sandbox
+    participant B as Trusted per-attempt broker
+    participant C as Child sandbox
+    participant X as Trusted integration relay
+
+    U->>E: Submit evaluation with provider / collection
+    E->>E: Authorize tenant and resolve required profiles and capabilities
+    alt Mandatory sandbox or required capability unavailable
+        E-->>U: Descriptive error, no plain Job fallback
+    else Preflight passes
+        E->>E: Persist evaluation and durable dispatch intent
+        E->>R: Create versioned SandboxedEvaluation (idempotent)
+        E-->>U: Evaluation ID through existing asynchronous API
+        R->>P: Ensure attempt (tenant UID, profiles, envelope, deadline)
+        P->>P: Obtain aggregate / Kueue admission where enabled
+        P->>G: Ensure ephemeral workspace, templates, providers, membership
+        Note over P,B: Unique workspace-user identity per attempt, broker outside sandbox
+        P->>B: Deliver only this attempt's gateway identity
+        R->>B: Provision bounded endpoint and attempt capability
+        P->>G: Ensure primary sandbox using complete approved profile
+        G->>K: Prepare managed namespace and sandbox resources
+        K->>K: SCC allocation, quota, limits, PSA, effective policy, storage
+        Note over G,K: Required platform extension: deny execution until guardrails ready
+        K-->>G: Attest readiness and release approved execution
+        G->>S: Start sandbox runtime / evaluator
+        G-->>R: Workspace, namespace UID and sandbox ready
+        R->>E: Mirror benchmark Running and provenance
+        loop Each qualified child request within declared limits
+            S->>B: Kubernetes-shaped create (attempt authentication)
+            B->>B: Bind caller and validate kind, image, fan-out, depth, TTL
+            B->>G: Create child with pinned policy and provider bindings
+            G->>G: Independently authorize workspace and effective profile
+            G->>K: Reconcile approved child workload and supervisor
+            K->>C: Start child sandbox
+            G-->>B: Child sandbox ID and state
+            B-->>S: Logical Pod-compatible result
+            S->>B: exec / log / attach
+            B->>G: Qualified remote-execution / stream operation
+            G->>C: Supervisor-mediated command / observation
+            C-->>G: Output, stream state and exit status
+            G-->>B: Stream / exit status
+            B-->>S: Qualified Kubernetes-compatible stream
+        end
+        S->>X: Job-bound events and result artifacts
+        X->>E: Authorized tenant / evaluation / benchmark update
+        alt Completion or failure
+            R->>R: Record execution outcome and freeze child spawning
+        else Cancel request or absolute deadline
+            U->>E: Cancel evaluation (or deadline fires)
+            E->>R: Reconcile cancellation / deadline
+        end
+        R->>B: Revoke capability, reject creates and close streams
+        R->>P: Terminate attempt compute and export available results
+        P->>G: Stop primary and all child sandboxes, retain output storage
+        G->>K: Terminate workloads and supervisors
+        R->>X: Finalize staged artifacts / qualified trusted storage export
+        X-->>R: Export state / retained artifact references
+        alt Required export complete or authorized data disposition
+            P->>G: Remove sandboxes, storage, templates, providers, services, settings
+            P->>G: Remove membership and delete workspace
+            G->>K: Delete managed namespace and owned resources
+            K-->>P: Verify namespace UID / PVC / volume cleanup
+            P->>P: Revoke attempt identity and release capacity after termination
+            alt Cleanup verified
+                P-->>R: CleanupComplete plus audit / deletion evidence
+                R->>E: Final outcome + export / cleanup provenance
+                R->>R: Remove finalizer
+            else Outage or stuck deletion
+                P-->>R: CleanupBlocked with retained resource IDs
+                R->>R: Retry, alert and record durable orphan responsibility
+            end
+        else Required export blocked
+            R->>P: Revoke identity and retain protected output for bounded recovery
+            R->>E: Results failure and visible cleanup / retention state
+        end
+        Note over R,K: Platform TTL sweeper recovers after crashes, timeout is not cleanup success
+    end
