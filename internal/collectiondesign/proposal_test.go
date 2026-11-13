@@ -848,7 +848,7 @@ func TestCalibrateProposalUsesMutableDataSourceForWeightButNotThreshold(t *testi
 			if got.Benchmarks[0].PassCriteria != nil {
 				t.Fatalf("threshold was inferred without a stable content identity: %+v", got.Benchmarks[0].PassCriteria)
 			}
-			if !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "no system references match the candidate parameters and test-data identity") {
+			if !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "matching mutable Git/Hugging Face sources need the same server-resolved content identity") {
 				t.Fatalf("missing stable-identity explanation: %+v", decisions)
 			}
 		})

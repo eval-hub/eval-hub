@@ -194,7 +194,7 @@ func CalibrateProposal(ctx context.Context, source CatalogSource, options Option
 		} else {
 			threshold, ids := calibratedThreshold(thresholdReferences, providerBenchmark, benchmark.PrimaryScore, normalized.Strictness)
 			if threshold == nil {
-				decisions = append(decisions, noDecision(*benchmark, pathPrefix+".pass_criteria.threshold", thresholdUnavailableReason(references, thresholdReferences, providerBenchmark, benchmark.PrimaryScore)))
+				decisions = append(decisions, noDecision(*benchmark, pathPrefix+".pass_criteria.threshold", thresholdUnavailableReason(references, thresholdReferences, *benchmark, providerBenchmark, benchmark.PrimaryScore)))
 			} else {
 				if benchmark.PassCriteria == nil {
 					benchmark.PassCriteria = &api.PassCriteria{}
@@ -701,11 +701,14 @@ func calibratedThreshold(references []referenceBenchmark, providerBenchmark api.
 	return &result, uniqueSorted(ids)
 }
 
-func thresholdUnavailableReason(references, comparable []referenceBenchmark, providerBenchmark api.BenchmarkResource, candidateScore *api.PrimaryScore) string {
+func thresholdUnavailableReason(references, comparable []referenceBenchmark, candidate api.CollectionBenchmarkConfig, providerBenchmark api.BenchmarkResource, candidateScore *api.PrimaryScore) string {
 	if len(references) == 0 {
 		return "no matching system references were found"
 	}
 	if len(comparable) == 0 {
+		if len(comparableWeightReferences(references, candidate)) > 0 && requiresResolvedTestDataIdentity(candidate.TestDataRef) {
+			return "matching mutable Git/Hugging Face sources need the same server-resolved content identity for threshold calibration"
+		}
 		return "no system references match the candidate parameters and test-data identity"
 	}
 	defaultScore := advertisedDefaultScore(providerBenchmark)
