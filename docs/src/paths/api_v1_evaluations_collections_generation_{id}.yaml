@@ -5,12 +5,22 @@ get:
   description: |
     Poll a dry-run generation. An authorized user in the same tenant may read
     the resource; a user in another tenant cannot. The request summary is
-    tenant-visible and contains normalized search options, never credentials.
+    tenant-visible and contains normalized search options and the generator
+    model connection (including its endpoint and optional Secret reference),
+    never Secret contents.
     Only completed resources contain result. Its collection is a postable
     CollectionConfig, and result.yaml describes that same config. Catalog
     changes between generation and the later collection-create POST may make
     the proposal invalid. Generation results remain readable after the pod
     exits until configured retention expires or the resource is deleted.
+
+    While running, status.progress may report a trusted phase and the timestamp
+    of the last completed allowlisted runner action. This is durable activity
+    information, not a percentage, ETA, or heartbeat. The ordinary
+    /api/v1/evaluations/jobs list excludes generation workloads; retain the
+    POST Location URL to continue polling. Catalog validity at finalization does
+    not guarantee that a benchmark can execute with a particular evaluation
+    model, judge, dataset, tokenizer, adapter image, or disconnected setup.
 
     Unknown IDs, backing jobs of a different workload type, expired resources,
     and jobs outside the caller's tenant return 404. In cluster mode, requests
@@ -46,6 +56,12 @@ get:
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                    auth:
+                      secret_ref: generator-credentials
+                  generation_effort: standard
                 status:
                   state: pending
             running:
@@ -56,15 +72,27 @@ get:
                   tenant: team-a
                   owner: user-a
                   created_at: '2026-10-29T12:00:00Z'
-                  updated_at: '2026-10-29T12:00:01Z'
+                  updated_at: '2026-10-29T12:00:15Z'
                 request:
                   evaluation_goal: Assess agent safety and tool-use risks
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                    auth:
+                      secret_ref: generator-credentials
+                  generation_effort: standard
                 status:
                   state: running
                   started_at: '2026-10-29T12:00:01Z'
+                  progress:
+                    phase: catalog_discovery
+                    updated_at: '2026-10-29T12:00:15Z'
+                    last_completed_action:
+                      name: search_benchmarks
+                      completed_at: '2026-10-29T12:00:15Z'
             completed:
               summary: Validated collection proposal with explanations
               value:
@@ -79,6 +107,12 @@ get:
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                    auth:
+                      secret_ref: generator-credentials
+                  generation_effort: standard
                 status:
                   state: completed
                   started_at: '2026-10-29T12:00:01Z'
@@ -125,6 +159,12 @@ get:
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                    auth:
+                      secret_ref: generator-credentials
+                  generation_effort: standard
                 status:
                   state: failed
                   started_at: '2026-10-29T12:00:01Z'
@@ -147,6 +187,12 @@ get:
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                    auth:
+                      secret_ref: generator-credentials
+                  generation_effort: standard
                 status:
                   state: failed
                   started_at: '2026-10-29T12:00:01Z'
@@ -168,6 +214,12 @@ get:
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                    auth:
+                      secret_ref: generator-credentials
+                  generation_effort: standard
                 status:
                   state: cancelled
                   started_at: '2026-10-29T12:00:01Z'
