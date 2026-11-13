@@ -386,7 +386,7 @@ func TestBuildJobWithS3TestData(t *testing.T) {
 		t.Fatalf("expected init container command %q, got %v", defaultTestDataInitCmd, initContainer.Command)
 	}
 
-	var foundBucketEnv, foundKeyEnv, foundTimeoutEnv, foundLegacyTimeoutEnv bool
+	var foundBucketEnv, foundKeyEnv, foundTimeoutEnv bool
 	for _, env := range initContainer.Env {
 		if env.Name == envTestDataS3BucketName {
 			foundBucketEnv = true
@@ -406,14 +406,8 @@ func TestBuildJobWithS3TestData(t *testing.T) {
 				t.Fatalf("expected timeout env %q, got %q", "45m0s", env.Value)
 			}
 		}
-		if env.Name == envTestDataS3TimeoutName {
-			foundLegacyTimeoutEnv = true
-			if env.Value != "45m0s" {
-				t.Fatalf("expected legacy timeout env %q, got %q", "45m0s", env.Value)
-			}
-		}
 	}
-	if !foundBucketEnv || !foundKeyEnv || !foundTimeoutEnv || !foundLegacyTimeoutEnv {
+	if !foundBucketEnv || !foundKeyEnv || !foundTimeoutEnv {
 		t.Fatalf("expected bucket/key/timeout env vars on init container")
 	}
 
@@ -698,7 +692,7 @@ func TestBuildJobWithGitTestDataPublicRepo(t *testing.T) {
 		t.Fatalf("expected init container command %q, got %v", defaultTestDataInitCmd, initContainer.Command)
 	}
 
-	var foundURL, foundRef, foundTimeout, foundLegacyTimeout bool
+	var foundURL, foundRef, foundTimeout bool
 	for _, env := range initContainer.Env {
 		if env.Name == envTestDataGitURLName {
 			foundURL = true
@@ -718,14 +712,8 @@ func TestBuildJobWithGitTestDataPublicRepo(t *testing.T) {
 				t.Fatalf("expected git timeout env %q, got %q", "45m0s", env.Value)
 			}
 		}
-		if env.Name == envTestDataGitTimeoutName {
-			foundLegacyTimeout = true
-			if env.Value != "45m0s" {
-				t.Fatalf("expected legacy git timeout env %q, got %q", "45m0s", env.Value)
-			}
-		}
 	}
-	if !foundURL || !foundRef || !foundTimeout || !foundLegacyTimeout {
+	if !foundURL || !foundRef || !foundTimeout {
 		t.Fatal("expected URL/ref/timeout env vars on git init container")
 	}
 
@@ -963,7 +951,7 @@ func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
 		t.Fatalf("expected init command [%q], got %v", defaultTestDataInitCmd, initContainer.Command)
 	}
 
-	var foundRepoID, foundRevision, foundTimeout, foundLegacyTimeout bool
+	var foundRepoID, foundRevision, foundTimeout bool
 	for _, env := range initContainer.Env {
 		switch env.Name {
 		case envTestDataHFRepoIDName:
@@ -978,11 +966,6 @@ func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
 				t.Fatalf("expected timeout 45m0s, got %q", env.Value)
 			}
 			foundTimeout = true
-		case envTestDataHFTimeoutName:
-			if env.Value != "45m0s" {
-				t.Fatalf("expected legacy timeout 45m0s, got %q", env.Value)
-			}
-			foundLegacyTimeout = true
 		}
 	}
 	if !foundRepoID {
@@ -991,7 +974,7 @@ func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
 	if !foundRevision {
 		t.Fatal("expected revision env var on HF init container")
 	}
-	if !foundTimeout || !foundLegacyTimeout {
+	if !foundTimeout {
 		t.Fatal("expected timeout env var on HF init container")
 	}
 	assertTestDataEmptyDirSizeLimit(t, job.Spec.Template.Spec.Volumes)

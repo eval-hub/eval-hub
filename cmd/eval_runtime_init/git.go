@@ -42,7 +42,7 @@ func (d downloader) runGit() error {
 		return fmt.Errorf("%s is required", envGitRef)
 	}
 
-	timeout, err := resolveInitTimeout(envGitTimeout)
+	timeout, err := resolveInitTimeout()
 	if err != nil {
 		return err
 	}

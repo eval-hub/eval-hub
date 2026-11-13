@@ -30,7 +30,6 @@ const (
 	// S3 env vars
 	envBucket           = "TEST_DATA_S3_BUCKET"
 	envKey              = "TEST_DATA_S3_KEY"
-	envS3Timeout        = "TEST_DATA_S3_TIMEOUT"
 	regionOptionalKey   = "AWS_DEFAULT_REGION"
 	endpointKey         = "AWS_S3_ENDPOINT"
 	accessKeyIDKey      = "AWS_ACCESS_KEY_ID"
@@ -40,32 +39,21 @@ const (
 	envGitURL     = "TEST_DATA_GIT_URL"
 	envGitRef     = "TEST_DATA_GIT_REF"
 	envGitSubPath = "TEST_DATA_GIT_SUBPATH"
-	envGitTimeout = "TEST_DATA_GIT_TIMEOUT"
 
 	defaultTimeout = 10 * time.Minute
 )
 
-func resolveInitTimeout(legacyEnvNames ...string) (time.Duration, error) {
-	name := envInitTimeout
-	raw := strings.TrimSpace(os.Getenv(name))
-	if raw == "" {
-		for _, legacyName := range legacyEnvNames {
-			if value := strings.TrimSpace(os.Getenv(legacyName)); value != "" {
-				name = legacyName
-				raw = value
-				break
-			}
-		}
-	}
+func resolveInitTimeout() (time.Duration, error) {
+	raw := strings.TrimSpace(os.Getenv(envInitTimeout))
 	if raw == "" {
 		return defaultTimeout, nil
 	}
 	parsed, err := time.ParseDuration(raw)
 	if err != nil {
-		return 0, fmt.Errorf("invalid %s: %w", name, err)
+		return 0, fmt.Errorf("invalid %s: %w", envInitTimeout, err)
 	}
 	if parsed <= 0 {
-		return 0, fmt.Errorf("invalid %s: must be a positive duration", name)
+		return 0, fmt.Errorf("invalid %s: must be a positive duration", envInitTimeout)
 	}
 	return parsed, nil
 }
@@ -115,7 +103,7 @@ func (d downloader) runS3() error {
 	}
 
 	keyPrefix = strings.TrimPrefix(keyPrefix, "/")
-	timeout, err := resolveInitTimeout(envS3Timeout)
+	timeout, err := resolveInitTimeout()
 	if err != nil {
 		return err
 	}

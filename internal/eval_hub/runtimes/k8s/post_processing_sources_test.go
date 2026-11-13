@@ -149,11 +149,6 @@ func TestPostProcessorSecretProjection(t *testing.T) {
 		t.Fatal("staging must complete before the adapter starts")
 	}
 	timeoutEnv := false
-	legacyTimeoutEnvs := map[string]bool{
-		envTestDataS3TimeoutName:  false,
-		envTestDataGitTimeoutName: false,
-		envTestDataHFTimeoutName:  false,
-	}
 	for _, env := range init.Env {
 		if env.Name == envTestDataInitTimeoutName {
 			timeoutEnv = true
@@ -161,20 +156,9 @@ func TestPostProcessorSecretProjection(t *testing.T) {
 				t.Fatalf("init timeout env = %q, want 45m0s", env.Value)
 			}
 		}
-		if _, ok := legacyTimeoutEnvs[env.Name]; ok {
-			legacyTimeoutEnvs[env.Name] = true
-			if env.Value != "45m0s" {
-				t.Fatalf("%s = %q, want 45m0s", env.Name, env.Value)
-			}
-		}
 	}
 	if !timeoutEnv {
 		t.Fatal("post-processing init must receive configured test data timeout")
-	}
-	for name, found := range legacyTimeoutEnvs {
-		if !found {
-			t.Fatalf("post-processing init must receive legacy timeout env %s", name)
-		}
 	}
 	for _, name := range []string{"shared", "hf-auth"} {
 		count := 0

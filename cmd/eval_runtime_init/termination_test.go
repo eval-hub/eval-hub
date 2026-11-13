@@ -71,6 +71,23 @@ func TestReportInitFailure_WritesTimeoutMessage(t *testing.T) {
 	}
 }
 
+func TestWriteTerminationMessageFile_CurrentDirectoryPath(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	t.Setenv("TERMINATION_MESSAGE_PATH", "./termination.log")
+
+	if err := writeTerminationMessageFile([]byte("init failed")); err != nil {
+		t.Fatalf("writeTerminationMessageFile: %v", err)
+	}
+	content, err := os.ReadFile(filepath.Join(dir, "termination.log"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if got, want := string(content), "init failed\n"; got != want {
+		t.Fatalf("termination message = %q, want %q", got, want)
+	}
+}
+
 func TestWriteTerminationMessage_DropsWriteFailure(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "missing", "termination-log")
 	t.Setenv("TERMINATION_MESSAGE_PATH", path)

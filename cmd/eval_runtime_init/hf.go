@@ -20,7 +20,6 @@ const (
 	envHFRepoID   = "TEST_DATA_HF_REPO_ID"
 	envHFRevision = "TEST_DATA_HF_REVISION"
 	envHFSubPath  = "TEST_DATA_HF_SUBPATH"
-	envHFTimeout  = "TEST_DATA_HF_TIMEOUT"
 	hfTokenKey    = "token"
 	// hfCacheDirName is the Hub cache directory under the test-data emptyDir volume.
 	hfCacheDirName = ".hf-cache"
@@ -45,7 +44,7 @@ func (d downloader) runHF() error {
 		}
 	}
 
-	timeout, err := resolveInitTimeout(envHFTimeout)
+	timeout, err := resolveInitTimeout()
 	if err != nil {
 		return failHF(err)
 	}

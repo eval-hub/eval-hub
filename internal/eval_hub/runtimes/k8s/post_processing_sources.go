@@ -68,13 +68,7 @@ func postProcessorInitContainer(cfg *jobConfig, resources corev1.ResourceRequire
 		mounts = append(mounts, corev1.VolumeMount{Name: volume, MountPath: postProcessorSecretMountPath + "/" + name, ReadOnly: true})
 	}
 	envVars := []corev1.EnvVar{{Name: shared.InitJobSpecPathEnv, Value: "/meta/" + jobSpecFileName}}
-	envVars = appendTestDataInitTimeoutEnv(
-		envVars,
-		cfg.testDataInitTimeout,
-		envTestDataS3TimeoutName,
-		envTestDataGitTimeoutName,
-		envTestDataHFTimeoutName,
-	)
+	envVars = appendTestDataInitTimeoutEnv(envVars, cfg.testDataInitTimeout)
 	return &corev1.Container{
 		Name:            initContainerName,
 		Image:           cfg.testDataInitImage,

@@ -67,8 +67,9 @@ func writeTerminationMessageFile(content []byte) error {
 		path = terminationMessagePath
 	}
 	clean := filepath.Clean(path)
-	dir, name := filepath.Split(clean)
-	if name == "" || name == "." || name == ".." {
+	dir := filepath.Dir(clean)
+	name := filepath.Base(clean)
+	if name == "" || name == "." || name == ".." || name == string(filepath.Separator) {
 		return fmt.Errorf("invalid termination message path %q", path)
 	}
 	root, err := os.OpenRoot(dir)

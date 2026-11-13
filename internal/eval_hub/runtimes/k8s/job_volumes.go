@@ -452,7 +452,7 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			{Name: envTestDataS3BucketName, Value: cfg.testDataS3.bucket},
 			{Name: envTestDataS3KeyName, Value: normalizeS3Key(cfg.testDataS3.key)},
 		}
-		s3Env = appendTestDataInitTimeoutEnv(s3Env, cfg.testDataInitTimeout, envTestDataS3TimeoutName)
+		s3Env = appendTestDataInitTimeoutEnv(s3Env, cfg.testDataInitTimeout)
 
 		initContainers = append(initContainers, corev1.Container{
 			Name:            initContainerName,
@@ -498,7 +498,7 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			{Name: envTestDataGitURLName, Value: cfg.testDataGit.url},
 			{Name: envTestDataGitRefName, Value: cfg.testDataGit.ref},
 		}
-		envVars = appendTestDataInitTimeoutEnv(envVars, cfg.testDataInitTimeout, envTestDataGitTimeoutName)
+		envVars = appendTestDataInitTimeoutEnv(envVars, cfg.testDataInitTimeout)
 		if cfg.testDataGit.subPath != "" {
 			envVars = append(envVars, corev1.EnvVar{Name: envTestDataGitSubPathName, Value: cfg.testDataGit.subPath})
 		}
@@ -563,7 +563,7 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 		envVars := []corev1.EnvVar{
 			{Name: envTestDataHFRepoIDName, Value: cfg.testDataHF.repoID},
 		}
-		envVars = appendTestDataInitTimeoutEnv(envVars, cfg.testDataInitTimeout, envTestDataHFTimeoutName)
+		envVars = appendTestDataInitTimeoutEnv(envVars, cfg.testDataInitTimeout)
 		if cfg.testDataHF.revision != "" {
 			envVars = append(envVars, corev1.EnvVar{Name: envTestDataHFRevisionName, Value: cfg.testDataHF.revision})
 		}
@@ -612,16 +612,12 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 	return initContainers, volumes, nil
 }
 
-func appendTestDataInitTimeoutEnv(env []corev1.EnvVar, timeout time.Duration, legacyEnvNames ...string) []corev1.EnvVar {
+func appendTestDataInitTimeoutEnv(env []corev1.EnvVar, timeout time.Duration) []corev1.EnvVar {
 	if timeout <= 0 {
 		return env
 	}
 	value := timeout.String()
 	env = append(env, corev1.EnvVar{Name: envTestDataInitTimeoutName, Value: value})
-	// Deprecated compatibility for older eval-runtime-init images pinned through service.eval_init_image.
-	for _, legacyEnvName := range legacyEnvNames {
-		env = append(env, corev1.EnvVar{Name: legacyEnvName, Value: value})
-	}
 	return env
 }
 
