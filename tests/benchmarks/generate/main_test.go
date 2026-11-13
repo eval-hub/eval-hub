@@ -62,6 +62,40 @@ func TestJudgeProfiles(t *testing.T) {
 	}
 }
 
+func TestGarakTimeout(t *testing.T) {
+	for _, tc := range []struct {
+		provider string
+		want     string
+	}{
+		{provider: "garak", want: "15m"},
+		{provider: "garak-kfp", want: "5m"},
+	} {
+		t.Run(tc.provider, func(t *testing.T) {
+			f, err := minimalFixture(tc.provider, "quality")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := f["timeout"]; got != tc.want {
+				t.Fatalf("timeout = %v; want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRulerUsesTokenizerPathEnv(t *testing.T) {
+	f, err := minimalFixture("ruler", "niah-single-noise")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := f["tokenizer_path_env"]; got != "RULER_TOKENIZER" {
+		t.Fatalf("tokenizer_path_env = %v; want RULER_TOKENIZER", got)
+	}
+	parameters := f["parameters"].(map[string]any)
+	if _, pinned := parameters["tokenizer_path"]; pinned {
+		t.Fatalf("ruler fixture should defer tokenizer_path to environment or adapter fallback: %v", parameters)
+	}
+}
+
 func TestATIFUsesJudgeModel(t *testing.T) {
 	f, err := minimalFixture("atif", "atif-v1.0")
 	if err != nil {
