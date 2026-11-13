@@ -40,7 +40,13 @@ paths:
         configured scheduling type. Queue-backed profiles also include the tenant
         LocalQueue Active condition in queue_availability. Node-scheduled profiles are shared across tenants.
         Users in the same tenant see the same profiles, matching evaluation job
-        visibility. Local runtimes return an empty hardware_profiles array.
+        visibility. Local runtimes return an empty hardware_profiles array, and so do
+        clusters without hardware profile support: when
+        EVALHUB_HARDWARE_PROFILES_NAMESPACE is not set, or when the HardwareProfile
+        CRD (`hardwareprofiles.infrastructure.opendatahub.io`) is not installed.
+        Only failures to read existing profiles, such as an RBAC denial, return 500,
+        so build metadata stays available on clusters that cannot serve hardware
+        profiles.
         X-Tenant and X-User are required in cluster mode, as for evaluation jobs.
       operationId: get_info
       tags:
@@ -2763,7 +2769,7 @@ components:
           type: string
         hardware_profiles:
           type: array
-          description: Enabled hardware profiles available to the caller's tenant, sorted by name.
+          description: Enabled hardware profiles available to the caller's tenant, sorted by name. Empty when the cluster does not install the HardwareProfile CRD or EVALHUB_HARDWARE_PROFILES_NAMESPACE is not configured.
           items:
             type: object
             required:
