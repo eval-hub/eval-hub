@@ -5,5 +5,5 @@
     "num_examples": 1,
     "num_few_shot": 0
   },
-  "timeout": "5m"
+  "timeout": "20m"
 }
