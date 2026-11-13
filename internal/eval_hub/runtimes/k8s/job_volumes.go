@@ -3,6 +3,7 @@ package k8s
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	corev1 "k8s.io/api/core/v1"
@@ -447,16 +448,19 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			},
 		})
 
+		s3Env := []corev1.EnvVar{
+			{Name: envTestDataS3BucketName, Value: cfg.testDataS3.bucket},
+			{Name: envTestDataS3KeyName, Value: normalizeS3Key(cfg.testDataS3.key)},
+		}
+		s3Env = appendTestDataInitTimeoutEnv(s3Env, cfg.testDataInitTimeout)
+
 		initContainers = append(initContainers, corev1.Container{
 			Name:            initContainerName,
 			Image:           cfg.testDataInitImage,
 			ImagePullPolicy: corev1.PullIfNotPresent,
 			Command:         []string{defaultTestDataInitCmd},
 			Resources:       initResources,
-			Env: []corev1.EnvVar{
-				{Name: envTestDataS3BucketName, Value: cfg.testDataS3.bucket},
-				{Name: envTestDataS3KeyName, Value: normalizeS3Key(cfg.testDataS3.key)},
-			},
+			Env:             s3Env,
 			SecurityContext: defaultSecurityContext(),
 			VolumeMounts: []corev1.VolumeMount{
 				{
@@ -494,6 +498,7 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			{Name: envTestDataGitURLName, Value: cfg.testDataGit.url},
 			{Name: envTestDataGitRefName, Value: cfg.testDataGit.ref},
 		}
+		envVars = appendTestDataInitTimeoutEnv(envVars, cfg.testDataInitTimeout)
 		if cfg.testDataGit.subPath != "" {
 			envVars = append(envVars, corev1.EnvVar{Name: envTestDataGitSubPathName, Value: cfg.testDataGit.subPath})
 		}
@@ -558,6 +563,7 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 		envVars := []corev1.EnvVar{
 			{Name: envTestDataHFRepoIDName, Value: cfg.testDataHF.repoID},
 		}
+		envVars = appendTestDataInitTimeoutEnv(envVars, cfg.testDataInitTimeout)
 		if cfg.testDataHF.revision != "" {
 			envVars = append(envVars, corev1.EnvVar{Name: envTestDataHFRevisionName, Value: cfg.testDataHF.revision})
 		}
@@ -604,6 +610,15 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 		})
 	}
 	return initContainers, volumes, nil
+}
+
+func appendTestDataInitTimeoutEnv(env []corev1.EnvVar, timeout time.Duration) []corev1.EnvVar {
+	if timeout <= 0 {
+		return env
+	}
+	value := timeout.String()
+	env = append(env, corev1.EnvVar{Name: envTestDataInitTimeoutName, Value: value})
+	return env
 }
 
 func ensureServiceCAVolume(volumes []corev1.Volume, configMapName string) []corev1.Volume {

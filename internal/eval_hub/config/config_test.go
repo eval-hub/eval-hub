@@ -366,5 +366,8 @@ func TestServiceConfig_HTTP(t *testing.T) {
 		if err := (&config.ServiceConfig{LogStreamTimeout: -1}).ValidateHTTPConfig(); err == nil {
 			t.Error("negative log_stream_timeout: want error")
 		}
+		if err := (&config.ServiceConfig{Init: config.ServiceInitConfig{TestDataTimeout: -1}}).ValidateHTTPConfig(); err == nil {
+			t.Error("negative init.test_data_timeout: want error")
+		}
 	})
 }

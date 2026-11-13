@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	git "github.com/go-git/go-git/v5"
 	gitconfig "github.com/go-git/go-git/v5/config"
@@ -43,13 +42,9 @@ func (d downloader) runGit() error {
 		return fmt.Errorf("%s is required", envGitRef)
 	}
 
-	timeout := defaultTimeout
-	if raw := strings.TrimSpace(os.Getenv(envGitTimeout)); raw != "" {
-		parsed, err := time.ParseDuration(raw)
-		if err != nil {
-			return fmt.Errorf("invalid %s: %w", envGitTimeout, err)
-		}
-		timeout = parsed
+	timeout, err := resolveInitTimeout()
+	if err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -77,7 +72,7 @@ func (d downloader) runGit() error {
 
 	commitSHA, err := cloneRef(ctx, cloneDir, repoURL, ref, auth)
 	if err != nil {
-		return err
+		return wrapInitTimeout("git clone", timeout, err)
 	}
 
 	slog.Info("cloned", "commit_sha", commitSHA)
@@ -124,11 +119,14 @@ func (d downloader) runGit() error {
 		defer func() { _ = srcRoot.Close() }()
 	}
 
-	if err := copyDirFromRoot(srcRoot, d.destDir); err != nil {
-		return fmt.Errorf("copy to dest: %w", err)
+	if err := copyDirFromRoot(ctx, srcRoot, d.destDir); err != nil {
+		return wrapInitTimeout("git stage files", timeout, fmt.Errorf("copy to dest: %w", err))
 	}
 
 	// 0600: init and sidecar share the same pod UID (OpenShift SCC / runAsNonRoot).
+	if err := ctx.Err(); err != nil {
+		return wrapInitTimeout("git stage files", timeout, err)
+	}
 	if err := d.writeGitMetadata(commitSHA); err != nil {
 		return fmt.Errorf("write git metadata: %w", err)
 	}

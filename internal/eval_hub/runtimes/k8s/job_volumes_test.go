@@ -3,6 +3,7 @@ package k8s
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
@@ -352,15 +353,16 @@ func TestBuildJobWithoutOCICredentials(t *testing.T) {
 
 func TestBuildJobWithS3TestData(t *testing.T) {
 	cfg := &jobConfig{
-		jobID:             "job-s3",
-		resourceGUID:      "guid-s3",
-		benchmarkIndex:    0,
-		namespace:         "default",
-		providerID:        "provider-1",
-		benchmarkID:       "bench-1",
-		adapterImage:      "adapter:latest",
-		defaultEnv:        []api.EnvVar{},
-		testDataInitImage: "quay.io/evalhub/evalhub:test",
+		jobID:               "job-s3",
+		resourceGUID:        "guid-s3",
+		benchmarkIndex:      0,
+		namespace:           "default",
+		providerID:          "provider-1",
+		benchmarkID:         "bench-1",
+		adapterImage:        "adapter:latest",
+		defaultEnv:          []api.EnvVar{},
+		testDataInitImage:   "quay.io/evalhub/evalhub:test",
+		testDataInitTimeout: 45 * time.Minute,
 		testDataS3: s3TestDataConfig{
 			bucket:    "bucket-1",
 			key:       "/a/b",
@@ -384,7 +386,7 @@ func TestBuildJobWithS3TestData(t *testing.T) {
 		t.Fatalf("expected init container command %q, got %v", defaultTestDataInitCmd, initContainer.Command)
 	}
 
-	var foundBucketEnv, foundKeyEnv bool
+	var foundBucketEnv, foundKeyEnv, foundTimeoutEnv bool
 	for _, env := range initContainer.Env {
 		if env.Name == envTestDataS3BucketName {
 			foundBucketEnv = true
@@ -398,9 +400,15 @@ func TestBuildJobWithS3TestData(t *testing.T) {
 				t.Fatalf("expected key env %q, got %q", "a/b", env.Value)
 			}
 		}
+		if env.Name == envTestDataInitTimeoutName {
+			foundTimeoutEnv = true
+			if env.Value != "45m0s" {
+				t.Fatalf("expected timeout env %q, got %q", "45m0s", env.Value)
+			}
+		}
 	}
-	if !foundBucketEnv || !foundKeyEnv {
-		t.Fatalf("expected bucket/key env vars on init container")
+	if !foundBucketEnv || !foundKeyEnv || !foundTimeoutEnv {
+		t.Fatalf("expected bucket/key/timeout env vars on init container")
 	}
 
 	var foundTestDataVolume, foundSecretVolume bool
@@ -428,6 +436,37 @@ func TestBuildJobWithS3TestData(t *testing.T) {
 	}
 	if !foundTestDataMount {
 		t.Fatalf("expected adapter to mount %s", testDataMountPath)
+	}
+}
+
+func TestBuildJobWithS3TestDataOmitsDefaultInitTimeout(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:             "job-s3-default-timeout",
+		resourceGUID:      "guid-s3-default-timeout",
+		benchmarkIndex:    0,
+		namespace:         "default",
+		providerID:        "provider-1",
+		benchmarkID:       "bench-1",
+		adapterImage:      "adapter:latest",
+		defaultEnv:        []api.EnvVar{},
+		testDataInitImage: "quay.io/evalhub/evalhub:test",
+		testDataS3: s3TestDataConfig{
+			bucket:    "bucket-1",
+			key:       "/a/b",
+			secretRef: "s3-secret",
+		},
+	}
+
+	job, err := buildJob(cfg, nil)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	initContainer := mustFindContainer(t, job.Spec.Template.Spec.InitContainers, initContainerName)
+	for _, env := range initContainer.Env {
+		if env.Name == envTestDataInitTimeoutName {
+			t.Fatalf("unexpected %s env var for default timeout: %q", envTestDataInitTimeoutName, env.Value)
+		}
 	}
 }
 
@@ -654,15 +693,16 @@ func TestBuildJobSATokenSidecarOnly(t *testing.T) {
 
 func TestBuildJobWithGitTestDataPublicRepo(t *testing.T) {
 	cfg := &jobConfig{
-		jobID:             "job-git-public",
-		resourceGUID:      "guid-git-public",
-		benchmarkIndex:    0,
-		namespace:         "default",
-		providerID:        "provider-1",
-		benchmarkID:       "bench-1",
-		adapterImage:      "adapter:latest",
-		defaultEnv:        []api.EnvVar{},
-		testDataInitImage: "quay.io/evalhub/evalhub:test",
+		jobID:               "job-git-public",
+		resourceGUID:        "guid-git-public",
+		benchmarkIndex:      0,
+		namespace:           "default",
+		providerID:          "provider-1",
+		benchmarkID:         "bench-1",
+		adapterImage:        "adapter:latest",
+		defaultEnv:          []api.EnvVar{},
+		testDataInitImage:   "quay.io/evalhub/evalhub:test",
+		testDataInitTimeout: 45 * time.Minute,
 		testDataGit: gitTestDataConfig{
 			url: "https://github.com/org/repo.git",
 			ref: "main",
@@ -683,7 +723,7 @@ func TestBuildJobWithGitTestDataPublicRepo(t *testing.T) {
 		t.Fatalf("expected init container command %q, got %v", defaultTestDataInitCmd, initContainer.Command)
 	}
 
-	var foundURL, foundRef bool
+	var foundURL, foundRef, foundTimeout bool
 	for _, env := range initContainer.Env {
 		if env.Name == envTestDataGitURLName {
 			foundURL = true
@@ -697,9 +737,15 @@ func TestBuildJobWithGitTestDataPublicRepo(t *testing.T) {
 				t.Fatalf("expected git ref env %q, got %q", "main", env.Value)
 			}
 		}
+		if env.Name == envTestDataInitTimeoutName {
+			foundTimeout = true
+			if env.Value != "45m0s" {
+				t.Fatalf("expected git timeout env %q, got %q", "45m0s", env.Value)
+			}
+		}
 	}
-	if !foundURL || !foundRef {
-		t.Fatal("expected URL and ref env vars on git init container")
+	if !foundURL || !foundRef || !foundTimeout {
+		t.Fatal("expected URL/ref/timeout env vars on git init container")
 	}
 
 	// No secret volume for public repos.
@@ -907,15 +953,16 @@ func TestBuildJobWithGitTestDataMissingInitImage(t *testing.T) {
 
 func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
 	cfg := &jobConfig{
-		jobID:             "job-hf-public",
-		resourceGUID:      "guid-hf-public",
-		benchmarkIndex:    0,
-		namespace:         "default",
-		providerID:        "provider-1",
-		benchmarkID:       "bench-1",
-		adapterImage:      "adapter:latest",
-		defaultEnv:        []api.EnvVar{},
-		testDataInitImage: "quay.io/evalhub/evalhub:test",
+		jobID:               "job-hf-public",
+		resourceGUID:        "guid-hf-public",
+		benchmarkIndex:      0,
+		namespace:           "default",
+		providerID:          "provider-1",
+		benchmarkID:         "bench-1",
+		adapterImage:        "adapter:latest",
+		defaultEnv:          []api.EnvVar{},
+		testDataInitImage:   "quay.io/evalhub/evalhub:test",
+		testDataInitTimeout: 45 * time.Minute,
 		testDataHF: hfTestDataConfig{
 			repoID:   "cais/mmlu",
 			revision: "main",
@@ -935,7 +982,7 @@ func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
 		t.Fatalf("expected init command [%q], got %v", defaultTestDataInitCmd, initContainer.Command)
 	}
 
-	var foundRepoID, foundRevision bool
+	var foundRepoID, foundRevision, foundTimeout bool
 	for _, env := range initContainer.Env {
 		switch env.Name {
 		case envTestDataHFRepoIDName:
@@ -945,6 +992,11 @@ func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
 				t.Fatalf("expected revision main, got %q", env.Value)
 			}
 			foundRevision = true
+		case envTestDataInitTimeoutName:
+			if env.Value != "45m0s" {
+				t.Fatalf("expected timeout 45m0s, got %q", env.Value)
+			}
+			foundTimeout = true
 		}
 	}
 	if !foundRepoID {
@@ -952,6 +1004,9 @@ func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
 	}
 	if !foundRevision {
 		t.Fatal("expected revision env var on HF init container")
+	}
+	if !foundTimeout {
+		t.Fatal("expected timeout env var on HF init container")
 	}
 	assertTestDataEmptyDirSizeLimit(t, job.Spec.Template.Spec.Volumes)
 

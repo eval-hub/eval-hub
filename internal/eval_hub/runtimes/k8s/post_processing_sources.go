@@ -67,6 +67,8 @@ func postProcessorInitContainer(cfg *jobConfig, resources corev1.ResourceRequire
 		volumes = append(volumes, corev1.Volume{Name: volume, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: name}}})
 		mounts = append(mounts, corev1.VolumeMount{Name: volume, MountPath: postProcessorSecretMountPath + "/" + name, ReadOnly: true})
 	}
+	envVars := []corev1.EnvVar{{Name: shared.InitJobSpecPathEnv, Value: "/meta/" + jobSpecFileName}}
+	envVars = appendTestDataInitTimeoutEnv(envVars, cfg.testDataInitTimeout)
 	return &corev1.Container{
 		Name:            initContainerName,
 		Image:           cfg.testDataInitImage,
@@ -74,7 +76,7 @@ func postProcessorInitContainer(cfg *jobConfig, resources corev1.ResourceRequire
 		Command:         []string{defaultTestDataInitCmd},
 		Resources:       resources,
 		SecurityContext: defaultSecurityContext(),
-		Env:             []corev1.EnvVar{{Name: shared.InitJobSpecPathEnv, Value: "/meta/" + jobSpecFileName}},
+		Env:             envVars,
 		VolumeMounts:    mounts,
 	}, volumes, nil
 }
