@@ -3,7 +3,7 @@
 ### Prerequisites: the EvalHub service/API and the compatible operator route/RBAC
 ### mapping are deployed in the local kind cluster. Export a short-lived token
 ### as API_TOKEN, for example from `kubectl create token`; do not put token text
-### in this file. Set API_BASE_URL if the dev-deploy NodePort differs.
+### in this file. Set EVALHUB_API_BASE_URL if the dev-deploy NodePort differs.
 
 @baseUrl = {{$processEnv EVALHUB_API_BASE_URL}}
 @token = {{$processEnv API_TOKEN}}

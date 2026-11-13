@@ -94,9 +94,13 @@ detect_container_runtime() {
       log WARN "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $RESOLVED_RECORDED; using the recorded runtime."
       CONTAINER_RUNTIME="$RESOLVED_RECORDED"
       ;;
-    explicit-mismatch-stale|explicit-mismatch-gone|explicit-recorded-stale|explicit-other-owns)
+    explicit-mismatch-stale|explicit-mismatch-gone)
       log WARN "The explicit runtime does not own kind cluster '$KIND_CLUSTER_NAME'; using '$RESOLVED_RUNTIME' for the read-only query."
       CONTAINER_RUNTIME="$RESOLVED_RUNTIME"
+      ;;
+    explicit-recorded-stale|explicit-other-owns)
+      log WARN "The explicit runtime does not own kind cluster '$KIND_CLUSTER_NAME'; using its owner '$RESOLVED_OWNER' for the read-only query."
+      CONTAINER_RUNTIME="$RESOLVED_OWNER"
       ;;
     recorded-stale)
       log WARN "The recorded runtime no longer lists kind cluster '$KIND_CLUSTER_NAME'; using its current owner '$RESOLVED_OWNER'."

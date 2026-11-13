@@ -394,7 +394,11 @@ vet: ## Run go vet (go.mod toolchain)
 # Iterations (Nx) or duration for mutational fuzzing during make test / make test-fuzz.
 # Prefer Nx so CI finishes deterministically; seed corpora also run under plain go test.
 FUZZTIME ?= 10000x
-GO_TEST_TIMEOUT ?= 10m
+# The MLflow integration tests in ./internal/eval_hub/mlflow install and start one
+# tracking server per release in their version matrix (3.8.1 through the latest
+# GitHub release, with and without workspaces), which cold-cache can take longer
+# than a few minutes, so the unit-test budget is deliberately generous.
+GO_TEST_TIMEOUT ?= 30m
 # The full disconnected curated-collection suite stages four adapter bundles
 # and submits benchmark jobs serially; allow enough time for all 24 smoke cases.
 E2E_TEST_TIMEOUT ?= 480m
@@ -552,6 +556,7 @@ KIND_BENCHMARK_JUDGE_MODEL_NAME ?= kind-judge-model
 KIND_BENCHMARK_JUDGE_URL ?= http://evalhub-kind-mock-judge.system.svc.cluster.local:8000/v1
 KIND_BENCHMARK_JUDGE_API_KEY ?= judge-test-token
 KIND_BENCHMARK_LM_EVAL_TOKENIZER ?= hf-internal-testing/llama-tokenizer
+KIND_BENCHMARK_RULER_TOKENIZER ?= hf-internal-testing/llama-tokenizer
 
 # Reject a token lifetime that cannot cover the suite before the (long) image
 # builds start, so a bad explicit KIND_BENCHMARK_TOKEN_DURATION fails in seconds
@@ -602,6 +607,7 @@ test-benchmarks-kind: test-benchmarks-kind-deploy ## Run benchmark smoke tests a
 	JUDGE_MODEL_NAME="$(KIND_BENCHMARK_JUDGE_MODEL_NAME)" \
 	JUDGE_BASE_URL="$(KIND_BENCHMARK_JUDGE_URL)" \
 	LM_EVAL_TOKENIZER="$(KIND_BENCHMARK_LM_EVAL_TOKENIZER)" \
+	RULER_TOKENIZER="$(KIND_BENCHMARK_RULER_TOKENIZER)" \
 	BENCHMARK_PARALLEL="$(KIND_BENCHMARK_PARALLEL)" \
 	BENCHMARK_TIMEOUT="$(KIND_BENCHMARK_TIMEOUT)" \
 	BENCHMARK_RUN="$(KIND_BENCHMARK_RUN)" \

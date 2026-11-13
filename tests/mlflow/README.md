@@ -39,6 +39,7 @@ Run `make help` for a short list.
 | `start-mlflow` | Install (locked), stop this port, then start MLflow in the background |
 | `stop-mlflow` | Stop the server on `MLFLOW_PORT` only (PID file / port listen) |
 | `test-godog-server` | Start server, run godog tests (`-tags=godog`), then stop server |
+| `test-unit-server` | Run the Go `TestMLFlowIntegration` version matrix (see below) |
 | `clean` | Remove `bin/` (SQLite DB, logs, artifact dirs) and any stray `mlartifacts/` |
 | `cls` | Clear the terminal |
 
@@ -52,7 +53,7 @@ Override defaults on the `make` command line or in the environment:
 |----------|---------|---------|
 | `VENV_DIR` | `.venv` | uv virtualenv location (under `tests/mlflow`) |
 | `PYTHON` | `3.12` | Python version passed to `uv venv` |
-| `MLFLOW_VERSION` | `3.13.0` | MLflow package version for `uv pip install` (see **MLflow version note** below) |
+| `MLFLOW_VERSION` | latest GitHub release (fallback `3.18.0`) | MLflow package version for `uv pip install` (see **MLflow version note** below) |
 | `MLFLOW_HOST` | `127.0.0.1` | Server bind address |
 | `MLFLOW_PORT` | `5000` | Server port |
 | `MLFLOW_BACKEND_STORE_URI` | `sqlite:///bin/mlflow_<port>.db` | Tracking store URI |
@@ -99,6 +100,33 @@ make stop-mlflow
 ```
 
 Repository-wide FVT (`make test-fvt` from the repo root) **excludes** `@mlflow` scenarios by default; use this directory when working on MLflow integration tests.
+
+## Go integration tests (MLflow version matrix)
+
+`TestMLFlowIntegration` in `internal/eval_hub/mlflow` starts a real tracking
+server for every MLflow **minor** release line from **3.8.1** to the newest
+stable release published at
+[`mlflow/mlflow` releases/latest](https://api.github.com/repos/mlflow/mlflow/releases/latest),
+using that line's newest patch (for example `3.15.2`, not `3.15.0`). Each
+release runs twice — with workspaces disabled and with `--enable-workspaces` —
+starting at **3.10.0**, the first `mlflow server` release that accepts the flag;
+3.8.x and 3.9.x only run the default case.
+
+The version list is resolved over the network when the test starts. When GitHub
+is unreachable, rate-limited, or returns nothing, the test falls back to the
+pinned list in `tests/mlflow/testutil/versions.go` instead of failing. Set
+`GITHUB_TOKEN` to raise the unauthenticated API rate limit.
+
+```bash
+make test-unit-server      # from tests/mlflow: every case
+go test -v ./internal/eval_hub/mlflow -run 'TestMLFlowIntegration/v3.16.1' -count=1   # one release
+go test ./tests/mlflow/testutil -v -count=1                                            # version-resolution unit tests
+```
+
+Each case gets its own port starting at `5010`; per-case make output is written
+to `bin/mlflow_<version_with_underscores>.log` (for example
+`bin/mlflow_3_16_1_workspaces.log`) and structured test logs to
+`bin/mlflow_tests.log`.
 
 ## Scripts
 
