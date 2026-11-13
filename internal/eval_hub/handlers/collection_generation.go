@@ -23,6 +23,10 @@ var collectionGenerationRequestAllowedFields = map[string]struct{}{
 	"max_benchmarks": {}, "strictness": {}, "generation_effort": {},
 }
 
+var collectionGenerationModelAllowedFields = map[string]struct{}{
+	"url": {}, "name": {}, "auth": {}, "parameters": {}, "card_url": {},
+}
+
 // parseCollectionGenerationRequest parses and validates the durable request
 // contract.
 func parseCollectionGenerationRequest(body []byte) (api.CollectionGenerationRequest, error) {
@@ -115,6 +119,11 @@ func decodeAndValidateGenerationModel(raw json.RawMessage, model *api.ModelRef) 
 	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
 		return errors.New("model must be an object")
 	}
+	for key := range fields {
+		if _, ok := collectionGenerationModelAllowedFields[key]; !ok {
+			return fmt.Errorf("model field %q is not allowed", key)
+		}
+	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(model); err != nil {
@@ -128,7 +137,19 @@ func decodeAndValidateGenerationModel(raw json.RawMessage, model *api.ModelRef) 
 		return errors.New("model.url must be an HTTP(S) URL without embedded credentials")
 	}
 	if auth, ok := fields["auth"]; ok {
-		if isJSONNull(auth) || model.Auth == nil || strings.TrimSpace(model.Auth.SecretRef) == "" {
+		if isJSONNull(auth) {
+			return errors.New("model.auth must be an object")
+		}
+		var authFields map[string]json.RawMessage
+		if err := json.Unmarshal(auth, &authFields); err != nil || authFields == nil {
+			return errors.New("model.auth must be an object")
+		}
+		for key := range authFields {
+			if key != "secret_ref" {
+				return fmt.Errorf("model.auth field %q is not allowed", key)
+			}
+		}
+		if model.Auth == nil || strings.TrimSpace(model.Auth.SecretRef) == "" {
 			return errors.New("model.auth.secret_ref is required when model.auth is provided")
 		}
 	}
