@@ -21,13 +21,13 @@ func TestParseCollectionGenerationRequest(t *testing.T) {
 	t.Run("accepts every declared enum and integral JSON number representation", func(t *testing.T) {
 		for _, effort := range []string{"low", "standard", "high"} {
 			for _, strictness := range []string{"lenient", "moderate", "strict"} {
-				for _, benchmarkCount := range []string{"1", "1.0", "1e0", "50"} {
+				for _, benchmarkCount := range []string{"1", "1.0", "1e0", "100"} {
 					body := `{"evaluation_goal":"goal",` + generationTestModel + `,"provider_filter":"inspect,lighteval","max_benchmarks":` + benchmarkCount + `,"strictness":"` + strictness + `","generation_effort":"` + effort + `"}`
 					request, err := parseCollectionGenerationRequest([]byte(body))
 					if err != nil {
 						t.Fatalf("valid request effort=%s strictness=%s max=%s: %v", effort, strictness, benchmarkCount, err)
 					}
-					if request.GenerationEffort != effort || request.Strictness != strictness || request.MaxBenchmarks < 1 || request.MaxBenchmarks > 50 || request.ProviderFilter != "inspect,lighteval" {
+					if request.GenerationEffort != effort || request.Strictness != strictness || request.MaxBenchmarks < 1 || request.MaxBenchmarks > 100 || request.ProviderFilter != "inspect,lighteval" {
 						t.Fatalf("request not normalized as specified: %+v", request)
 					}
 				}
@@ -45,7 +45,7 @@ func TestParseCollectionGenerationRequest(t *testing.T) {
 		{name: "missing required goal", body: `{}`},
 		{name: "null goal", body: `{"evaluation_goal":null,` + generationTestModel + `}`},
 		{name: "blank goal", body: `{"evaluation_goal":" \t\n ",` + generationTestModel + `}`},
-		{name: "goal too long before trimming", body: `{"evaluation_goal":" ` + strings.Repeat("x", 2000) + ` ",` + generationTestModel + `}`},
+		{name: "goal too long before trimming", body: `{"evaluation_goal":" ` + strings.Repeat("x", 10_000) + ` ",` + generationTestModel + `}`},
 		{name: "missing model", body: `{"evaluation_goal":"goal"}`},
 		{name: "null model", body: `{"evaluation_goal":"goal","model":null}`},
 		{name: "model without name", body: `{"evaluation_goal":"goal","model":{"url":"https://generator.example/v1"}}`},
@@ -58,7 +58,7 @@ func TestParseCollectionGenerationRequest(t *testing.T) {
 		{name: "null provider filter", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"provider_filter":null}`},
 		{name: "empty provider filter", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"provider_filter":""}`},
 		{name: "max benchmark below minimum", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"max_benchmarks":0}`},
-		{name: "max benchmark above maximum", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"max_benchmarks":51}`},
+		{name: "max benchmark above maximum", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"max_benchmarks":101}`},
 		{name: "fractional max benchmark", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"max_benchmarks":1.5}`},
 		{name: "null max benchmark", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"max_benchmarks":null}`},
 		{name: "string max benchmark", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"max_benchmarks":"12"}`},
@@ -74,6 +74,18 @@ func TestParseCollectionGenerationRequest(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("accepts the documented goal and benchmark limits", func(t *testing.T) {
+		goal := strings.Repeat("x", 10_000)
+		body := `{"evaluation_goal":"` + goal + `",` + generationTestModel + `,"max_benchmarks":100}`
+		request, err := parseCollectionGenerationRequest([]byte(body))
+		if err != nil {
+			t.Fatalf("maximum valid request was rejected: %v", err)
+		}
+		if len(request.EvaluationGoal) != 10_000 || request.MaxBenchmarks != 100 {
+			t.Fatalf("maximum values were not preserved: goal length=%d max_benchmarks=%d", len(request.EvaluationGoal), request.MaxBenchmarks)
+		}
+	})
 
 	t.Run("normalizes whitespace-only provider filter to omitted", func(t *testing.T) {
 		request, err := parseCollectionGenerationRequest([]byte(`{"evaluation_goal":"goal",` + generationTestModel + `,"provider_filter":"   "}`))

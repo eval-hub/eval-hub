@@ -422,18 +422,6 @@ func (s *Server) setupCollectionRoutes(h *handlers.Handlers, router *http.ServeM
 	})
 }
 
-func (s *Server) setupCollectionClonesRoutes(h *handlers.Handlers, router *http.ServeMux) {
-	s.handleFunc(router, fmt.Sprintf("POST /api/v1/evaluations/collections/{%s}/clones", constants.PathParameterCollectionID), func(w http.ResponseWriter, r *http.Request) {
-		ctx := s.newExecutionContext(r)
-		resp := NewRespWrapper(w, ctx)
-		req := s.newRequestWrapper(w, r)
-		if !s.canContinueRequest(ctx, resp) {
-			return
-		}
-		h.HandleCloneCollection(ctx, req, resp)
-	})
-}
-
 func (s *Server) setupCollectionGenerationRoutes(h *handlers.Handlers, router *http.ServeMux) {
 	s.handleFunc(router, "/api/v1/evaluations/collections/generation", func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
@@ -442,31 +430,72 @@ func (s *Server) setupCollectionGenerationRoutes(h *handlers.Handlers, router *h
 		if !s.canContinueRequest(ctx, resp) {
 			return
 		}
-		if r.Method != http.MethodPost {
+		switch r.Method {
+		case http.MethodPost:
+			h.HandleCreateCollectionGeneration(ctx, req, resp)
+		default:
 			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
-			return
 		}
-		h.HandleCreateCollectionGeneration(ctx, req, resp)
 	})
 
-	s.handleFunc(router, "GET /api/v1/evaluations/collections/generation/{id}", func(w http.ResponseWriter, r *http.Request) {
+}
+
+// setupCollectionSubresourceRoutes dispatches collection clone and generation
+// resource requests from one pattern. Their path shapes overlap at
+// /collections/generation/clones, so registering them separately makes ServeMux
+// reject the route table as ambiguous.
+func (s *Server) setupCollectionSubresourceRoutes(h *handlers.Handlers, router *http.ServeMux) {
+	pattern := fmt.Sprintf("/api/v1/evaluations/collections/{%s}/{id}", constants.PathParameterCollectionID)
+	s.handleFunc(router, pattern, func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
 		req := s.newRequestWrapper(w, r)
 		if !s.canContinueRequest(ctx, resp) {
 			return
 		}
-		h.HandleGetCollectionGeneration(ctx, req, resp)
-	})
-
-	s.handleFunc(router, "DELETE /api/v1/evaluations/collections/generation/{id}", func(w http.ResponseWriter, r *http.Request) {
-		ctx := s.newExecutionContext(r)
-		resp := NewRespWrapper(w, ctx)
-		req := s.newRequestWrapper(w, r)
-		if !s.canContinueRequest(ctx, resp) {
-			return
+		collectionID := r.PathValue(constants.PathParameterCollectionID)
+		subresourceID := r.PathValue("id")
+		methodNotAllowed := func() {
+			resp.ErrorWithMessageCode(ctx.RequestID, messages.MethodNotAllowed, "Method", req.Method(), "Api", req.URI())
 		}
-		h.HandleDeleteCollectionGeneration(ctx, req, resp)
+		switch r.Method {
+		case http.MethodPost:
+			if subresourceID == "clones" {
+				h.HandleCloneCollection(ctx, req, resp)
+				return
+			}
+			if collectionID == "generation" {
+				methodNotAllowed()
+				return
+			}
+			http.NotFound(w, r)
+		case http.MethodGet:
+			if collectionID == "generation" {
+				h.HandleGetCollectionGeneration(ctx, req, resp)
+				return
+			}
+			if subresourceID == "clones" {
+				methodNotAllowed()
+				return
+			}
+			http.NotFound(w, r)
+		case http.MethodDelete:
+			if collectionID == "generation" {
+				h.HandleDeleteCollectionGeneration(ctx, req, resp)
+				return
+			}
+			if subresourceID == "clones" {
+				methodNotAllowed()
+				return
+			}
+			http.NotFound(w, r)
+		default:
+			if collectionID == "generation" || subresourceID == "clones" {
+				methodNotAllowed()
+				return
+			}
+			http.NotFound(w, r)
+		}
 	})
 }
 
@@ -574,8 +603,8 @@ func (s *Server) setupRoutes() (http.Handler, error) {
 	// Collections endpoints
 	s.setupCollectionsRoutes(h, router)
 	s.setupCollectionRoutes(h, router)
-	s.setupCollectionClonesRoutes(h, router)
 	s.setupCollectionGenerationRoutes(h, router)
+	s.setupCollectionSubresourceRoutes(h, router)
 
 	// Providers endpoints
 	s.setupProvidersRoutes(h, router)

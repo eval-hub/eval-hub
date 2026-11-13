@@ -20,7 +20,7 @@ part of that OpenAPI contract.
 From the EvalHub repository root:
 
 ```bash
-make dev-generation-demo
+./examples/generation/demo.sh
 ```
 
 The script uses the `evalhub-dev` cluster, its private kubeconfig, and the
@@ -30,10 +30,10 @@ for `system/evalhub-local-service`. To select a different cluster or pass an
 already-authorized token:
 
 ```bash
-make dev-generation-demo KIND_CLUSTER_NAME=my-kind EVALHUB_HOST_PORT=18443
+KIND_CLUSTER_NAME=my-kind EVALHUB_HOST_PORT=18443 ./examples/generation/demo.sh
 ```
 
-Or export `API_TOKEN` before running the target. The script never prints the
+Or export `API_TOKEN` before running the script. The script never prints the
 token, writes its curl config into a mode-0600 temporary directory, and removes
 that directory on exit. It does not build images, create a collection, or submit
 an evaluation job.

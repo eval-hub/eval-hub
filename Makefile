@@ -113,7 +113,7 @@ EVALHUB_KUBECONFIG_FILE ?=
 DEV_REPO_PARENT_PATHS ?= $(HOME)/code
 CONTAINER_RUNTIME ?=
 
-.PHONY: dev-deploy dev-deploy-help dev-clean dev-clean-help dev-demo dev-demo-help dev-generation-demo dev-generation-demo-help
+.PHONY: dev-deploy dev-deploy-help dev-clean dev-clean-help dev-demo dev-demo-help
 dev-deploy: ## Build and deploy the local EvalHub stack to podman/Docker-backed kind (optional air-gap mode)
 	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" IMAGE_TAG="$(IMAGE_TAG)" \
 		SKIP_BUILD="$(SKIP_BUILD)" AIRGAP="$(AIRGAP)" ADAPTERS="$(ADAPTERS)" \
@@ -165,16 +165,6 @@ dev-demo: ## List collections, clone one, and run a mock-backed evaluation on ki
 
 dev-demo-help: ## Show dev-demo inputs and usage
 	@bash scripts/dev-demo.sh --help
-
-dev-generation-demo: ## Exercise the temporary collection-generation API fixture on kind
-	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" EVALHUB_HOST_PORT="$(EVALHUB_HOST_PORT)" \
-		CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" \
-		EVALHUB_API_BASE_URL="$(EVALHUB_API_BASE_URL)" \
-		EVALHUB_KUBECONFIG_FILE="$(EVALHUB_KUBECONFIG_FILE)" \
-		bash scripts/dev-generation-demo.sh
-
-dev-generation-demo-help: ## Show collection-generation demo inputs and usage
-	@bash scripts/dev-generation-demo.sh --help
 
 PRE_COMMIT ?= .git/hooks/pre-commit
 

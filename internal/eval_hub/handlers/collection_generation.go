@@ -15,13 +15,16 @@ import (
 )
 
 // collectionGenerationBasePath is the durable base path for the collection
-// generation API. Temporary mock behavior is implemented separately in
-// collection_generation_mock.go.
+// generation API.
 const collectionGenerationBasePath = "/api/v1/evaluations/collections/generation"
 
+var collectionGenerationRequestAllowedFields = map[string]struct{}{
+	"evaluation_goal": {}, "model": {}, "provider_filter": {},
+	"max_benchmarks": {}, "strictness": {}, "generation_effort": {},
+}
+
 // parseCollectionGenerationRequest parses and validates the durable request
-// contract. Keep this independent of the temporary fixture response so it can
-// be reused by the real generation implementation.
+// contract.
 func parseCollectionGenerationRequest(body []byte) (api.CollectionGenerationRequest, error) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(body, &fields); err != nil {
@@ -30,18 +33,14 @@ func parseCollectionGenerationRequest(body []byte) (api.CollectionGenerationRequ
 	if fields == nil {
 		return api.CollectionGenerationRequest{}, errors.New("request body must be a JSON object")
 	}
-	allowed := map[string]struct{}{
-		"evaluation_goal": {}, "model": {}, "provider_filter": {},
-		"max_benchmarks": {}, "strictness": {}, "generation_effort": {},
-	}
 	for key := range fields {
-		if _, ok := allowed[key]; !ok {
+		if _, ok := collectionGenerationRequestAllowedFields[key]; !ok {
 			return api.CollectionGenerationRequest{}, fmt.Errorf("field %q is not allowed", key)
 		}
 	}
 
 	request := api.CollectionGenerationRequest{
-		MaxBenchmarks:    12,
+		MaxBenchmarks:    api.DefaultCollectionGenerationBenchmarks,
 		Strictness:       "moderate",
 		GenerationEffort: "standard",
 	}
@@ -50,8 +49,8 @@ func parseCollectionGenerationRequest(body []byte) (api.CollectionGenerationRequ
 	} else if err := decodeGenerationString(raw, &request.EvaluationGoal); err != nil {
 		return api.CollectionGenerationRequest{}, fmt.Errorf("evaluation_goal must be a string: %w", err)
 	}
-	if strings.TrimSpace(request.EvaluationGoal) == "" || utf8.RuneCountInString(request.EvaluationGoal) > 2000 {
-		return api.CollectionGenerationRequest{}, errors.New("evaluation_goal must contain 1 to 2000 non-whitespace characters")
+	if strings.TrimSpace(request.EvaluationGoal) == "" || utf8.RuneCountInString(request.EvaluationGoal) > api.MaxCollectionGenerationGoalLength {
+		return api.CollectionGenerationRequest{}, fmt.Errorf("evaluation_goal must contain 1 to %d non-whitespace characters", api.MaxCollectionGenerationGoalLength)
 	}
 	request.EvaluationGoal = strings.TrimSpace(request.EvaluationGoal)
 	if raw, ok := fields["model"]; !ok {
@@ -71,21 +70,21 @@ func parseCollectionGenerationRequest(body []byte) (api.CollectionGenerationRequ
 	}
 	if raw, ok := fields["max_benchmarks"]; ok {
 		if isJSONNull(raw) {
-			return api.CollectionGenerationRequest{}, errors.New("max_benchmarks must be an integer from 1 to 50")
+			return api.CollectionGenerationRequest{}, fmt.Errorf("max_benchmarks must be an integer from 1 to %d", api.MaxCollectionGenerationBenchmarks)
 		}
 		decoder := json.NewDecoder(bytes.NewReader(raw))
 		decoder.UseNumber()
 		var decoded any
 		if err := decoder.Decode(&decoded); err != nil {
-			return api.CollectionGenerationRequest{}, errors.New("max_benchmarks must be an integer from 1 to 50")
+			return api.CollectionGenerationRequest{}, fmt.Errorf("max_benchmarks must be an integer from 1 to %d", api.MaxCollectionGenerationBenchmarks)
 		}
 		value, ok := decoded.(json.Number)
 		if !ok {
-			return api.CollectionGenerationRequest{}, errors.New("max_benchmarks must be an integer from 1 to 50")
+			return api.CollectionGenerationRequest{}, fmt.Errorf("max_benchmarks must be an integer from 1 to %d", api.MaxCollectionGenerationBenchmarks)
 		}
 		number, err := strconv.ParseFloat(value.String(), 64)
-		if err != nil || math.IsInf(number, 0) || math.IsNaN(number) || math.Trunc(number) != number || number < 1 || number > 50 {
-			return api.CollectionGenerationRequest{}, errors.New("max_benchmarks must be an integer from 1 to 50")
+		if err != nil || math.IsInf(number, 0) || math.IsNaN(number) || math.Trunc(number) != number || number < 1 || number > api.MaxCollectionGenerationBenchmarks {
+			return api.CollectionGenerationRequest{}, fmt.Errorf("max_benchmarks must be an integer from 1 to %d", api.MaxCollectionGenerationBenchmarks)
 		}
 		request.MaxBenchmarks = int(number)
 	}

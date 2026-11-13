@@ -1,8 +1,9 @@
 """Regression tests for how the dev scripts resolve the container runtime.
 
 dev-deploy records the engine that backs a kind cluster next to the private
-kubeconfig, and dev-deploy, dev-clean, dev-demo, and clean-container-storage
-resolve the runtime from that record instead of probing both engines. The
+kubeconfig, and dev-deploy, dev-clean, dev-demo, the generation demo, and
+clean-container-storage resolve the runtime from that record instead of probing
+both engines. The
 resolution itself lives once, in resolve_runtime_decision
 (scripts/lib/dev-runtime.sh): these tests extract the real function bodies, stub
 podman, docker, and kind on PATH, and check the evidence it reports alongside
@@ -113,7 +114,7 @@ SCRIPT_FUNCTIONS = {
         "need_command",
         "detect_container_runtime",
     ],
-    "dev-generation-demo.sh": [
+    "../examples/generation/demo.sh": [
         "log",
         "fail",
         "need_command",
@@ -713,12 +714,12 @@ class GenerationDemoResolutionTests(RuntimeResolutionTestCase):
 
     def test_recorded_runtime_is_reused(self):
         self.assert_resolves(
-            "dev-generation-demo.sh", "podman", recorded="podman", podman_clusters=CLUSTER + "\n"
+            "../examples/generation/demo.sh", "podman", recorded="podman", podman_clusters=CLUSTER + "\n"
         )
 
     def test_stale_record_uses_cluster_owner(self):
         output = self.assert_resolves(
-            "dev-generation-demo.sh",
+            "../examples/generation/demo.sh",
             "docker",
             recorded="podman",
             docker_clusters=CLUSTER + "\n",
@@ -727,7 +728,7 @@ class GenerationDemoResolutionTests(RuntimeResolutionTestCase):
 
     def test_explicit_runtime_conflict_uses_recorded_owner(self):
         output = self.assert_resolves(
-            "dev-generation-demo.sh",
+            "../examples/generation/demo.sh",
             "podman",
             explicit="docker",
             recorded="podman",
@@ -737,14 +738,14 @@ class GenerationDemoResolutionTests(RuntimeResolutionTestCase):
 
     def test_podman_docker_shim_uses_podman_provider(self):
         self.assert_resolves(
-            "dev-generation-demo.sh", "podman", explicit="docker", shim=True
+            "../examples/generation/demo.sh", "podman", explicit="docker", shim=True
         )
 
     def test_missing_cluster_falls_back_to_docker_for_diagnostic(self):
-        self.assert_resolves("dev-generation-demo.sh", "docker")
+        self.assert_resolves("../examples/generation/demo.sh", "docker")
 
     def test_invalid_runtime_is_rejected(self):
-        code, _, output = self.resolve("dev-generation-demo.sh", explicit="containerd")
+        code, _, output = self.resolve("../examples/generation/demo.sh", explicit="containerd")
         self.assertNotEqual(code, 0, output)
         self.assertIn("CONTAINER_RUNTIME must be", output)
 

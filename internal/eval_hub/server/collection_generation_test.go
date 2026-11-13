@@ -30,6 +30,23 @@ func TestCollectionGenerationMockMatchesOpenAPIContract(t *testing.T) {
 		}
 	})
 
+	t.Run("unsupported collection route methods return structured errors", func(t *testing.T) {
+		for _, test := range []struct {
+			method string
+			path   string
+		}{
+			{method: http.MethodGet, path: "/api/v1/evaluations/collections/generation"},
+			{method: http.MethodPut, path: "/api/v1/evaluations/collections/generation/" + collectionGenerationMockID},
+			{method: http.MethodGet, path: "/api/v1/evaluations/collections/custom-collection/clones"},
+		} {
+			response := serveGenerationRequest(handler, test.method, test.path, "", "")
+			if response.Code != http.StatusMethodNotAllowed {
+				t.Errorf("%s %s status = %d, want 405; body = %s", test.method, test.path, response.Code, response.Body.String())
+			}
+			assertMessageCode(t, response, "method_not_allowed")
+		}
+	})
+
 	t.Run("post applies normalized OpenAPI request defaults", func(t *testing.T) {
 		withoutMock := serveGenerationRequest(handler, http.MethodPost, "/api/v1/evaluations/collections/generation", `{"evaluation_goal":"goal"}`, "application/json")
 		assertMessageCode(t, withoutMock, "collection_generation_not_configured")

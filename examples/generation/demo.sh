@@ -6,7 +6,8 @@ set -Eeuo pipefail
 umask 077
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-. "${SCRIPT_DIR}/lib/dev-runtime.sh"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+. "${REPO_ROOT}/scripts/lib/dev-runtime.sh"
 
 KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-evalhub-dev}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-}"
@@ -31,7 +32,7 @@ fail() {
 
 usage() {
   cat <<'USAGE'
-Usage: make dev-generation-demo [VARIABLE=value ...]
+Usage: ./examples/generation/demo.sh [--help]
 
 Exercises the temporary collection-generation mock API against an already
 deployed EvalHub kind cluster. It checks the documented 503 response when the
@@ -242,7 +243,7 @@ main() {
     usage
     return 0
   fi
-  (($# == 0)) || fail "Unexpected argument: $1. Run make dev-generation-demo-help for supported inputs."
+  (($# == 0)) || fail "Unexpected argument: $1. Run ./examples/generation/demo.sh --help for supported inputs."
   validate_inputs
   for tool in kind kubectl curl jq grep awk date chmod mktemp rm; do
     need_command "$tool"
