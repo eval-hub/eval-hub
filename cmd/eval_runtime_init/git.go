@@ -119,11 +119,14 @@ func (d downloader) runGit() error {
 		defer func() { _ = srcRoot.Close() }()
 	}
 
-	if err := copyDirFromRoot(srcRoot, d.destDir); err != nil {
-		return fmt.Errorf("copy to dest: %w", err)
+	if err := copyDirFromRoot(ctx, srcRoot, d.destDir); err != nil {
+		return wrapInitTimeout("git stage files", timeout, fmt.Errorf("copy to dest: %w", err))
 	}
 
 	// 0600: init and sidecar share the same pod UID (OpenShift SCC / runAsNonRoot).
+	if err := ctx.Err(); err != nil {
+		return wrapInitTimeout("git stage files", timeout, err)
+	}
 	if err := d.writeGitMetadata(commitSHA); err != nil {
 		return fmt.Errorf("write git metadata: %w", err)
 	}

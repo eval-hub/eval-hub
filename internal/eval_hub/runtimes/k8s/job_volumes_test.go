@@ -439,6 +439,37 @@ func TestBuildJobWithS3TestData(t *testing.T) {
 	}
 }
 
+func TestBuildJobWithS3TestDataOmitsDefaultInitTimeout(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:             "job-s3-default-timeout",
+		resourceGUID:      "guid-s3-default-timeout",
+		benchmarkIndex:    0,
+		namespace:         "default",
+		providerID:        "provider-1",
+		benchmarkID:       "bench-1",
+		adapterImage:      "adapter:latest",
+		defaultEnv:        []api.EnvVar{},
+		testDataInitImage: "quay.io/evalhub/evalhub:test",
+		testDataS3: s3TestDataConfig{
+			bucket:    "bucket-1",
+			key:       "/a/b",
+			secretRef: "s3-secret",
+		},
+	}
+
+	job, err := buildJob(cfg, nil)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	initContainer := mustFindContainer(t, job.Spec.Template.Spec.InitContainers, initContainerName)
+	for _, env := range initContainer.Env {
+		if env.Name == envTestDataInitTimeoutName {
+			t.Fatalf("unexpected %s env var for default timeout: %q", envTestDataInitTimeoutName, env.Value)
+		}
+	}
+}
+
 func TestBuildJobWithS3TestDataSkipsEmptyNormalizedKey(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:          "job-s3-empty",

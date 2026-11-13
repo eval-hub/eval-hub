@@ -266,7 +266,7 @@ func TestStageHFSubPathAndClearDest(t *testing.T) {
 	defer func() { _ = snapshotRoot.Close() }()
 
 	dest := filepath.Join(tmp, "dest")
-	if err := stageHFSubPath(snapshotRoot, "staging_sub_path", dest); err != nil {
+	if err := stageHFSubPath(context.Background(), snapshotRoot, "staging_sub_path", dest); err != nil {
 		t.Fatalf("stageHFSubPath: %v", err)
 	}
 	if !destHasData(dest) {
@@ -334,7 +334,7 @@ func TestStageHFSubPath_SingleFile(t *testing.T) {
 	defer func() { _ = snapshotRoot.Close() }()
 
 	dest := filepath.Join(tmp, "dest")
-	if err := stageHFSubPath(snapshotRoot, "data.jsonl", dest); err != nil {
+	if err := stageHFSubPath(context.Background(), snapshotRoot, "data.jsonl", dest); err != nil {
 		t.Fatalf("stageHFSubPath: %v", err)
 	}
 	got, err := os.ReadFile(filepath.Join(dest, "data.jsonl"))
@@ -702,7 +702,7 @@ func TestCopyHFRepoFile_MissingSource(t *testing.T) {
 	}
 	defer func() { _ = dstRoot.Close() }()
 
-	if err := copyHFRepoFile(srcRoot, dstRoot, "missing", "out.txt"); err == nil {
+	if err := copyHFRepoFile(context.Background(), srcRoot, dstRoot, "missing", "out.txt"); err == nil {
 		t.Fatal("copyHFRepoFile() = nil, want missing source error")
 	}
 }
@@ -724,7 +724,7 @@ func TestCopyHFRepoFile_CopiesContent(t *testing.T) {
 	}
 	defer func() { _ = dstRoot.Close() }()
 
-	if err := copyHFRepoFile(srcRoot, dstRoot, "blob", "out.txt"); err != nil {
+	if err := copyHFRepoFile(context.Background(), srcRoot, dstRoot, "blob", "out.txt"); err != nil {
 		t.Fatalf("copyHFRepoFile: %v", err)
 	}
 	got, err := os.ReadFile(filepath.Join(dstDir, "out.txt"))
@@ -810,7 +810,7 @@ func TestStageHFFiles_FromSymlinkedCache(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := stageHFFiles(cache, commit, []string{"file.txt"}, "", dest); err != nil {
+	if err := stageHFFiles(context.Background(), cache, commit, []string{"file.txt"}, "", dest); err != nil {
 		t.Fatalf("stageHFFiles: %v", err)
 	}
 	got, err := os.ReadFile(filepath.Join(dest, "file.txt"))
@@ -819,6 +819,16 @@ func TestStageHFFiles_FromSymlinkedCache(t *testing.T) {
 	}
 	if string(got) != "blob-data" {
 		t.Fatalf("staged content = %q, want blob-data", got)
+	}
+}
+
+func TestStageHFFilesHonorsCanceledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := stageHFFiles(ctx, t.TempDir(), testHFCommitSHA, []string{"file.txt"}, "", t.TempDir())
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("stageHFFiles() error = %v, want context.Canceled", err)
 	}
 }
 

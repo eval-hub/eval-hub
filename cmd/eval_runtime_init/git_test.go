@@ -422,7 +422,7 @@ func TestCopyDirFromRoot_SkipsDotGitAndCopiesFiles(t *testing.T) {
 	}
 	defer func() { _ = root.Close() }()
 
-	if err := copyDirFromRoot(root, dst); err != nil {
+	if err := copyDirFromRoot(context.Background(), root, dst); err != nil {
 		t.Fatalf("copyDirFromRoot: %v", err)
 	}
 	got, err := os.ReadFile(filepath.Join(dst, "data", "file.txt"))
@@ -434,6 +434,25 @@ func TestCopyDirFromRoot_SkipsDotGitAndCopiesFiles(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dst, ".git")); !os.IsNotExist(err) {
 		t.Errorf(".git should not be copied, stat err = %v", err)
+	}
+}
+
+func TestCopyDirFromRootHonorsCanceledContext(t *testing.T) {
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "file.txt"), []byte("data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = root.Close() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err = copyDirFromRoot(ctx, root, t.TempDir())
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("copyDirFromRoot() error = %v, want context.Canceled", err)
 	}
 }
 

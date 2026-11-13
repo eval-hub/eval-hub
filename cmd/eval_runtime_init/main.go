@@ -191,7 +191,10 @@ func (d downloader) runS3() error {
 
 // copyDirFromRoot copies the contents of srcRoot into dst, skipping the .git directory.
 // All reads are confined by os.Root; destination writes use a second Root under dst.
-func copyDirFromRoot(srcRoot *os.Root, dst string) error {
+func copyDirFromRoot(ctx context.Context, srcRoot *os.Root, dst string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(dst, 0o750); err != nil {
 		return err
 	}
@@ -202,6 +205,9 @@ func copyDirFromRoot(srcRoot *os.Root, dst string) error {
 	defer func() { _ = dstRoot.Close() }()
 
 	return fs.WalkDir(srcRoot.FS(), ".", func(p string, d fs.DirEntry, err error) error {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
 		if err != nil {
 			return err
 		}
@@ -219,7 +225,7 @@ func copyDirFromRoot(srcRoot *os.Root, dst string) error {
 		if d.IsDir() {
 			return dstRoot.MkdirAll(rel, 0o750)
 		}
-		return copyFileBetweenRoots(srcRoot, dstRoot, rel)
+		return copyFileBetweenRoots(ctx, srcRoot, dstRoot, rel)
 	})
 }
 
@@ -227,7 +233,10 @@ func copyDirFromRoot(srcRoot *os.Root, dst string) error {
 // preserve the source mode, including the execute bit. That is intentional: evaluation
 // test data is read by the adapter, not executed; OpenShift SCCs use static UIDs so
 // owner-only perms remain readable by the job containers that share the pod UID.
-func copyFileBetweenRoots(srcRoot, dstRoot *os.Root, rel string) error {
+func copyFileBetweenRoots(ctx context.Context, srcRoot, dstRoot *os.Root, rel string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	in, err := srcRoot.Open(rel)
 	if err != nil {
 		return err
@@ -237,11 +246,43 @@ func copyFileBetweenRoots(srcRoot, dstRoot *os.Root, rel string) error {
 	if err != nil {
 		return err
 	}
-	if _, err = io.Copy(out, in); err != nil {
+	if _, err = copyWithContext(ctx, out, in); err != nil {
 		_ = out.Close()
 		return err
 	}
 	return out.Close()
+}
+
+func copyWithContext(ctx context.Context, dst io.Writer, src io.Reader) (int64, error) {
+	buf := make([]byte, 32*1024)
+	var written int64
+	for {
+		if err := ctx.Err(); err != nil {
+			return written, err
+		}
+		nr, er := src.Read(buf)
+		if nr > 0 {
+			if err := ctx.Err(); err != nil {
+				return written, err
+			}
+			nw, ew := dst.Write(buf[:nr])
+			if nw > 0 {
+				written += int64(nw)
+			}
+			if ew != nil {
+				return written, ew
+			}
+			if nw != nr {
+				return written, io.ErrShortWrite
+			}
+		}
+		if er != nil {
+			if er == io.EOF {
+				return written, nil
+			}
+			return written, er
+		}
+	}
 }
 
 func loadAWSConfig(ctx context.Context, region, accessKey, secretKey string) (aws.Config, error) {

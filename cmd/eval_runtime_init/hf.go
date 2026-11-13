@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -189,7 +188,7 @@ func (d downloader) downloadHFRepo(ctx context.Context, repoID, revision, subPat
 		return "", fmt.Errorf("snapshot path %q is not a directory", snapshotRel)
 	}
 
-	if err := stageHFFiles(cacheDir, commitSHA, repoFiles, subPath, d.destDir); err != nil {
+	if err := stageHFFiles(ctx, cacheDir, commitSHA, repoFiles, subPath, d.destDir); err != nil {
 		return "", fmt.Errorf("stage repository: %w", err)
 	}
 
@@ -227,7 +226,10 @@ func revisionOrDefault(revision string) string {
 	return "default"
 }
 
-func stageHFFiles(cacheDir, commitSHA string, repoFiles []string, subPath, dst string) error {
+func stageHFFiles(ctx context.Context, cacheDir, commitSHA string, repoFiles []string, subPath, dst string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := clearDestDir(dst); err != nil {
 		return err
 	}
@@ -244,6 +246,9 @@ func stageHFFiles(cacheDir, commitSHA string, repoFiles []string, subPath, dst s
 	defer func() { _ = dstRoot.Close() }()
 
 	for _, repoFile := range repoFiles {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		srcRel, err := resolveHFRepoFileRel(cacheDir, commitSHA, repoFile)
 		if err != nil {
 			return fmt.Errorf("read repository file %q: %w", repoFile, err)
@@ -257,7 +262,7 @@ func stageHFFiles(cacheDir, commitSHA string, repoFiles []string, subPath, dst s
 				return err
 			}
 		}
-		if err := copyHFRepoFile(cacheRoot, dstRoot, srcRel, destRel); err != nil {
+		if err := copyHFRepoFile(ctx, cacheRoot, dstRoot, srcRel, destRel); err != nil {
 			return err
 		}
 	}
@@ -322,7 +327,10 @@ func resolveHFRepoFileRel(cacheDir, commitSHA, repoFile string) (string, error) 
 	return rel, nil
 }
 
-func copyHFRepoFile(cacheRoot, dstRoot *os.Root, srcRel, dstRel string) error {
+func copyHFRepoFile(ctx context.Context, cacheRoot, dstRoot *os.Root, srcRel, dstRel string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	in, err := cacheRoot.Open(srcRel)
 	if err != nil {
 		return err
@@ -332,14 +340,17 @@ func copyHFRepoFile(cacheRoot, dstRoot *os.Root, srcRel, dstRel string) error {
 	if err != nil {
 		return err
 	}
-	if _, err = io.Copy(out, in); err != nil {
+	if _, err = copyWithContext(ctx, out, in); err != nil {
 		_ = out.Close()
 		return err
 	}
 	return out.Close()
 }
 
-func stageHFSubPath(snapshotRoot *os.Root, subPath, dst string) error {
+func stageHFSubPath(ctx context.Context, snapshotRoot *os.Root, subPath, dst string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	cleanSub := filepath.Clean(filepath.FromSlash(subPath))
 	info, err := snapshotRoot.Stat(cleanSub)
 	if err != nil {
@@ -352,7 +363,7 @@ func stageHFSubPath(snapshotRoot *os.Root, subPath, dst string) error {
 			return fmt.Errorf("open sub_path root: %w", err)
 		}
 		defer func() { _ = subRoot.Close() }()
-		return copyDirFromRoot(subRoot, dst)
+		return copyDirFromRoot(ctx, subRoot, dst)
 	}
 
 	if err := os.MkdirAll(dst, 0o750); err != nil {
@@ -363,7 +374,7 @@ func stageHFSubPath(snapshotRoot *os.Root, subPath, dst string) error {
 		return err
 	}
 	defer func() { _ = dstRoot.Close() }()
-	return copyFileBetweenRoots(snapshotRoot, dstRoot, cleanSub)
+	return copyFileBetweenRoots(ctx, snapshotRoot, dstRoot, cleanSub)
 }
 
 func validateHFSubPath(subPath string) error {
