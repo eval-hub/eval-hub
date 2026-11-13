@@ -123,7 +123,10 @@ go test -v ./internal/eval_hub/mlflow -run 'TestMLFlowIntegration/v3.16.1' -coun
 go test ./tests/mlflow/testutil -v -count=1                                            # version-resolution unit tests
 ```
 
-Each case gets its own port starting at `5010`; per-case make output is written
+Each case gets its own port starting at `5010`, but the port is only a
+preference: before starting a server the test probes whether it can be bound and,
+when another process already holds it (a stale tracking server, a local tool),
+tries the next free port instead and logs the switch. Per-case make output is written
 to `bin/mlflow_<version_with_underscores>.log` (for example
 `bin/mlflow_3_16_1_workspaces.log`) and structured test logs to
 `bin/mlflow_tests.log`.
