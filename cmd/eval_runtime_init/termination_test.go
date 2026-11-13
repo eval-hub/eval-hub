@@ -97,3 +97,15 @@ func TestWriteTerminationMessage_DropsWriteFailure(t *testing.T) {
 		t.Fatalf("expected no termination message file after write failure, got stat error %v", err)
 	}
 }
+
+func TestWriteTerminationMessageFile_RejectsRootPath(t *testing.T) {
+	t.Setenv("TERMINATION_MESSAGE_PATH", string(filepath.Separator))
+
+	err := writeTerminationMessageFile([]byte("init failed"))
+	if err == nil {
+		t.Fatal("writeTerminationMessageFile() = nil, want invalid path error")
+	}
+	if !strings.Contains(err.Error(), "invalid termination message path") {
+		t.Fatalf("writeTerminationMessageFile() = %v, want invalid path error", err)
+	}
+}

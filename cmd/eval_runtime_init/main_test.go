@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -528,4 +529,95 @@ func TestReadOptionalSecret(t *testing.T) {
 	if err == nil {
 		t.Fatal("readOptionalSecret(invalid dir) = nil, want open error")
 	}
+}
+
+func TestCopyFileBetweenRootsHonorsCanceledContext(t *testing.T) {
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(srcDir, "data.txt"), []byte("data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srcRoot, err := os.OpenRoot(srcDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = srcRoot.Close() }()
+	dstRoot, err := os.OpenRoot(dstDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = dstRoot.Close() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err = copyFileBetweenRoots(ctx, srcRoot, dstRoot, "data.txt")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("copyFileBetweenRoots() = %v, want context.Canceled", err)
+	}
+}
+
+func TestCopyWithContextErrors(t *testing.T) {
+	t.Run("canceled before copy", func(t *testing.T) {
+		src, err := os.CreateTemp(t.TempDir(), "src")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = src.Close() }()
+		dst, err := os.CreateTemp(t.TempDir(), "dst")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = dst.Close() }()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		_, err = copyWithContext(ctx, dst, src)
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("copyWithContext() = %v, want context.Canceled", err)
+		}
+	})
+
+	t.Run("read error", func(t *testing.T) {
+		src, err := os.CreateTemp(t.TempDir(), "src")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := src.Close(); err != nil {
+			t.Fatal(err)
+		}
+		dst, err := os.CreateTemp(t.TempDir(), "dst")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = dst.Close() }()
+
+		if _, err = copyWithContext(context.Background(), dst, src); err == nil {
+			t.Fatal("copyWithContext() = nil, want read error")
+		}
+	})
+
+	t.Run("write error", func(t *testing.T) {
+		src, err := os.CreateTemp(t.TempDir(), "src")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = src.Close() }()
+		if _, err := src.WriteString("data"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := src.Seek(0, io.SeekStart); err != nil {
+			t.Fatal(err)
+		}
+		dst, err := os.CreateTemp(t.TempDir(), "dst")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := dst.Close(); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err = copyWithContext(context.Background(), dst, src); err == nil {
+			t.Fatal("copyWithContext() = nil, want write error")
+		}
+	})
 }

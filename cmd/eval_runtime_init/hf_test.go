@@ -246,6 +246,14 @@ func TestFormatHFDownloadErrorUsesContextDeadline(t *testing.T) {
 	}
 }
 
+func TestFormatHFDownloadErrorNil(t *testing.T) {
+	t.Parallel()
+
+	if err := formatHFDownloadError(context.Background(), time.Second, nil); err != nil {
+		t.Fatalf("formatHFDownloadError(nil) = %v, want nil", err)
+	}
+}
+
 func TestStageHFSubPathAndClearDest(t *testing.T) {
 	t.Parallel()
 
@@ -343,6 +351,23 @@ func TestStageHFSubPath_SingleFile(t *testing.T) {
 	}
 	if string(got) != "line\n" {
 		t.Fatalf("unexpected file content: %q", got)
+	}
+}
+
+func TestStageHFSubPathHonorsCanceledContext(t *testing.T) {
+	t.Parallel()
+
+	snapshotRoot, err := os.OpenRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = snapshotRoot.Close() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err = stageHFSubPath(ctx, snapshotRoot, "data.jsonl", t.TempDir())
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("stageHFSubPath() = %v, want context.Canceled", err)
 	}
 }
 
@@ -704,6 +729,26 @@ func TestCopyHFRepoFile_MissingSource(t *testing.T) {
 
 	if err := copyHFRepoFile(context.Background(), srcRoot, dstRoot, "missing", "out.txt"); err == nil {
 		t.Fatal("copyHFRepoFile() = nil, want missing source error")
+	}
+}
+
+func TestCopyHFRepoFileHonorsCanceledContext(t *testing.T) {
+	srcRoot, err := os.OpenRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = srcRoot.Close() }()
+	dstRoot, err := os.OpenRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = dstRoot.Close() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err = copyHFRepoFile(ctx, srcRoot, dstRoot, "missing", "out.txt")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("copyHFRepoFile() = %v, want context.Canceled", err)
 	}
 }
 
