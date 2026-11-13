@@ -7,5 +7,6 @@
     "num_samples": 1,
     "tokens_to_generate": 32
   },
-  "timeout": "5m"
+  "tokenizer_path_env": "RULER_TOKENIZER",
+  "timeout": "15m"
 }
