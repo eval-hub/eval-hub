@@ -7,14 +7,14 @@ import (
 
 const generationTestModel = `"model":{"name":"generator","url":"https://generator.example/v1"}`
 
-func TestParseCollectionGenerationOptions(t *testing.T) {
+func TestParseCollectionGenerationRequest(t *testing.T) {
 	t.Run("applies documented defaults and trims goal", func(t *testing.T) {
-		options, err := parseCollectionGenerationOptions([]byte(`{"evaluation_goal":"  evaluate safety  ",` + generationTestModel + `}`))
+		request, err := parseCollectionGenerationRequest([]byte(`{"evaluation_goal":"  evaluate safety  ",` + generationTestModel + `}`))
 		if err != nil {
-			t.Fatalf("parseCollectionGenerationOptions: %v", err)
+			t.Fatalf("parseCollectionGenerationRequest: %v", err)
 		}
-		if options.EvaluationGoal != "evaluate safety" || options.Model.Name != "generator" || options.Model.URL != "https://generator.example/v1" || options.MaxBenchmarks != 12 || options.Strictness != "moderate" || options.GenerationEffort != "standard" {
-			t.Fatalf("unexpected normalized options: %+v", options)
+		if request.EvaluationGoal != "evaluate safety" || request.Model.Name != "generator" || request.Model.URL != "https://generator.example/v1" || request.MaxBenchmarks != 12 || request.Strictness != "moderate" || request.GenerationEffort != "standard" {
+			t.Fatalf("unexpected normalized request: %+v", request)
 		}
 	})
 
@@ -23,12 +23,12 @@ func TestParseCollectionGenerationOptions(t *testing.T) {
 			for _, strictness := range []string{"lenient", "moderate", "strict"} {
 				for _, benchmarkCount := range []string{"1", "1.0", "1e0", "50"} {
 					body := `{"evaluation_goal":"goal",` + generationTestModel + `,"provider_filter":"inspect,lighteval","max_benchmarks":` + benchmarkCount + `,"strictness":"` + strictness + `","generation_effort":"` + effort + `"}`
-					options, err := parseCollectionGenerationOptions([]byte(body))
+					request, err := parseCollectionGenerationRequest([]byte(body))
 					if err != nil {
 						t.Fatalf("valid request effort=%s strictness=%s max=%s: %v", effort, strictness, benchmarkCount, err)
 					}
-					if options.GenerationEffort != effort || options.Strictness != strictness || options.MaxBenchmarks < 1 || options.MaxBenchmarks > 50 || options.ProviderFilter != "inspect,lighteval" {
-						t.Fatalf("request not normalized as specified: %+v", options)
+					if request.GenerationEffort != effort || request.Strictness != strictness || request.MaxBenchmarks < 1 || request.MaxBenchmarks > 50 || request.ProviderFilter != "inspect,lighteval" {
+						t.Fatalf("request not normalized as specified: %+v", request)
 					}
 				}
 			}
@@ -69,29 +69,29 @@ func TestParseCollectionGenerationOptions(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := parseCollectionGenerationOptions([]byte(test.body)); err == nil {
+			if _, err := parseCollectionGenerationRequest([]byte(test.body)); err == nil {
 				t.Fatalf("expected invalid request %s to fail", test.body)
 			}
 		})
 	}
 
 	t.Run("normalizes whitespace-only provider filter to omitted", func(t *testing.T) {
-		options, err := parseCollectionGenerationOptions([]byte(`{"evaluation_goal":"goal",` + generationTestModel + `,"provider_filter":"   "}`))
+		request, err := parseCollectionGenerationRequest([]byte(`{"evaluation_goal":"goal",` + generationTestModel + `,"provider_filter":"   "}`))
 		if err != nil {
 			t.Fatalf("whitespace provider_filter is schema-valid: %v", err)
 		}
-		if options.ProviderFilter != "" {
-			t.Fatalf("provider_filter = %q, want empty normalized filter", options.ProviderFilter)
+		if request.ProviderFilter != "" {
+			t.Fatalf("provider_filter = %q, want empty normalized filter", request.ProviderFilter)
 		}
 	})
 
 	t.Run("preserves the caller's model connection and Secret reference", func(t *testing.T) {
-		options, err := parseCollectionGenerationOptions([]byte(`{"evaluation_goal":"goal","model":{"name":"other-generator","url":"http://other.example/v1","auth":{"secret_ref":"generator-credentials"},"parameters":{"temperature":0}}}`))
+		request, err := parseCollectionGenerationRequest([]byte(`{"evaluation_goal":"goal","model":{"name":"other-generator","url":"http://other.example/v1","auth":{"secret_ref":"generator-credentials"},"parameters":{"temperature":0}}}`))
 		if err != nil {
-			t.Fatalf("parseCollectionGenerationOptions: %v", err)
+			t.Fatalf("parseCollectionGenerationRequest: %v", err)
 		}
-		if options.Model.Name != "other-generator" || options.Model.URL != "http://other.example/v1" || options.Model.Auth == nil || options.Model.Auth.SecretRef != "generator-credentials" || options.Model.Parameters["temperature"] != float64(0) {
-			t.Fatalf("model connection changed: %+v", options.Model)
+		if request.Model.Name != "other-generator" || request.Model.URL != "http://other.example/v1" || request.Model.Auth == nil || request.Model.Auth.SecretRef != "generator-credentials" || request.Model.Parameters["temperature"] != float64(0) {
+			t.Fatalf("model connection changed: %+v", request.Model)
 		}
 	})
 }
