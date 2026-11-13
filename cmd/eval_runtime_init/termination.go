@@ -30,7 +30,7 @@ func wrapInitTimeout(op string, timeout time.Duration, err error) error {
 
 // formatInitFailure returns the termination-log text for an init failure.
 // Context deadlines become an explicit timeout message so kube / eval-hub do not
-// surface an empty message= when the init container hits TEST_DATA_*_TIMEOUT.
+// surface an empty message= when the init container hits TEST_DATA_INIT_TIMEOUT.
 func formatInitFailure(err error) string {
 	if err == nil {
 		return ""

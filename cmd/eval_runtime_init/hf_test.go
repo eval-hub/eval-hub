@@ -238,6 +238,12 @@ func TestFormatHFDownloadErrorUsesContextDeadline(t *testing.T) {
 	if !strings.Contains(err.Error(), "huggingface download timed out after 5s") {
 		t.Fatalf("expected timeout message, got %v", err)
 	}
+
+	classified := classifyHFError("org/repo", false, fmt.Errorf("download: %w", context.DeadlineExceeded))
+	err = formatHFDownloadError(ctx, 5*time.Second, classified)
+	if got := strings.Count(err.Error(), context.DeadlineExceeded.Error()); got != 1 {
+		t.Fatalf("deadline message repeated %d times in %v", got, err)
+	}
 }
 
 func TestStageHFSubPathAndClearDest(t *testing.T) {

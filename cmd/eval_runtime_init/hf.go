@@ -20,6 +20,7 @@ const (
 	envHFRepoID   = "TEST_DATA_HF_REPO_ID"
 	envHFRevision = "TEST_DATA_HF_REVISION"
 	envHFSubPath  = "TEST_DATA_HF_SUBPATH"
+	envHFTimeout  = "TEST_DATA_HF_TIMEOUT"
 	hfTokenKey    = "token"
 	// hfCacheDirName is the Hub cache directory under the test-data emptyDir volume.
 	hfCacheDirName = ".hf-cache"
@@ -44,7 +45,7 @@ func (d downloader) runHF() error {
 		}
 	}
 
-	timeout, err := resolveInitTimeout()
+	timeout, err := resolveInitTimeout(envHFTimeout)
 	if err != nil {
 		return failHF(err)
 	}
@@ -74,7 +75,7 @@ func formatHFDownloadError(ctx context.Context, timeout time.Duration, err error
 	if err == nil {
 		return nil
 	}
-	if ctxErr := ctx.Err(); ctxErr != nil {
+	if ctxErr := ctx.Err(); ctxErr != nil && !errors.Is(err, ctxErr) {
 		err = fmt.Errorf("%w: %v", ctxErr, err)
 	}
 	return wrapInitTimeout("huggingface download", timeout, err)

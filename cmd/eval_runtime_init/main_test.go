@@ -323,6 +323,7 @@ func TestRun_InvokesHFSuccessfully(t *testing.T) {
 func TestResolveInitTimeout(t *testing.T) {
 	t.Run("configured init timeout", func(t *testing.T) {
 		t.Setenv(envInitTimeout, "45m")
+		t.Setenv(envS3Timeout, "")
 		got, err := resolveInitTimeout()
 		if err != nil {
 			t.Fatalf("resolveInitTimeout() error = %v", err)
@@ -333,6 +334,7 @@ func TestResolveInitTimeout(t *testing.T) {
 	})
 	t.Run("default timeout", func(t *testing.T) {
 		t.Setenv(envInitTimeout, "")
+		t.Setenv(envS3Timeout, "")
 		got, err := resolveInitTimeout()
 		if err != nil {
 			t.Fatalf("resolveInitTimeout() error = %v", err)
@@ -341,10 +343,43 @@ func TestResolveInitTimeout(t *testing.T) {
 			t.Fatalf("resolveInitTimeout() = %v, want %v", got, defaultTimeout)
 		}
 	})
+	t.Run("legacy source timeout", func(t *testing.T) {
+		t.Setenv(envInitTimeout, "")
+		t.Setenv(envS3Timeout, "30m")
+		got, err := resolveInitTimeout(envS3Timeout)
+		if err != nil {
+			t.Fatalf("resolveInitTimeout() error = %v", err)
+		}
+		if got != 30*time.Minute {
+			t.Fatalf("resolveInitTimeout() = %v, want 30m", got)
+		}
+	})
+	t.Run("shared timeout takes precedence", func(t *testing.T) {
+		t.Setenv(envInitTimeout, "45m")
+		t.Setenv(envS3Timeout, "30m")
+		got, err := resolveInitTimeout(envS3Timeout)
+		if err != nil {
+			t.Fatalf("resolveInitTimeout() error = %v", err)
+		}
+		if got != 45*time.Minute {
+			t.Fatalf("resolveInitTimeout() = %v, want 45m", got)
+		}
+	})
 	t.Run("invalid timeout", func(t *testing.T) {
 		t.Setenv(envInitTimeout, "not-a-duration")
 		if _, err := resolveInitTimeout(); err == nil {
 			t.Fatal("resolveInitTimeout() error = nil, want invalid duration error")
+		}
+	})
+	t.Run("invalid legacy timeout", func(t *testing.T) {
+		t.Setenv(envInitTimeout, "")
+		t.Setenv(envS3Timeout, "not-a-duration")
+		_, err := resolveInitTimeout(envS3Timeout)
+		if err == nil {
+			t.Fatal("resolveInitTimeout() error = nil, want invalid legacy duration error")
+		}
+		if !strings.Contains(err.Error(), envS3Timeout) {
+			t.Fatalf("resolveInitTimeout() error = %v, want mention of %s", err, envS3Timeout)
 		}
 	})
 	t.Run("non-positive timeout", func(t *testing.T) {

@@ -24,10 +24,13 @@ import (
 )
 
 const (
+	// Shared test data env vars
+	envInitTimeout = "TEST_DATA_INIT_TIMEOUT"
+
 	// S3 env vars
 	envBucket           = "TEST_DATA_S3_BUCKET"
 	envKey              = "TEST_DATA_S3_KEY"
-	envInitTimeout      = "TEST_DATA_INIT_TIMEOUT"
+	envS3Timeout        = "TEST_DATA_S3_TIMEOUT"
 	regionOptionalKey   = "AWS_DEFAULT_REGION"
 	endpointKey         = "AWS_S3_ENDPOINT"
 	accessKeyIDKey      = "AWS_ACCESS_KEY_ID"
@@ -37,21 +40,32 @@ const (
 	envGitURL     = "TEST_DATA_GIT_URL"
 	envGitRef     = "TEST_DATA_GIT_REF"
 	envGitSubPath = "TEST_DATA_GIT_SUBPATH"
+	envGitTimeout = "TEST_DATA_GIT_TIMEOUT"
 
 	defaultTimeout = 10 * time.Minute
 )
 
-func resolveInitTimeout() (time.Duration, error) {
-	raw := strings.TrimSpace(os.Getenv(envInitTimeout))
+func resolveInitTimeout(legacyEnvNames ...string) (time.Duration, error) {
+	name := envInitTimeout
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		for _, legacyName := range legacyEnvNames {
+			if value := strings.TrimSpace(os.Getenv(legacyName)); value != "" {
+				name = legacyName
+				raw = value
+				break
+			}
+		}
+	}
 	if raw == "" {
 		return defaultTimeout, nil
 	}
 	parsed, err := time.ParseDuration(raw)
 	if err != nil {
-		return 0, fmt.Errorf("invalid %s: %w", envInitTimeout, err)
+		return 0, fmt.Errorf("invalid %s: %w", name, err)
 	}
 	if parsed <= 0 {
-		return 0, fmt.Errorf("invalid %s: must be a positive duration", envInitTimeout)
+		return 0, fmt.Errorf("invalid %s: must be a positive duration", name)
 	}
 	return parsed, nil
 }
@@ -69,7 +83,7 @@ func main() {
 	slog.SetDefault(logger)
 	if err := run(); err != nil {
 		logger.Error("eval-runtime-init failed", "error", err)
-		// Git/S3 (and HF via failHF) must leave a non-empty termination message so
+		// Test-data init failures must leave a non-empty termination message so
 		// eval-hub can surface timeout/init failures instead of an empty message=.
 		reportInitFailure(err)
 		os.Exit(1)
@@ -101,7 +115,7 @@ func (d downloader) runS3() error {
 	}
 
 	keyPrefix = strings.TrimPrefix(keyPrefix, "/")
-	timeout, err := resolveInitTimeout()
+	timeout, err := resolveInitTimeout(envS3Timeout)
 	if err != nil {
 		return err
 	}

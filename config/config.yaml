@@ -9,7 +9,7 @@ service:
   # max_header_bytes: 1048576    # http.Server MaxHeaderBytes; omit or 0 for default (1 MiB, net/http default)
   # max_request_body_bytes: 10485760  # default 10 MiB when omitted or 0; use -1 to disable the limit
   # init:
-  #   test_data_timeout: 10m  # forwarded to test-data init containers; omit or 0 for init default (10m)
+  #   test_data_timeout: 10m  # per-source timeout for each test-data init download; omit or 0 for init default (10m)
 # These are here so that the config can be loaded from the secrets directory when needed
 secrets:
   dir: /tmp
