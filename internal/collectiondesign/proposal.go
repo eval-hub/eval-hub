@@ -156,15 +156,16 @@ func CalibrateProposal(ctx context.Context, source CatalogSource, options Option
 		}
 
 		references := matchingReferenceBenchmarks(collections, key)
-		comparableReferences := comparableBenchmarkReferences(references, *benchmark)
+		weightReferences := comparableWeightReferences(references, *benchmark)
+		thresholdReferences := comparableThresholdReferences(references, *benchmark)
 		if benchmark.Weight == 0 {
-			value, ids := consensusReferenceWeight(comparableReferences)
+			value, ids := consensusReferenceWeight(weightReferences)
 			if value == nil {
 				reason := "matching system references do not provide a consensus positive weight"
 				if len(references) == 0 {
 					reason = "no matching system references were found"
-				} else if len(comparableReferences) == 0 {
-					reason = "no comparable system references match the candidate parameters and test-data identity"
+				} else if len(weightReferences) == 0 {
+					reason = "no comparable system references match the candidate parameters and test-data source"
 				}
 				decisions = append(decisions, noDecision(*benchmark, pathPrefix+".weight", reason))
 			} else {
@@ -191,9 +192,9 @@ func CalibrateProposal(ctx context.Context, source CatalogSource, options Option
 				Reason: "preserved the explicit threshold",
 			})
 		} else {
-			threshold, ids := calibratedThreshold(comparableReferences, providerBenchmark, benchmark.PrimaryScore, normalized.Strictness)
+			threshold, ids := calibratedThreshold(thresholdReferences, providerBenchmark, benchmark.PrimaryScore, normalized.Strictness)
 			if threshold == nil {
-				decisions = append(decisions, noDecision(*benchmark, pathPrefix+".pass_criteria.threshold", thresholdUnavailableReason(references, comparableReferences, providerBenchmark, benchmark.PrimaryScore)))
+				decisions = append(decisions, noDecision(*benchmark, pathPrefix+".pass_criteria.threshold", thresholdUnavailableReason(references, thresholdReferences, providerBenchmark, benchmark.PrimaryScore)))
 			} else {
 				if benchmark.PassCriteria == nil {
 					benchmark.PassCriteria = &api.PassCriteria{}
@@ -380,7 +381,7 @@ func validateAgainstCatalog(candidate api.CollectionConfig, catalog *providerCat
 			issues = append(issues, Issue{Code: issueUnknownBenchmark, Path: path + ".id", Message: fmt.Sprintf("benchmark %q is not advertised by provider %q", selected.ID, selected.ProviderID)})
 			continue
 		}
-		if selected.PrimaryScore != nil && !contains(metadata.Metrics, selected.PrimaryScore.Metric) {
+		if selected.PrimaryScore != nil && len(metadata.Metrics) > 0 && !contains(metadata.Metrics, selected.PrimaryScore.Metric) {
 			issues = append(issues, Issue{Code: issueMetricNotAdvertised, Path: path + ".primary_score.metric", Message: fmt.Sprintf("metric %q is not advertised by provider %q for this benchmark", selected.PrimaryScore.Metric, selected.ProviderID)})
 		}
 		defaultScore := advertisedDefaultScore(metadata)
@@ -458,13 +459,32 @@ func matchingReferenceBenchmarks(collections []api.CollectionResource, key bench
 	return references
 }
 
-// comparableBenchmarkReferences limits weight and threshold evidence to system
-// benchmarks with the same configured parameters and test-data identity as the candidate.
+// comparableWeightReferences limits weight evidence to system benchmarks with
+// the same configured parameters and test-data source as the candidate. A
+// benchmark weight describes collection composition, so a mutable Git/Hugging
+// Face ref can contribute when its configured source matches even though its
+// resolved content identity is not yet available during proposal generation.
+func comparableWeightReferences(references []referenceBenchmark, candidate api.CollectionBenchmarkConfig) []referenceBenchmark {
+	comparable := make([]referenceBenchmark, 0, len(references))
+	for _, reference := range references {
+		if !sameConfiguredParameters(candidate.Parameters, reference.benchmark.Parameters) {
+			continue
+		}
+		if !sameTestDataSourceDescriptor(candidate.TestDataRef, reference.benchmark.TestDataRef) {
+			continue
+		}
+		comparable = append(comparable, reference)
+	}
+	return comparable
+}
+
+// comparableThresholdReferences limits threshold evidence to system benchmarks
+// with the same configured parameters and test-data identity as the candidate.
 // Provider metadata does not expose parameter defaults. S3 and PVC sources are
 // matched by their configured locations; mutable Git/Hugging Face revisions
 // need equal resolved content identities, while full commit revisions are
 // immutable and can be compared directly.
-func comparableBenchmarkReferences(references []referenceBenchmark, candidate api.CollectionBenchmarkConfig) []referenceBenchmark {
+func comparableThresholdReferences(references []referenceBenchmark, candidate api.CollectionBenchmarkConfig) []referenceBenchmark {
 	comparable := make([]referenceBenchmark, 0, len(references))
 	for _, reference := range references {
 		if !sameConfiguredParameters(candidate.Parameters, reference.benchmark.Parameters) {
@@ -704,16 +724,17 @@ func thresholdUnavailableReason(references, comparable []referenceBenchmark, pro
 	if candidateScore.Metric != defaultScore.Metric || candidateScore.LowerIsBetter != defaultScore.LowerIsBetter {
 		return "candidate primary score does not match the provider-advertised metric and direction"
 	}
+	hasMatchingReferenceScore := false
 	for _, reference := range comparable {
 		refScore := reference.benchmark.PrimaryScore
 		if refScore == nil {
 			refScore = defaultScore
 		}
 		if refScore != nil && refScore.Metric == candidateScore.Metric && refScore.LowerIsBetter == candidateScore.LowerIsBetter {
-			return "comparable system references have no finite thresholds for the selected primary score"
+			hasMatchingReferenceScore = true
 		}
 	}
-	if defaultScore == nil {
+	if !hasMatchingReferenceScore {
 		return "comparable system references do not declare the selected primary-score metric and direction"
 	}
 	return "comparable system references have no finite thresholds for the selected primary score"
