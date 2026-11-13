@@ -3,10 +3,15 @@ package k8s
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"reflect"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -66,10 +71,14 @@ func TestListHardwareProfilesErrors(t *testing.T) {
 	if _, err := runtime.ListHardwareProfiles(context.Background(), ""); err == nil {
 		t.Fatal("expected missing tenant error")
 	}
-	t.Run("missing platform namespace", func(t *testing.T) {
+	t.Run("missing platform namespace disables discovery", func(t *testing.T) {
 		t.Setenv(hardwareProfilesNamespaceEnv, "")
-		if _, err := runtime.ListHardwareProfiles(context.Background(), "tenant-a"); err == nil {
-			t.Fatal("expected missing platform namespace error")
+		got, err := runtime.ListHardwareProfiles(context.Background(), "tenant-a")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got == nil || len(got) != 0 {
+			t.Fatalf("profiles = %#v, want empty array", got)
 		}
 	})
 	t.Run("missing client", func(t *testing.T) {
@@ -85,6 +94,55 @@ func TestListHardwareProfilesErrors(t *testing.T) {
 			t.Fatalf("error = %v", err)
 		}
 	})
+}
+
+// TestListHardwareProfilesWithoutCRD covers clusters that do not serve the
+// HardwareProfile API (for example the kind dev stack): /api/v1/info must still
+// return build metadata with an empty hardware_profiles array.
+func TestListHardwareProfilesWithoutCRD(t *testing.T) {
+	t.Setenv(hardwareProfilesNamespaceEnv, "platform")
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{
+			name: "api server reports the resource is missing",
+			err: &apierrors.StatusError{ErrStatus: metav1.Status{
+				Status:  metav1.StatusFailure,
+				Code:    http.StatusNotFound,
+				Reason:  metav1.StatusReasonNotFound,
+				Message: "the server could not find the requested resource",
+			}},
+		},
+		{
+			name: "wrapped not found error",
+			err:  fmt.Errorf("list hardware profiles: %w", apierrors.NewNotFound(hardwareProfileGVR.GroupResource(), "")),
+		},
+		{
+			name: "kind is absent from discovery",
+			err: &meta.NoKindMatchError{
+				GroupKind:        schema.GroupKind{Group: hardwareProfileAPIGroup, Kind: "HardwareProfile"},
+				SearchedVersions: []string{hardwareProfileAPIVersion},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := fake.NewSimpleDynamicClientWithCustomListKinds(k8sruntime.NewScheme(), map[schema.GroupVersionResource]string{
+				hardwareProfileGVR: "HardwareProfileList",
+			})
+			client.PrependReactor("list", hardwareProfileResource, func(k8stesting.Action) (bool, k8sruntime.Object, error) {
+				return true, nil, tc.err
+			})
+			r := &K8sRuntime{helper: &KubernetesHelper{dynamicClient: client}}
+			got, err := r.ListHardwareProfiles(context.Background(), "tenant-a")
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got == nil || len(got) != 0 {
+				t.Fatalf("profiles = %#v, want empty array", got)
+			}
+		})
+	}
 }
 
 func TestListHardwareProfilesEdgeCases(t *testing.T) {
