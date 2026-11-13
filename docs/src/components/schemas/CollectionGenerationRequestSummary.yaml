@@ -6,5 +6,4 @@ allOf:
     required:
       - max_benchmarks
       - strictness
-      - generator_model_id
       - generation_effort
