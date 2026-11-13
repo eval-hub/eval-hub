@@ -14,4 +14,5 @@ const (
 	HTTPCodePayloadTooLarge     = 413
 	HTTPCodeInternalServerError = 500
 	HTTPCodeNotImplemented      = 501
+	HTTPCodeServiceUnavailable  = 503
 )

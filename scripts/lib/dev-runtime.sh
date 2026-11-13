@@ -12,8 +12,9 @@
 # the record, so the four scripts share one implementation instead of four
 # near-copies.
 #
-# Sourced by scripts/dev-deploy.sh, scripts/dev-clean.sh, scripts/dev-demo.sh and
-# scripts/clean-container-storage.sh. The caller sets:
+# Sourced by scripts/dev-deploy.sh, scripts/dev-clean.sh, scripts/dev-demo.sh,
+# examples/generation/demo.sh, and scripts/clean-container-storage.sh. The
+# caller sets:
 #
 #   KIND_CLUSTER_NAME   cluster whose engine is resolved
 #   RUNTIME_STATE_FILE  file holding that engine (see recorded_runtime)
