@@ -5397,9 +5397,9 @@ components:
         evaluation_goal:
           type: string
           minLength: 1
-          maxLength: 2000
+          maxLength: 10000
           pattern: \S
-          description: Non-blank natural-language evaluation goal, up to 2000 characters; leading and trailing whitespace is trimmed.
+          description: Non-blank natural-language evaluation goal, up to 10000 characters; leading and trailing whitespace is trimmed.
         model:
           description: |
             Model that generates the proposal, distinct from any future evaluation target or guardrail model. Both name and url are required for generation; prerecorded evaluation data cannot substitute for a generator connection.
@@ -5419,9 +5419,9 @@ components:
         max_benchmarks:
           type: integer
           minimum: 1
-          maximum: 50
+          maximum: 100
           default: 12
-          description: Maximum number of benchmarks in the generated collection (1 to 50).
+          description: Maximum number of benchmarks in the generated collection (1 to 100).
         strictness:
           type: string
           enum:
