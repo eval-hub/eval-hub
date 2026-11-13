@@ -1,11 +1,14 @@
 package k8s
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -73,12 +76,21 @@ func TestListHardwareProfilesErrors(t *testing.T) {
 	}
 	t.Run("missing platform namespace disables discovery", func(t *testing.T) {
 		t.Setenv(hardwareProfilesNamespaceEnv, "")
-		got, err := runtime.ListHardwareProfiles(context.Background(), "tenant-a")
+		var logs bytes.Buffer
+		r := &K8sRuntime{
+			logger: slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
+			helper: &KubernetesHelper{dynamicClient: client},
+		}
+		got, err := r.ListHardwareProfiles(context.Background(), "tenant-a")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if got == nil || len(got) != 0 {
 			t.Fatalf("profiles = %#v, want empty array", got)
+		}
+		want := "hardware profile discovery is not configured"
+		if !strings.Contains(logs.String(), want) {
+			t.Fatalf("expected debug log containing %q, got %q", want, logs.String())
 		}
 	})
 	t.Run("missing client", func(t *testing.T) {
@@ -104,6 +116,9 @@ func TestListHardwareProfilesWithoutCRD(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		err  error
+		// withoutLogger keeps the degraded path covered for runtimes built by
+		// hand (tests, embedders) that carry no logger.
+		withoutLogger bool
 	}{
 		{
 			name: "api server reports the resource is missing",
@@ -125,6 +140,11 @@ func TestListHardwareProfilesWithoutCRD(t *testing.T) {
 				SearchedVersions: []string{hardwareProfileAPIVersion},
 			},
 		},
+		{
+			name:          "not found without a logger",
+			err:           apierrors.NewNotFound(hardwareProfileGVR.GroupResource(), ""),
+			withoutLogger: true,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			client := fake.NewSimpleDynamicClientWithCustomListKinds(k8sruntime.NewScheme(), map[schema.GroupVersionResource]string{
@@ -133,13 +153,24 @@ func TestListHardwareProfilesWithoutCRD(t *testing.T) {
 			client.PrependReactor("list", hardwareProfileResource, func(k8stesting.Action) (bool, k8sruntime.Object, error) {
 				return true, nil, tc.err
 			})
+			var logs bytes.Buffer
 			r := &K8sRuntime{helper: &KubernetesHelper{dynamicClient: client}}
+			if !tc.withoutLogger {
+				r.logger = slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+			}
 			got, err := r.ListHardwareProfiles(context.Background(), "tenant-a")
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			if got == nil || len(got) != 0 {
 				t.Fatalf("profiles = %#v, want empty array", got)
+			}
+			if tc.withoutLogger {
+				return
+			}
+			want := "hardware profile CRD is not installed"
+			if !strings.Contains(logs.String(), want) {
+				t.Fatalf("expected debug log containing %q, got %q", want, logs.String())
 			}
 		})
 	}
