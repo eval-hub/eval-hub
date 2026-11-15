@@ -1,8 +1,24 @@
 package api
 
+import (
+	"fmt"
+	"regexp"
+)
+
 // IsOCIExportEnabled reports whether a job has OCI exports configured.
 func IsOCIExportEnabled(job *EvaluationJobResource) bool {
 	return job != nil && job.Exports != nil && job.Exports.OCI != nil
+}
+
+var ociExportPrefixPattern = regexp.MustCompile(`^[a-zA-Z0-9_][a-zA-Z0-9._-]*$`)
+
+// ValidateOCIExportPrefix checks the complete export prefix before any truncation.
+// Empty prefixes are allowed. Length is limited only when constructing the final tag.
+func ValidateOCIExportPrefix(prefix string) error {
+	if prefix != "" && !ociExportPrefixPattern.MatchString(prefix) {
+		return fmt.Errorf("OCI export prefix must match %s", ociExportPrefixPattern.String())
+	}
+	return nil
 }
 
 // OCISigningConfig selects the signing method and optionally references a key Secret.
