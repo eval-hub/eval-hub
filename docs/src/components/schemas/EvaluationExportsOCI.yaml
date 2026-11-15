@@ -10,6 +10,12 @@ examples:
       oci_host: quay.io
       oci_repository: my-org/eval-results
   - coordinates:
+      oci_host: localhost:5001
+      oci_repository: eval-results
+    signing:
+      type: key-pair
+      secret_ref: file:///absolute/path/to/signing-material
+  - coordinates:
       oci_host: quay.io
       oci_repository: my-org/eval-results
       oci_tag: final
@@ -44,7 +50,7 @@ properties:
     description: Optional Kubernetes connection for OCI registry authentication
   signing:
     $ref: ./OCISigningConfig.yaml
-    description: Optional signing configuration. Signing is disabled when omitted.
+    description: Optional signing configuration. Signing is disabled when omitted or null. Key-pair signing requires secret_ref; local file URIs are rejected in cluster mode.
 required:
   - coordinates
 additionalProperties: false
