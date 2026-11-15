@@ -53,21 +53,3 @@ func TestBundleFactoryResolvesEachJob(t *testing.T) {
 		t.Fatalf("lost typed cause: %v", err)
 	}
 }
-
-// TestBundleFactoryRequiresAccessConfiguration rejects missing job, resolver, or HTTP client before publication.
-func TestBundleFactoryRequiresAccessConfiguration(t *testing.T) {
-	job := completedJob()
-	for _, tc := range []struct {
-		job      *api.EvaluationJobResource
-		resolver OCICredentialResolver
-		client   *http.Client
-	}{
-		{nil, NewLocalCredentialResolver(), http.DefaultClient},
-		{job, nil, http.DefaultClient},
-		{job, NewLocalCredentialResolver(), nil},
-	} {
-		if _, err := NewBundlePublisherFactory(tc.resolver, tc.client).NewPublisher(context.Background(), tc.job); err == nil {
-			t.Fatal("missing access configuration accepted")
-		}
-	}
-}

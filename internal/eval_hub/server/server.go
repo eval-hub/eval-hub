@@ -90,11 +90,11 @@ func NewServer(logger *slog.Logger,
 		return nil, fmt.Errorf("validator is required for the server")
 	}
 
-	ociFactory, bundleFactory, ociCleanup := newOCIPublisherFactories(logger, serviceConfig)
+	ociEvalCardFactory, ociBundleFactory, ociCleanup := newOCIPublisherFactories(logger, serviceConfig)
 	resultsExporter := evalcards.NewManager(logger, evalcards.ManagerConfig{
 		MLFlowClient:           mlflowClient,
 		MLFlowWorkspaceSupport: mlflowWorkspace,
-		OCIPublisherFactory:    ociFactory,
+		OCIPublisherFactory:    ociEvalCardFactory,
 		OCIPushTimeout:         serviceConfig.EffectiveOCIPushTimeout(),
 	})
 
@@ -108,7 +108,7 @@ func NewServer(logger *slog.Logger,
 		mlflowClient:           mlflowClient,
 		mlflowWorkspace:        mlflowWorkspace,
 		resultsExporter:        resultsExporter,
-		bundlePublisherFactory: bundleFactory,
+		bundlePublisherFactory: ociBundleFactory,
 		ociCleanup:             ociCleanup,
 	}, nil
 }
