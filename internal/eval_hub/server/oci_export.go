@@ -36,22 +36,23 @@ func (g *kubernetesDockerConfigSecretGetter) GetDockerConfigJSON(ctx context.Con
 	return ociclient.DockerConfigJSONFromSecret(secret.Data)
 }
 
-// newOCIPublisherFactory wires anonymous local or tenant-authenticated cluster exporters.
+// newOCIPublisherFactories wires anonymous local or tenant-authenticated cluster exporters.
 // Initialization failures return an error-aware factory so OCI export requests
 // fail explicitly instead of being silently discarded.
 // The returned cleanup func must be called when the factory is no longer needed to stop the
 // Kubernetes EventBroadcaster goroutines started by NewKubernetesHelper.
-func newOCIPublisherFactory(logger *slog.Logger, serviceConfig *config.Config) (evalcards.OCIPublisherFactory, func()) {
+func newOCIPublisherFactories(logger *slog.Logger, serviceConfig *config.Config) (evalcards.OCIPublisherFactory, oci.BundlePublisherFactory, func()) {
 	noop := func() {}
 	if serviceConfig == nil || serviceConfig.Service == nil {
-		return evalcards.NewNoopOCIPublisherFactory(), noop
+		return evalcards.NewNoopOCIPublisherFactory(), &unavailableBundlePublisherFactory{err: fmt.Errorf("oci export configuration is unavailable")}, noop
 	}
 	if serviceConfig.Service.LocalMode {
 		httpClient, err := evalcards.NewOCIHTTPClient(serviceConfig, serviceConfig.IsOTELEnabled(), logger)
 		if err != nil {
-			return newUnavailableOCIPublisherFactory(fmt.Errorf("oci export unavailable: http client: %w", err)), noop
+			return unavailableOCIPublisherFactories(fmt.Errorf("oci export unavailable: http client: %w", err), noop)
 		}
-		return evalcards.NewOCIPublisherFactory(oci.NewLocalCredentialResolver(), httpClient), noop
+		resolver := oci.NewLocalCredentialResolver()
+		return evalcards.NewOCIPublisherFactory(resolver, httpClient), oci.NewBundlePublisherFactory(resolver, httpClient), noop
 	}
 
 	helper, err := k8s.NewKubernetesHelper()
@@ -59,7 +60,7 @@ func newOCIPublisherFactory(logger *slog.Logger, serviceConfig *config.Config) (
 		if logger != nil {
 			logger.Warn("OCI export unavailable: kubernetes client initialization failed", "error", err)
 		}
-		return newUnavailableOCIPublisherFactory(fmt.Errorf("oci export unavailable: kubernetes client: %w", err)), noop
+		return unavailableOCIPublisherFactories(fmt.Errorf("oci export unavailable: kubernetes client: %w", err), noop)
 	}
 	httpClient, err := evalcards.NewOCIHTTPClient(serviceConfig, serviceConfig.IsOTELEnabled(), logger)
 	if err != nil {
@@ -67,22 +68,34 @@ func newOCIPublisherFactory(logger *slog.Logger, serviceConfig *config.Config) (
 		if logger != nil {
 			logger.Warn("OCI export unavailable: failed to create oci http client", "error", err)
 		}
-		return newUnavailableOCIPublisherFactory(fmt.Errorf("oci export unavailable: http client: %w", err)), noop
+		return unavailableOCIPublisherFactories(fmt.Errorf("oci export unavailable: http client: %w", err), noop)
 	}
-	return evalcards.NewOCIPublisherFactory(
-		oci.NewKubernetesCredentialResolver(newKubernetesDockerConfigSecretGetter(helper)),
-		httpClient,
-	), func() { _ = helper.Close() }
+	resolver := oci.NewKubernetesCredentialResolver(newKubernetesDockerConfigSecretGetter(helper))
+	return evalcards.NewOCIPublisherFactory(resolver, httpClient), oci.NewBundlePublisherFactory(resolver, httpClient), func() { _ = helper.Close() }
 }
 
 type unavailableOCIPublisherFactory struct {
 	err error
 }
 
+// newUnavailableOCIPublisherFactory defers a setup error until card export is attempted.
 func newUnavailableOCIPublisherFactory(err error) evalcards.OCIPublisherFactory {
 	return &unavailableOCIPublisherFactory{err: err}
 }
 
+// NewPublisher returns the saved setup error so card export reports an explicit failure.
 func (f *unavailableOCIPublisherFactory) NewPublisher(_ context.Context, _ *api.EvaluationJobResource) (evalcards.OCIPublisher, error) {
+	return nil, f.err
+}
+
+// Both factories surface setup failures when an export is attempted.
+func unavailableOCIPublisherFactories(err error, cleanup func()) (evalcards.OCIPublisherFactory, oci.BundlePublisherFactory, func()) {
+	return newUnavailableOCIPublisherFactory(err), &unavailableBundlePublisherFactory{err: err}, cleanup
+}
+
+type unavailableBundlePublisherFactory struct{ err error }
+
+// NewPublisher returns the saved setup error so bundle export reports an explicit failure.
+func (f *unavailableBundlePublisherFactory) NewPublisher(_ context.Context, _ *api.EvaluationJobResource) (oci.EvaluationBundlePublisher, error) {
 	return nil, f.err
 }

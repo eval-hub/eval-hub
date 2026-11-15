@@ -145,3 +145,35 @@ func TestUpdateOCIResultsPreservesNilUpdates(t *testing.T) {
 		t.Fatal("card-only update did not preserve the existing status")
 	}
 }
+
+func TestEligibleForOCIProcessing(t *testing.T) {
+	for _, state := range []OverallState{"", OverallStatePending, OverallStateRunning, OverallStateCompleted, OverallStateFailed, OverallStateCancelled, OverallStatePartiallyFailed} {
+		t.Run(string(state), func(t *testing.T) {
+			job := &EvaluationJobResource{
+				EvaluationJobConfig: EvaluationJobConfig{Exports: &EvaluationExports{OCI: &EvaluationExportsOCI{}}},
+				Status:              &EvaluationJobStatus{EvaluationJobState: EvaluationJobState{State: state}},
+			}
+			want := state == OverallStateCompleted || state == OverallStatePartiallyFailed
+			if got := EligibleForOCIProcessing(job); got != want {
+				t.Fatalf("eligibility = %v, want %v", got, want)
+			}
+		})
+	}
+	for name, job := range map[string]*EvaluationJobResource{
+		"nil job": nil,
+		"missing status": {EvaluationJobConfig: EvaluationJobConfig{
+			Exports: &EvaluationExports{OCI: &EvaluationExportsOCI{}},
+		}},
+		"missing exports": {Status: &EvaluationJobStatus{EvaluationJobState: EvaluationJobState{State: OverallStateCompleted}}},
+		"missing OCI": {
+			EvaluationJobConfig: EvaluationJobConfig{Exports: &EvaluationExports{}},
+			Status:              &EvaluationJobStatus{EvaluationJobState: EvaluationJobState{State: OverallStateCompleted}},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if EligibleForOCIProcessing(job) {
+				t.Fatal("job with missing prerequisites is eligible")
+			}
+		})
+	}
+}

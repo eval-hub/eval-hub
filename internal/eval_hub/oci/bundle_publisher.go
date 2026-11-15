@@ -29,18 +29,12 @@ func NewBundlePublisher(client RegistryClient) *BundlePublisher {
 	return &BundlePublisher{client: client}
 }
 
-// EligibleForBundle reports whether the stored outcome and export settings allow bundling.
-func EligibleForBundle(job *api.EvaluationJobResource) bool {
-	return job != nil && job.Exports != nil && job.Exports.OCI != nil && job.Status != nil &&
-		(job.Status.State == api.OverallStateCompleted || job.Status.State == api.OverallStatePartiallyFailed)
-}
-
 // Publish returns nil, nil for an ineligible job. For eligible jobs, every
 // recorded completed result and the card must verify before any index PUT.
 // Membership comes solely from recorded results and statuses; no definitions or
 // collections are resolved. Neither the job nor its results are modified.
 func (p *BundlePublisher) Publish(ctx context.Context, job *api.EvaluationJobResource, card *api.OCIArtifactReference) (*api.OCIArtifactReference, error) {
-	if !EligibleForBundle(job) {
+	if !api.EligibleForOCIProcessing(job) {
 		return nil, nil
 	}
 	if p == nil || p.client == nil {

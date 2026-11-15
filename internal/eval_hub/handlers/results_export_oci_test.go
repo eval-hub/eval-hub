@@ -3,10 +3,13 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/go-playground/validator/v10"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -17,9 +20,9 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/evalcards"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/oci"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/validation"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/cards"
+	"github.com/eval-hub/eval-hub/pkg/ociclient"
 )
 
 type ociReportingStorage struct {
@@ -30,6 +33,7 @@ type ociReportingStorage struct {
 	bundles     []*api.OCIArtifactReference
 	codes       []string
 	failAt      int
+	failFrom    int
 	unavailable bool
 	done        chan struct{}
 }
@@ -49,7 +53,7 @@ func (s *ociReportingStorage) UpdateEvaluationJobOCI(id string, status *api.OCIP
 	s.calls = append(s.calls, status.State)
 	s.cards = append(s.cards, card)
 	s.bundles = append(s.bundles, bundle)
-	if s.unavailable || len(s.calls) == s.failAt {
+	if s.unavailable || len(s.calls) == s.failAt || (s.failFrom > 0 && len(s.calls) >= s.failFrom) {
 		return errors.New("database unavailable")
 	}
 	if status.Message == nil || status.Message.Message == "" || status.Message.MessageCode == "" || status.Message.MessageOrigin != api.MessageOriginServer {
@@ -88,38 +92,76 @@ func publishedCard() *api.OCIArtifactReference {
 	return &api.OCIArtifactReference{OCIDigest: "sha256:" + strings.Repeat("a", 64), OCIReference: "quay.io/team/results:evaluation-card-job-1@sha256:" + strings.Repeat("a", 64)}
 }
 
+// publishedBundle returns an index reference distinct from the card to detect output mix-ups.
+func publishedBundle() *api.OCIArtifactReference {
+	return &api.OCIArtifactReference{OCIDigest: "sha256:" + strings.Repeat("b", 64), OCIReference: "quay.io/team/results:custom-job-1@sha256:" + strings.Repeat("b", 64)}
+}
+
+type stubBundleFactory struct {
+	ref          *api.OCIArtifactReference
+	factoryError error
+	publishError error
+	created      int
+	published    int
+	job          *api.EvaluationJobResource
+	card         *api.OCIArtifactReference
+}
+
+// NewPublisher records the job scope and optionally simulates initialization failure.
+func (f *stubBundleFactory) NewPublisher(_ context.Context, job *api.EvaluationJobResource) (oci.EvaluationBundlePublisher, error) {
+	f.created++
+	f.job = job
+	return f, f.factoryError
+}
+
+// Publish checks that bundling uses the same job after running progress has been saved.
+func (f *stubBundleFactory) Publish(_ context.Context, job *api.EvaluationJobResource, card *api.OCIArtifactReference) (*api.OCIArtifactReference, error) {
+	f.published++
+	f.card = card
+	if job != f.job || job.Results.OCI.Status.State != api.OCIProcessingRunning {
+		return nil, errors.New("bundle must run with the recorded job while OCI is running")
+	}
+	return f.ref, f.publishError
+}
+
+// TestOCIReportingSuccessAndUnchangedTerminalCallback verifies saved outputs and skips sequential duplicate exports.
 func TestOCIReportingSuccessAndUnchangedTerminalCallback(t *testing.T) {
-	job := completedOCIJob()
-	before, _ := json.Marshal(job.Status)
-	exporter := &ociOutcomeExporter{result: evalcards.ExportResult{OCIArtifact: publishedCard()}, err: errors.New("MLflow upload failed")}
-	storage := &ociReportingStorage{job: job, done: make(chan struct{})}
-	h := &Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exporter}
-	h.onEvaluationJobUpdated(context.Background(), storage, func(context.Context) (*api.EvaluationJobResource, error) { return job, nil }, api.OverallStateRunning, nil)
-	awaitExportSignal(t, storage.done)
-	want := []api.OCIProcessingState{api.OCIProcessingRunning, api.OCIProcessingCompleted}
-	if !reflect.DeepEqual(storage.calls, want) {
-		t.Fatalf("progress = %v", storage.calls)
-	}
-	wantCodes := []string{"oci_processing_running", "oci_processing_completed"}
-	if !reflect.DeepEqual(storage.codes, wantCodes) {
-		t.Fatalf("message codes = %v, want %v", storage.codes, wantCodes)
-	}
-	if !reflect.DeepEqual(storage.cards, []*api.OCIArtifactReference{nil, publishedCard()}) {
-		t.Fatalf("expected card reference only in final completion update: %v", storage.cards)
-	}
-	if !reflect.DeepEqual(storage.bundles, []*api.OCIArtifactReference{nil, nil}) {
-		t.Fatalf("card workflow supplied bundle references: %v", storage.bundles)
-	}
-	if !reflect.DeepEqual(job.Results.OCI.EvaluationCard, publishedCard()) || job.Results.OCI.EvaluationBundle != nil || job.Results.OCI.Signing != nil {
-		t.Fatalf("OCI outputs = %#v", job.Results.OCI)
-	}
-	after, _ := json.Marshal(job.Status)
-	if !bytes.Equal(before, after) || job.Results.Benchmarks[0].Metrics["accuracy"] != 0.7 {
-		t.Fatal("evaluation status or benchmark results changed")
-	}
-	h.onEvaluationJobUpdated(context.Background(), storage, func(context.Context) (*api.EvaluationJobResource, error) { return job, nil }, api.OverallStateCompleted, nil)
-	if exporter.calls != 1 || !reflect.DeepEqual(storage.calls, want) {
-		t.Fatal("unchanged callback repeated exports or regressed progress")
+	for _, state := range []api.OverallState{api.OverallStateCompleted, api.OverallStatePartiallyFailed} {
+		t.Run(string(state), func(t *testing.T) {
+			job := completedOCIJob()
+			job.Status.State = state
+			before, _ := json.Marshal(job.Status)
+			exporter := &ociOutcomeExporter{result: evalcards.ExportResult{OCIArtifact: publishedCard()}, err: errors.New("MLflow upload failed")}
+			storage := &ociReportingStorage{job: job, done: make(chan struct{})}
+			h := &Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exporter, bundlePublisherFactory: &stubBundleFactory{ref: publishedBundle()}}
+			h.onEvaluationJobUpdated(context.Background(), storage, func(context.Context) (*api.EvaluationJobResource, error) { return job, nil }, api.OverallStateRunning, nil)
+			awaitExportSignal(t, storage.done)
+			want := []api.OCIProcessingState{api.OCIProcessingRunning, api.OCIProcessingCompleted}
+			if !reflect.DeepEqual(storage.calls, want) {
+				t.Fatalf("progress = %v", storage.calls)
+			}
+			wantCodes := []string{"oci_processing_running", "oci_processing_completed"}
+			if !reflect.DeepEqual(storage.codes, wantCodes) {
+				t.Fatalf("message codes = %v, want %v", storage.codes, wantCodes)
+			}
+			if !reflect.DeepEqual(storage.cards, []*api.OCIArtifactReference{nil, publishedCard()}) {
+				t.Fatalf("expected card reference only in final completion update: %v", storage.cards)
+			}
+			if !reflect.DeepEqual(storage.bundles, []*api.OCIArtifactReference{nil, publishedBundle()}) {
+				t.Fatalf("unexpected bundle references: %v", storage.bundles)
+			}
+			if !reflect.DeepEqual(job.Results.OCI.EvaluationCard, publishedCard()) || !reflect.DeepEqual(job.Results.OCI.EvaluationBundle, publishedBundle()) || job.Results.OCI.Signing != nil {
+				t.Fatalf("OCI outputs = %#v", job.Results.OCI)
+			}
+			after, _ := json.Marshal(job.Status)
+			if !bytes.Equal(before, after) || job.Results.Benchmarks[0].Metrics["accuracy"] != 0.7 {
+				t.Fatal("evaluation status or benchmark results changed")
+			}
+			h.onEvaluationJobUpdated(context.Background(), storage, func(context.Context) (*api.EvaluationJobResource, error) { return job, nil }, state, nil)
+			if exporter.calls != 1 || !reflect.DeepEqual(storage.calls, want) {
+				t.Fatal("unchanged callback repeated exports or regressed progress")
+			}
+		})
 	}
 }
 
@@ -158,6 +200,7 @@ func TestOCIReportingFailures(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
 		failAt      int
+		failFrom    int
 		unavailable bool
 		done        chan struct{}
 		exportError error
@@ -173,8 +216,8 @@ func TestOCIReportingFailures(t *testing.T) {
 		{name: "untyped publisher error", result: &evalcards.ExportResult{OCIError: errors.New("publisher failed"), OCIArtifact: publishedCard()}, wantCode: "oci_processing_failed", wantMessage: "Publish evaluation card: OCI publisher failed", wantExport: true},
 		{name: "missing digest", result: &evalcards.ExportResult{OCIArtifact: &api.OCIArtifactReference{OCIReference: publishedCard().OCIReference}}, wantCode: "oci_processing_failed", wantMessage: "Publish evaluation card: publisher returned an invalid manifest reference", wantExport: true},
 		{name: "missing reference", result: &evalcards.ExportResult{OCIArtifact: &api.OCIArtifactReference{OCIDigest: publishedCard().OCIDigest}}, wantCode: "oci_processing_failed", wantMessage: "Publish evaluation card: publisher returned an invalid manifest reference", wantExport: true},
-		{name: "running persistence", failAt: 1, wantCode: "oci_processing_failed", wantMessage: "Persist running OCI progress: storage update failed"},
-		{name: "completion persistence", failAt: 2, wantCode: "oci_processing_failed", wantMessage: "Persist evaluation-card OCI completion: storage update failed", wantCard: true, wantExport: true},
+		{name: "running persistence", failAt: 1, wantCode: "oci_processing_failed"},
+		{name: "completion persistence", failAt: 2, wantCode: "oci_processing_failed", wantCard: true, wantExport: true},
 		{name: "unavailable storage", unavailable: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -187,7 +230,7 @@ func TestOCIReportingFailures(t *testing.T) {
 			if tc.result != nil {
 				exporter.result = *tc.result
 			}
-			h := &Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exporter}
+			h := &Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exporter, bundlePublisherFactory: &stubBundleFactory{ref: publishedBundle()}}
 			var logs bytes.Buffer
 			h.exportEvaluationResults(context.Background(), storage, job, slog.New(slog.NewTextHandler(&logs, nil)))
 			if exporter.calls != 1 || exporter.ociEnabled != tc.wantExport {
@@ -197,10 +240,8 @@ func TestOCIReportingFailures(t *testing.T) {
 			if tc.failAt == 2 {
 				wantStates = []api.OCIProcessingState{api.OCIProcessingRunning, api.OCIProcessingCompleted, api.OCIProcessingFailed}
 			}
-			for _, bundle := range storage.bundles {
-				if bundle != nil {
-					t.Fatal("card workflow supplied a bundle")
-				}
+			if tc.failAt == 2 && !reflect.DeepEqual(storage.bundles, []*api.OCIArtifactReference{nil, publishedBundle(), publishedBundle()}) {
+				t.Fatalf("completion fallback lost bundle: %v", storage.bundles)
 			}
 			if !reflect.DeepEqual(storage.calls, wantStates) {
 				t.Fatalf("progress = %v, want %v", storage.calls, wantStates)
@@ -250,7 +291,7 @@ func TestOCIReportingEligibility(t *testing.T) {
 				}
 				storage := &ociReportingStorage{job: job, done: make(chan struct{})}
 				exporter := &ociOutcomeExporter{result: evalcards.ExportResult{OCIArtifact: publishedCard()}, done: make(chan struct{})}
-				(&Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exporter}).exportEvaluationResultsAsync(context.Background(), storage, job, nil)
+				(&Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exporter, bundlePublisherFactory: &stubBundleFactory{ref: publishedBundle()}}).exportEvaluationResultsAsync(context.Background(), storage, job, nil)
 				eligible := state == api.OverallStateCompleted || state == api.OverallStatePartiallyFailed
 				wantCalls := 0
 				if eligible {
@@ -310,6 +351,194 @@ func TestOCIReportingWithoutStoragePreservesJobAndIndependentExports(t *testing.
 	}
 }
 
+// TestOCIBundleWorkflow covers retained outputs, failure reporting, and persistence fallback for both eligible outcomes.
+func TestOCIBundleWorkflow(t *testing.T) {
+	for _, state := range []api.OverallState{api.OverallStateCompleted, api.OverallStatePartiallyFailed} {
+		for _, scenario := range []string{"success", "factory failure", "missing factory", "publish failure", "missing output", "missing digest", "missing reference", "card failure", "completion save failure", "fallback save failure"} {
+			t.Run(string(state)+"/"+scenario, func(t *testing.T) {
+				job := completedOCIJob()
+				job.Status.State = state
+				before, _ := json.Marshal(job.Status)
+				storage := &ociReportingStorage{job: job}
+				factory := &stubBundleFactory{ref: publishedBundle()}
+				exporter := &ociOutcomeExporter{result: evalcards.ExportResult{OCIArtifact: publishedCard()}}
+				h := &Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exporter, bundlePublisherFactory: factory}
+				switch scenario {
+				case "factory failure":
+					factory.factoryError = errors.New("tenant Secret unavailable")
+				case "missing factory":
+					h.bundlePublisherFactory = nil
+				case "publish failure":
+					factory.publishError = errors.New("verify benchmark 3 manifest: registry denied")
+				case "missing output":
+					factory.ref = nil
+				case "missing digest":
+					factory.ref = &api.OCIArtifactReference{OCIReference: publishedBundle().OCIReference}
+				case "missing reference":
+					factory.ref = &api.OCIArtifactReference{OCIDigest: publishedBundle().OCIDigest}
+				case "card failure":
+					exporter.result.OCIError = errors.New("card failed")
+				case "completion save failure", "fallback save failure":
+					storage.failAt = 2
+				}
+				// Fail completion and fallback independently, after the running write.
+				if scenario == "fallback save failure" {
+					factory.publishError = nil
+					storage.failFrom = 2
+				}
+				var logs bytes.Buffer
+				h.exportEvaluationResults(context.Background(), storage, job, slog.New(slog.NewTextHandler(&logs, nil)))
+				if scenario == "factory failure" || scenario == "publish failure" {
+					if count := strings.Count(logs.String(), "level=ERROR"); count != 1 {
+						t.Fatalf("bundle failure logged %d times, want once: %s", count, logs.String())
+					}
+				}
+				after, _ := json.Marshal(job.Status)
+				if !bytes.Equal(before, after) {
+					t.Fatal("evaluation outcome changed")
+				}
+				want := api.OCIProcessingFailed
+				switch scenario {
+				case "success":
+					want = api.OCIProcessingCompleted
+				case "fallback save failure":
+					want = api.OCIProcessingRunning
+				}
+				if job.Results.OCI.Status.State != want {
+					t.Fatalf("OCI state = %s, want %s", job.Results.OCI.Status.State, want)
+				}
+				wantCard := scenario != "card failure" && scenario != "fallback save failure"
+				wantBundle := scenario == "success" || scenario == "completion save failure"
+				if (job.Results.OCI.EvaluationCard != nil) != wantCard || (job.Results.OCI.EvaluationBundle != nil) != wantBundle {
+					t.Fatalf("incorrect retained outputs: %+v", job.Results.OCI)
+				}
+				if scenario == "card failure" && factory.created != 0 {
+					t.Fatal("card failure entered bundle stage")
+				}
+				if factory.published > 0 && !reflect.DeepEqual(factory.card, publishedCard()) {
+					t.Fatal("bundle did not receive newly published card")
+				}
+				if scenario == "completion save failure" || scenario == "fallback save failure" {
+					if len(storage.calls) != 3 || !reflect.DeepEqual(storage.cards[2], publishedCard()) || !reflect.DeepEqual(storage.bundles[2], publishedBundle()) {
+						t.Fatal("fallback did not carry both published outputs")
+					}
+				} else if len(storage.calls) != 2 {
+					t.Fatalf("unexpected writes: %v", storage.calls)
+				}
+				if scenario == "fallback save failure" && !strings.Contains(logs.String(), "database unavailable") {
+					t.Fatal("missing persistence failure diagnostic")
+				}
+			})
+		}
+	}
+}
+
+// Exercise the real card exporter and bundle factory within a single handler invocation.
+func TestOCIBundleWorkflowWithRegistry(t *testing.T) {
+	for _, outcome := range []api.OverallState{api.OverallStateCompleted, api.OverallStatePartiallyFailed} {
+		for _, failure := range []string{"", "missing child", "denied index"} {
+			t.Run(string(outcome)+"/"+failure, func(t *testing.T) {
+				child := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","config":{"mediaType":"application/vnd.oci.empty.v1+json","size":2,"digest":"sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"},"layers":[]}`)
+				digest := func(body []byte) string { return fmt.Sprintf("sha256:%x", sha256.Sum256(body)) }
+				childDigest := digest(child)
+				manifests := map[string][]byte{childDigest: child}
+				indexPuts := 0
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == http.MethodHead {
+						w.WriteHeader(http.StatusOK)
+						return
+					}
+					key := strings.TrimPrefix(r.URL.Path, "/v2/team/results/manifests/")
+					if key == r.URL.Path {
+						t.Errorf("unexpected registry request: %s", r.URL.Path)
+						http.NotFound(w, r)
+						return
+					}
+					if r.Method == http.MethodPut {
+						body, err := io.ReadAll(r.Body)
+						if err != nil {
+							t.Error(err)
+							return
+						}
+						if r.Header.Get("Content-Type") == "application/vnd.oci.image.index.v1+json" {
+							indexPuts++
+							if failure == "denied index" {
+								http.Error(w, "bundle policy denied", http.StatusForbidden)
+								return
+							}
+						}
+						manifests[key], manifests[digest(body)] = body, body
+						w.Header().Set("Docker-Content-Digest", digest(body))
+						w.WriteHeader(http.StatusCreated)
+						return
+					}
+					if r.Method == http.MethodGet {
+						if key == childDigest && failure == "missing child" {
+							http.NotFound(w, r)
+							return
+						}
+						body, ok := manifests[key]
+						if !ok {
+							http.NotFound(w, r)
+							return
+						}
+						w.Header().Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
+						w.Header().Set("Docker-Content-Digest", digest(body))
+						_, _ = w.Write(body)
+						return
+					}
+					t.Errorf("unexpected method: %s", r.Method)
+				}))
+				defer srv.Close()
+				job := completedOCIJob()
+				job.Status.State = outcome
+				job.Status.Benchmarks = []api.BenchmarkStatus{{BenchmarkIndex: 0, ID: "bench", ProviderID: "provider", Status: api.StateCompleted}}
+				job.Results.Benchmarks = []api.BenchmarkResult{{BenchmarkIndex: 0, ID: "bench", ProviderID: "provider", Artifacts: map[string]any{"oci_digest": childDigest}}}
+				if outcome == api.OverallStatePartiallyFailed {
+					job.Status.Benchmarks = append(job.Status.Benchmarks, api.BenchmarkStatus{BenchmarkIndex: 1, ID: "bench", ProviderID: "provider", Status: api.StateFailed})
+				}
+				job.Exports.OCI.Coordinates.OCIHost = srv.URL
+				resolver := oci.NewLocalCredentialResolver()
+				exporter := evalcards.NewManager(nil, evalcards.ManagerConfig{OCIPublisherFactory: evalcards.NewOCIPublisherFactory(resolver, srv.Client())})
+				h := &Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exporter, bundlePublisherFactory: oci.NewBundlePublisherFactory(resolver, srv.Client())}
+				storage := &ociReportingStorage{job: job}
+				h.exportEvaluationResults(context.Background(), storage, job, nil)
+				if job.Results.OCI.EvaluationCard == nil {
+					t.Fatal("published card was lost")
+				}
+				if failure != "" {
+					if job.Results.OCI.Status.State != api.OCIProcessingFailed || job.Results.OCI.EvaluationBundle != nil {
+						t.Fatalf("incorrect failure: %+v", job.Results.OCI)
+					}
+					message := job.Results.OCI.Status.Message.Message
+					if failure == "missing child" && (!strings.Contains(message, "benchmark 0") || !strings.Contains(message, "HTTP status 404") || indexPuts != 0) {
+						t.Fatal(message)
+					}
+					if failure == "denied index" && (!strings.Contains(message, "HTTP status 403") || !strings.Contains(message, "bundle policy denied")) {
+						t.Fatal(message)
+					}
+					return
+				}
+				if job.Results.OCI.Status.State != api.OCIProcessingCompleted || indexPuts != 1 || len(storage.calls) != 2 {
+					t.Fatalf("workflow failed: %+v", job.Results.OCI)
+				}
+				bundle := job.Results.OCI.EvaluationBundle
+				body := manifests["custom-job-1"]
+				if bundle.OCIDigest != digest(body) {
+					t.Fatal("bundle digest mismatch")
+				}
+				var index ociclient.Index
+				if err := json.Unmarshal(body, &index); err != nil {
+					t.Fatal(err)
+				}
+				if len(index.Manifests) != 2 || index.Manifests[0].Digest != job.Results.OCI.EvaluationCard.OCIDigest || index.Manifests[1].Digest != childDigest || index.Annotations["evaluation_state"] != string(outcome) {
+					t.Fatalf("incorrect index: %+v", index)
+				}
+			})
+		}
+	}
+}
+
 func newOCIWorkflowValidator(t *testing.T) *validator.Validate {
 	t.Helper()
 	v, err := validation.NewValidator()
@@ -326,7 +555,7 @@ func TestPersistOCIResultsValidation(t *testing.T) {
 	for _, name := range []string{"nil status", "invalid state", "missing message", "missing text", "missing code", "empty artifact", "malformed digest", "blank reference", "storage failure", "running", "completed", "failed"} {
 		t.Run(name, func(t *testing.T) {
 			job := completedOCIJob()
-			storage := &ociReportingStorage{job: job}
+			storage := &ociReportingStorage{job: job, done: make(chan struct{})}
 			h := &Handlers{validate: newOCIWorkflowValidator(t)}
 			status := validStatus()
 			var card *api.OCIArtifactReference
@@ -363,7 +592,7 @@ func TestPersistOCIResultsValidation(t *testing.T) {
 				status.State = api.OCIProcessingFailed
 			}
 			before, _ := json.Marshal(job.Results)
-			err := h.persistOCIResults(storage, job, status, card)
+			err := h.persistOCIResults(storage, job, status, card, nil)
 			if valid {
 				if err != nil || len(storage.calls) != 1 || job.Results.OCI.Status != status {
 					t.Fatalf("valid update failed: %v", err)

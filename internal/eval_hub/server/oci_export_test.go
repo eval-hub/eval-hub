@@ -22,10 +22,13 @@ import (
 // TestNewOCIPublisherFactoryLocalModeUsesAnonymousPublisher verifies local mode creates publishers without tenant secrets and validates exports.
 func TestNewOCIPublisherFactoryLocalModeUsesAnonymousPublisher(t *testing.T) {
 	t.Parallel()
-	factory, cleanup := newOCIPublisherFactory(nil, &config.Config{
+	factory, bundleFactory, cleanup := newOCIPublisherFactories(nil, &config.Config{
 		Service: &config.ServiceConfig{LocalMode: true},
 	})
 	defer cleanup()
+	if bundleFactory == nil {
+		t.Fatal("bundle factory is missing")
+	}
 	job := &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-local"}},
 		EvaluationJobConfig: api.EvaluationJobConfig{Exports: &api.EvaluationExports{
@@ -39,6 +42,9 @@ func TestNewOCIPublisherFactoryLocalModeUsesAnonymousPublisher(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = publisher.Close() }()
+	if _, err := bundleFactory.NewPublisher(context.Background(), job); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := factory.NewPublisher(context.Background(), nil); err == nil {
 		t.Fatal("expected missing export configuration to fail")
 	}
@@ -47,8 +53,11 @@ func TestNewOCIPublisherFactoryLocalModeUsesAnonymousPublisher(t *testing.T) {
 func TestNewOCIPublisherFactoryNilConfigReturnsNoop(t *testing.T) {
 	t.Parallel()
 
-	factory, cleanup := newOCIPublisherFactory(nil, nil)
+	factory, bundleFactory, cleanup := newOCIPublisherFactories(nil, nil)
 	defer cleanup()
+	if bundleFactory == nil {
+		t.Fatal("bundle factory is missing")
+	}
 	publisher, err := factory.NewPublisher(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("NewPublisher() err = %v", err)
@@ -67,13 +76,16 @@ func TestNewOCIPublisherFactoryReturnsErrorWhenHTTPClientInitFails(t *testing.T)
 		t.Fatalf("WriteFile() err = %v", err)
 	}
 
-	factory, cleanup := newOCIPublisherFactory(nil, &config.Config{
+	factory, bundleFactory, cleanup := newOCIPublisherFactories(nil, &config.Config{
 		Service: &config.ServiceConfig{LocalMode: false},
 		Sidecar: &config.SidecarConfig{
 			OCI: &config.SidecarOCIConfig{CACertPath: badCA},
 		},
 	})
 	defer cleanup()
+	if bundleFactory == nil {
+		t.Fatal("bundle factory is missing")
+	}
 	_, err := factory.NewPublisher(context.Background(), &api.EvaluationJobResource{
 		EvaluationJobConfig: api.EvaluationJobConfig{
 			Exports: &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{}},
@@ -128,10 +140,13 @@ func TestKubernetesDockerConfigSecretGetter(t *testing.T) {
 func TestNewOCIPublisherFactoryClusterModeUsesRealFactory(t *testing.T) {
 	configureOCITestKubernetesAPI(t)
 
-	factory, cleanup := newOCIPublisherFactory(nil, &config.Config{
+	factory, bundleFactory, cleanup := newOCIPublisherFactories(nil, &config.Config{
 		Service: &config.ServiceConfig{LocalMode: false},
 	})
 	defer cleanup()
+	if bundleFactory == nil {
+		t.Fatal("bundle factory is missing")
+	}
 	_, err := factory.NewPublisher(context.Background(), &api.EvaluationJobResource{
 		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1", Tenant: "tenant-a"}},
 		EvaluationJobConfig: api.EvaluationJobConfig{
@@ -192,12 +207,35 @@ func TestLocalOCIPublisherFactoryHTTPClientInitFailure(t *testing.T) {
 	if err := os.WriteFile(badCA, []byte("invalid"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	factory, cleanup := newOCIPublisherFactory(nil, &config.Config{
+	factory, bundleFactory, cleanup := newOCIPublisherFactories(nil, &config.Config{
 		Service: &config.ServiceConfig{LocalMode: true},
 		Sidecar: &config.SidecarConfig{OCI: &config.SidecarOCIConfig{CACertPath: badCA}},
 	})
 	defer cleanup()
+	if bundleFactory == nil {
+		t.Fatal("bundle factory is missing")
+	}
 	if _, err := factory.NewPublisher(context.Background(), nil); err == nil {
 		t.Fatal("expected invalid local CA configuration to fail")
+	}
+	if _, err := bundleFactory.NewPublisher(context.Background(), nil); err == nil {
+		t.Fatal("bundle factory lost CA initialization failure")
+	}
+}
+
+// TestBundleFactorySharesServerAccessConfiguration checks local access and tenant-scoped Secret lookup failures.
+func TestBundleFactorySharesServerAccessConfiguration(t *testing.T) {
+	configureOCITestKubernetesAPI(t)
+	_, bundleFactory, cleanup := newOCIPublisherFactories(nil, &config.Config{Service: &config.ServiceConfig{LocalMode: false}})
+	defer cleanup()
+	job := &api.EvaluationJobResource{
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1", Tenant: "tenant-a"}},
+		EvaluationJobConfig: api.EvaluationJobConfig{Exports: &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{
+			Coordinates: api.OCICoordinates{OCIHost: "quay.io", OCIRepository: "org/repo"},
+			K8s:         &api.OCIConnectionConfig{Connection: "oci-secret"},
+		}}},
+	}
+	if _, err := bundleFactory.NewPublisher(context.Background(), job); err == nil || !strings.Contains(err.Error(), `get secret "oci-secret" in namespace "tenant-a"`) {
+		t.Fatalf("expected tenant-scoped lookup failure: %v", err)
 	}
 }
