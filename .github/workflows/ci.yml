@@ -84,8 +84,10 @@ jobs:
       # `make clean` resets bin/ here and *only* here: the FVT step below reuses
       # this directory for its own coverage output, and `make build` keeps the
       # compile check for the service, init, sidecar and MCP binaries.
+      # CLEAN_OPTS drops `-cache` so `go clean` keeps the Go build cache that
+      # actions/setup-go restored; `-testcache` still forces fresh test runs.
       run: |
-        make clean build test-coverage
+        make CLEAN_OPTS="-r -testcache" clean build test-coverage
       env:
         GOFLAGS: "-p=1"
 
