@@ -9,6 +9,7 @@ set -euo pipefail
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -43,6 +44,25 @@ is_local_path() {
         *) return 0 ;;
     esac
 }
+
+# The caller only probes that this port can be bound; another process can claim it
+# afterwards. Fail here with a clear message instead of failing inside uvicorn with
+# EADDRINUSE. The Go test helper retries on the next free port when this happens.
+# Only the configured address is probed: a listener on another local address (for
+# example [::1] when binding 127.0.0.1) does not conflict with this bind. lsof wants
+# IPv6 hosts in brackets, as in -iTCP@[::1]:5000.
+if command -v lsof >/dev/null 2>&1; then
+    LSOF_HOST="${HOST}"
+    case "${HOST}" in
+        *:*) LSOF_HOST="[${HOST}]" ;;
+    esac
+    PORT_LISTENERS="$(lsof -tiTCP@"${LSOF_HOST}:${PORT}" -sTCP:LISTEN 2>/dev/null || true)"
+    if [ -n "${PORT_LISTENERS}" ]; then
+        echo -e "${RED}❌ Port ${PORT} is already in use by PID(s): ${PORT_LISTENERS}${NC}"
+        echo -e "${YELLOW}   Stop that process or start MLflow on another MLFLOW_PORT.${NC}"
+        exit 1
+    fi
+fi
 
 # Wipe only this instance's store/artifacts so other port-specific servers stay intact.
 # Never rm -rf remote artifact URIs.
@@ -160,7 +180,6 @@ wait_for_server() {
     local attempt=0
     local server_url="http://$HOST:$PORT"
 
-    RED='\033[0;31m'
     echo -e "${YELLOW}⏳ Waiting for server to be ready...${NC}"
 
     while [ $attempt -lt $max_attempts ]; do
@@ -206,7 +225,6 @@ wait_for_server() {
 }
 
 # Wait for server to be ready
-RED='\033[0;31m'
 if wait_for_server; then
     echo "Server is ready"
     echo "export MLFLOW_TRACKING_URI=http://$HOST:$PORT"

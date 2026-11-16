@@ -2665,7 +2665,7 @@
           "Collections"
         ],
         "summary": "Start Collection Generation",
-        "description": "Start an asynchronous, dry-run collection proposal from an evaluation goal.\nThe service validates the request and required feature, image, model, and\nguardrail configuration before admission, persists a tenant-scoped backing\nevaluation job, and returns promptly. It does not wait for model work and\ndoes not create a collection. The literal generation segment is reserved\nfor this resource and cannot address a collection by ID. If a guardrail or\nrunner failure occurs after admission, poll for its safe terminal error.\n\nIn cluster mode, the caller must be authenticated and authorized through\nkube-rbac-proxy and supply the tenant context via X-Tenant. X-User is set by\nthe trusted proxy from the authenticated caller; clients cannot use it to\nimpersonate another user. The model endpoint and credentials are configured\nserver-side and cannot be supplied in this request.\n",
+        "description": "Start an asynchronous, dry-run collection proposal from an evaluation goal.\nThe service validates the request and required feature, image, model connection, and\nguardrail configuration before admission, persists a tenant-scoped backing\nevaluation job, and returns promptly. It does not wait for model work and\ndoes not create a collection. The literal generation segment is reserved\nfor this resource and cannot address a collection by ID. If a guardrail or\nrunner failure occurs after admission, poll for its safe terminal error.\n\nThe required model object names the generator and supplies its endpoint,\nusing the same shape as an evaluation job's model. It is distinct from the\nfuture evaluation target and any guardrail model. Supply credentials through\nmodel.auth.secret_ref, which names a Secret accessible in the tenant; never\nput API keys in the request or in model.parameters. There is no server-side\ngenerator-model registry, default selection, or generation-model discovery\nendpoint. Invalid model connections or inaccessible Secret references fail\nadmission without exposing credential values.\n\ngeneration_effort selects server-capped iteration, token, and deadline\nbudgets. It is independent of strictness and does not promise a completion\ntime. A model-specific reasoning control is used only when supported by the\nselected model/provider. The running status may expose trusted progress phases and\nactivity timestamps; it does not expose a model-generated percentage or ETA.\n\nThe POST response's resource.id and Location are the tracking contract.\nClients should retain the Location and poll it. The ordinary\n/api/v1/evaluations/jobs list excludes collection-generation workloads and\ncannot recover a lost generation ID. The generation resource is visible to\nauthorized callers in the same tenant until its configured retention expires\nor it is deleted.\n\nIn cluster mode, the caller must be authenticated and authorized through\nkube-rbac-proxy and supply the tenant context via X-Tenant. X-User is set by\nthe trusted proxy from the authenticated caller; clients cannot use it to\nimpersonate another user. The model endpoint and Secret reference in the\nstored request summary are visible to authorized users of that tenant;\nSecret contents are never returned.\n",
         "operationId": "create_collection_generation",
         "requestBody": {
           "required": true,
@@ -2681,7 +2681,25 @@
                     "evaluation_goal": "Assess agent safety and tool-use risks",
                     "provider_filter": "inspect",
                     "max_benchmarks": 12,
-                    "strictness": "moderate"
+                    "strictness": "moderate",
+                    "model": {
+                      "name": "generator-model",
+                      "url": "https://generator.example/v1",
+                      "auth": {
+                        "secret_ref": "generator-credentials"
+                      }
+                    },
+                    "generation_effort": "standard"
+                  }
+                },
+                "goal_defaults": {
+                  "summary": "Let the service default the generation effort and search options",
+                  "value": {
+                    "evaluation_goal": "Assess agent safety and tool-use risks",
+                    "model": {
+                      "name": "generator-model",
+                      "url": "https://generator.example/v1"
+                    }
                   }
                 }
               }
@@ -2720,7 +2738,41 @@
                         "evaluation_goal": "Assess agent safety and tool-use risks",
                         "provider_filter": "inspect",
                         "max_benchmarks": 12,
-                        "strictness": "moderate"
+                        "strictness": "moderate",
+                        "model": {
+                          "name": "generator-model",
+                          "url": "https://generator.example/v1",
+                          "auth": {
+                            "secret_ref": "generator-credentials"
+                          }
+                        },
+                        "generation_effort": "standard"
+                      },
+                      "status": {
+                        "state": "pending"
+                      }
+                    }
+                  },
+                  "pending_defaults": {
+                    "summary": "Search and effort defaults included in the normalized request",
+                    "value": {
+                      "resource": {
+                        "id": "550e8400-e29b-41d4-a716-446655440001",
+                        "tenant": "team-a",
+                        "owner": "user-a",
+                        "created_at": "2026-10-29T12:00:00Z",
+                        "updated_at": "2026-10-29T12:00:00Z"
+                      },
+                      "request": {
+                        "evaluation_goal": "Assess agent safety and tool-use risks",
+                        "provider_filter": "inspect",
+                        "max_benchmarks": 12,
+                        "strictness": "moderate",
+                        "model": {
+                          "name": "generator-model",
+                          "url": "https://generator.example/v1"
+                        },
+                        "generation_effort": "standard"
                       },
                       "status": {
                         "state": "pending"
@@ -2732,7 +2784,14 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "description": "Invalid request, model connection, or inaccessible model Secret reference.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
@@ -2752,7 +2811,7 @@
           "Collections"
         ],
         "summary": "Get Collection Generation",
-        "description": "Poll a dry-run generation. An authorized user in the same tenant may read\nthe resource; a user in another tenant cannot. The request summary is\ntenant-visible and contains normalized search options, never credentials.\nOnly completed resources contain result. Its collection is a postable\nCollectionConfig, and result.yaml describes that same config. Catalog\nchanges between generation and the later collection-create POST may make\nthe proposal invalid. Generation results remain readable after the pod\nexits until configured retention expires or the resource is deleted.\n\nUnknown IDs, backing jobs of a different workload type, expired resources,\nand jobs outside the caller's tenant return 404. In cluster mode, requests\nrequire authenticated/authorized access and X-Tenant; kube-rbac-proxy sets\nX-User from the authenticated caller, not from a client assertion.\n",
+        "description": "Poll a dry-run generation. An authorized user in the same tenant may read\nthe resource; a user in another tenant cannot. The request summary is\ntenant-visible and contains normalized search options and the generator\nmodel connection (including its endpoint and optional Secret reference),\nnever Secret contents.\nOnly completed resources contain result. Its collection is a postable\nCollectionConfig, and result.yaml describes that same config. Catalog\nchanges between generation and the later collection-create POST may make\nthe proposal invalid. Generation results remain readable after the pod\nexits until configured retention expires or the resource is deleted.\n\nWhile running, status.progress may report a trusted phase and the timestamp\nof the last completed allowlisted runner action. This is durable activity\ninformation, not a percentage, ETA, or heartbeat. The ordinary\n/api/v1/evaluations/jobs list excludes generation workloads; retain the\nPOST Location URL to continue polling. Catalog validity at finalization does\nnot guarantee that a benchmark can execute with a particular evaluation\nmodel, judge, dataset, tokenizer, adapter image, or disconnected setup.\n\nUnknown IDs, backing jobs of a different workload type, expired resources,\nand jobs outside the caller's tenant return 404. In cluster mode, requests\nrequire authenticated/authorized access and X-Tenant; kube-rbac-proxy sets\nX-User from the authenticated caller, not from a client assertion.\n",
         "operationId": "get_collection_generation",
         "parameters": [
           {
@@ -2788,7 +2847,15 @@
                         "evaluation_goal": "Assess agent safety and tool-use risks",
                         "provider_filter": "inspect",
                         "max_benchmarks": 12,
-                        "strictness": "moderate"
+                        "strictness": "moderate",
+                        "model": {
+                          "name": "generator-model",
+                          "url": "https://generator.example/v1",
+                          "auth": {
+                            "secret_ref": "generator-credentials"
+                          }
+                        },
+                        "generation_effort": "standard"
                       },
                       "status": {
                         "state": "pending"
@@ -2803,17 +2870,33 @@
                         "tenant": "team-a",
                         "owner": "user-a",
                         "created_at": "2026-10-29T12:00:00Z",
-                        "updated_at": "2026-10-29T12:00:01Z"
+                        "updated_at": "2026-10-29T12:00:15Z"
                       },
                       "request": {
                         "evaluation_goal": "Assess agent safety and tool-use risks",
                         "provider_filter": "inspect",
                         "max_benchmarks": 12,
-                        "strictness": "moderate"
+                        "strictness": "moderate",
+                        "model": {
+                          "name": "generator-model",
+                          "url": "https://generator.example/v1",
+                          "auth": {
+                            "secret_ref": "generator-credentials"
+                          }
+                        },
+                        "generation_effort": "standard"
                       },
                       "status": {
                         "state": "running",
-                        "started_at": "2026-10-29T12:00:01Z"
+                        "started_at": "2026-10-29T12:00:01Z",
+                        "progress": {
+                          "phase": "catalog_discovery",
+                          "updated_at": "2026-10-29T12:00:15Z",
+                          "last_completed_action": {
+                            "name": "search_benchmarks",
+                            "completed_at": "2026-10-29T12:00:15Z"
+                          }
+                        }
                       }
                     }
                   },
@@ -2831,7 +2914,15 @@
                         "evaluation_goal": "Assess agent safety and tool-use risks",
                         "provider_filter": "inspect",
                         "max_benchmarks": 12,
-                        "strictness": "moderate"
+                        "strictness": "moderate",
+                        "model": {
+                          "name": "generator-model",
+                          "url": "https://generator.example/v1",
+                          "auth": {
+                            "secret_ref": "generator-credentials"
+                          }
+                        },
+                        "generation_effort": "standard"
                       },
                       "status": {
                         "state": "completed",
@@ -2893,7 +2984,15 @@
                         "evaluation_goal": "Assess agent safety and tool-use risks",
                         "provider_filter": "inspect",
                         "max_benchmarks": 12,
-                        "strictness": "moderate"
+                        "strictness": "moderate",
+                        "model": {
+                          "name": "generator-model",
+                          "url": "https://generator.example/v1",
+                          "auth": {
+                            "secret_ref": "generator-credentials"
+                          }
+                        },
+                        "generation_effort": "standard"
                       },
                       "status": {
                         "state": "failed",
@@ -2921,7 +3020,15 @@
                         "evaluation_goal": "Assess agent safety and tool-use risks",
                         "provider_filter": "inspect",
                         "max_benchmarks": 12,
-                        "strictness": "moderate"
+                        "strictness": "moderate",
+                        "model": {
+                          "name": "generator-model",
+                          "url": "https://generator.example/v1",
+                          "auth": {
+                            "secret_ref": "generator-credentials"
+                          }
+                        },
+                        "generation_effort": "standard"
                       },
                       "status": {
                         "state": "failed",
@@ -2948,7 +3055,15 @@
                         "evaluation_goal": "Assess agent safety and tool-use risks",
                         "provider_filter": "inspect",
                         "max_benchmarks": 12,
-                        "strictness": "moderate"
+                        "strictness": "moderate",
+                        "model": {
+                          "name": "generator-model",
+                          "url": "https://generator.example/v1",
+                          "auth": {
+                            "secret_ref": "generator-credentials"
+                          }
+                        },
+                        "generation_effort": "standard"
                       },
                       "status": {
                         "state": "cancelled",
@@ -6585,17 +6700,38 @@
       "CollectionGenerationRequest": {
         "type": "object",
         "title": "CollectionGenerationRequest",
-        "description": "Goal and search options for a dry-run collection proposal. The service trims\nthe goal and normalizes the options before persisting the generation job.\nThe model connection and credentials are configured server-side, not supplied\nin this request.\n",
+        "description": "Goal and search options for a dry-run collection proposal. The service trims\nthe goal and normalizes the options before persisting the generation job.\nThe caller supplies the generator model's name and endpoint using the same\nmodel shape as an evaluation job. When authentication is needed, auth.secret_ref\nnames a Secret in the tenant namespace; do not include credentials in this request.\n",
         "required": [
-          "evaluation_goal"
+          "evaluation_goal",
+          "model"
         ],
         "properties": {
           "evaluation_goal": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 2000,
+            "maxLength": 10000,
             "pattern": "\\S",
-            "description": "Non-blank natural-language evaluation goal, up to 2000 characters; leading and trailing whitespace is trimmed."
+            "description": "Non-blank natural-language evaluation goal, up to 10000 characters; leading and trailing whitespace is trimmed."
+          },
+          "model": {
+            "description": "Model that generates the proposal, distinct from any future evaluation target or guardrail model. Both name and url are required for generation; prerecorded evaluation data cannot substitute for a generator connection.\n",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ModelRef"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "url"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            ]
           },
           "provider_filter": {
             "type": "string",
@@ -6605,9 +6741,9 @@
           "max_benchmarks": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 50,
+            "maximum": 100,
             "default": 12,
-            "description": "Maximum number of benchmarks in the generated collection (1 to 50)."
+            "description": "Maximum number of benchmarks in the generated collection (1 to 100)."
           },
           "strictness": {
             "type": "string",
@@ -6618,6 +6754,16 @@
             ],
             "default": "moderate",
             "description": "How conservatively the runner selects and calibrates benchmarks."
+          },
+          "generation_effort": {
+            "type": "string",
+            "enum": [
+              "low",
+              "standard",
+              "high"
+            ],
+            "default": "standard",
+            "description": "Requested generation-effort preset. The service maps this to server-capped iteration, token, and deadline budgets. It may set a model-specific reasoning control only when the selected model/provider supports it. Presets do not promise a fixed completion time and are independent of strictness.\n"
           }
         },
         "additionalProperties": false
@@ -6633,7 +6779,8 @@
             "type": "object",
             "required": [
               "max_benchmarks",
-              "strictness"
+              "strictness",
+              "generation_effort"
             ]
           }
         ]
@@ -6701,6 +6848,66 @@
         },
         "additionalProperties": false
       },
+      "CollectionGenerationProgressAction": {
+        "type": "object",
+        "title": "CollectionGenerationProgressAction",
+        "description": "Name and completion timestamp for the last trusted runner action.",
+        "required": [
+          "name",
+          "completed_at"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "guardrails_check",
+              "search_benchmarks",
+              "get_provider_details",
+              "list_collections",
+              "validate_proposal",
+              "calibrate_proposal",
+              "finalize_proposal"
+            ],
+            "description": "Allowlisted action name. No arguments or action output are included."
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CollectionGenerationProgress": {
+        "type": "object",
+        "title": "CollectionGenerationProgress",
+        "description": "Trusted, bounded progress information for a running generation.",
+        "required": [
+          "phase",
+          "updated_at"
+        ],
+        "properties": {
+          "phase": {
+            "type": "string",
+            "enum": [
+              "guardrails",
+              "catalog_discovery",
+              "model_generation",
+              "validation",
+              "finalization"
+            ],
+            "description": "Current runner phase. Model generation and validation may recur during correction."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time of the last durable progress update; this is not an ETA or heartbeat."
+          },
+          "last_completed_action": {
+            "$ref": "#/components/schemas/CollectionGenerationProgressAction"
+          }
+        },
+        "additionalProperties": false
+      },
       "CollectionGenerationStatus": {
         "type": "object",
         "title": "CollectionGenerationStatus",
@@ -6729,33 +6936,147 @@
             "format": "date-time",
             "description": "Set when the workload reaches a terminal state."
           },
+          "progress": {
+            "$ref": "#/components/schemas/CollectionGenerationProgress",
+            "description": "Present only while running; describes the most recent durable progress update."
+          },
           "error": {
             "$ref": "#/components/schemas/CollectionGenerationStatusError",
             "description": "Required for failed generations; absent in every other state."
           }
         },
-        "if": {
-          "properties": {
-            "state": {
-              "const": "failed"
+        "oneOf": [
+          {
+            "properties": {
+              "state": {
+                "const": "pending"
+              }
+            },
+            "required": [
+              "state"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "error": {}
+                  },
+                  "required": [
+                    "error"
+                  ]
+                },
+                {
+                  "properties": {
+                    "progress": {}
+                  },
+                  "required": [
+                    "progress"
+                  ]
+                }
+              ]
             }
           },
-          "required": [
-            "state"
-          ]
-        },
-        "then": {
-          "required": [
-            "error"
-          ]
-        },
-        "else": {
-          "not": {
+          {
+            "properties": {
+              "state": {
+                "const": "running"
+              }
+            },
             "required": [
+              "state"
+            ],
+            "not": {
+              "properties": {
+                "error": {}
+              },
+              "required": [
+                "error"
+              ]
+            }
+          },
+          {
+            "properties": {
+              "state": {
+                "const": "completed"
+              }
+            },
+            "required": [
+              "state"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "error": {}
+                  },
+                  "required": [
+                    "error"
+                  ]
+                },
+                {
+                  "properties": {
+                    "progress": {}
+                  },
+                  "required": [
+                    "progress"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "properties": {
+              "state": {
+                "const": "failed"
+              },
+              "error": {
+                "$ref": "#/components/schemas/CollectionGenerationStatusError"
+              }
+            },
+            "required": [
+              "state",
               "error"
-            ]
+            ],
+            "not": {
+              "properties": {
+                "progress": {}
+              },
+              "required": [
+                "progress"
+              ]
+            }
+          },
+          {
+            "properties": {
+              "state": {
+                "const": "cancelled"
+              }
+            },
+            "required": [
+              "state"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "error": {}
+                  },
+                  "required": [
+                    "error"
+                  ]
+                },
+                {
+                  "properties": {
+                    "progress": {}
+                  },
+                  "required": [
+                    "progress"
+                  ]
+                }
+              ]
+            }
           }
-        },
+        ],
         "additionalProperties": false
       },
       "CollectionGenerationBenchmarkReason": {
@@ -6850,7 +7171,7 @@
       "CollectionGenerationResult": {
         "type": "object",
         "title": "CollectionGenerationResult",
-        "description": "Completed dry-run proposal. Generation does not create this collection; the\ncaller reviews and separately submits collection to POST /api/v1/evaluations/collections.\nThe YAML and JSON describe the same postable CollectionConfig. A later catalog\nchange may make the proposal invalid at collection-create time.\n",
+        "description": "Completed dry-run proposal. Generation does not create this collection; the\ncaller reviews and separately submits collection to POST /api/v1/evaluations/collections.\nThe YAML and JSON describe the same postable CollectionConfig. A later catalog\nchange may make the proposal invalid at collection-create time. Passing catalog\nvalidation means the selected provider/benchmark pairs and collection shape\nwere valid against the tenant-visible catalog at finalization; it does not\nguarantee execution with a particular target model, judge, dataset, tokenizer,\nadapter image, or disconnected-cluster setup.\n",
         "required": [
           "collection",
           "yaml",
