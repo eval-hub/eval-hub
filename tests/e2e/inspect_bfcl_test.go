@@ -512,8 +512,13 @@ func startPortForward(
 	if err := cmd.Start(); err != nil {
 		return "", nil, fmt.Errorf("start kubectl port-forward: %w", err)
 	}
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
+	// stop() kills kubectl, so Wait reports a signal error that is not actionable
+	// here; the channel only signals that the process finished.
+	done := make(chan struct{}, 1)
+	go func() {
+		_ = cmd.Wait()
+		done <- struct{}{}
+	}()
 
 	stop := func() {
 		if cmd.Process != nil {

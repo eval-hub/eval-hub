@@ -8,6 +8,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/pkg/ociclient"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/oci"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -465,4 +469,59 @@ func TestLocalOCIPublisherIgnoresKubernetesCredentials(t *testing.T) {
 		t.Fatalf("expected Kubernetes credentials to be ignored in local mode: %v", err)
 	}
 	defer func() { _ = publisher.Close() }()
+}
+
+type credentialResolverFunc func(context.Context, oci.OCICredentialRequest) (ociclient.Credentials, error)
+
+func (f credentialResolverFunc) Resolve(ctx context.Context, req oci.OCICredentialRequest) (ociclient.Credentials, error) {
+	return f(ctx, req)
+}
+
+func TestCredentialResolutionUsesOCIHTTPTimeout(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		timeout time.Duration
+		expire  bool
+	}{
+		{name: "default"},
+		{name: "configured", timeout: 45 * time.Second},
+		{name: "expiry", timeout: time.Millisecond, expire: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client, err := NewOCIHTTPClient(&config.Config{Sidecar: &config.SidecarConfig{OCI: &config.SidecarOCIConfig{HTTPTimeout: tc.timeout}}}, false, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var credentialCtx context.Context
+			resolver := credentialResolverFunc(func(ctx context.Context, _ oci.OCICredentialRequest) (ociclient.Credentials, error) {
+				credentialCtx = ctx
+				assertExportBudget(t, ctx, client.Timeout)
+				if tc.expire {
+					<-ctx.Done()
+					return ociclient.Credentials{}, ctx.Err()
+				}
+				return ociclient.Credentials{}, nil
+			})
+			factory := NewOCIPublisherFactory(resolver, client)
+			job := &api.EvaluationJobResource{EvaluationJobConfig: api.EvaluationJobConfig{Exports: &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{Coordinates: api.OCICoordinates{OCIHost: "quay.io", OCIRepository: "org/results"}}}}}
+			parent := context.Background()
+			publisher, err := factory.NewPublisher(parent, job)
+			if tc.expire {
+				if !errors.Is(err, context.DeadlineExceeded) {
+					t.Fatalf("error=%v, want deadline exceeded", err)
+				}
+			} else {
+				if err != nil {
+					t.Fatal(err)
+				}
+				_ = publisher.Close()
+			}
+			if credentialCtx.Err() == nil {
+				t.Fatal("credential context was not released")
+			}
+			if parent.Err() != nil {
+				t.Fatal("credential lookup canceled the push parent")
+			}
+		})
+	}
 }

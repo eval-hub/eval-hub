@@ -19,7 +19,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+      uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
       with:
         egress-policy: audit
 
@@ -39,6 +39,11 @@ jobs:
       uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
       with:
         # Keep in sync with GOLANGCI_LINT_VERSION in the Makefile.
-        version: v2.12.2
+        # v2.15.0 is pinned for the Go toolchain declared in go.mod (go 1.27.3):
+        # it bundles golang.org/x/tools v0.52.0, which understands Go 1.27 export
+        # data. v2.12.2 and v2.13.x fail with "cannot decode ... export data
+        # version 5 is greater than maximum supported version 4"; v2.14.0 is the
+        # oldest release that works, so do not pin below that on go 1.27.3.
+        version: v2.15.0
         # Existing findings are not cleaned up yet; fail only on newly introduced issues.
         only-new-issues: true

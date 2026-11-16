@@ -8,11 +8,12 @@ These tests validate Kubernetes resources created by eval-hub in a real cluster.
 
 ### Prerequisites
 
-- Go 1.26+
+- Go 1.27+
 - A running eval-hub service that is configured with Kubernetes runtime
 - Access to the Kubernetes cluster where resources are created (read-only is sufficient)
 
 Required env vars:
+
 - `SERVER_URL` (API base URL)
 - `KUBERNETES_NAMESPACE`
 - `AUTH_TOKEN`
@@ -21,6 +22,7 @@ Required env vars:
 If any required env var is missing, the tests are skipped.
 
 Optional:
+
 - `FVT_CA_CERT_PATH` for a PEM bundle containing the private CA for the EvalHub API
 - `K8S_TEST_DEBUG=true` for verbose test logs
 
@@ -34,7 +36,8 @@ in-cluster configuration; this setting applies to EvalHub HTTP requests only.
 ### Execute
 
 From the repo root:
-```bash
+
+```shell
 go test -v ./tests/kubernetes/features
 ```
 

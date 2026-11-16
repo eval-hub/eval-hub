@@ -4,9 +4,13 @@
 #
 # dev-deploy records the engine that backs KIND_CLUSTER_NAME next to the private
 # kubeconfig, and every dev script resolves the runtime from that record instead
-# of probing both engines. These helpers resolve the engine, query kind with the
-# matching provider, and read or write the record, so the four scripts share one
-# implementation instead of four near-copies.
+# of probing both engines. resolve_runtime_decision decides which engine a script
+# should use and the evidence it rests on, in one place; each script's
+# detect_container_runtime is a policy table over that evidence, because the same
+# fact calls for a different action depending on what the script is about to do.
+# The remaining helpers query kind with the matching provider and read or write
+# the record, so the four scripts share one implementation instead of four
+# near-copies.
 #
 # Sourced by scripts/dev-deploy.sh, scripts/dev-clean.sh, scripts/dev-demo.sh and
 # scripts/clean-container-storage.sh. The caller sets:
@@ -62,39 +66,6 @@ kind_cluster_in_runtime() {
       ;;
   esac
   grep -Fqx -- "$KIND_CLUSTER_NAME" <<<"$clusters"
-}
-
-# ensure_runtime_owns_existing_cluster fails when the other engine lists
-# KIND_CLUSTER_NAME and the selected one does not. kind only lists the clusters of
-# the engine it is pointed at, so a command that continues under the selected
-# engine would miss the running cluster: a deploy creates a second cluster with
-# the same name and overwrites the private kubeconfig of the one that is running,
-# and a cleanup reports the cluster absent, drops its record, and still removes
-# registry state on an engine the user did not deploy with. The optional second
-# argument names what the caller is about to do: "deploy" (the default), "clean",
-# or "recorded" when the engine comes from the record, which fails with the stale
-# record to remove instead of an "Unset CONTAINER_RUNTIME" hint.
-ensure_runtime_owns_existing_cluster() {
-  local runtime other purpose="${2:-deploy}"
-  runtime="$(canonical_runtime "$1")"
-  # A cluster of this name under the selected engine is used as-is, so the other
-  # engine owning one too changes nothing: this run creates no cluster and
-  # rewrites no kubeconfig, and a cleanup removes only the selected engine's
-  # registry container and image tags.
-  kind_cluster_in_runtime "$runtime" && return 0
-  case "$runtime" in
-    podman) other=docker ;;
-    docker) other=podman ;;
-    *) return 0 ;;
-  esac
-  kind_cluster_in_runtime "$other" || return 0
-  if [[ "$purpose" == recorded ]]; then
-    fail "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $runtime-backed in $RUNTIME_STATE_FILE, but $runtime no longer runs it and $other does. Remove the stale record (rm -- '$RUNTIME_STATE_FILE') to reuse the $other cluster with this script, or remove it and run 'make dev-clean CONTAINER_RUNTIME=$other DELETE_CLUSTER=true' to delete that cluster."
-  fi
-  if [[ "$purpose" == clean ]]; then
-    fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $other, not $runtime. Unset CONTAINER_RUNTIME to clean up with the engine that owns the cluster, or set CONTAINER_RUNTIME=$other."
-  fi
-  fail "Kind cluster '$KIND_CLUSTER_NAME' exists under $other, not $runtime. Unset CONTAINER_RUNTIME to reuse the engine that owns the cluster, or set CONTAINER_RUNTIME=$other."
 }
 
 # recorded_runtime prints the engine dev-deploy recorded for KIND_CLUSTER_NAME, if
@@ -164,6 +135,285 @@ fallback_runtime_order() {
   else
     printf 'podman\ndocker\n'
   fi
+}
+
+# runtime_other prints the container engine that is not $1, and nothing for any
+# other value.
+runtime_other() {
+  case "$1" in
+    podman) printf 'docker\n' ;;
+    docker) printf 'podman\n' ;;
+  esac
+}
+
+# first_reachable_runtime prints the first engine in fallback_runtime_order that
+# is installed and answers, and fails when neither does. It is the last resort of
+# a command that needs a working engine (a deploy, a cleanup, a prune).
+first_reachable_runtime() {
+  local runtime
+  for runtime in $(fallback_runtime_order); do
+    if runtime_is_reachable "$runtime"; then
+      printf '%s\n' "$runtime"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# cluster_owner prints the engine that runs KIND_CLUSTER_NAME, probing the engines
+# in the given order, and fails when neither runs it. $1 is "fallback" (the
+# default: fallback_runtime_order) or "query" (docker before podman, the order
+# dev-demo probes with to report a missing cluster).
+cluster_owner() {
+  local runtime
+  # Splitting the helper's newline-separated output is intended.
+  if [[ "${1:-fallback}" == query ]]; then
+    set -- docker podman
+  else
+    set -- $(fallback_runtime_order)
+  fi
+  for runtime in "$@"; do
+    runtime="$(canonical_runtime "$runtime")"
+    if kind_cluster_in_runtime "$runtime"; then
+      printf '%s\n' "$runtime"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# resolve_runtime_decision [fallback|query|prune] resolves which engine a dev
+# script should use and the evidence it rests on, without logging, exiting, or
+# acting. That decision is written once here; each script's
+# detect_container_runtime is a policy table over the evidence, because the same
+# fact means "fail before you create a duplicate cluster" to a deploy, "fall back
+# to the owner" to a query, and "prune the engine the caller named" to a storage
+# cleanup.
+#
+# $1 is what the caller needs to know. "fallback" (the default) probes for the
+# engine that runs the cluster, and "query" asks docker before podman (the order
+# dev-demo probes with to report a missing cluster). "prune" is for a storage
+# cleanup, which cannot duplicate or destroy a cluster, so an explicit engine is
+# taken as given and no engine is probed for ownership: an engine that stops
+# answering (for example a wedged Docker Desktop) must not hold up reclaiming
+# space. Prune mode therefore asks only whether the engine it was given answers
+# and whether the recorded one is installed, never which cluster either runs.
+#
+# The caller sets KIND_CLUSTER_NAME, RUNTIME_STATE_FILE and (optionally)
+# CONTAINER_RUNTIME, and reads back:
+#
+#   RESOLVED_RUNTIME       canonical engine for the decision, or empty
+#   RESOLVED_EVIDENCE      one term from the table below
+#   RESOLVED_OWNER         the engine kind listed KIND_CLUSTER_NAME for, when a
+#                          probe found it; while a record's engine is stopped that
+#                          proves only that the other engine lists a cluster of
+#                          that name, not that it is the cluster the record names
+#   RESOLVED_RECORDED      canonical engine named by the record, if any
+#   RESOLVED_RECORD_STATE  none | uninstalled | stopped | owned | stale | gone,
+#                          or unchecked in prune mode, where an installed
+#                          recorded engine is not probed
+#
+# Explicit CONTAINER_RUNTIME:
+#   explicit-invalid             not podman or docker
+#   explicit-missing             that engine is not installed or not reachable
+#   explicit-requested           prune mode: it is installed and reachable, so it
+#                                is used as given, with no ownership probe of
+#                                either engine
+#   explicit-owned               it runs the cluster
+#   explicit-no-owner            nothing runs the cluster; it is used
+#   explicit-other-owns          no usable record; the other engine runs it
+#   explicit-recorded-stale      it matches a record whose engine no longer runs
+#                                the cluster; the other engine does
+#   explicit-recorded-unverified it matches a record whose engine is stopped, so
+#                                the record cannot be checked; RESOLVED_OWNER is
+#                                set when the other engine lists a cluster of that
+#                                name, which may not be the recorded one
+#   explicit-mismatch            it differs from a trusted record (owned/stopped)
+#   explicit-mismatch-stale      it differs from a record that no longer runs the
+#                                cluster, while the other engine does
+#   explicit-mismatch-gone       it differs from a record that runs nothing
+# No explicit value:
+#   recorded-owned               the recorded engine runs the cluster
+#   recorded-stale               the record is reachable but the other engine runs
+#                                the cluster: the record is stale
+#   recorded-gone                the recorded engine runs no cluster of that name
+#   recorded-stopped             the recorded engine is installed but not
+#                                reachable, so the record cannot be checked;
+#                                RESOLVED_OWNER is set when the other engine lists
+#                                a cluster of that name, which may not be the
+#                                recorded one: this record is unverified, not stale
+#   owner                        no usable record; this engine runs the cluster
+#   no-owner                     nothing runs the cluster (or could be probed)
+#
+# A record whose engine is installed and runs the cluster answers the ownership
+# question, so the other engine is not probed: that is the point of the record.
+# The other engine is probed only to tell a stale record from a gone cluster, to
+# name the engine that lists the name while the recorded one is stopped, or
+# when no usable record exists.
+resolve_runtime_decision() {
+  local order="${1:-fallback}" explicit="" recorded="" other="" record_state=none
+  RESOLVED_RUNTIME=""
+  RESOLVED_EVIDENCE=""
+  RESOLVED_OWNER=""
+  RESOLVED_RECORDED=""
+  RESOLVED_RECORD_STATE=none
+
+  if [[ -n "${CONTAINER_RUNTIME:-}" ]]; then
+    case "$CONTAINER_RUNTIME" in
+      podman|docker) explicit="$(canonical_runtime "$CONTAINER_RUNTIME")" ;;
+      *)
+        RESOLVED_EVIDENCE=explicit-invalid
+        return 0
+        ;;
+    esac
+  fi
+
+  if [[ -n "$explicit" && "$order" == prune ]]; then
+    # A storage cleanup reclaims space from the engine it was given and cannot
+    # duplicate or destroy a cluster, so ownership corroboration would buy it
+    # nothing: the other engine -- possibly the one that never answers -- is not
+    # probed, and neither is kind. The record is still read, because its engine
+    # name is worth a warning when the caller asked for another one.
+    RESOLVED_RUNTIME="$explicit"
+    if recorded="$(recorded_runtime)"; then
+      recorded="$(canonical_runtime "$recorded")"
+      RESOLVED_RECORDED="$recorded"
+      if runtime_is_installed "$recorded"; then
+        RESOLVED_RECORD_STATE=unchecked
+      else
+        RESOLVED_RECORD_STATE=uninstalled
+      fi
+    fi
+    if runtime_is_reachable "$explicit"; then
+      RESOLVED_EVIDENCE=explicit-requested
+    else
+      RESOLVED_EVIDENCE=explicit-missing
+    fi
+    return 0
+  fi
+
+  if recorded="$(recorded_runtime)"; then
+    recorded="$(canonical_runtime "$recorded")"
+    RESOLVED_RECORDED="$recorded"
+    if ! runtime_is_installed "$recorded"; then
+      # An uninstalled engine cannot describe a reachable cluster, so the record
+      # is ignored; callers may drop it so it cannot reject a later command.
+      record_state=uninstalled
+      recorded=""
+    elif ! runtime_is_reachable "$recorded"; then
+      # The recorded engine cannot be asked, so the record itself cannot be
+      # checked -- but the other engine can still list a cluster of that name,
+      # which a deploy has to name and a prune has to choose. That list does not
+      # prove the recorded cluster is gone: stopping a podman machine stops its
+      # VM, while kind keeps cluster state in node containers, so the recorded
+      # cluster is usually still there. This record is unverified, not stale, and
+      # a caller must not advise removing it.
+      record_state=stopped
+      other="$(runtime_other "$recorded")"
+      if kind_cluster_in_runtime "$other"; then
+        RESOLVED_OWNER="$other"
+      fi
+    elif kind_cluster_in_runtime "$recorded"; then
+      record_state=owned
+    else
+      # The record's engine answers but does not run the cluster: ask the other
+      # engine, the only way to tell a stale record from a gone cluster.
+      other="$(runtime_other "$recorded")"
+      if kind_cluster_in_runtime "$other"; then
+        record_state=stale
+      else
+        record_state=gone
+      fi
+    fi
+  fi
+  RESOLVED_RECORD_STATE="$record_state"
+
+  if [[ -n "$explicit" ]]; then
+    RESOLVED_RUNTIME="$explicit"
+    if ! runtime_is_installed "$explicit"; then
+      RESOLVED_EVIDENCE=explicit-missing
+      return 0
+    fi
+    case "$record_state" in
+      owned|stopped)
+        if [[ "$recorded" != "$explicit" ]]; then
+          RESOLVED_EVIDENCE=explicit-mismatch
+        elif [[ "$record_state" == owned ]]; then
+          RESOLVED_EVIDENCE=explicit-owned
+          RESOLVED_OWNER="$explicit"
+        else
+          RESOLVED_EVIDENCE=explicit-recorded-unverified
+        fi
+        ;;
+      stale)
+        RESOLVED_OWNER="$other"
+        if [[ "$recorded" != "$explicit" ]]; then
+          RESOLVED_EVIDENCE=explicit-mismatch-stale
+        else
+          RESOLVED_EVIDENCE=explicit-recorded-stale
+        fi
+        ;;
+      gone)
+        if [[ "$recorded" != "$explicit" ]]; then
+          RESOLVED_EVIDENCE=explicit-mismatch-gone
+        else
+          RESOLVED_EVIDENCE=explicit-no-owner
+        fi
+        ;;
+      *)
+        # No usable record: ask both engines which one runs the cluster.
+        if ! runtime_is_reachable "$explicit"; then
+          RESOLVED_EVIDENCE=explicit-missing
+        elif kind_cluster_in_runtime "$explicit"; then
+          RESOLVED_EVIDENCE=explicit-owned
+          RESOLVED_OWNER="$explicit"
+        else
+          other="$(runtime_other "$explicit")"
+          if kind_cluster_in_runtime "$other"; then
+            RESOLVED_EVIDENCE=explicit-other-owns
+            RESOLVED_OWNER="$other"
+          else
+            RESOLVED_EVIDENCE=explicit-no-owner
+          fi
+        fi
+        ;;
+    esac
+    return 0
+  fi
+
+  case "$record_state" in
+    owned)
+      RESOLVED_RUNTIME="$recorded"
+      RESOLVED_EVIDENCE=recorded-owned
+      RESOLVED_OWNER="$recorded"
+      return 0
+      ;;
+    stale)
+      RESOLVED_RUNTIME="$recorded"
+      RESOLVED_EVIDENCE=recorded-stale
+      RESOLVED_OWNER="$other"
+      return 0
+      ;;
+    gone)
+      RESOLVED_RUNTIME="$recorded"
+      RESOLVED_EVIDENCE=recorded-gone
+      return 0
+      ;;
+    stopped)
+      RESOLVED_RUNTIME="$recorded"
+      RESOLVED_EVIDENCE=recorded-stopped
+      return 0
+      ;;
+  esac
+
+  if RESOLVED_RUNTIME="$(cluster_owner "$order")"; then
+    RESOLVED_EVIDENCE=owner
+    RESOLVED_OWNER="$RESOLVED_RUNTIME"
+  else
+    RESOLVED_RUNTIME=""
+    RESOLVED_EVIDENCE=no-owner
+  fi
+  return 0
 }
 
 # use_runtime makes ENGINE the selected runtime after checking that it exists and

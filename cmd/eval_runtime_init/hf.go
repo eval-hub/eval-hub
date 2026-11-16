@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -19,50 +19,36 @@ const (
 	envHFRepoID   = "TEST_DATA_HF_REPO_ID"
 	envHFRevision = "TEST_DATA_HF_REVISION"
 	envHFSubPath  = "TEST_DATA_HF_SUBPATH"
-	envHFTimeout  = "TEST_DATA_HF_TIMEOUT"
 	hfTokenKey    = "token"
 	// hfCacheDirName is the Hub cache directory under the test-data emptyDir volume.
 	hfCacheDirName = ".hf-cache"
-
-	terminationMessagePath = "/dev/termination-log"
 )
 
 // hfCacheDir overrides the Hub cache location when non-empty (unit tests only).
 var hfCacheDir string
 
-const (
-	maxTerminationMessageBytes = 4096
-)
-
 // runHF downloads a Hugging Face Hub dataset repository into destDir and writes the
 // resolved commit SHA to init metadata for the sidecar (same contract as git init).
-func runHF() error {
-	repoID := strings.TrimSpace(os.Getenv(envHFRepoID))
+func (d downloader) runHF() error {
+	repoID := strings.TrimSpace(d.source.HF.RepoID)
 	if repoID == "" {
 		return failHF(fmt.Errorf("%s is required", envHFRepoID))
 	}
 
-	revision := strings.TrimSpace(os.Getenv(envHFRevision))
-	subPath := strings.TrimSpace(os.Getenv(envHFSubPath))
+	revision := strings.TrimSpace(d.source.HF.Revision)
+	subPath := strings.TrimSpace(d.source.HF.SubPath)
 	if subPath != "" {
 		if err := validateHFSubPath(subPath); err != nil {
 			return failHF(err)
 		}
 	}
 
-	timeout := defaultTimeout
-	if raw := strings.TrimSpace(os.Getenv(envHFTimeout)); raw != "" {
-		parsed, err := time.ParseDuration(raw)
-		if err != nil {
-			return failHF(fmt.Errorf("invalid %s: %w", envHFTimeout, err))
-		}
-		if parsed <= 0 {
-			return failHF(fmt.Errorf("invalid %s: must be a positive duration", envHFTimeout))
-		}
-		timeout = parsed
+	timeout, err := resolveInitTimeout()
+	if err != nil {
+		return failHF(err)
 	}
 
-	token, err := resolveHFToken()
+	token, err := d.resolveHFToken()
 	if err != nil {
 		return failHF(err)
 	}
@@ -70,42 +56,54 @@ func runHF() error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	commitSHA, err := downloadHFRepo(ctx, repoID, revision, subPath, token)
+	commitSHA, err := d.downloadHFRepo(ctx, repoID, revision, subPath, token)
 	if err != nil {
-		return failHF(err)
+		return failHF(formatHFDownloadError(ctx, timeout, err))
 	}
 
-	if err := writeGitMetadata(commitSHA); err != nil {
+	if err := d.writeGitMetadata(commitSHA); err != nil {
 		return failHF(fmt.Errorf("write git metadata: %w", err))
 	}
 
-	slog.Info("hf source ready", "dest", destDir, "commit_sha", commitSHA)
+	slog.Info("hf source ready", "dest", d.destDir, "commit_sha", commitSHA)
 	return nil
+}
+
+func formatHFDownloadError(ctx context.Context, timeout time.Duration, err error) error {
+	if err == nil {
+		return nil
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil && !errors.Is(err, ctxErr) {
+		err = fmt.Errorf("%w: %v", ctxErr, err)
+	}
+	return wrapInitTimeout("huggingface download", timeout, err)
 }
 
 // resolveHFToken reads the Hugging Face token when secret_ref mounted the credentials
 // volume. No secret dir means public access is allowed. A mounted dir without a valid
 // token key is a misconfiguration (same contract as git auth).
-func resolveHFToken() (string, error) {
-	if _, err := os.Stat(scrtDir); os.IsNotExist(err) {
+func (d downloader) resolveHFToken() (string, error) {
+	if _, err := os.Stat(d.scrtDir); os.IsNotExist(err) {
 		return "", nil
 	}
-	token, err := readSecret(hfTokenKey)
+	token, err := d.readSecret(hfTokenKey)
 	if err != nil {
 		return "", fmt.Errorf("hugging face auth: %w", err)
 	}
 	return token, nil
 }
 
-func effectiveHFCacheDir() string {
-	if strings.TrimSpace(hfCacheDir) != "" {
-		return hfCacheDir
+// effectiveHFCacheDir prefers the source-specific cache over the evaluation default.
+func (d downloader) effectiveHFCacheDir() string {
+	if strings.TrimSpace(d.hfCacheDir) != "" {
+		return d.hfCacheDir
 	}
-	return filepath.Join(destDir, hfCacheDirName)
+	return filepath.Join(d.destDir, hfCacheDirName)
 }
 
-func downloadHFRepo(ctx context.Context, repoID, revision, subPath, token string) (string, error) {
-	cachePath := effectiveHFCacheDir()
+// downloadHFRepo resolves a revision and stages its selected files using this source's cache and credentials.
+func (d downloader) downloadHFRepo(ctx context.Context, repoID, revision, subPath, token string) (string, error) {
+	cachePath := d.effectiveHFCacheDir()
 	if err := os.MkdirAll(cachePath, 0o750); err != nil {
 		return "", fmt.Errorf("create hf cache dir: %w", err)
 	}
@@ -190,16 +188,16 @@ func downloadHFRepo(ctx context.Context, repoID, revision, subPath, token string
 		return "", fmt.Errorf("snapshot path %q is not a directory", snapshotRel)
 	}
 
-	if err := stageHFFiles(cacheDir, commitSHA, repoFiles, subPath, destDir); err != nil {
+	if err := stageHFFiles(ctx, cacheDir, commitSHA, repoFiles, subPath, d.destDir); err != nil {
 		return "", fmt.Errorf("stage repository: %w", err)
 	}
 
-	if err := cleanupHFCache(); err != nil {
+	if err := d.cleanupHFCache(); err != nil {
 		slog.Warn("failed to remove hf cache after staging", "error", err)
 	}
 
-	if !destHasData(destDir) {
-		return "", fmt.Errorf("no files were staged under %s", destDir)
+	if !destHasData(d.destDir) {
+		return "", fmt.Errorf("no files were staged under %s", d.destDir)
 	}
 
 	return commitSHA, nil
@@ -228,7 +226,10 @@ func revisionOrDefault(revision string) string {
 	return "default"
 }
 
-func stageHFFiles(cacheDir, commitSHA string, repoFiles []string, subPath, dst string) error {
+func stageHFFiles(ctx context.Context, cacheDir, commitSHA string, repoFiles []string, subPath, dst string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := clearDestDir(dst); err != nil {
 		return err
 	}
@@ -245,6 +246,9 @@ func stageHFFiles(cacheDir, commitSHA string, repoFiles []string, subPath, dst s
 	defer func() { _ = dstRoot.Close() }()
 
 	for _, repoFile := range repoFiles {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		srcRel, err := resolveHFRepoFileRel(cacheDir, commitSHA, repoFile)
 		if err != nil {
 			return fmt.Errorf("read repository file %q: %w", repoFile, err)
@@ -258,7 +262,7 @@ func stageHFFiles(cacheDir, commitSHA string, repoFiles []string, subPath, dst s
 				return err
 			}
 		}
-		if err := copyHFRepoFile(cacheRoot, dstRoot, srcRel, destRel); err != nil {
+		if err := copyHFRepoFile(ctx, cacheRoot, dstRoot, srcRel, destRel); err != nil {
 			return err
 		}
 	}
@@ -323,7 +327,10 @@ func resolveHFRepoFileRel(cacheDir, commitSHA, repoFile string) (string, error) 
 	return rel, nil
 }
 
-func copyHFRepoFile(cacheRoot, dstRoot *os.Root, srcRel, dstRel string) error {
+func copyHFRepoFile(ctx context.Context, cacheRoot, dstRoot *os.Root, srcRel, dstRel string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	in, err := cacheRoot.Open(srcRel)
 	if err != nil {
 		return err
@@ -333,14 +340,17 @@ func copyHFRepoFile(cacheRoot, dstRoot *os.Root, srcRel, dstRel string) error {
 	if err != nil {
 		return err
 	}
-	if _, err = io.Copy(out, in); err != nil {
+	if _, err = copyWithContext(ctx, out, in); err != nil {
 		_ = out.Close()
 		return err
 	}
 	return out.Close()
 }
 
-func stageHFSubPath(snapshotRoot *os.Root, subPath, dst string) error {
+func stageHFSubPath(ctx context.Context, snapshotRoot *os.Root, subPath, dst string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	cleanSub := filepath.Clean(filepath.FromSlash(subPath))
 	info, err := snapshotRoot.Stat(cleanSub)
 	if err != nil {
@@ -353,7 +363,7 @@ func stageHFSubPath(snapshotRoot *os.Root, subPath, dst string) error {
 			return fmt.Errorf("open sub_path root: %w", err)
 		}
 		defer func() { _ = subRoot.Close() }()
-		return copyDirFromRoot(subRoot, dst)
+		return copyDirFromRoot(ctx, subRoot, dst)
 	}
 
 	if err := os.MkdirAll(dst, 0o750); err != nil {
@@ -364,7 +374,7 @@ func stageHFSubPath(snapshotRoot *os.Root, subPath, dst string) error {
 		return err
 	}
 	defer func() { _ = dstRoot.Close() }()
-	return copyFileBetweenRoots(snapshotRoot, dstRoot, cleanSub)
+	return copyFileBetweenRoots(ctx, snapshotRoot, dstRoot, cleanSub)
 }
 
 func validateHFSubPath(subPath string) error {
@@ -403,6 +413,10 @@ func classifyHFError(repoID string, authenticated bool, err error) error {
 
 	slog.Error("hugging face hub error", "repo_id", repoID, "error", err)
 
+	if errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf("failed to download repository %s from Hugging Face Hub: %w", repoID, context.DeadlineExceeded)
+	}
+
 	lower := strings.ToLower(err.Error())
 	// HF returns 401 for missing and private datasets without a token; 404 when the repo
 	// is explicitly not found. Use one operator-facing message for both cases.
@@ -434,9 +448,10 @@ func isHFGatedRepoError(lower string) bool {
 		(strings.Contains(lower, "gated") && !strings.Contains(lower, "repository not found"))
 }
 
-func cleanupHFCache() error {
-	cache := effectiveHFCacheDir()
-	if !pathWithinBase(destDir, cache) {
+// cleanupHFCache removes only caches inside the staged data directory; external caches remain available.
+func (d downloader) cleanupHFCache() error {
+	cache := d.effectiveHFCacheDir()
+	if !pathWithinBase(d.destDir, cache) {
 		return nil
 	}
 	return os.RemoveAll(cache)
@@ -484,39 +499,5 @@ func destHasData(root string) bool {
 
 func failHF(err error) error {
 	slog.Error("hf init failed", "error", err)
-	writeTerminationMessage(err.Error())
 	return err
-}
-
-func writeTerminationMessage(message string) {
-	text := strings.TrimSpace(message)
-	if text == "" {
-		return
-	}
-	encoded := []byte(text)
-	if len(encoded) > maxTerminationMessageBytes {
-		encoded = encoded[:maxTerminationMessageBytes]
-	}
-	if writeErr := writeTerminationMessageFile(encoded); writeErr != nil {
-		slog.Warn("failed to write termination message", "error", writeErr)
-	}
-}
-
-// writeTerminationMessageFile writes via os.Root so TERMINATION_MESSAGE_PATH cannot escape its directory.
-func writeTerminationMessageFile(content []byte) error {
-	path := strings.TrimSpace(os.Getenv("TERMINATION_MESSAGE_PATH"))
-	if path == "" {
-		path = terminationMessagePath
-	}
-	clean := filepath.Clean(path)
-	dir, name := filepath.Split(clean)
-	if name == "" || name == "." || name == ".." {
-		return fmt.Errorf("invalid termination message path %q", path)
-	}
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = root.Close() }()
-	return root.WriteFile(name, append(content, '\n'), 0o600)
 }

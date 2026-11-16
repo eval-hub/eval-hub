@@ -162,6 +162,47 @@ func TestTokenizerEnvironmentOverride(t *testing.T) {
 	}
 }
 
+func TestTokenizerPathEnvironmentOverride(t *testing.T) {
+	for _, tc := range []struct {
+		name, parameters, value string
+		set                     bool
+		want                    any
+	}{
+		{name: "environment supplies the tokenizer path", parameters: `{}`,
+			value: "hf-internal-testing/llama-tokenizer", set: true, want: "hf-internal-testing/llama-tokenizer"},
+		{name: "surrounding whitespace is trimmed", parameters: `{}`,
+			value: "  org/tokenizer  ", set: true, want: "org/tokenizer"},
+		{name: "unset keeps the model name fallback", parameters: `{}`},
+		{name: "blank keeps the model name fallback", parameters: `{}`, value: "   ", set: true},
+		{name: "pinned fixture tokenizer path wins", parameters: `{"tokenizer_path":"/test_data/tokenizer"}`,
+			value: "org/other", set: true, want: "/test_data/tokenizer"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeFixture(t, t.TempDir(), "ruler", "niah_single_1",
+				`{"parameters":`+tc.parameters+`,"tokenizer_path_env":"RULER_TOKENIZER","timeout":"5m"}`)
+			f, err := loadFixture(path, func(key string) (string, bool) {
+				if key != "RULER_TOKENIZER" {
+					t.Fatalf("unexpected environment lookup: %s", key)
+				}
+				return tc.value, tc.set && tc.value != ""
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, ok := f.Parameters["tokenizer_path"]
+			if tc.want == nil {
+				if ok {
+					t.Fatalf("tokenizer_path = %v, want no override", got)
+				}
+				return
+			}
+			if got != tc.want {
+				t.Fatalf("tokenizer_path = %v, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func writeFixture(t *testing.T, root, provider, benchmark, body string) string {
 	t.Helper()
 	path := fixturePath(root, provider, benchmark)
@@ -630,4 +671,53 @@ func TestSmokeEnvAliases(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProgressInterval(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		value   string
+		want    time.Duration
+		wantErr bool
+	}{
+		{"default", "", 5 * time.Minute, false},
+		{"disabled", "0", 0, false},
+		{"explicit", "30s", 30 * time.Second, false},
+		{"whitespace", " 1m ", time.Minute, false},
+		{"invalid", "soon", 0, true},
+		{"negative", "-1m", 0, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("BENCHMARK_PROGRESS_INTERVAL", tc.value)
+			got, err := progressInterval()
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("progressInterval() error = %v, wantErr %v", err, tc.wantErr)
+			}
+			if !tc.wantErr && got != tc.want {
+				t.Fatalf("progressInterval() = %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBenchmarkProgressLine(t *testing.T) {
+	progress := &benchmarkProgress{}
+	progress.selected.Add(3)
+	progress.running.Add(1)
+	progress.finished.Add(1)
+	progress.passed.Add(1)
+	want := "benchmarks: total=3 finished=1 running=1 passed=1 failed=0 skipped=0 remaining=2"
+	if got := progress.line(); got != want {
+		t.Fatalf("line() = %q, want %q", got, want)
+	}
+}
+
+func TestBenchmarkProgressHeartbeatStops(t *testing.T) {
+	progress := &benchmarkProgress{}
+	progress.selected.Add(1)
+	stop := progress.heartbeat(t, time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
+	stop()
+	// A disabled heartbeat must still return a usable stop function.
+	progress.heartbeat(t, 0)()
 }

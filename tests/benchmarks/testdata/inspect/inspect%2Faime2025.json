@@ -5,5 +5,5 @@
     "max_tasks": 1,
     "num_examples": 1
   },
-  "timeout": "5m"
+  "timeout": "15m"
 }

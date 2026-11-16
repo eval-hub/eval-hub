@@ -678,6 +678,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I wait for the evaluation job status to match "([^"]*)"$`, tc.iWaitForEvaluationJobStatusToMatch)
 
 	// OCI artifact steps
+	ctx.Step(`^I wait for the OCI export status to be "([^"]*)"$`, tc.iWaitForOCIExportStatus)
 	ctx.Step(`^I fetch the OCI manifest for repository "([^"]*)" and tag "([^"]*)"$`, tc.iFetchOCIManifestByRepoAndTag)
 	ctx.Step(`^the OCI manifest should not exist$`, tc.theOCIManifestShouldNotExist)
 	ctx.Step(`^the OCI manifest should contain annotation "([^"]*)" with value "([^"]*)"$`, tc.theOCIManifestShouldContainAnnotation)

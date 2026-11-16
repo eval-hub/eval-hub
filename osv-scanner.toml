@@ -3,3 +3,11 @@ id = "GO-2026-5932"
 ignoreUntil = 2026-12-31 # Force a re-verification for this exception
 # https://pkg.go.dev/vuln/GO-2026-5932
 reason = "We do not use OpenPGP in EvalHub"
+
+# Consumed by `make govulncheck` through scripts/check_govulncheck_waivers.py as
+# well as by osv-scanner, so both scanners share one waiver record.
+[[IgnoredVulns]]
+id = "GO-2026-6859"
+ignoreUntil = 2026-12-11 # Re-verify: drop once go-toolset publishes go1.27.4 (or go1.26.11)
+# https://pkg.go.dev/vuln/GO-2026-6859 (CVE-2026-97054)
+reason = "net/http HTTP/1 MaxBytesReader header race, fixed in go1.27.4/go1.26.11, but registry.access.redhat.com/ubi10/go-toolset:1.27 publishes only go1.27.3, so go.mod cannot move yet (CLAUDE.md). EvalHub installs MaxBytesReader in NewRequestWrapper (internal/eval_hub/server/execution_context.go) but reads the body before a handler writes response headers, so the concurrent read/write the advisory needs is not reachable from the request path."

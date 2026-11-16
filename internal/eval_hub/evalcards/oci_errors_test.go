@@ -33,7 +33,7 @@ func TestOCITargetKubernetesCredentialFailures(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			factory := NewOCIPublisherFactory(oci.NewKubernetesCredentialResolver(stubDockerConfigSecretGetter{data: tc.data, err: tc.err}), http.DefaultClient)
 			job := &api.EvaluationJobResource{Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1", Tenant: "tenant-a"}}, EvaluationJobConfig: api.EvaluationJobConfig{Exports: &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{Coordinates: api.OCICoordinates{OCIHost: "quay.io", OCIRepository: "team/results"}, K8s: &api.OCIConnectionConfig{Connection: "connection"}}}}}
-			_, err := NewOCITarget(factory, nil).Export(context.Background(), job, cards.NewEvaluationCard(job))
+			_, err := NewOCITarget(factory, nil, 0).Export(context.Background(), job, cards.NewEvaluationCard(job))
 			var exportErr *OCIExportError
 			if !errors.As(err, &exportErr) || exportErr.Operation != "initialize OCI publisher and resolve registry credentials" || !strings.Contains(exportErr.Error(), tc.reason) {
 				t.Fatalf("error=%v", err)
@@ -74,7 +74,7 @@ func TestOCITargetPublicationFailurePreservesRegistryResponse(t *testing.T) {
 	}))
 	defer srv.Close()
 	job := &api.EvaluationJobResource{Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}}, EvaluationJobConfig: api.EvaluationJobConfig{Exports: &api.EvaluationExports{OCI: &api.EvaluationExportsOCI{Coordinates: api.OCICoordinates{OCIHost: srv.URL, OCIRepository: "team/results"}}}}}
-	target := NewOCITarget(NewOCIPublisherFactory(oci.NewLocalCredentialResolver(), srv.Client()), nil)
+	target := NewOCITarget(NewOCIPublisherFactory(oci.NewLocalCredentialResolver(), srv.Client()), nil, 0)
 	result, err := target.Export(context.Background(), job, cards.NewEvaluationCard(job))
 	var exportErr *OCIExportError
 	if !errors.As(err, &exportErr) || exportErr.Operation != "publish evaluation card to OCI" || !strings.Contains(err.Error(), message) || result != nil {

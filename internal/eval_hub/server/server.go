@@ -93,6 +93,7 @@ func NewServer(logger *slog.Logger,
 		MLFlowClient:           mlflowClient,
 		MLFlowWorkspaceSupport: mlflowWorkspace,
 		OCIPublisherFactory:    ociFactory,
+		OCIPushTimeout:         serviceConfig.EffectiveOCIPushTimeout(),
 	})
 
 	return &Server{
