@@ -1,0 +1,18 @@
+type: object
+title: CollectionGenerationProgress
+description: Trusted, bounded progress information for a running generation.
+required:
+  - phase
+  - updated_at
+properties:
+  phase:
+    type: string
+    enum: [guardrails, catalog_discovery, model_generation, validation, finalization]
+    description: Current runner phase. Model generation and validation may recur during correction.
+  updated_at:
+    type: string
+    format: date-time
+    description: Time of the last durable progress update; this is not an ETA or heartbeat.
+  last_completed_action:
+    $ref: ./CollectionGenerationProgressAction.yaml
+additionalProperties: false

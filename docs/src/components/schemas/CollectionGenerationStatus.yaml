@@ -15,17 +15,65 @@ properties:
     type: string
     format: date-time
     description: Set when the workload reaches a terminal state.
+  progress:
+    $ref: ./CollectionGenerationProgress.yaml
+    description: Present only while running; describes the most recent durable progress update.
   error:
     $ref: ./CollectionGenerationStatusError.yaml
     description: Required for failed generations; absent in every other state.
-if:
-  properties:
-    state:
-      const: failed
-  required: [state]
-then:
-  required: [error]
-else:
-  not:
-    required: [error]
+oneOf:
+  - properties:
+      state:
+        const: pending
+    required: [state]
+    not:
+      anyOf:
+        - properties:
+            error: {}
+          required: [error]
+        - properties:
+            progress: {}
+          required: [progress]
+  - properties:
+      state:
+        const: running
+    required: [state]
+    not:
+      properties:
+        error: {}
+      required: [error]
+  - properties:
+      state:
+        const: completed
+    required: [state]
+    not:
+      anyOf:
+        - properties:
+            error: {}
+          required: [error]
+        - properties:
+            progress: {}
+          required: [progress]
+  - properties:
+      state:
+        const: failed
+      error:
+        $ref: ./CollectionGenerationStatusError.yaml
+    required: [state, error]
+    not:
+      properties:
+        progress: {}
+      required: [progress]
+  - properties:
+      state:
+        const: cancelled
+    required: [state]
+    not:
+      anyOf:
+        - properties:
+            error: {}
+          required: [error]
+        - properties:
+            progress: {}
+          required: [progress]
 additionalProperties: false
