@@ -233,7 +233,6 @@ func stampBenchmarkTimestamps(benchmark *api.BenchmarkStatus, now time.Time) {
 }
 
 func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runStatus *api.StatusEvent, benchmarkStatus *api.BenchmarkStatus, receivedAt time.Time) {
-	benchmarkStatus.CreatedAt = api.DateTimeToString(time.Now().UTC())
 	// Only the first accepted running event may supply a start time. In particular,
 	// timestamps on pending or terminal events must not invent a runtime start.
 	if benchmarkStatus.Status != api.StateRunning {
@@ -261,9 +260,7 @@ func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runSt
 			if api.IsBenchmarkTerminalState(benchmark.Status) && !api.IsBenchmarkTerminalState(benchmarkStatus.Status) {
 				return
 			}
-			if benchmark.CreatedAt != "" {
-				benchmarkStatus.CreatedAt = benchmark.CreatedAt
-			}
+			benchmarkStatus.CreatedAt = benchmark.CreatedAt
 			if benchmark.StartedAt != "" {
 				benchmarkStatus.StartedAt = benchmark.StartedAt
 			}

@@ -4357,7 +4357,7 @@
             "type": "string",
             "format": "date-time",
             "readOnly": true,
-            "description": "Server-managed RFC3339 creation time, set from the service's current time when the evaluation job is created, before runtime execution. Set for every benchmark, including benchmarks that never start, and preserved across subsequent status events. Independent of the evaluation job's database-generated resource.created_at. For older jobs missing benchmark creation metadata, populated on the first accepted benchmark status event.\n"
+            "description": "Server-managed RFC3339 creation time, set from the service's current time when the evaluation job is created, before runtime execution. Set for every benchmark, including benchmarks that never start, and preserved across subsequent status events. Independent of the evaluation job's database-generated resource.created_at. Omitted if it was not recorded when the evaluation job was created; status events do not populate it.\n"
           },
           "updated_at": {
             "type": "string",

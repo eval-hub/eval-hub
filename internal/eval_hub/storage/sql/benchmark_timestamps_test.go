@@ -220,7 +220,7 @@ func TestBenchmarkStartUsesOnlyFirstRunningEvent(t *testing.T) {
 
 // Jobs persisted before benchmark timestamps were introduced may have no
 // benchmark status entries, or entries without creation metadata.
-func TestBenchmarkEventInitializesMissingCreationTime(t *testing.T) {
+func TestBenchmarkEventsDoNotBackfillCreationTime(t *testing.T) {
 	for _, initializeStatus := range []bool{false, true} {
 		t.Run(map[bool]string{false: "missing status", true: "missing timestamps"}[initializeStatus], func(t *testing.T) {
 			store, job := newBenchmarkTimestampJobWithStatus(t, false)
@@ -233,23 +233,15 @@ func TestBenchmarkEventInitializesMissingCreationTime(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			before := time.Now().UTC().Truncate(time.Second)
-			var firstCreation api.DateTime
-			for _, state := range []api.State{api.StateRunning, api.StateCompleted} {
+			for _, state := range []api.State{api.StatePending, api.StateRunning, api.StateCompleted} {
 				if err := store.UpdateEvaluationJob(job.Resource.ID, &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 					ID: "repeated", ProviderID: "provider", Status: state,
 				}}); err != nil {
 					t.Fatal(err)
 				}
 				status := readBenchmarkTimestampStatus(t, store, job.Resource.ID, 0)
-				created, err := api.DateTimeFromString(status.CreatedAt)
-				if err != nil || created.Before(before) || created.After(time.Now()) {
-					t.Fatalf("%s event did not use the service's current time: %+v (%v)", state, status, err)
-				}
-				if firstCreation == "" {
-					firstCreation = status.CreatedAt
-				} else if status.CreatedAt != firstCreation {
-					t.Fatalf("%s event replaced creation time: got %q, want %q", state, status.CreatedAt, firstCreation)
+				if status.CreatedAt != "" {
+					t.Fatalf("%s event backfilled missing creation time: %+v", state, status)
 				}
 			}
 		})
