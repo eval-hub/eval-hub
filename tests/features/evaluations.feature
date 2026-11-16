@@ -386,11 +386,61 @@ Feature: Evaluations Endpoint
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "running" at path "$.status.state"
+    And the response should have schema as:
+    """
+      {
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "required": ["benchmarks"],
+            "properties": {
+              "benchmarks": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "required": ["created_at", "updated_at"],
+                  "properties": {
+                    "created_at": {"type": "string", "format": "date-time"},
+                    "updated_at": {"type": "string", "format": "date-time"}
+                  },
+                  "not": {"required": ["completed_at"]}
+                }
+              }
+            }
+          }
+        }
+      }
+    """
     When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_completed.json"
     Then the response code should be 204
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     And the response should contain the value "completed" at path "$.status.state"
+    And the response should have schema as:
+    """
+      {
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "required": ["benchmarks"],
+            "properties": {
+              "benchmarks": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "required": ["created_at", "updated_at", "completed_at"],
+                  "properties": {
+                    "created_at": {"type": "string", "format": "date-time"},
+                    "updated_at": {"type": "string", "format": "date-time"},
+                    "completed_at": {"type": "string", "format": "date-time"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    """
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 409
     And the response should contain the value "can not be cancelled because" at path "$.message"

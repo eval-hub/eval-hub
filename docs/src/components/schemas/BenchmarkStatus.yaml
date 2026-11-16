@@ -18,6 +18,22 @@ properties:
     $ref: ./MessageInfo.yaml
   warning_message:
     $ref: ./MessageInfo.yaml
+  created_at:
+    type: string
+    format: date-time
+    readOnly: true
+    description: >
+      Server-managed RFC3339 time of the first running status event received
+      for this benchmark. Omitted until a running event is received; a benchmark
+      that terminates without reporting running has no creation timestamp.
+  updated_at:
+    type: string
+    format: date-time
+    readOnly: true
+    description: >
+      Server-managed RFC3339 time of the most recent accepted update to this
+      benchmark, including pending events. Updates to other benchmarks do not
+      change this timestamp.
   started_at:
     type: string
     format: date-time
@@ -25,4 +41,8 @@ properties:
   completed_at:
     type: string
     format: date-time
-    description: RFC3339 completion time
+    description: >
+      RFC3339 time the benchmark finished successfully, failed, or was cancelled.
+      Omitted until the benchmark reaches a terminal state. Uses the runtime's
+      completion time when supplied, otherwise the server time. Preserved
+      across subsequent status events.

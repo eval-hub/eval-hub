@@ -3,6 +3,7 @@ package sql
 import (
 	"database/sql"
 	"encoding/json"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
@@ -77,12 +78,18 @@ func (s *sqlStorage) UpdateEvaluationJobStatus(id string, state api.OverallState
 
 		benchmarks := evaluationJob.Status.Benchmarks
 
-		// When cancelling a job, cascade cancellation to all non-terminal benchmarks
-		if state == api.OverallStateCancelled {
+		// Finalize unfinished benchmarks when the job is cancelled or cannot start.
+		if state == api.OverallStateCancelled || state == api.OverallStateFailed {
+			benchmarkState := api.StateCancelled
+			if state == api.OverallStateFailed {
+				benchmarkState = api.StateFailed
+			}
+			now := time.Now()
 			for i := range benchmarks {
 				if !api.IsBenchmarkTerminalState(benchmarks[i].Status) {
-					benchmarks[i].Status = api.StateCancelled
+					benchmarks[i].Status = benchmarkState
 					benchmarks[i].ErrorMessage = message
+					stampBenchmarkTimestamps(&benchmarks[i], now)
 				}
 			}
 		}
@@ -216,7 +223,23 @@ func (s *sqlStorage) getOverallJobStatus(txn *sql.Tx, job *api.EvaluationJobReso
 	}, api.MessageOriginServer), nil
 }
 
+// stampBenchmarkTimestamps fills server-managed timestamps, including completion
+// when a terminal runtime event omitted its completion time. Creation marks the
+// first running event, not submission of the containing evaluation job.
+func stampBenchmarkTimestamps(benchmark *api.BenchmarkStatus, now time.Time) {
+	if benchmark.CreatedAt == "" && benchmark.Status == api.StateRunning {
+		benchmark.CreatedAt = api.DateTimeToString(now.UTC())
+	}
+	benchmark.UpdatedAt = api.DateTimeToString(now.UTC())
+	if api.IsBenchmarkTerminalState(benchmark.Status) && benchmark.CompletedAt == "" {
+		benchmark.CompletedAt = benchmark.UpdatedAt
+	}
+}
+
 func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runStatus *api.StatusEvent, benchmarkStatus *api.BenchmarkStatus) {
+	if !api.IsBenchmarkTerminalState(benchmarkStatus.Status) {
+		benchmarkStatus.CompletedAt = ""
+	}
 	if job.Status == nil {
 		job.Status = &api.EvaluationJobStatus{
 			EvaluationJobState: api.EvaluationJobState{
@@ -234,10 +257,19 @@ func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runSt
 			if api.IsBenchmarkTerminalState(benchmark.Status) && !api.IsBenchmarkTerminalState(benchmarkStatus.Status) {
 				return
 			}
+			benchmarkStatus.CreatedAt = benchmark.CreatedAt
+			if benchmark.StartedAt != "" {
+				benchmarkStatus.StartedAt = benchmark.StartedAt
+			}
+			if api.IsBenchmarkTerminalState(benchmark.Status) && benchmark.CompletedAt != "" {
+				benchmarkStatus.CompletedAt = benchmark.CompletedAt
+			}
+			stampBenchmarkTimestamps(benchmarkStatus, time.Now())
 			job.Status.Benchmarks[index] = *benchmarkStatus
 			return
 		}
 	}
+	stampBenchmarkTimestamps(benchmarkStatus, time.Now())
 	job.Status.Benchmarks = append(job.Status.Benchmarks, *benchmarkStatus)
 }
 
