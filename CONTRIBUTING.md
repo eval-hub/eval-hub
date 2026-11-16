@@ -487,7 +487,7 @@ Pull the branch and run the suites yourself when the change is risky:
 
 ```bash
 gh pr checkout <number>
-make clean test-all          # unit tests, FVT, and FVT against a started server
+make clean test-all          # unit tests + FVT (one pass, against a started server)
 pre-commit run --all-files
 ```
 

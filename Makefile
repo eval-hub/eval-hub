@@ -1,5 +1,5 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint validate-configs test test-e2e test-fuzz test-fvt-server test-fvt-server-local test-fvt-server-local-mlflow test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build clean-container-storage clean-container-storage-help
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint govulncheck validate-configs test test-fuzz test-fvt-server test-fvt-server-local test-fvt-server-local-mlflow test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build clean-container-storage clean-container-storage-help
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint validate-configs test test-e2e test-fuzz test-fvt test-fvt-server test-fvt-server-local test-fvt-server-local-mlflow test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build clean-container-storage clean-container-storage-help
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint govulncheck validate-configs test test-fuzz test-fvt test-fvt-server test-fvt-server-local test-fvt-server-local-mlflow test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build clean-container-storage clean-container-storage-help
 
 GOPATH := $(shell go env GOPATH)
 # Honour a configured GOBIN, falling back to GOPATH/bin when it is unset, so
@@ -430,7 +430,10 @@ test-coverage: $(BIN_DIR) ## Run unit tests with coverage
 	@go tool cover -html=$(BIN_DIR)/coverage-init.out -o $(BIN_DIR)/coverage-init.html
 	@echo "Coverage report generated: $(BIN_DIR)/coverage.html and $(BIN_DIR)/coverage-init.html"
 
-test-all: test test-scripts test-fvt test-fvt-server test-mcp-fvt ## Run all tests (unit + script regressions + FVT)
+# `test-fvt-server` already runs the FVT suite (through `test-fvt`), so listing
+# `test-fvt` here as well would run the whole suite twice. One FVT pass, against
+# a real started server, is what `test-all` and CI need.
+test-all: test test-scripts test-fvt-server test-mcp-fvt ## Run all tests (unit + script regressions + FVT against a started server)
 
 test-help: ## Display Go test flags documentation
 	@go help testflag
@@ -610,6 +613,10 @@ generate-benchmark-configs: ## Create missing per-benchmark smoke fixtures from 
 test-setup: venv ## Set up Python test environment (venv + eval-hub-sdk adapter)
 	@uv pip install "eval-hub-sdk[adapter]>=1.0.4"
 
+# One godog pass per target: `test-fvt` is the only place that invokes the FVT
+# suite (tests/features). `test-fvt-server` layers a started server on top of it
+# by calling it through make, so never list `test-fvt` next to `test-fvt-server`
+# in the same target: the recursive make would run the whole suite twice.
 test-fvt: $(BIN_DIR) test-setup ## Run FVT (Functional Verification Tests) using godog
 	@echo "Running FVT tests..."
 	@if [ -f $(VENV_DIR)/bin/activate ]; then . $(VENV_DIR)/bin/activate; else . $(VENV_DIR)/Scripts/activate; fi && bash -c 'set -o pipefail; go test ${FVT_TESTS} ${FVT_OUTPUT} "${FVT_TAGS}" -timeout=$(GO_TEST_TIMEOUT) -v -race | ${PWD}/scripts/grcat ${PWD}/.conf.go-integration-test'
@@ -623,20 +630,31 @@ test-fvt-server-local:
 test-fvt-server-local-mlflow: ## Run FVT (incl. @mlflow) against a local server; requires a running MLflow (see tests/mlflow)
 	@FVT_TAGS="--godog.tags=~@ignore && ~@otel && ~@cluster && ~@benchmark_providers" make test-fvt-server
 
-test-fvt-coverage: $(BIN_DIR)## Run integration (FVT) tests with coverage
-	@echo "Running integration (FVT) tests with coverage..."
-	@go test ${FVT_TESTS} ${FVT_OUTPUT} "${FVT_TAGS}" -timeout=$(GO_TEST_TIMEOUT) -v -race -coverprofile=$(BIN_DIR)/coverage-fvt.out -covermode=atomic
-	@go tool cover -html=$(BIN_DIR)/coverage-fvt.out -o $(BIN_DIR)/coverage-fvt.html
-	@echo "Coverage report generated: $(BIN_DIR)/coverage-fvt.html"
+# Historical name for the covered FVT pass. It used to run `go test
+# -coverprofile` against the embedded server, but the tests/features TestMain
+# runs godog without calling m.Run(), so Go never flushes the profile and the
+# file only ever contained "mode: atomic". Point it at the instrumented-server
+# pass below so there is a single covered implementation and the suite can never
+# be run twice by chaining the two.
+test-fvt-coverage: test-fvt-server-coverage ## Alias for test-fvt-server-coverage (single covered FVT pass)
 
-test-fvt-server-coverage: start-service-coverage ## Run FVT tests using godog against a running server with coverage
+# The FVT suite runs exactly once here: start-service-coverage runs the
+# -cover instrumented server, GOCOVERDIR collects its counters while `test-fvt`
+# exercises it once, and covdata turns them into the text profile Codecov
+# uploads. test-fvt-coverage is an alias for this target; do not add a second
+# `test-fvt` invocation, which would run the suite again and overwrite
+# coverage-fvt.out.
+test-fvt-server-coverage: start-service-coverage ## Run FVT tests using godog once against a running server with coverage
 	@echo "Running FVT tests with coverage against a running server..."
 	@GOCOVERDIR="${BIN_DIR}" SERVER_URL="${SERVER_URL}" make test-fvt test-mcp-fvt; status=$$?; make stop-service; exit $$status
 	go tool covdata textfmt -i ${BIN_DIR} -o ${BIN_DIR}/coverage-fvt.out
 	@go tool cover -html=$(BIN_DIR)/coverage-fvt.out -o $(BIN_DIR)/coverage-fvt.html
 	@echo "Coverage report generated: $(BIN_DIR)/coverage-fvt.html"
 
-test-all-coverage: test-coverage test-fvt-server-coverage ## Run all tests (unit + FVT) with coverage
+# test-coverage is pure unit testing (no godog); test-fvt-server-coverage is the
+# single covered FVT pass. Keeping the two apart is what stops the suite running
+# twice, as `make test-all` used to do with test-fvt + test-fvt-server.
+test-all-coverage: test-coverage test-fvt-server-coverage ## Run all tests (unit + one covered FVT pass) with coverage
 
 ${GOBIN}/go-cover-treemap:
 	go install github.com/nikolaydubina/go-cover-treemap@latest
