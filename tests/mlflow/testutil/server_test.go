@@ -169,6 +169,32 @@ func TestNextAvailablePort(t *testing.T) {
 	})
 }
 
+func TestShouldRetryStart(t *testing.T) {
+	t.Run("retries when another process claimed the port", func(t *testing.T) {
+		useFakeBinder(t, defaultPort)
+
+		if !shouldRetryStart(defaultHost, defaultPort, 1) {
+			t.Fatalf("shouldRetryStart(%s, %d, 1) = false after the port was claimed", defaultHost, defaultPort)
+		}
+	})
+
+	t.Run("reports a failure on a port that is still free", func(t *testing.T) {
+		useFakeBinder(t)
+
+		if shouldRetryStart(defaultHost, defaultPort, 1) {
+			t.Fatalf("shouldRetryStart(%s, %d, 1) = true while the port is free", defaultHost, defaultPort)
+		}
+	})
+
+	t.Run("stops after the last attempt", func(t *testing.T) {
+		useFakeBinder(t, defaultPort)
+
+		if shouldRetryStart(defaultHost, defaultPort, startAttempts) {
+			t.Fatalf("shouldRetryStart(%s, %d, %d) = true after the last attempt", defaultHost, defaultPort, startAttempts)
+		}
+	})
+}
+
 func TestServerOptionsWithAvailablePort(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
