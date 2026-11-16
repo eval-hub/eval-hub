@@ -2,21 +2,59 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 )
+
+const envRunMainFailureSubprocess = "EVAL_RUNTIME_INIT_TEST_MAIN_FAILURE"
+
+func TestMainFailureWritesTerminationMessage(t *testing.T) {
+	if os.Getenv(envRunMainFailureSubprocess) == "1" {
+		main()
+		panic("main returned")
+	}
+
+	path := filepath.Join(t.TempDir(), "termination-log")
+	cmd := exec.Command(os.Args[0], "-test.run=^TestMainFailureWritesTerminationMessage$")
+	cmd.Env = append(os.Environ(),
+		envRunMainFailureSubprocess+"=1",
+		"TERMINATION_MESSAGE_PATH="+path,
+		shared.InitJobSpecPathEnv+"=",
+		envHFRepoID+"=",
+		envGitURL+"=",
+		envGitRef+"=",
+		envBucket+"=",
+		envKey+"=",
+	)
+
+	if err := cmd.Run(); err == nil {
+		t.Fatal("main() exited successfully, want failure")
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(%q): %v", path, err)
+	}
+	if got := string(content); !strings.Contains(got, envBucket) || !strings.Contains(got, envKey) {
+		t.Fatalf("termination message = %q, want missing S3 env failure", got)
+	}
+}
 
 func TestRelativeDestPath(t *testing.T) {
 	t.Parallel()
@@ -270,7 +308,7 @@ func TestRun_InvokesHFSuccessfully(t *testing.T) {
 	t.Setenv(envHFRepoID, repoID)
 	t.Setenv(envHFRevision, "")
 	t.Setenv(envHFSubPath, "")
-	t.Setenv(envHFTimeout, "")
+	t.Setenv(envInitTimeout, "")
 	t.Setenv(envGitURL, "")
 	t.Setenv(envBucket, "")
 	t.Setenv(envKey, "")
@@ -283,9 +321,44 @@ func TestRun_InvokesHFSuccessfully(t *testing.T) {
 	}
 }
 
+func TestResolveInitTimeout(t *testing.T) {
+	t.Run("configured init timeout", func(t *testing.T) {
+		t.Setenv(envInitTimeout, "45m")
+		got, err := resolveInitTimeout()
+		if err != nil {
+			t.Fatalf("resolveInitTimeout() error = %v", err)
+		}
+		if got != 45*time.Minute {
+			t.Fatalf("resolveInitTimeout() = %v, want 45m", got)
+		}
+	})
+	t.Run("default timeout", func(t *testing.T) {
+		t.Setenv(envInitTimeout, "")
+		got, err := resolveInitTimeout()
+		if err != nil {
+			t.Fatalf("resolveInitTimeout() error = %v", err)
+		}
+		if got != defaultTimeout {
+			t.Fatalf("resolveInitTimeout() = %v, want %v", got, defaultTimeout)
+		}
+	})
+	t.Run("invalid timeout", func(t *testing.T) {
+		t.Setenv(envInitTimeout, "not-a-duration")
+		if _, err := resolveInitTimeout(); err == nil {
+			t.Fatal("resolveInitTimeout() error = nil, want invalid duration error")
+		}
+	})
+	t.Run("non-positive timeout", func(t *testing.T) {
+		t.Setenv(envInitTimeout, "0s")
+		if _, err := resolveInitTimeout(); err == nil {
+			t.Fatal("resolveInitTimeout() error = nil, want positive duration error")
+		}
+	})
+}
+
 func TestRunHF_RoutesBeforeS3AndGit(t *testing.T) {
 	t.Setenv(envHFRepoID, "org/offline-dataset")
-	t.Setenv(envHFTimeout, "not-a-duration")
+	t.Setenv(envInitTimeout, "not-a-duration")
 	t.Setenv(envGitURL, "")
 	t.Setenv(envBucket, "")
 	t.Setenv(envKey, "")
@@ -294,8 +367,8 @@ func TestRunHF_RoutesBeforeS3AndGit(t *testing.T) {
 	if err == nil {
 		t.Fatal("run() = nil, want HF validation error")
 	}
-	if !strings.Contains(err.Error(), envHFTimeout) {
-		t.Fatalf("run() error = %v, want mention of %s", err, envHFTimeout)
+	if !strings.Contains(err.Error(), envInitTimeout) {
+		t.Fatalf("run() error = %v, want mention of %s", err, envInitTimeout)
 	}
 	if strings.Contains(err.Error(), envBucket) || strings.Contains(err.Error(), envKey) {
 		t.Fatalf("run() routed to S3, got: %v", err)
@@ -309,13 +382,13 @@ func TestRunHF_RejectsNonPositiveTimeout(t *testing.T) {
 	t.Setenv(envHFRepoID, "org/offline-dataset")
 	for _, raw := range []string{"0s", "-1s", "0"} {
 		t.Run(raw, func(t *testing.T) {
-			t.Setenv(envHFTimeout, raw)
+			t.Setenv(envInitTimeout, raw)
 			err := downloaderFromEnv().runHF()
 			if err == nil {
 				t.Fatal("runHF() = nil, want error for non-positive timeout")
 			}
-			if !strings.Contains(err.Error(), envHFTimeout) {
-				t.Fatalf("runHF() error = %v, want mention of %s", err, envHFTimeout)
+			if !strings.Contains(err.Error(), envInitTimeout) {
+				t.Fatalf("runHF() error = %v, want mention of %s", err, envInitTimeout)
 			}
 		})
 	}
@@ -324,7 +397,7 @@ func TestRunHF_RejectsNonPositiveTimeout(t *testing.T) {
 func TestRunS3_MissingSecretAccessKey(t *testing.T) {
 	t.Setenv(envBucket, "bucket")
 	t.Setenv(envKey, "prefix")
-	t.Setenv(envS3Timeout, "30s")
+	t.Setenv(envInitTimeout, "30s")
 
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, accessKeyIDKey), []byte("AKIA"), 0o600); err != nil {
@@ -349,13 +422,13 @@ func TestRunS3_RejectsNonPositiveTimeout(t *testing.T) {
 	t.Setenv(envKey, "prefix")
 	for _, raw := range []string{"0s", "-1s", "0"} {
 		t.Run(raw, func(t *testing.T) {
-			t.Setenv(envS3Timeout, raw)
+			t.Setenv(envInitTimeout, raw)
 			err := downloaderFromEnv().runS3()
 			if err == nil {
 				t.Fatal("runS3() = nil, want error for non-positive timeout")
 			}
-			if !strings.Contains(err.Error(), envS3Timeout) {
-				t.Fatalf("runS3() error = %v, want mention of %s", err, envS3Timeout)
+			if !strings.Contains(err.Error(), envInitTimeout) {
+				t.Fatalf("runS3() error = %v, want mention of %s", err, envInitTimeout)
 			}
 		})
 	}
@@ -456,4 +529,95 @@ func TestReadOptionalSecret(t *testing.T) {
 	if err == nil {
 		t.Fatal("readOptionalSecret(invalid dir) = nil, want open error")
 	}
+}
+
+func TestCopyFileBetweenRootsHonorsCanceledContext(t *testing.T) {
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(srcDir, "data.txt"), []byte("data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	srcRoot, err := os.OpenRoot(srcDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = srcRoot.Close() }()
+	dstRoot, err := os.OpenRoot(dstDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = dstRoot.Close() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err = copyFileBetweenRoots(ctx, srcRoot, dstRoot, "data.txt")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("copyFileBetweenRoots() = %v, want context.Canceled", err)
+	}
+}
+
+func TestCopyWithContextErrors(t *testing.T) {
+	t.Run("canceled before copy", func(t *testing.T) {
+		src, err := os.CreateTemp(t.TempDir(), "src")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = src.Close() }()
+		dst, err := os.CreateTemp(t.TempDir(), "dst")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = dst.Close() }()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		_, err = copyWithContext(ctx, dst, src)
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("copyWithContext() = %v, want context.Canceled", err)
+		}
+	})
+
+	t.Run("read error", func(t *testing.T) {
+		src, err := os.CreateTemp(t.TempDir(), "src")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := src.Close(); err != nil {
+			t.Fatal(err)
+		}
+		dst, err := os.CreateTemp(t.TempDir(), "dst")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = dst.Close() }()
+
+		if _, err = copyWithContext(context.Background(), dst, src); err == nil {
+			t.Fatal("copyWithContext() = nil, want read error")
+		}
+	})
+
+	t.Run("write error", func(t *testing.T) {
+		src, err := os.CreateTemp(t.TempDir(), "src")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = src.Close() }()
+		if _, err := src.WriteString("data"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := src.Seek(0, io.SeekStart); err != nil {
+			t.Fatal(err)
+		}
+		dst, err := os.CreateTemp(t.TempDir(), "dst")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := dst.Close(); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err = copyWithContext(context.Background(), dst, src); err == nil {
+			t.Fatal("copyWithContext() = nil, want write error")
+		}
+	})
 }

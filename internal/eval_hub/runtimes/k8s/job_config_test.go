@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
@@ -418,7 +419,10 @@ func TestBuildJobConfigTestDataS3(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
+	serviceConfig := &config.Config{
+		Service: &config.ServiceConfig{Init: config.ServiceInitConfig{TestDataTimeout: 45 * time.Minute}},
+	}
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, serviceConfig, nil)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
@@ -430,6 +434,9 @@ func TestBuildJobConfigTestDataS3(t *testing.T) {
 	}
 	if cfg.testDataS3.secretRef != "s3-secret" {
 		t.Fatalf("expected testDataS3SecretRef %q, got %q", "s3-secret", cfg.testDataS3.secretRef)
+	}
+	if cfg.testDataInitTimeout != 45*time.Minute {
+		t.Fatalf("expected testDataInitTimeout %v, got %v", 45*time.Minute, cfg.testDataInitTimeout)
 	}
 }
 
