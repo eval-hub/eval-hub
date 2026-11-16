@@ -197,6 +197,11 @@ func (tc *scenarioConfig) createMLflowExperimentAsCurrentUser() error {
 // cleanupMLflowExperimentAfterScenario removes the experiment created by the
 // non-admin RBAC scenario, even when an assertion fails after creation.
 func (tc *scenarioConfig) cleanupMLflowExperimentAfterScenario(ctx context.Context, _ *godog.Scenario, _ error) (context.Context, error) {
+	defer func() {
+		delete(tc.values, "user_mlflow_experiment_name")
+		delete(tc.values, "non_admin_mlflow_experiment_id")
+	}()
+
 	name := strings.TrimSpace(tc.values["user_mlflow_experiment_name"])
 	if name == "" {
 		return ctx, nil
