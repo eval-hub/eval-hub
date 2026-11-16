@@ -22,6 +22,20 @@ case "${PORT}" in
 esac
 PID_FILE="bin/mlflow_${PORT}.pid"
 
+# ERE matching an MLflow server invocation and nothing else: the `mlflow` console
+# script (`mlflow server …`, or `<venv>/bin/python <venv>/bin/mlflow server …` from
+# its shebang) or `python -m mlflow server …`. It is anchored at the start of the
+# command line, so a command that merely mentions mlflow (a log path, a file name,
+# a grep pattern) never matches. Shared with pgrep/pkill -f, which take this ERE.
+MLFLOW_SERVER_RE='^([^[:space:]]*/)?([Pp]ython[0-9.]*[[:space:]]+([^[:space:]]*/|-m[[:space:]]+))?mlflow[[:space:]]+server([[:space:]]|$)'
+
+# ERE matching this port's flag on that server: `--port 5010`, `--port=5010`,
+# `-b host:5010`, `--bind host:5010` or their `=` forms.
+MLFLOW_PORT_RE='(--port(=|[[:space:]])|(-b|--bind)(=|[[:space:]])[^[:space:]]*:)'"${PORT}"'([[:space:]]|$)'
+
+# Combined ERE for the full command line, as matched by pgrep -f and pkill -f.
+MLFLOW_SERVER_PID_RE="${MLFLOW_SERVER_RE}.*${MLFLOW_PORT_RE}"
+
 echo "🛑 Stopping MLflow server on port ${PORT}..."
 
 kill_pid() {
@@ -45,21 +59,13 @@ parent_pid() {
 }
 
 # is_port_mlflow_command reports whether a command line is this port's MLflow
-# server. The port is accepted as `--port 5010`, `--port=5010`, `-b host:5010`,
-# `--bind host:5010` or their `=` forms, and the command must mention mlflow.
+# server. The command must be an MLflow server invocation (see MLFLOW_SERVER_RE),
+# with the port accepted as `--port 5010`, `--port=5010`, `-b host:5010`,
+# `--bind host:5010` or their `=` forms.
 is_port_mlflow_command() {
     local command="$1"
-    local normalized="${command//--port=/--port }"
-    normalized="${normalized//--bind=/--bind }"
-    normalized="${normalized//-b=/-b }"
-    case "${normalized}" in
-        *mlflow*) ;;
-        *) return 1 ;;
-    esac
-    if [[ "${normalized}" =~ --port[[:space:]]+${PORT}([[:space:]]|$) ]]; then
-        return 0
-    fi
-    [[ "${normalized}" =~ (-b|--bind)[[:space:]]+[^[:space:]]*:${PORT}([[:space:]]|$) ]]
+    [[ "${command}" =~ ${MLFLOW_SERVER_RE} ]] || return 1
+    [[ "${command}" =~ ${MLFLOW_PORT_RE} ]]
 }
 
 # is_verified_mlflow_pid reports whether PID, or one of its ancestors, is this
@@ -92,23 +98,40 @@ listeners() {
     lsof -tiTCP:"${PORT}" -sTCP:LISTEN 2>/dev/null || true
 }
 
+# mlflow_server_running reports whether a process running this port's MLflow server
+# invocation is still alive. It is the liveness test used when lsof is unavailable
+# and when a forced stop is confirmed; pgrep is optional, so the test is skipped
+# without it.
+mlflow_server_running() {
+    if ! command -v pgrep >/dev/null 2>&1; then
+        return 1
+    fi
+    pgrep -f "${MLFLOW_SERVER_PID_RE}" >/dev/null 2>&1
+}
+
 # FOREIGN_PIDS collects listeners that are not this port's MLflow server. They are
 # reported rather than signalled, so a process that grabbed the port after the
 # availability probe is never killed.
 FOREIGN_PIDS=""
 
 # kill_listeners signals verified MLflow listeners on PORT with SIGNAL
-# (-TERM by default).
+# (-TERM by default). Verified PIDs are collected before anything is signalled:
+# a worker is verified through its ancestors, so killing the parent first would
+# break that chain for the remaining PIDs.
 kill_listeners() {
-    local signal="${1:--TERM}" pid
+    local signal="${1:--TERM}" pid verified=""
     for pid in $(listeners); do
         if is_verified_mlflow_pid "${pid}"; then
-            kill "${signal}" "${pid}" 2>/dev/null || true
+            verified="${verified} ${pid}"
         else
             FOREIGN_PIDS="${FOREIGN_PIDS} ${pid}"
             echo "⚠️  Port ${PORT} is held by PID ${pid} ($(command_line "${pid}")), which is not this port's MLflow server; leaving it running"
         fi
     done
+    if [ -n "${verified}" ]; then
+        # shellcheck disable=SC2086 # deliberate word splitting of the PID list
+        kill "${signal}" ${verified} 2>/dev/null || true
+    fi
 }
 
 # refuse_foreign_listeners exits when the port belongs to a process we must not kill.
@@ -139,9 +162,10 @@ fi
 # Free anything still listening on this port (parent or worker) — verified MLflow only.
 kill_listeners
 
-# Narrow fallback: match this port only (do not pkill all mlflow.server processes).
+# Narrow fallback: only an MLflow server invocation for this port (never all
+# mlflow.server processes, and never a command that merely mentions mlflow).
 if command -v pkill >/dev/null 2>&1; then
-    pkill -f "mlflow.*--port(=| )${PORT}([[:space:]]|$)" 2>/dev/null || true
+    pkill -f "${MLFLOW_SERVER_PID_RE}" 2>/dev/null || true
 fi
 
 refuse_foreign_listeners
@@ -154,10 +178,8 @@ while [ "${iterations}" -lt "${timeout}" ]; do
         if [ -n "$(listeners)" ]; then
             still_listening=1
         fi
-    elif command -v pgrep >/dev/null 2>&1; then
-        if pgrep -f "mlflow.*--port(=| )${PORT}([[:space:]]|$)" >/dev/null 2>&1; then
-            still_listening=1
-        fi
+    elif mlflow_server_running; then
+        still_listening=1
     fi
     if [ "${still_listening}" -eq 0 ]; then
         echo "🛑 MLflow server on port ${PORT} stopped"
@@ -170,7 +192,9 @@ done
 # Last resort after graceful attempts timed out: force only verified listeners.
 kill_listeners -9
 refuse_foreign_listeners
-if [ -z "$(listeners)" ]; then
+# A process can stop listening without having exited, so the forced stop only
+# counts as a success once no listener and no matching MLflow process remains.
+if [ -z "$(listeners)" ] && ! mlflow_server_running; then
     echo "🛑 MLflow server on port ${PORT} stopped (forced)"
     exit 0
 fi

@@ -48,8 +48,15 @@ is_local_path() {
 # The caller only probes that this port can be bound; another process can claim it
 # afterwards. Fail here with a clear message instead of failing inside uvicorn with
 # EADDRINUSE. The Go test helper retries on the next free port when this happens.
+# Only the configured address is probed: a listener on another local address (for
+# example [::1] when binding 127.0.0.1) does not conflict with this bind. lsof wants
+# IPv6 hosts in brackets, as in -iTCP@[::1]:5000.
 if command -v lsof >/dev/null 2>&1; then
-    PORT_LISTENERS="$(lsof -tiTCP:"${PORT}" -sTCP:LISTEN 2>/dev/null || true)"
+    LSOF_HOST="${HOST}"
+    case "${HOST}" in
+        *:*) LSOF_HOST="[${HOST}]" ;;
+    esac
+    PORT_LISTENERS="$(lsof -tiTCP@"${LSOF_HOST}:${PORT}" -sTCP:LISTEN 2>/dev/null || true)"
     if [ -n "${PORT_LISTENERS}" ]; then
         echo -e "${RED}❌ Port ${PORT} is already in use by PID(s): ${PORT_LISTENERS}${NC}"
         echo -e "${YELLOW}   Stop that process or start MLflow on another MLFLOW_PORT.${NC}"
