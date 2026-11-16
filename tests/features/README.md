@@ -189,16 +189,65 @@ go test ./tests/features -run '^TestBenchmarkProviderFixtureCounts$'
 | `@hf` | Evaluation jobs that download offline test data from Hugging Face Hub (`evaluation_jobs.feature`). Defaults: `TEST_DATA_HF_REPO_ID`=`eval-hub-test/evalhub-offline-testdata`, `TEST_DATA_HF_REVISION`=`main`, nested `truthfulqa_mc1` via `TEST_DATA_HF_NESTED_SUB_PATH`=`staging_sub_path` (public mirror of `tests/git-testdata` on HF). One happy-path job runs `arc_easy` (full repo, branch revision) + `truthfulqa_mc1` (nested `sub_path`) and asserts `resolved_sha` is absent on create then populated after completion; set `TEST_DATA_HF_SHA_REVISION` to a real hex commit SHA to exercise pinned revision on `arc_easy` without a separate scenario. Runtime failures: one job covers invalid `repo_id` + bad `revision`; missing `sub_path` stays a separate job. Optional env: `TEST_DATA_HF_BAD_REPO_ID` (default `eval-hub-test/invalid-db`), `TEST_DATA_HF_BAD_REVISION`, `TEST_DATA_HF_BAD_SUB_PATH`. Job-wait negatives poll every 10s for up to 5m; API-only negatives return 400 immediately. Requires cluster egress to huggingface.co (or configure the init image with `HF_ENDPOINT` for a mirror). Opt in with `GODOG_TAGS="@hf"`. |
 | `@gha-wheel-sanity` | Local-runtime wheel validation scenario run by `scripts/gha_wheel_sanity_test.sh` during GHA wheel checks |
 
-### Non-admin MLflow experiment cleanup
+### Non-admin RBAC jobs
 
-The `@non-admin_user` MLflow RBAC scenario creates a uniquely named experiment
-with `AUTH_TOKEN`, verifies the restricted user cannot update or delete it, and
-then removes it in a scenario teardown using `MLFLOW_CLEANUP_TOKEN`. Set that
-variable to a separate credential authorized to delete experiments in the same
-MLflow workspace. The scenario fails before creating an experiment if the
-cleanup credential is missing or matches `AUTH_TOKEN`; cleanup also runs when
-an assertion fails after creation. For a local run, set the token from the
-approved cleanup identity without printing it:
+Run the user and viewer features as separate jobs. Each job must use the token
+and `X-User` for the same identity; do not combine the role tags in one run.
+Set `X-Tenant` to the namespace being tested (for ATRIS, `tenant`). Both
+features are tagged `@cluster`, so the default `make test-fvt` run excludes
+them; set `GODOG_TAGS` explicitly for either non-admin job.
+
+| Job identity | Feature path | `GODOG_TAGS` |
+| --- | --- | --- |
+| EvalHub user | `tests/features/non_admin_user.feature` | `@non-admin_user` |
+| EvalHub viewer | `tests/features/non_admin_viewer.feature` | `@non-admin_viewer` |
+
+Configure a separate Jenkins job and identity credential for each row. In each
+job, `AUTH_TOKEN` and `X_USER` must belong to the same role identity. Set
+`SERVER_URL`, `X_TENANT`, `GODOG_PATHS`, and `GODOG_TAGS` to the matching
+feature and tag above. Supply these additional variables:
+
+| Job | Additional environment variables |
+| --- | --- |
+| User | `USER_COLLECTION_ID`, `USER_PROVIDER_ID`, `MODEL_URL`, `MODEL_NAME`, `MODEL_AUTH_SECRET_REF`, `MLFLOW_TRACKING_URI`, `MLFLOW_CLEANUP_TOKEN`, `WAIT_DEADLINE` |
+| Viewer | `VIEWER_JOB_ID`, `VIEWER_COLLECTION_ID`, `VIEWER_PROVIDER_ID`, `VIEWER_MLFLOW_EXPERIMENT_ID`, `MLFLOW_TRACKING_URI`, `WAIT_DEADLINE` |
+
+For example, the user job can run:
+
+```bash
+GODOG_PATHS=tests/features/non_admin_user.feature \
+GODOG_TAGS='@non-admin_user' \
+go test -v -timeout=360m ./tests/features
+```
+
+Use the viewer row's path and tag in the separate viewer job. Keep credentials
+in the Jenkins credential store; do not place tokens in feature files or logs.
+
+The resource IDs must identify existing resources in the selected tenant. The
+viewer's `VIEWER_JOB_ID` must identify a job that the viewer can read.
+
+The `@mlflow` scenarios need `MLFLOW_TRACKING_URI` for the same workspace. The
+user job feature submits model-backed evaluations, so `MODEL_URL` and
+`MODEL_NAME` must be usable and `MODEL_AUTH_SECRET_REF` must name a model-auth
+Secret in the tenant. `MLFLOW_CLEANUP_TOKEN` must be a separate credential
+authorized to delete experiments in that workspace; keep it in the Jenkins
+credential store. Configure `WAIT_DEADLINE` if the default 30-minute job wait
+is unsuitable.
+
+The expected permissions are:
+
+| Resource | Viewer | User |
+| --- | --- | --- |
+| EvalHub evaluations | `get`, `list` | `get`, `list`, `create`, `update`, `patch`, `delete` |
+| Collections and providers | `get`, `list` | `get`, `list` |
+| Evaluation status events | Writes denied | `create` denied |
+| MLflow experiments | Access denied | `get`, `list`, `create` allowed; `update`, `delete` denied |
+
+The user MLflow scenario creates a uniquely named experiment with `AUTH_TOKEN`
+and removes it in scenario teardown. The cleanup credential must not match
+`AUTH_TOKEN`. Cleanup runs even if an assertion fails after creation. For a
+local run, the approved cleanup identity can supply the token without printing
+it:
 
 ```bash
 export MLFLOW_CLEANUP_TOKEN="$(oc whoami -t)"

@@ -74,6 +74,14 @@ Feature: Evaluation Hub RBAC for a viewer
     Then the response code should be 403
     And the response body should contain "user={{env:X_USER|test-viewer}}, verb=create, resource=collections"
 
+  @negative
+  Scenario: Viewer cannot clone a collection
+    Given the service is running
+    # A nonexistent source ID prevents an unexpected authorization grant from creating a clone.
+    When I send a POST request to "/api/v1/evaluations/collections/00000000-0000-0000-0000-000000000000/clones"
+    Then the response code should be 403
+    And the response body should contain "user={{env:X_USER|test-viewer}}, verb=create, resource=collections"
+
   Scenario: Viewer can get an existing collection
     Given the service is running
     And I set the resource ID from environment variable "VIEWER_COLLECTION_ID"
