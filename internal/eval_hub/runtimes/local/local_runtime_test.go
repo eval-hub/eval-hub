@@ -33,14 +33,6 @@ type fakeStorage struct {
 	updateErr         error
 	providerConfigs   map[string]api.ProviderResource
 	collectionConfigs map[string]api.CollectionResource
-	creationFn        func(string, int, time.Time) error
-}
-
-func (f *fakeStorage) RecordBenchmarkCreation(id string, index int, createdAt time.Time) error {
-	if f.creationFn != nil {
-		return f.creationFn(id, index, createdAt)
-	}
-	return nil
 }
 
 func TestReplaceEnvironmentVariable(t *testing.T) {

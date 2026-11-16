@@ -2858,7 +2858,7 @@ components:
           format: date-time
           readOnly: true
           description: |
-            Server-managed RFC3339 creation time of this benchmark's runtime resource. Uses the Kubernetes Job's metadata.creationTimestamp in cluster mode, or the successful subprocess launch time in local mode. Omitted until resource creation is confirmed. Preserved across subsequent status events.
+            Server-managed RFC3339 creation time, copied from the evaluation job's resource.created_at when the evaluation job is created. Set for every benchmark before runtime execution, including benchmarks that never start. Preserved across subsequent status events.
         updated_at:
           type: string
           format: date-time

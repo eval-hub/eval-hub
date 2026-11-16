@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	insertEvaluationStatement = `INSERT INTO evaluations (id, tenant_id, owner, status, experiment_id, workload_type, entity) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id;`
+	insertEvaluationStatement = `INSERT INTO evaluations (id, tenant_id, owner, status, experiment_id, workload_type, entity, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id;`
 
 	insertCollectionStatement = `INSERT INTO collections (id, tenant_id, owner, created_at, updated_at, entity) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id;`
 
@@ -77,7 +77,7 @@ func (s *postgresStatementsFactory) GetTablesSchema() string {
 }
 
 func (s *postgresStatementsFactory) CreateEvaluationAddEntityStatement(evaluation *api.EvaluationJobResource, entity string, workloadType workloads.Type) (string, []any) {
-	return insertEvaluationStatement, []any{evaluation.Resource.ID, evaluation.Resource.Tenant, evaluation.Resource.Owner, evaluation.Status.State, evaluation.Resource.MLFlowExperimentID, string(workloadType), entity}
+	return insertEvaluationStatement, []any{evaluation.Resource.ID, evaluation.Resource.Tenant, evaluation.Resource.Owner, evaluation.Status.State, evaluation.Resource.MLFlowExperimentID, string(workloadType), entity, evaluation.Resource.CreatedAt.UTC()}
 }
 
 func (s *postgresStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {

@@ -12,7 +12,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
@@ -386,18 +385,10 @@ func (r *LocalRuntime) runBenchmark(
 	}
 
 	pid := cmd.Process.Pid
-	createdAt := time.Now()
 	r.tracker.addPID(jobID, pid)
 
 	// Close the log file — the child process has its own fd copy.
 	_ = logFile.Close()
-	if storage != nil {
-		if err := storage.RecordBenchmarkCreation(jobID, benchmarkIndex, createdAt); err != nil {
-			_ = killProcessGroup(pid)
-			_ = cmd.Wait()
-			return fmt.Errorf("record benchmark creation: %w", err)
-		}
-	}
 
 	r.logger.Info(
 		"local runtime process started",

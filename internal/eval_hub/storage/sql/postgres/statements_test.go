@@ -312,15 +312,19 @@ func TestCreateEvaluationAddEntityStatement(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
 	state := api.OverallStatePending
 	eval := &api.EvaluationJobResource{
-		Resource: api.EvaluationResource{Resource: api.Resource{ID: "e1", Tenant: "t1", Owner: "u1"}},
+		Resource: api.EvaluationResource{Resource: api.Resource{ID: "e1", Tenant: "t1", Owner: "u1", CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.FixedZone("offset", 3600))}},
 		Status:   &api.EvaluationJobStatus{EvaluationJobState: api.EvaluationJobState{State: state}},
 	}
 	stmt, args := f.CreateEvaluationAddEntityStatement(eval, `{}`, workloads.Evaluation)
 	if !strings.Contains(stmt, "INSERT INTO evaluations") {
 		t.Errorf("expected INSERT INTO evaluations, got: %s", stmt)
 	}
-	if len(args) == 0 {
-		t.Error("expected args")
+	if len(args) != 8 || !strings.Contains(stmt, "created_at") {
+		t.Fatalf("creation timestamp is not included in INSERT: %s / %v", stmt, args)
+	}
+	created, ok := args[7].(time.Time)
+	if !ok || !created.Equal(eval.Resource.CreatedAt) || created.Location() != time.UTC {
+		t.Fatalf("creation time was not preserved in UTC: %v", args[7])
 	}
 }
 

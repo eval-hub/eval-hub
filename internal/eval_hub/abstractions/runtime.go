@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"log/slog"
-	"time"
 
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -25,8 +24,6 @@ type RuntimeStorage interface {
 	GetProvider(id string) (*api.ProviderResource, error)
 	GetEvaluationJob(id string) (*api.EvaluationJobResource, error)
 	UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error
-	// RecordBenchmarkCreation merges runtime resource creation metadata without replacing status.
-	RecordBenchmarkCreation(id string, benchmarkIndex int, createdAt time.Time) error
 }
 
 type Runtime interface {

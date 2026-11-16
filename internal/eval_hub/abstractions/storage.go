@@ -81,9 +81,6 @@ type Storage interface {
 	GetEvaluationJobs(filter *QueryFilter) (*QueryResults[api.EvaluationJobResource], error)
 	DeleteEvaluationJob(id string) error
 	UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error
-	// RecordBenchmarkCreation records the first confirmed runtime resource creation time,
-	// including when a status event or cancellation was persisted before this metadata.
-	RecordBenchmarkCreation(id string, benchmarkIndex int, createdAt time.Time) error
 	// UpdateEvaluationJobStatus is used to update the status of an evaluation job and is internal - do we need it here?
 	UpdateEvaluationJobStatus(id string, state api.OverallState, message *api.MessageInfo) error
 	// UpdateEvaluationJobOCI merges service-owned OCI progress and an optional published card

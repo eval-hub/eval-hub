@@ -51,14 +51,6 @@ type fakeStorage struct {
 	getJobErr     error
 	getJobFn      func(id string) (*api.EvaluationJobResource, error)
 	getJobMu      sync.Mutex
-	creationFn    func(string, int, time.Time) error
-}
-
-func (f *fakeStorage) RecordBenchmarkCreation(id string, index int, createdAt time.Time) error {
-	if f.creationFn != nil {
-		return f.creationFn(id, index, createdAt)
-	}
-	return nil
 }
 
 // UpdateEvaluationJob implements [abstractions.Storage].

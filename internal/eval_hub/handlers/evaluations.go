@@ -113,10 +113,6 @@ func (s *runtimeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEve
 	return nil
 }
 
-func (s *runtimeStorage) RecordBenchmarkCreation(id string, benchmarkIndex int, createdAt time.Time) error {
-	return s.scopedStorage().RecordBenchmarkCreation(id, benchmarkIndex, createdAt)
-}
-
 func (h *Handlers) getStorage(ctx *executioncontext.ExecutionContext) abstractions.Storage {
 	return h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 }
@@ -421,6 +417,13 @@ func (h *Handlers) createPreparedEvaluationJob(
 					MLFlowExperimentURL: mlflowExperimentURL,
 				},
 				EvaluationJobConfig: *evaluation,
+			}
+			createdAt := api.DateTimeToString(job.Resource.CreatedAt.UTC())
+			for index, benchmark := range benchmarks {
+				job.Status.Benchmarks = append(job.Status.Benchmarks, api.BenchmarkStatus{
+					ID: benchmark.ID, ProviderID: benchmark.ProviderID, BenchmarkIndex: index,
+					Status: api.StatePending, CreatedAt: createdAt, UpdatedAt: createdAt,
+				})
 			}
 			if collection != nil {
 				return storage.WithContext(runtimeCtx).CreateEvaluationJobAndUpdateCollection(job)

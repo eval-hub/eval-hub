@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	insertEvaluationStatement = `INSERT INTO evaluations (id, tenant_id, owner, status, experiment_id, workload_type, entity) VALUES (?, ?, ?, ?, ?, ?, ?);`
+	insertEvaluationStatement = `INSERT INTO evaluations (id, tenant_id, owner, status, experiment_id, workload_type, entity, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?);`
 
 	insertCollectionStatement = `INSERT INTO collections (id, tenant_id, owner, created_at, updated_at, entity) VALUES (?, ?, ?, ?, ?, ?);`
 
@@ -96,7 +96,7 @@ func (s *sqliteStatementsFactory) GetAllowedFilterColumns(tableName string) []st
 }
 
 func (s *sqliteStatementsFactory) CreateEvaluationAddEntityStatement(evaluation *api.EvaluationJobResource, entity string, workloadType workloads.Type) (string, []any) {
-	return insertEvaluationStatement, []any{evaluation.Resource.ID, evaluation.Resource.Tenant, evaluation.Resource.Owner, evaluation.Status.State, evaluation.Resource.MLFlowExperimentID, string(workloadType), entity}
+	return insertEvaluationStatement, []any{evaluation.Resource.ID, evaluation.Resource.Tenant, evaluation.Resource.Owner, evaluation.Status.State, evaluation.Resource.MLFlowExperimentID, string(workloadType), entity, evaluation.Resource.CreatedAt.UTC()}
 }
 
 func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {

@@ -99,8 +99,6 @@ func (f *fakeStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
 	return nil
 }
 
-func (f *fakeStorage) RecordBenchmarkCreation(_ string, _ int, _ time.Time) error { return nil }
-
 func (f *fakeStorage) UpdateEvaluationJobResolvedSHA(id string, benchmarkIndex int, sha string) error {
 	if f.updateResolvedSHAFn != nil {
 		return f.updateResolvedSHAFn(id, benchmarkIndex, sha)

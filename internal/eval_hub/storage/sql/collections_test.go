@@ -564,6 +564,10 @@ func TestCollectionPatchCollection(t *testing.T) {
 	}
 }
 
+func TestCollectionPatchConcurrentSQLite(t *testing.T) {
+	testCollectionPatchConcurrentDisjoint(t, "sqlite", getDBName())
+}
+
 func TestCollectionPatchConcurrentPostgres(t *testing.T) {
 	image := usePostgresImage()
 	databaseName := getDBName()
@@ -600,9 +604,9 @@ func testCollectionPatchConcurrentDisjoint(t *testing.T, driver, databaseName st
 		t.Fatalf("CreateCollection: %v", err)
 	}
 
-	// Hold the first PATCH transaction after its locked read. A concurrent PATCH
-	// must wait at SELECT ... FOR UPDATE, then apply its change to the first
-	// transaction's committed entity instead of overwriting it with a stale copy.
+	// Hold the first PATCH transaction after its read. A concurrent PATCH must
+	// wait for the transaction (SQLite) or row lock (PostgreSQL), then apply its
+	// change to the committed entity instead of overwriting it with a stale copy.
 	locked := make(chan struct{})
 	secondLockedReadAttempt := make(chan struct{})
 	release := make(chan struct{})
@@ -678,19 +682,23 @@ func testCollectionPatchConcurrentDisjoint(t *testing.T, driver, databaseName st
 		_, err := workerScoped.PatchCollection(collection.Resource.ID, patchDescription)
 		secondDone <- err
 	}()
-	select {
-	case <-secondLockedReadAttempt:
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for second PATCH transaction to attempt the row lock")
+	// SQLite serializes transactions through its single database connection, so
+	// the second transaction cannot reach this hook until the first commits.
+	if driver != "sqlite" {
+		select {
+		case <-secondLockedReadAttempt:
+		case <-time.After(5 * time.Second):
+			t.Fatal("timed out waiting for second PATCH transaction to attempt the row lock")
+		}
 	}
 
 	select {
 	case err := <-firstDone:
 		t.Fatalf("first PATCH completed while holding row lock: %v", err)
 	case err := <-secondDone:
-		t.Fatalf("second PATCH completed before row lock released (FOR UPDATE not contending): %v", err)
+		t.Fatalf("second PATCH completed before first transaction released: %v", err)
 	case <-time.After(time.Second):
-		// Expected: the second transaction is blocked on SELECT ... FOR UPDATE.
+		// Expected: the second transaction waits for the first to commit.
 	}
 
 	releaseTransactions()
