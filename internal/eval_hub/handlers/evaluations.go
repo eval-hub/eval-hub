@@ -113,6 +113,10 @@ func (s *runtimeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEve
 	return nil
 }
 
+func (s *runtimeStorage) RecordBenchmarkCreation(id string, benchmarkIndex int, createdAt time.Time) error {
+	return s.scopedStorage().RecordBenchmarkCreation(id, benchmarkIndex, createdAt)
+}
+
 func (h *Handlers) getStorage(ctx *executioncontext.ExecutionContext) abstractions.Storage {
 	return h.storage.WithLogger(ctx.Logger).WithContext(ctx.Ctx).WithTenant(ctx.Tenant).WithOwner(ctx.User)
 }
@@ -693,7 +697,7 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	var status = &api.StatusEvent{}
+	var status = &api.StatusEvent{ReceivedAt: ctx.StartedAt}
 
 	err := h.withSpan(
 		ctx,

@@ -676,6 +676,15 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 			)
 		}
 	}
+	// Use the API server's creation time, including when an ambiguous create was
+	// recovered by GET. Persist independently of runtime status callbacks.
+	var creationErr error
+	if storage != nil {
+		creationErr = storage.RecordBenchmarkCreation(evaluation.Resource.ID, benchmarkIndex, createdJob.CreationTimestamp.Time)
+		if creationErr != nil {
+			logger.Error("failed to record benchmark creation", "job_id", evaluation.Resource.ID, "benchmark_index", benchmarkIndex, "error", creationErr)
+		}
+	}
 	ownerRef := metav1.OwnerReference{
 		APIVersion: "batch/v1",
 		Kind:       "Job",
@@ -731,7 +740,7 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 			cleanupModelRefSecret()
 		}
 	}
-	return nil
+	return creationErr
 }
 
 func buildBenchmarkFailureStatus(benchmark *api.EvaluationBenchmarkConfig, benchmarkIndex int, runErr error) *api.StatusEvent {

@@ -398,9 +398,10 @@ Feature: Evaluations Endpoint
                 "type": "array",
                 "minItems": 1,
                 "items": {
-                  "required": ["created_at", "updated_at"],
+                  "required": ["started_at", "updated_at"],
                   "properties": {
                     "created_at": {"type": "string", "format": "date-time"},
+                    "started_at": {"type": "string", "format": "date-time"},
                     "updated_at": {"type": "string", "format": "date-time"}
                   },
                   "not": {"required": ["completed_at"]}
@@ -428,9 +429,10 @@ Feature: Evaluations Endpoint
                 "type": "array",
                 "minItems": 1,
                 "items": {
-                  "required": ["created_at", "updated_at", "completed_at"],
+                  "required": ["started_at", "updated_at", "completed_at"],
                   "properties": {
                     "created_at": {"type": "string", "format": "date-time"},
+                    "started_at": {"type": "string", "format": "date-time"},
                     "updated_at": {"type": "string", "format": "date-time"},
                     "completed_at": {"type": "string", "format": "date-time"}
                   }
@@ -524,6 +526,8 @@ Feature: Evaluations Endpoint
     Then the response code should be 200
     And the response should contain the value "1" at path "$.total_count"
     And the response should contain the value "{{value:collection_id}}" at path "$.items[0].collection.id"
+    When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_pass_criteria_provider_b1_running.json"
+    Then the response code should be 204
     When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_pass_criteria_provider_b1.json"
     Then the response code should be 204
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
@@ -532,7 +536,7 @@ Feature: Evaluations Endpoint
     And the response should contain the value "running" at path "$.status.state"
     And the response should contain the value "completed" at path "$.status.benchmarks[?(@.id == &quot;pc_b1&quot;)].status"
     And the response should contain the value "0.9" at path "$.results.benchmarks[?(@.id == &quot;pc_b1&quot;)].metrics.accuracy"
-    And the response should contain the value "2026-01-12T10:45:32Z" at path "$.status.benchmarks[?(@.id == &quot;pc_b1&quot;)].started_at"
+    And the response should contain the value "2026-01-12T10:45:00Z" at path "$.status.benchmarks[?(@.id == &quot;pc_b1&quot;)].started_at"
     And the response should contain the value "2026-01-12T10:47:12Z" at path "$.status.benchmarks[?(@.id == &quot;pc_b1&quot;)].completed_at"
     When I send a POST request to "/api/v1/evaluations/jobs/{id}/events" with body "file:/evaluation_job_status_event_pass_criteria_provider_b2.json"
     Then the response code should be 204

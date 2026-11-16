@@ -4002,7 +4002,7 @@
             "type": "string",
             "format": "date-time",
             "readOnly": true,
-            "description": "Server-managed RFC3339 time of the first running status event received for this benchmark. Omitted until a running event is received; a benchmark that terminates without reporting running has no creation timestamp.\n"
+            "description": "Server-managed RFC3339 creation time of this benchmark's runtime resource. Uses the Kubernetes Job's metadata.creationTimestamp in cluster mode, or the successful subprocess launch time in local mode. Omitted until resource creation is confirmed. Preserved across subsequent status events.\n"
           },
           "updated_at": {
             "type": "string",
@@ -4013,7 +4013,8 @@
           "started_at": {
             "type": "string",
             "format": "date-time",
-            "description": "RFC3339 start time"
+            "readOnly": true,
+            "description": "RFC3339 start time selected by the first accepted running status event. Uses that event's started_at when provided, otherwise the time eval-hub received the request. Omitted until a running event is accepted, including when a benchmark terminates before reporting running. Never replaced by timestamps on subsequent status events, retries, or pod restarts. Runtime timestamps are preserved as supplied, so clock differences may affect ordering relative to server-managed timestamps.\n"
           },
           "completed_at": {
             "type": "string",

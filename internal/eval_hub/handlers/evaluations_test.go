@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
@@ -97,6 +98,8 @@ func (f *fakeStorage) GetEvaluationJobs(_ *abstractions.QueryFilter) (*abstracti
 func (f *fakeStorage) UpdateEvaluationJob(_ string, _ *api.StatusEvent) error {
 	return nil
 }
+
+func (f *fakeStorage) RecordBenchmarkCreation(_ string, _ int, _ time.Time) error { return nil }
 
 func (f *fakeStorage) UpdateEvaluationJobResolvedSHA(id string, benchmarkIndex int, sha string) error {
 	if f.updateResolvedSHAFn != nil {
@@ -983,11 +986,15 @@ func TestHandleUpdateEvaluationAcceptsValidPhase(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	resp := MockResponseWrapper{recorder: recorder}
 	ctx := executioncontext.NewExecutionContext(context.Background(), "req-phase", logger, "test-user", "test-tenant")
+	ctx.StartedAt = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 
 	h.HandleUpdateEvaluation(ctx, reqWithPath, resp)
 
 	if recorder.Code != 204 {
 		t.Fatalf("expected status 204, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+	if storage.lastStatusEvent == nil || !storage.lastStatusEvent.ReceivedAt.Equal(ctx.StartedAt) {
+		t.Fatalf("status event did not retain the HTTP request receipt time: %+v", storage.lastStatusEvent)
 	}
 }
 

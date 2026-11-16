@@ -63,6 +63,11 @@ properties:
   started_at:
     type: string
     format: date-time
+    description: >
+      Optional runtime start time. Only used on the first accepted running
+      event for this benchmark occurrence. If omitted on that event, eval-hub
+      uses its request receipt time. Ignored on all subsequent events and on
+      events with a status other than running.
   completed_at:
     type: string
     format: date-time

@@ -224,19 +224,23 @@ func (s *sqlStorage) getOverallJobStatus(txn *sql.Tx, job *api.EvaluationJobReso
 }
 
 // stampBenchmarkTimestamps fills server-managed timestamps, including completion
-// when a terminal runtime event omitted its completion time. Creation marks the
-// first running event, not submission of the containing evaluation job.
+// when a terminal runtime event omitted its completion time. Resource creation
+// is recorded separately by RecordBenchmarkCreation.
 func stampBenchmarkTimestamps(benchmark *api.BenchmarkStatus, now time.Time) {
-	if benchmark.CreatedAt == "" && benchmark.Status == api.StateRunning {
-		benchmark.CreatedAt = api.DateTimeToString(now.UTC())
-	}
 	benchmark.UpdatedAt = api.DateTimeToString(now.UTC())
 	if api.IsBenchmarkTerminalState(benchmark.Status) && benchmark.CompletedAt == "" {
 		benchmark.CompletedAt = benchmark.UpdatedAt
 	}
 }
 
-func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runStatus *api.StatusEvent, benchmarkStatus *api.BenchmarkStatus) {
+func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runStatus *api.StatusEvent, benchmarkStatus *api.BenchmarkStatus, receivedAt time.Time) {
+	// Only the first accepted running event may supply a start time. In particular,
+	// timestamps on pending or terminal events must not invent a runtime start.
+	if benchmarkStatus.Status != api.StateRunning {
+		benchmarkStatus.StartedAt = ""
+	} else if benchmarkStatus.StartedAt == "" {
+		benchmarkStatus.StartedAt = api.DateTimeToString(receivedAt.UTC())
+	}
 	if !api.IsBenchmarkTerminalState(benchmarkStatus.Status) {
 		benchmarkStatus.CompletedAt = ""
 	}
@@ -275,6 +279,10 @@ func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runSt
 
 // UpdateEvaluationJobWithRunStatus runs in a transaction: fetches the job, merges RunStatusInternal into the entity, and persists.
 func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
+	receivedAt := runStatus.ReceivedAt
+	if receivedAt.IsZero() {
+		receivedAt = time.Now()
+	}
 	return s.withTransaction("update evaluation job", id, func(txn *sql.Tx) error {
 		s.logger.Info("Updating evaluation job", "id", id, "status", runStatus.BenchmarkStatusEvent.Status, "runStatus", runStatus)
 
@@ -315,7 +323,7 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 			CompletedAt:    runStatus.BenchmarkStatusEvent.CompletedAt,
 			BenchmarkIndex: runStatus.BenchmarkStatusEvent.BenchmarkIndex,
 		}
-		s.updateBenchmarkStatus(job, runStatus, &benchmark)
+		s.updateBenchmarkStatus(job, runStatus, &benchmark, receivedAt)
 
 		outcome := s.computeBenchmarkTestResult(txn, job, runStatus.BenchmarkStatusEvent, collection)
 
