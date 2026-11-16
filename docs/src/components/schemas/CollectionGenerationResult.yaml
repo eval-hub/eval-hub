@@ -4,7 +4,11 @@ description: |
   Completed dry-run proposal. Generation does not create this collection; the
   caller reviews and separately submits collection to POST /api/v1/evaluations/collections.
   The YAML and JSON describe the same postable CollectionConfig. A later catalog
-  change may make the proposal invalid at collection-create time.
+  change may make the proposal invalid at collection-create time. Passing catalog
+  validation means the selected provider/benchmark pairs and collection shape
+  were valid against the tenant-visible catalog at finalization; it does not
+  guarantee execution with a particular target model, judge, dataset, tokenizer,
+  adapter image, or disconnected-cluster setup.
 required:
   - collection
   - yaml

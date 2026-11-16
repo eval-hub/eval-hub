@@ -422,7 +422,7 @@ func TestCopyDirFromRoot_SkipsDotGitAndCopiesFiles(t *testing.T) {
 	}
 	defer func() { _ = root.Close() }()
 
-	if err := copyDirFromRoot(root, dst); err != nil {
+	if err := copyDirFromRoot(context.Background(), root, dst); err != nil {
 		t.Fatalf("copyDirFromRoot: %v", err)
 	}
 	got, err := os.ReadFile(filepath.Join(dst, "data", "file.txt"))
@@ -437,6 +437,25 @@ func TestCopyDirFromRoot_SkipsDotGitAndCopiesFiles(t *testing.T) {
 	}
 }
 
+func TestCopyDirFromRootHonorsCanceledContext(t *testing.T) {
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "file.txt"), []byte("data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = root.Close() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err = copyDirFromRoot(ctx, root, t.TempDir())
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("copyDirFromRoot() error = %v, want context.Canceled", err)
+	}
+}
+
 func withRunGitTestEnv(t *testing.T, dest, meta, secret string) {
 	t.Helper()
 	origDest, origMeta, origSecret, origValidate := destDir, gitMetadataDir, scrtDir, validateGitCloneURL
@@ -447,7 +466,7 @@ func withRunGitTestEnv(t *testing.T, dest, meta, secret string) {
 		_ = os.Unsetenv(envGitURL)
 		_ = os.Unsetenv(envGitRef)
 		_ = os.Unsetenv(envGitSubPath)
-		_ = os.Unsetenv(envGitTimeout)
+		_ = os.Unsetenv(envInitTimeout)
 	})
 }
 
@@ -492,6 +511,26 @@ func TestRunGit_HappyPathAndSubPath(t *testing.T) {
 	}
 }
 
+func TestRunGit_TimeoutMessage(t *testing.T) {
+	repoDir := newLocalBareRepo(t)
+	dest := t.TempDir()
+	meta := t.TempDir()
+	secret := filepath.Join(t.TempDir(), "missing-secret")
+	withRunGitTestEnv(t, dest, meta, secret)
+
+	t.Setenv(envGitURL, "file://"+repoDir)
+	t.Setenv(envGitRef, "master")
+	t.Setenv(envInitTimeout, "1ns")
+
+	err := downloaderFromEnv().runGit()
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("runGit() error = %v, want deadline exceeded", err)
+	}
+	if !strings.Contains(err.Error(), "git clone timed out") {
+		t.Fatalf("runGit() error = %v, want timeout wording", err)
+	}
+}
+
 func TestRunGit_ValidationErrors(t *testing.T) {
 	dest := t.TempDir()
 	meta := t.TempDir()
@@ -515,7 +554,7 @@ func TestRunGit_ValidationErrors(t *testing.T) {
 	t.Run("invalid timeout", func(t *testing.T) {
 		t.Setenv(envGitURL, "https://example.com/repo.git")
 		t.Setenv(envGitRef, "master")
-		t.Setenv(envGitTimeout, "not-a-duration")
+		t.Setenv(envInitTimeout, "not-a-duration")
 		if err := downloaderFromEnv().runGit(); err == nil {
 			t.Fatal("expected error for invalid timeout")
 		}
@@ -527,7 +566,7 @@ func TestRunGit_ValidationErrors(t *testing.T) {
 		})
 		t.Setenv(envGitURL, "https://localhost/repo.git")
 		t.Setenv(envGitRef, "master")
-		_ = os.Unsetenv(envGitTimeout)
+		_ = os.Unsetenv(envInitTimeout)
 		if err := downloaderFromEnv().runGit(); err == nil {
 			t.Fatal("expected SSRF validation error")
 		}
