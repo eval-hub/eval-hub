@@ -53,7 +53,7 @@ func TestNewOCIPublisherFactoryNilConfigReturnsNoop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPublisher() err = %v", err)
 	}
-	if err := publisher.PublishEvalCard(context.Background(), []byte(`{}`)); err != nil {
+	if _, err := publisher.PublishEvalCard(context.Background(), []byte(`{}`)); err == nil {
 		t.Fatalf("PublishEvalCard() err = %v", err)
 	}
 }

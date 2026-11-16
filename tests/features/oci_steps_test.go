@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
+	pkgapi "github.com/eval-hub/eval-hub/pkg/api"
 )
 
 // getOCIBearerToken exchanges OCI_USERNAME/OCI_PASSWORD for a Bearer token
@@ -102,6 +103,57 @@ func (tc *scenarioConfig) getOCIBearerToken(repository string) (string, error) {
 }
 
 // --- OCI Artifact Step Definitions ---
+
+// iWaitForOCIExportStatus waits independently of the evaluation's terminal state.
+// The OCI worker may not have populated results.oci yet when evaluation completes.
+func (tc *scenarioConfig) iWaitForOCIExportStatus(expectedStatus string) error {
+	fetchJob := func() (*pkgapi.EvaluationJobResource, error) {
+		if err := tc.iSendARequestImpl(http.MethodGet, "/api/v1/evaluations/jobs/{id}", "", "wait for OCI export status"); err != nil {
+			return nil, err
+		}
+		if tc.response.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("unexpected response status %d: %s", tc.response.StatusCode, tc.body)
+		}
+		var job pkgapi.EvaluationJobResource
+		if err := json.Unmarshal(tc.body, &job); err != nil {
+			return nil, err
+		}
+		return &job, nil
+	}
+	if err := waitForOCIExportStatus(fetchJob, pkgapi.OCIProcessingState(expectedStatus), tc.waitDeadline, tc.waitInterval); err != nil {
+		return tc.logError(err)
+	}
+	return nil
+}
+
+// waitForOCIExportStatus polls a job's OCI workflow independently of evaluation
+// completion. Missing OCI status is expected until the export worker starts.
+// fetchJob must bound its own request duration; fetch errors are retried.
+func waitForOCIExportStatus(fetchJob func() (*pkgapi.EvaluationJobResource, error), expected pkgapi.OCIProcessingState, timeout, interval time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var lastStatus pkgapi.OCIProcessingState
+	var lastErr error
+	for time.Now().Before(deadline) {
+		job, err := fetchJob()
+		lastErr = err
+		if err == nil && job != nil && job.Results != nil && job.Results.OCI != nil && job.Results.OCI.Status != nil {
+			status := job.Results.OCI.Status
+			lastStatus = status.State
+			if status.State == expected {
+				return nil
+			}
+			if pkgapi.IsOCIProcessingTerminalState(status.State) {
+				message := ""
+				if status.Message != nil {
+					message = status.Message.Message
+				}
+				return fmt.Errorf("OCI export reached terminal state %q (expected %q): %s", status.State, expected, message)
+			}
+		}
+		time.Sleep(interval)
+	}
+	return fmt.Errorf("timed out after %v waiting for OCI export status %q, last status: %q, last error: %v", timeout, expected, lastStatus, lastErr)
+}
 
 // ociBaseURL returns the base URL for OCI registry access (for test code to fetch artifacts)
 // Returns empty string if OCI_REGISTRY is not set (scenarios will be skipped by requireOCIConfiguration)

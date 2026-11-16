@@ -30,7 +30,6 @@ const (
 	adapterTerminationSharedMountPath           = "/shared"
 	testDataVolumeName                          = "test-data"
 	postProcessorCalibrationPVCVolumeNamePrefix = "ppi-calibration-pvc-"
-	postProcessorCalibrationPVCMountPathPrefix  = "/mnt/evalhub/post-processing/calibration-pvc"
 	serviceCAVolumeName                         = "evalhub-service-ca"
 	jobSpecFileName                             = "job.json"
 	jobSpecMountPath                            = "/meta/job.json"
@@ -72,6 +71,7 @@ const (
 	serviceCABundleFile              = "service-ca.crt"
 	envMLFlowCertPathName            = "MLFLOW_TRACKING_SERVER_CERT_PATH"
 	envEvalHubModeName               = "EVALHUB_MODE"
+	envTestDataInitTimeoutName       = "TEST_DATA_INIT_TIMEOUT"
 	envTestDataS3BucketName          = "TEST_DATA_S3_BUCKET"
 	envTestDataS3KeyName             = "TEST_DATA_S3_KEY"
 	envTestDataGitURLName            = "TEST_DATA_GIT_URL"
@@ -80,7 +80,6 @@ const (
 	envTestDataHFRepoIDName          = "TEST_DATA_HF_REPO_ID"
 	envTestDataHFRevisionName        = "TEST_DATA_HF_REVISION"
 	envTestDataHFSubPathName         = "TEST_DATA_HF_SUBPATH"
-	envPostProcessorPVCMountsName    = "EVALHUB_POST_PROCESSOR_PVC_MOUNTS"
 	envOTELExporterEndpointName      = "OTEL_EXPORTER_OTLP_ENDPOINT"
 	envOTELServiceNameName           = "OTEL_SERVICE_NAME"
 	testDataGitAuthVolumeName        = "test-data-git-auth"
@@ -140,6 +139,7 @@ func buildConfigMap(cfg *jobConfig) (*corev1.ConfigMap, error) {
 		sidecarJSON = string(bytes)
 	}
 
+	data := map[string]string{jobSpecFileName: string(specJSON), sidecarConfigFileName: sidecarJSON}
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
@@ -147,10 +147,7 @@ func buildConfigMap(cfg *jobConfig) (*corev1.ConfigMap, error) {
 			Labels:      labels,
 			Annotations: annotations,
 		},
-		Data: map[string]string{
-			jobSpecFileName:       string(specJSON),
-			sidecarConfigFileName: sidecarJSON,
-		},
+		Data: data,
 	}, nil
 }
 

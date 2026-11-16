@@ -18,8 +18,9 @@ const (
 
 var validStrictness = [...]string{StrictnessLenient, StrictnessModerate, StrictnessStrict}
 
-// Options describes a collection-design request after input normalization.
-// ProviderFilter retains the caller's trimmed text for the existing MCP summary;
+// Options describes a collection-design request. ParseOptions and the proposal
+// APIs trim its string fields, apply defaults, and derive ProviderIDs from
+// ProviderFilter. ProviderFilter retains the trimmed text for the MCP summary;
 // ProviderIDs contains its nonempty, deduplicated IDs for membership checks.
 type Options struct {
 	Goal           string
@@ -60,17 +61,7 @@ func ParseOptions(goal, providerFilter, maxBenchmarksRaw, strictness string) (Op
 		return Options{}, fmt.Errorf("invalid strictness %q; valid values: %s", strictness, strings.Join(validStrictness[:], ", "))
 	}
 
-	var providerIDs map[string]struct{}
-	if providerFilter != "" {
-		providerIDs = make(map[string]struct{})
-		for id := range strings.SplitSeq(providerFilter, ",") {
-			id = strings.TrimSpace(id)
-			if id == "" {
-				continue
-			}
-			providerIDs[id] = struct{}{}
-		}
-	}
+	providerIDs := providerIDsFromFilter(providerFilter)
 
 	return Options{
 		Goal:           goal,
@@ -79,6 +70,21 @@ func ParseOptions(goal, providerFilter, maxBenchmarksRaw, strictness string) (Op
 		MaxBenchmarks:  maxBenchmarks,
 		Strictness:     strictness,
 	}, nil
+}
+
+func providerIDsFromFilter(providerFilter string) map[string]struct{} {
+	if providerFilter == "" {
+		return nil
+	}
+	providerIDs := make(map[string]struct{})
+	for id := range strings.SplitSeq(providerFilter, ",") {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		providerIDs[id] = struct{}{}
+	}
+	return providerIDs
 }
 
 func isValidStrictness(value string) bool {

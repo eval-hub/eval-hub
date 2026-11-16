@@ -29,7 +29,6 @@ test.mergeOptional(
         test.benchmark('bigbench_gre_reading_comprehension_multiple_choice', 'lm_evaluation_harness', { num_examples: 1 }),
         test.benchmark('eus_reading', 'lm_evaluation_harness', { num_examples: 1 }),
         test.benchmark('qasper_freeform', 'lm_evaluation_harness', { num_examples: 1 }),
-        test.benchmark('scrolls_qasper', 'lm_evaluation_harness', { num_examples: 1, trust_remote_code: true }),
         test.benchmark('AraDiCE_ArabicMMLU_high_social-science_economics_egy', 'lm_evaluation_harness', { num_examples: 1 }),
         test.benchmark('AraDiCE_ArabicMMLU_high_social-science_geography_lev', 'lm_evaluation_harness', { num_examples: 1 }),
         test.benchmark('AraDiCE_ArabicMMLU_high_stem_computer-science_egy', 'lm_evaluation_harness', { num_examples: 1 }),

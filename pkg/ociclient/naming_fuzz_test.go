@@ -6,20 +6,16 @@ import (
 )
 
 func FuzzEvaluationCardManifestTag(f *testing.F) {
-	f.Add("job-123", "v1.0")
-	f.Add("job-123", "")
-	f.Add("", "v1.0")
-	f.Add("", "")
-	f.Add("  job-123  ", "  v1.0  ")
+	f.Add("job-123")
+	f.Add("")
+	f.Add("  job-123  ")
 
-	f.Fuzz(func(t *testing.T, jobID, ociTag string) {
-		tag := EvaluationCardManifestTag(jobID, ociTag)
+	f.Fuzz(func(t *testing.T, jobID string) {
+		tag := EvaluationCardManifestTag(jobID)
 
 		trimJob := strings.TrimSpace(jobID)
-		trimTag := strings.TrimSpace(ociTag)
-
-		if trimJob == "" && trimTag == "" && tag != "" {
-			t.Fatalf("both empty inputs should produce empty tag, got %q", tag)
+		if trimJob == "" && tag != "" {
+			t.Fatalf("empty job ID should produce empty tag, got %q", tag)
 		}
 		if trimJob != "" && !strings.Contains(tag, trimJob) {
 			t.Fatalf("tag %q should contain jobID %q", tag, trimJob)

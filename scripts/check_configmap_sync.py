@@ -6,6 +6,7 @@ trustyai-service-operator repo against local collection/provider configs.
 Values containing Kustomize substitution variables like $(var) are skipped.
 """
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -30,7 +31,9 @@ IGNORED_PATHS = {
 
 def fetch_remote_files():
     """Return list of (filename, type) for collection/provider ConfigMaps."""
-    resp = requests.get(GITHUB_API, timeout=30)
+    token = os.environ.get("GITHUB_TOKEN")
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    resp = requests.get(GITHUB_API, headers=headers, timeout=30)
     resp.raise_for_status()
     files = []
     for entry in resp.json():

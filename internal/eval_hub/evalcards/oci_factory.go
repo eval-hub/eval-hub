@@ -112,11 +112,21 @@ func (f *ociPublisherFactory) NewPublisher(ctx context.Context, job *api.Evaluat
 	}
 
 	export := job.Exports.OCI
-	creds, err := f.credentialResolver.Resolve(ctx, oci.OCICredentialRequest{
+	// The async export worker has already detached its context from the request.
+	// Apply the configured HTTP timeout to credential lookup through the Kubernetes
+	// client. The push gets a separate deadline after credential lookup completes.
+	timeout := f.httpClient.Timeout
+	if timeout <= 0 {
+		timeout = defaultOCIHTTPTimeout
+	}
+	credentialCtx, cancelCredentials := context.WithTimeout(ctx, timeout)
+	defer cancelCredentials()
+	creds, err := f.credentialResolver.Resolve(credentialCtx, oci.OCICredentialRequest{
 		RegistryHost: export.Coordinates.OCIHost,
 		Tenant:       job.Resource.Tenant.String(),
 		Connection:   export.K8s,
 	})
+	cancelCredentials()
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +137,6 @@ func (f *ociPublisherFactory) NewPublisher(ctx context.Context, job *api.Evaluat
 	return &ociPublisher{
 		client:      client,
 		jobID:       job.Resource.ID,
-		ociTag:      export.Coordinates.OCITag,
 		annotations: export.Coordinates.Annotations,
 	}, nil
 }
@@ -135,16 +144,15 @@ func (f *ociPublisherFactory) NewPublisher(ctx context.Context, job *api.Evaluat
 type ociPublisher struct {
 	client      *ociclient.Client
 	jobID       string
-	ociTag      string
 	annotations map[string]string
 }
 
-// PublishEvalCard pushes the marshaled evaluation card JSON to the configured OCI registry tag.
-func (p *ociPublisher) PublishEvalCard(ctx context.Context, cardJSON []byte) error {
+// PublishEvalCard publishes the card and returns the identity of its accepted OCI manifest.
+func (p *ociPublisher) PublishEvalCard(ctx context.Context, cardJSON []byte) (*api.OCIArtifactReference, error) {
 	if p == nil || p.client == nil {
-		return fmt.Errorf("oci publisher is not configured")
+		return nil, fmt.Errorf("oci publisher is not configured")
 	}
-	return p.client.PushEvaluationCard(ctx, p.jobID, cardJSON, p.ociTag, p.annotations)
+	return p.client.PushEvaluationCard(ctx, p.jobID, cardJSON, p.annotations)
 }
 
 // Close releases per-job publisher resources. The current implementation has no persistent state.

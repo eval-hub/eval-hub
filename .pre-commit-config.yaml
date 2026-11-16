@@ -38,14 +38,19 @@ repos:
         language: system
         types: [go]
         pass_filenames: false
+      # Use the repo-pinned linter with the Go toolchain declared in go.mod, so
+      # commit-time lint matches CI and does not depend on the Go version
+      # installed on the machine (see Makefile -> GO_TOOLCHAIN).
+      - id: golangci-lint
+        name: golangci-lint (go.mod toolchain)
+        entry: make golangci-lint
+        language: system
+        types: [go]
+        pass_filenames: false
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.0
     hooks:
       - id: gitleaks
-  - repo: https://github.com/golangci/golangci-lint
-    rev: v2.14.0
-    hooks:
-      - id: golangci-lint
 #  - repo: https://github.com/shellcheck-py/shellcheck-py
 #    rev: v0.11.0.1
 #    hooks:

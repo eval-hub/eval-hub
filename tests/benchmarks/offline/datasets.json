@@ -1,0 +1,143 @@
+[
+  {
+    "benchmark": "cmmlu_high_school_mathematics",
+    "repo_id": "haonan-li/cmmlu",
+    "subset": "high_school_mathematics",
+    "revision": "efcc940752ea4a1ea94d2727f11f83858d64fc8e",
+    "splits": [
+      "test",
+      "dev"
+    ],
+    "archive": "cmmlu_v1_0_1.zip"
+  },
+  {
+    "benchmark": "cmmlu_college_mathematics",
+    "repo_id": "haonan-li/cmmlu",
+    "subset": "college_mathematics",
+    "revision": "efcc940752ea4a1ea94d2727f11f83858d64fc8e",
+    "splits": [
+      "test",
+      "dev"
+    ],
+    "archive": "cmmlu_v1_0_1.zip"
+  },
+  {
+    "benchmark": "cmmlu_traditional_chinese_medicine",
+    "repo_id": "haonan-li/cmmlu",
+    "subset": "traditional_chinese_medicine",
+    "revision": "efcc940752ea4a1ea94d2727f11f83858d64fc8e",
+    "splits": [
+      "test",
+      "dev"
+    ],
+    "archive": "cmmlu_v1_0_1.zip"
+  },
+  {
+    "benchmark": "cmmlu_professional_medicine",
+    "repo_id": "haonan-li/cmmlu",
+    "subset": "professional_medicine",
+    "revision": "efcc940752ea4a1ea94d2727f11f83858d64fc8e",
+    "splits": [
+      "test",
+      "dev"
+    ],
+    "archive": "cmmlu_v1_0_1.zip"
+  },
+  {
+    "benchmark": "aclue_ancient_chinese_culture",
+    "repo_id": "tyouisen/aclue",
+    "subset": "ancient_chinese_culture",
+    "revision": "f89544164a29a9eec66490bf6d0cd571ceab4358",
+    "splits": [
+      "test",
+      "dev"
+    ],
+    "archive": "aclue_v1_0_0.zip"
+  },
+  {
+    "benchmark": "pile_youtubesubtitles",
+    "repo_id": "EleutherAI/pile",
+    "subset": "pile_youtubesubtitles",
+    "source_repo_id": "NeelNanda/pile-10k",
+    "revision": "127bfedcd5047750df5ccf3a12979a47bfa0bafa",
+    "pile_set_name": "YoutubeSubtitles",
+    "splits": [
+      "train"
+    ],
+    "parquet": "data/train-00000-of-00001-4746b8785c874cc7.parquet"
+  },
+  {
+    "benchmark": "pile_ubuntu-irc",
+    "repo_id": "EleutherAI/pile",
+    "subset": "pile_ubuntu-irc",
+    "source_repo_id": "NeelNanda/pile-10k",
+    "revision": "127bfedcd5047750df5ccf3a12979a47bfa0bafa",
+    "pile_set_name": "Ubuntu IRC",
+    "splits": [
+      "train"
+    ],
+    "parquet": "data/train-00000-of-00001-4746b8785c874cc7.parquet"
+  },
+  {
+    "benchmark": "pile_openwebtext2",
+    "repo_id": "EleutherAI/pile",
+    "subset": "pile_openwebtext2",
+    "source_repo_id": "NeelNanda/pile-10k",
+    "revision": "127bfedcd5047750df5ccf3a12979a47bfa0bafa",
+    "pile_set_name": "OpenWebText2",
+    "splits": [
+      "train"
+    ],
+    "parquet": "data/train-00000-of-00001-4746b8785c874cc7.parquet"
+  },
+  {
+    "benchmark": "pile_hackernews",
+    "repo_id": "EleutherAI/pile",
+    "subset": "pile_hackernews",
+    "source_repo_id": "NeelNanda/pile-10k",
+    "revision": "127bfedcd5047750df5ccf3a12979a47bfa0bafa",
+    "pile_set_name": "HackerNews",
+    "splits": [
+      "train"
+    ],
+    "parquet": "data/train-00000-of-00001-4746b8785c874cc7.parquet"
+  },
+  {
+    "benchmark": "pile_freelaw",
+    "repo_id": "EleutherAI/pile",
+    "subset": "pile_freelaw",
+    "source_repo_id": "NeelNanda/pile-10k",
+    "revision": "127bfedcd5047750df5ccf3a12979a47bfa0bafa",
+    "pile_set_name": "FreeLaw",
+    "splits": [
+      "train"
+    ],
+    "parquet": "data/train-00000-of-00001-4746b8785c874cc7.parquet"
+  },
+  {
+    "benchmark": "pile_arxiv",
+    "repo_id": "EleutherAI/pile",
+    "subset": "pile_arxiv",
+    "source_repo_id": "NeelNanda/pile-10k",
+    "revision": "127bfedcd5047750df5ccf3a12979a47bfa0bafa",
+    "pile_set_name": "ArXiv",
+    "splits": [
+      "train"
+    ],
+    "parquet": "data/train-00000-of-00001-4746b8785c874cc7.parquet"
+  },
+  {
+    "benchmark": "scrolls_qasper",
+    "repo_id": "tau/scrolls",
+    "subset": "qasper",
+    "revision": "927b875150ac8f02262ddd3b078d33a9debc935b",
+    "splits": [
+      "train",
+      "validation",
+      "test"
+    ],
+    "archive": "qasper.zip",
+    "job_ready": false,
+    "blocked_by": "SCROLLS metric writes into read-only /test_data; requires adapter cache handling change"
+  }
+]

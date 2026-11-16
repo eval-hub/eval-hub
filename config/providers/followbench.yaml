@@ -70,12 +70,6 @@ parameters:
     type: string
     description: Judge model identifier. Required for the bundled collection.
 
-  - name: judge_url
-    type: string
-    description: >
-      Legacy endpoint override for standalone jobs. For bundled collection jobs,
-      use judge_url in model.auth.secret_ref together with judge_api-key instead.
-
   - name: num_examples
     type: integer
     description: >

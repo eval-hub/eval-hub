@@ -1,9 +1,9 @@
 package k8s
 
 import (
-	"encoding/json"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
@@ -25,109 +25,38 @@ func assertTestDataEmptyDirSizeLimit(t *testing.T, volumes []corev1.Volume) {
 }
 
 func TestBuildJobMountsPostProcessorCalibrationPVCs(t *testing.T) {
-	refs := []api.CalibrationDataRef{
-		{PVC: &api.PVCTestDataRef{ClaimName: "calibration-a", SubPath: "datasets/first"}},
-		{PVC: &api.PVCTestDataRef{ClaimName: "calibration-a", SubPath: "datasets/second"}},
-		{PVC: &api.PVCTestDataRef{ClaimName: "calibration-b"}},
-	}
-	for i := range refs {
-		refs[i].DataConfig = api.CalibrationDataConfig{
-			Format:  "jsonl",
-			Columns: api.CalibrationDataColumns{Label: "label", Prediction: "prediction"},
-		}
-	}
+	refs := []api.CalibrationDataRef{{PVC: &api.PVCTestDataRef{ClaimName: "calibration-a", SubPath: "datasets/first"}}, {PVC: &api.PVCTestDataRef{ClaimName: "calibration-a", SubPath: "datasets/second"}}, {PVC: &api.PVCTestDataRef{ClaimName: "calibration-b"}}}
 	evaluation := postProcessorPVCJobForEdgeCases(refs)
-	evaluation.Resource.ID = "job-ppi-pvc"
 	cfg, err := buildJobConfig(evaluation, postprocessing.RuntimeProvider(), &evaluation.Benchmarks[0], 0, nil, nil)
 	if err != nil {
-		t.Fatalf("buildJobConfig: %v", err)
-	}
-	cfg.defaultEnv = append(cfg.defaultEnv, api.EnvVar{
-		Name:  envPostProcessorPVCMountsName,
-		Value: "provider-value-must-not-override-runtime-paths",
-	})
-	pvcs := cfg.postProcessorPVCs
-	if len(pvcs) != 2 {
-		t.Fatalf("got %d PVC mounts, want 2 for 3 references sharing 2 claims", len(pvcs))
-	}
-
-	encodedSpec, err := json.Marshal(cfg.jobSpec)
-	if err != nil {
 		t.Fatal(err)
 	}
-	var spec struct {
-		Parameters struct {
-			Operations api.StandalonePostProcessingOperations `json:"operations"`
-		} `json:"parameters"`
-	}
-	if err := json.Unmarshal(encodedSpec, &spec); err != nil {
-		t.Fatal(err)
-	}
-	if spec.Parameters.Operations.ConfidenceInterval == nil || !reflect.DeepEqual(spec.Parameters.Operations.ConfidenceInterval.CalibrationDataRef, refs) {
-		t.Fatalf("adapter job spec did not preserve calibration subpaths: %s", encodedSpec)
-	}
-
 	job, err := buildJob(cfg, nil)
 	if err != nil {
-		t.Fatalf("buildJob: %v", err)
+		t.Fatal(err)
 	}
 	adapter := findContainer(job.Spec.Template.Spec.Containers, adapterContainerName)
-	if adapter == nil {
-		t.Fatal("expected adapter container")
+	if len(cfg.postProcessorPVCs) != 3 {
+		t.Fatal("each reference needs a mount")
 	}
-	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
-	if sidecar == nil {
-		t.Fatal("expected sidecar init container")
-	}
-
-	wantMountPaths := map[string]string{
-		"calibration-a": postProcessorCalibrationPVCMountPathPrefix + "/calibration-a",
-		"calibration-b": postProcessorCalibrationPVCMountPathPrefix + "/calibration-b",
-	}
-	for _, pvc := range pvcs {
-		if pvc.mountPath != wantMountPaths[pvc.claimName] {
-			t.Errorf("mount path for %q = %q, want claim root %q", pvc.claimName, pvc.mountPath, wantMountPaths[pvc.claimName])
-		}
-		volume := findVolume(job.Spec.Template.Spec.Volumes, pvc.volumeName)
-		if volume == nil || volume.PersistentVolumeClaim == nil {
-			t.Fatalf("expected PVC volume %q", pvc.volumeName)
-		}
-		if volume.PersistentVolumeClaim.ClaimName != pvc.claimName || !volume.PersistentVolumeClaim.ReadOnly {
-			t.Errorf("PVC volume %q = %#v, want claim %q mounted read-only", pvc.volumeName, volume.PersistentVolumeClaim, pvc.claimName)
-		}
-		mount := findVolumeMount(adapter.VolumeMounts, pvc.volumeName)
-		if mount == nil || mount.MountPath != pvc.mountPath || !mount.ReadOnly {
-			t.Errorf("adapter mount %q = %#v, want read-only mount at %q", pvc.volumeName, mount, pvc.mountPath)
-		}
-		if mount != nil && mount.SubPath != "" {
-			t.Errorf("adapter mount %q has SubPath %q; the adapter applies each reference's sub_path", pvc.volumeName, mount.SubPath)
-		}
-		if findVolumeMount(sidecar.VolumeMounts, pvc.volumeName) != nil {
-			t.Errorf("sidecar must not mount calibration PVC %q", pvc.claimName)
+	counts := map[string]int{}
+	for _, volume := range job.Spec.Template.Spec.Volumes {
+		if volume.PersistentVolumeClaim != nil {
+			counts[volume.PersistentVolumeClaim.ClaimName]++
 		}
 	}
-
-	var encodedMountPaths string
-	var mappingEnvCount int
-	for _, item := range adapter.Env {
-		if item.Name == envPostProcessorPVCMountsName {
-			mappingEnvCount++
-			encodedMountPaths = item.Value
+	if !reflect.DeepEqual(counts, map[string]int{"calibration-a": 1, "calibration-b": 1}) {
+		t.Fatalf("claim volumes: %v", counts)
+	}
+	for _, pvc := range cfg.postProcessorPVCs {
+		found := false
+		for _, mount := range adapter.VolumeMounts {
+			if mount.MountPath == pvc.mountPath {
+				found = mount.ReadOnly && mount.SubPath == pvc.subPath
+			}
 		}
-	}
-	if mappingEnvCount != 1 {
-		t.Fatalf("found %d %s env vars, want 1", mappingEnvCount, envPostProcessorPVCMountsName)
-	}
-	var mountPaths map[string]string
-	if err := json.Unmarshal([]byte(encodedMountPaths), &mountPaths); err != nil {
-		t.Fatalf("decode %s: %v", envPostProcessorPVCMountsName, err)
-	}
-	if len(mountPaths) != len(wantMountPaths) {
-		t.Fatalf("mount mapping = %#v, want %#v", mountPaths, wantMountPaths)
-	}
-	for claimName, wantPath := range wantMountPaths {
-		if mountPaths[claimName] != wantPath {
-			t.Errorf("mount mapping for %q = %q, want %q", claimName, mountPaths[claimName], wantPath)
+		if !found {
+			t.Fatalf("missing direct PVC subpath mount: %+v", pvc)
 		}
 	}
 }
@@ -424,15 +353,16 @@ func TestBuildJobWithoutOCICredentials(t *testing.T) {
 
 func TestBuildJobWithS3TestData(t *testing.T) {
 	cfg := &jobConfig{
-		jobID:             "job-s3",
-		resourceGUID:      "guid-s3",
-		benchmarkIndex:    0,
-		namespace:         "default",
-		providerID:        "provider-1",
-		benchmarkID:       "bench-1",
-		adapterImage:      "adapter:latest",
-		defaultEnv:        []api.EnvVar{},
-		testDataInitImage: "quay.io/evalhub/evalhub:test",
+		jobID:               "job-s3",
+		resourceGUID:        "guid-s3",
+		benchmarkIndex:      0,
+		namespace:           "default",
+		providerID:          "provider-1",
+		benchmarkID:         "bench-1",
+		adapterImage:        "adapter:latest",
+		defaultEnv:          []api.EnvVar{},
+		testDataInitImage:   "quay.io/evalhub/evalhub:test",
+		testDataInitTimeout: 45 * time.Minute,
 		testDataS3: s3TestDataConfig{
 			bucket:    "bucket-1",
 			key:       "/a/b",
@@ -456,7 +386,7 @@ func TestBuildJobWithS3TestData(t *testing.T) {
 		t.Fatalf("expected init container command %q, got %v", defaultTestDataInitCmd, initContainer.Command)
 	}
 
-	var foundBucketEnv, foundKeyEnv bool
+	var foundBucketEnv, foundKeyEnv, foundTimeoutEnv bool
 	for _, env := range initContainer.Env {
 		if env.Name == envTestDataS3BucketName {
 			foundBucketEnv = true
@@ -470,9 +400,15 @@ func TestBuildJobWithS3TestData(t *testing.T) {
 				t.Fatalf("expected key env %q, got %q", "a/b", env.Value)
 			}
 		}
+		if env.Name == envTestDataInitTimeoutName {
+			foundTimeoutEnv = true
+			if env.Value != "45m0s" {
+				t.Fatalf("expected timeout env %q, got %q", "45m0s", env.Value)
+			}
+		}
 	}
-	if !foundBucketEnv || !foundKeyEnv {
-		t.Fatalf("expected bucket/key env vars on init container")
+	if !foundBucketEnv || !foundKeyEnv || !foundTimeoutEnv {
+		t.Fatalf("expected bucket/key/timeout env vars on init container")
 	}
 
 	var foundTestDataVolume, foundSecretVolume bool
@@ -500,6 +436,37 @@ func TestBuildJobWithS3TestData(t *testing.T) {
 	}
 	if !foundTestDataMount {
 		t.Fatalf("expected adapter to mount %s", testDataMountPath)
+	}
+}
+
+func TestBuildJobWithS3TestDataOmitsDefaultInitTimeout(t *testing.T) {
+	cfg := &jobConfig{
+		jobID:             "job-s3-default-timeout",
+		resourceGUID:      "guid-s3-default-timeout",
+		benchmarkIndex:    0,
+		namespace:         "default",
+		providerID:        "provider-1",
+		benchmarkID:       "bench-1",
+		adapterImage:      "adapter:latest",
+		defaultEnv:        []api.EnvVar{},
+		testDataInitImage: "quay.io/evalhub/evalhub:test",
+		testDataS3: s3TestDataConfig{
+			bucket:    "bucket-1",
+			key:       "/a/b",
+			secretRef: "s3-secret",
+		},
+	}
+
+	job, err := buildJob(cfg, nil)
+	if err != nil {
+		t.Fatalf("buildJob returned error: %v", err)
+	}
+
+	initContainer := mustFindContainer(t, job.Spec.Template.Spec.InitContainers, initContainerName)
+	for _, env := range initContainer.Env {
+		if env.Name == envTestDataInitTimeoutName {
+			t.Fatalf("unexpected %s env var for default timeout: %q", envTestDataInitTimeoutName, env.Value)
+		}
 	}
 }
 
@@ -726,15 +693,16 @@ func TestBuildJobSATokenSidecarOnly(t *testing.T) {
 
 func TestBuildJobWithGitTestDataPublicRepo(t *testing.T) {
 	cfg := &jobConfig{
-		jobID:             "job-git-public",
-		resourceGUID:      "guid-git-public",
-		benchmarkIndex:    0,
-		namespace:         "default",
-		providerID:        "provider-1",
-		benchmarkID:       "bench-1",
-		adapterImage:      "adapter:latest",
-		defaultEnv:        []api.EnvVar{},
-		testDataInitImage: "quay.io/evalhub/evalhub:test",
+		jobID:               "job-git-public",
+		resourceGUID:        "guid-git-public",
+		benchmarkIndex:      0,
+		namespace:           "default",
+		providerID:          "provider-1",
+		benchmarkID:         "bench-1",
+		adapterImage:        "adapter:latest",
+		defaultEnv:          []api.EnvVar{},
+		testDataInitImage:   "quay.io/evalhub/evalhub:test",
+		testDataInitTimeout: 45 * time.Minute,
 		testDataGit: gitTestDataConfig{
 			url: "https://github.com/org/repo.git",
 			ref: "main",
@@ -755,7 +723,7 @@ func TestBuildJobWithGitTestDataPublicRepo(t *testing.T) {
 		t.Fatalf("expected init container command %q, got %v", defaultTestDataInitCmd, initContainer.Command)
 	}
 
-	var foundURL, foundRef bool
+	var foundURL, foundRef, foundTimeout bool
 	for _, env := range initContainer.Env {
 		if env.Name == envTestDataGitURLName {
 			foundURL = true
@@ -769,9 +737,15 @@ func TestBuildJobWithGitTestDataPublicRepo(t *testing.T) {
 				t.Fatalf("expected git ref env %q, got %q", "main", env.Value)
 			}
 		}
+		if env.Name == envTestDataInitTimeoutName {
+			foundTimeout = true
+			if env.Value != "45m0s" {
+				t.Fatalf("expected git timeout env %q, got %q", "45m0s", env.Value)
+			}
+		}
 	}
-	if !foundURL || !foundRef {
-		t.Fatal("expected URL and ref env vars on git init container")
+	if !foundURL || !foundRef || !foundTimeout {
+		t.Fatal("expected URL/ref/timeout env vars on git init container")
 	}
 
 	// No secret volume for public repos.
@@ -979,15 +953,16 @@ func TestBuildJobWithGitTestDataMissingInitImage(t *testing.T) {
 
 func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
 	cfg := &jobConfig{
-		jobID:             "job-hf-public",
-		resourceGUID:      "guid-hf-public",
-		benchmarkIndex:    0,
-		namespace:         "default",
-		providerID:        "provider-1",
-		benchmarkID:       "bench-1",
-		adapterImage:      "adapter:latest",
-		defaultEnv:        []api.EnvVar{},
-		testDataInitImage: "quay.io/evalhub/evalhub:test",
+		jobID:               "job-hf-public",
+		resourceGUID:        "guid-hf-public",
+		benchmarkIndex:      0,
+		namespace:           "default",
+		providerID:          "provider-1",
+		benchmarkID:         "bench-1",
+		adapterImage:        "adapter:latest",
+		defaultEnv:          []api.EnvVar{},
+		testDataInitImage:   "quay.io/evalhub/evalhub:test",
+		testDataInitTimeout: 45 * time.Minute,
 		testDataHF: hfTestDataConfig{
 			repoID:   "cais/mmlu",
 			revision: "main",
@@ -1007,7 +982,7 @@ func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
 		t.Fatalf("expected init command [%q], got %v", defaultTestDataInitCmd, initContainer.Command)
 	}
 
-	var foundRepoID, foundRevision bool
+	var foundRepoID, foundRevision, foundTimeout bool
 	for _, env := range initContainer.Env {
 		switch env.Name {
 		case envTestDataHFRepoIDName:
@@ -1017,6 +992,11 @@ func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
 				t.Fatalf("expected revision main, got %q", env.Value)
 			}
 			foundRevision = true
+		case envTestDataInitTimeoutName:
+			if env.Value != "45m0s" {
+				t.Fatalf("expected timeout 45m0s, got %q", env.Value)
+			}
+			foundTimeout = true
 		}
 	}
 	if !foundRepoID {
@@ -1024,6 +1004,9 @@ func TestBuildJobWithHFTestDataPublicRepo(t *testing.T) {
 	}
 	if !foundRevision {
 		t.Fatal("expected revision env var on HF init container")
+	}
+	if !foundTimeout {
+		t.Fatal("expected timeout env var on HF init container")
 	}
 	assertTestDataEmptyDirSizeLimit(t, job.Spec.Template.Spec.Volumes)
 

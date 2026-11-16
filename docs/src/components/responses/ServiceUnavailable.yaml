@@ -1,0 +1,11 @@
+description: Required collection-generation configuration is unavailable before admission.
+content:
+  application/json:
+    schema:
+      $ref: ../../components/schemas/Error.yaml
+    examples:
+      generation_not_configured:
+        summary: Collection generation cannot be admitted
+        value:
+          message_code: collection_generation_not_configured
+          message: Collection generation is not configured.

@@ -1,8 +1,7 @@
 {
-  "notes": "One sample; requires Secret-backed OPENAI_JUDGE_API_KEY in the adapter environment for the independent grader.",
+  "notes": "One sample per task. Agent/code benchmarks may require sandbox and external services. Model IDs remain job parameters; configure independent judge, auditor, scenarios, and realism connections with <role>_api-key/<role>_url in MODEL_AUTH_SECRET_REF. StrongREJECT uses the judge Secret pair for grader_model.",
   "parameters": {
     "epochs": 1,
-    "grader_base_url": "${JUDGE_BASE_URL}",
     "grader_model": "${JUDGE_MODEL_NAME}",
     "max_tasks": 1,
     "num_examples": 1

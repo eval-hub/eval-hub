@@ -1,5 +1,5 @@
 {
-  "notes": "Requires model.auth.secret_ref to contain judge_api-key and judge_url for the independent judge connection; judge_model cannot be combined with inline judge_url or judge_api_key.",
+  "notes": "Configure judge_api-key and judge_url in model.auth.secret_ref for an independent judge connection. judge_model selects the model; legacy inline judge URL/key parameters are ignored.",
   "parameters": {
     "judge_model": "${JUDGE_MODEL_NAME}",
     "max_tokens": 128,

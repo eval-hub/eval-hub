@@ -1,8 +1,15 @@
 {
-  "notes": "One example per underlying task; grouped benchmarks may expand into multiple tasks. Model endpoint must support the benchmark's request type (including loglikelihood where applicable).",
+  "notes": "Requires a prepared offline bundle (tests/benchmarks/offline), published at LM_EVAL_OFFLINE_HF_REPO_ID and LM_EVAL_OFFLINE_HF_REVISION. Its tokenizer must match MODEL_NAME. One sample, zero few-shot examples; smoke execution only. Requires the downstream LM runtime's offline DatasetDict loading support.",
   "parameters": {
     "num_examples": 1,
-    "num_fewshot": 0
+    "num_fewshot": 0,
+    "tokenizer": "/test_data/tokenizer"
+  },
+  "test_data_ref": {
+    "hf": {
+      "repo_id": "${LM_EVAL_OFFLINE_HF_REPO_ID}",
+      "revision": "${LM_EVAL_OFFLINE_HF_REVISION}"
+    }
   },
   "timeout": "5m"
 }
