@@ -37,7 +37,7 @@ Run `make help` for a short list.
 | `init-python` | Create `$(VENV_DIR)` with `uv venv` (default `.venv`, Python `3.12`) |
 | `install-mlflow` | Depends on `init-python`; installs MLflow with `uv pip` into the venv |
 | `start-mlflow` | Install (locked), stop this port, then start MLflow in the background |
-| `stop-mlflow` | Stop the server on `MLFLOW_PORT` only (PID file / port listen) |
+| `stop-mlflow` | Stop the server on `MLFLOW_PORT` only, signalling only processes verified as that port's MLflow server (PID file / port listen) |
 | `test-godog-server` | Start server, run godog tests (`-tags=godog`), then stop server |
 | `test-unit-server` | Run the Go `TestMLFlowIntegration` version matrix (see below) |
 | `clean` | Remove `bin/` (SQLite DB, logs, artifact dirs) and any stray `mlartifacts/` |
@@ -123,7 +123,14 @@ go test -v ./internal/eval_hub/mlflow -run 'TestMLFlowIntegration/v3.16.1' -coun
 go test ./tests/mlflow/testutil -v -count=1                                            # version-resolution unit tests
 ```
 
-Each case gets its own port starting at `5010`; per-case make output is written
+Each case gets its own port starting at `5010`, but the port is only a
+preference: before starting a server the test probes whether it can be bound and,
+when another process already holds it (a stale tracking server, a local tool),
+tries the next free port instead and logs the switch. A probe releases the port
+before MLflow binds it, so a process that claims it in that window cannot be
+prevented: the failed start is retried on the next free port (up to five attempts)
+and `scripts/stop_mlflow.sh` only signals processes verified as that port's MLflow
+server, leaving an unrelated listener running. Per-case make output is written
 to `bin/mlflow_<version_with_underscores>.log` (for example
 `bin/mlflow_3_16_1_workspaces.log`) and structured test logs to
 `bin/mlflow_tests.log`.
@@ -134,7 +141,7 @@ to `bin/mlflow_<version_with_underscores>.log` (for example
 |--------|------|
 | `scripts/download_mlflow.sh` | Installs MLflow into `$(VENV_DIR)` via `uv pip install` |
 | `scripts/run_mlflow.sh` | Starts `mlflow server`, waits for `/health`, logs to `bin/mlflow.log` |
-| `scripts/stop_mlflow.sh` | Stops background MLflow server processes |
+| `scripts/stop_mlflow.sh` | Stops background MLflow server processes on `MLFLOW_PORT`, killing only processes verified as that port's MLflow server |
 
 `make start-mlflow` installs MLflow first via its `install-mlflow` dependency. The `run_mlflow.sh` script itself does **not** auto-install; it exits with guidance if `mlflow` is missing. Run `make clean` if there are issues with the database.
 
