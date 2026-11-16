@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
@@ -63,9 +64,16 @@ func assertInitialBenchmarkTimestamps(t *testing.T, job *api.EvaluationJobResour
 	if job.Resource.CreatedAt.IsZero() || job.Status == nil || len(job.Status.Benchmarks) != len(benchmarks) {
 		t.Fatalf("missing benchmark creation statuses: %+v", job)
 	}
-	createdAt := api.DateTimeToString(job.Resource.CreatedAt.UTC())
+	var createdAt api.DateTime
 	for index, benchmark := range benchmarks {
 		status := job.Status.Benchmarks[index]
+		created, err := api.DateTimeFromString(status.CreatedAt)
+		if err != nil || created.Before(job.Resource.CreatedAt.UTC().Truncate(time.Second)) || created.After(time.Now()) {
+			t.Fatalf("benchmark %d creation time is outside the service creation interval: %q (%v)", index, status.CreatedAt, err)
+		}
+		if index == 0 {
+			createdAt = status.CreatedAt
+		}
 		if status.ID != benchmark.ID || status.ProviderID != benchmark.ProviderID || status.BenchmarkIndex != index ||
 			status.Status != api.StatePending || status.CreatedAt != createdAt || status.UpdatedAt != createdAt ||
 			status.StartedAt != "" || status.CompletedAt != "" {

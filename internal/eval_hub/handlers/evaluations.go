@@ -418,7 +418,7 @@ func (h *Handlers) createPreparedEvaluationJob(
 				},
 				EvaluationJobConfig: *evaluation,
 			}
-			createdAt := api.DateTimeToString(job.Resource.CreatedAt.UTC())
+			createdAt := api.DateTimeToString(time.Now().UTC())
 			for index, benchmark := range benchmarks {
 				job.Status.Benchmarks = append(job.Status.Benchmarks, api.BenchmarkStatus{
 					ID: benchmark.ID, ProviderID: benchmark.ProviderID, BenchmarkIndex: index,

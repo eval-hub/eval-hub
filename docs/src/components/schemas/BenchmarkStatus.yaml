@@ -23,10 +23,12 @@ properties:
     format: date-time
     readOnly: true
     description: >
-      Server-managed RFC3339 creation time, copied from the evaluation job's
-      resource.created_at when the evaluation job is created. Set for every
-      benchmark before runtime execution, including benchmarks that never start.
-      Preserved across subsequent status events.
+      Server-managed RFC3339 creation time, set from the service's current time
+      when the evaluation job is created, before runtime execution. Set for
+      every benchmark, including benchmarks that never start, and preserved
+      across subsequent status events. Independent of the evaluation job's
+      database-generated resource.created_at. For older jobs missing benchmark
+      creation metadata, populated on the first accepted benchmark status event.
   updated_at:
     type: string
     format: date-time

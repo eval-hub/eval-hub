@@ -3,7 +3,6 @@ package sql
 import (
 	"database/sql"
 	"encoding/json"
-	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
@@ -56,9 +55,6 @@ func (s *sqlStorage) CreateEvaluationJobAndUpdateCollection(evaluation *api.Eval
 }
 
 func (s *sqlStorage) createEvaluationJobTransactional(txn *sql.Tx, evaluation *api.EvaluationJobResource) error {
-	if evaluation.Resource.CreatedAt.IsZero() {
-		evaluation.Resource.CreatedAt = time.Now().UTC()
-	}
 	evaluationJSON, err := s.createEvaluationJobEntity(evaluation)
 	if err != nil {
 		return se.WithRollback(err)
