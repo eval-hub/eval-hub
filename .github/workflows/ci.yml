@@ -80,9 +80,21 @@ jobs:
     - name: Run development script regression tests
       run: make test-scripts
 
-    - name: Run all tests (unit and integration) with coverage
+    - name: Run unit tests with coverage
+      # `make clean` resets bin/ here and *only* here: the FVT step below reuses
+      # this directory for its own coverage output, and `make build` keeps the
+      # compile check for the service, init, sidecar and MCP binaries.
       run: |
-        make clean build test-all-coverage
+        make clean build test-coverage
+      env:
+        GOFLAGS: "-p=1"
+
+    - name: Run FVT (godog) tests with coverage
+      # Builds the -cover instrumented server, runs the FVT and MCP godog suites
+      # once each, converts the server counters into bin/coverage-fvt.out and
+      # stops the server. Never add `make clean` to this step: it would delete
+      # bin/coverage.out and bin/coverage-init.out from the unit step.
+      run: make test-fvt-server-coverage
       env:
         GOFLAGS: "-p=1"
 
