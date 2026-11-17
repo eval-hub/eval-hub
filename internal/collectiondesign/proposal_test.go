@@ -34,6 +34,12 @@ func TestValidateCollectionSharedRules(t *testing.T) {
 			second.Parameters = map[string]any{"task": "task-b"}
 			return proposalWithBenchmarks(first, second)
 		}()},
+		{name: "same pair with different test data", candidate: func() api.CollectionConfig {
+			first, second := testBenchmark("p1", "b1"), testBenchmark("p1", "b1")
+			first.TestDataRef = &api.TestDataRef{PVC: &api.PVCTestDataRef{ClaimName: "data-a"}}
+			second.TestDataRef = &api.TestDataRef{PVC: &api.PVCTestDataRef{ClaimName: "data-b"}}
+			return proposalWithBenchmarks(first, second)
+		}()},
 		{name: "unadvertised metric", candidate: proposalWithBenchmarks(testBenchmarkWithScore("p1", "b1", "missing", false)), wantCode: issueMetricNotAdvertised, wantPath: "benchmarks[0].primary_score.metric"},
 		{name: "wrong direction", candidate: proposalWithBenchmarks(testBenchmarkWithScore("p1", "b1", "accuracy", true)), wantCode: issueDirectionConflict, wantPath: "benchmarks[0].primary_score.lower_is_better"},
 		{name: "threshold without metric", candidate: proposalWithBenchmarks(testBenchmarkWithThreshold("p2", "b2", 0.5)), wantCode: issueMetricNotAdvertised, wantPath: "benchmarks[0].pass_criteria.threshold"},
@@ -633,7 +639,7 @@ func TestCalibrateProposalPaginatesReferencesAndDoesNotInventDirection(t *testin
 	withoutDirection := &fakeCatalogSource{
 		providers: []api.ProviderResource{provider},
 		collections: []api.CollectionResource{systemReference("no-trusted-direction",
-			testBenchmarkWithThreshold("p1", "b1", 0.9))},
+			testBenchmarkWithScoreAndThreshold("p1", "b1", "accuracy", false, 0.9))},
 	}
 	candidate := validProposal()
 	candidate.Benchmarks[0].PrimaryScore = &api.PrimaryScore{Metric: "accuracy"}
@@ -644,7 +650,7 @@ func TestCalibrateProposalPaginatesReferencesAndDoesNotInventDirection(t *testin
 	if got.Benchmarks[0].PassCriteria != nil {
 		t.Fatalf("calibration invented a threshold without a provider-advertised direction: %+v", got.Benchmarks[0].PassCriteria)
 	}
-	if !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "references do not declare the selected primary-score metric and direction") {
+	if !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "provider does not advertise a default primary score") {
 		t.Fatalf("missing no-direction explanation: %+v", decisions)
 	}
 }
@@ -685,7 +691,7 @@ func TestCalibrateProposalDistinguishesMissingProviderDefault(t *testing.T) {
 	}
 }
 
-func TestInspectCustomAllowsExplicitMetricAndCalibratesRepeatedReferences(t *testing.T) {
+func TestInspectCustomAllowsTaskMetricsWithoutInventingThresholdDirection(t *testing.T) {
 	t.Parallel()
 	provider := testProvider("inspect", "inspect/custom", nil, nil, nil)
 	candidateBenchmark := testBenchmarkWithScore("inspect", "inspect/custom", "accuracy", false)
@@ -693,31 +699,201 @@ func TestInspectCustomAllowsExplicitMetricAndCalibratesRepeatedReferences(t *tes
 	candidate := proposalWithBenchmarks(candidateBenchmark)
 	options := proposalTestOptions(t, "", 3, StrictnessModerate)
 
+	source := &fakeCatalogSource{providers: []api.ProviderResource{provider}}
+	_, issues, err := ValidateProposal(context.Background(), source, options, candidate)
+	if err != nil || len(issues) != 0 {
+		t.Fatalf("explicit task-dependent metric was rejected when the provider omits its metric list: issues=%+v err=%v", issues, err)
+	}
+	got, decisions, err := CalibrateProposal(context.Background(), source, options, candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Benchmarks[0].PrimaryScore == nil || got.Benchmarks[0].PrimaryScore.Metric != "accuracy" || got.Benchmarks[0].PassCriteria != nil {
+		t.Fatalf("explicit task metric was not preserved or an unverified threshold was inferred: %+v", got.Benchmarks[0])
+	}
+	if !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "no matching system references were found") {
+		t.Fatalf("missing no-reference explanation for task-dependent metric: %+v", decisions)
+	}
+
+	provider = testProvider("inspect", "inspect/custom", []string{"accuracy"}, nil, nil)
+	candidateBenchmark = testBenchmarkWithScore("inspect", "inspect/custom", "accuracy", false)
+	candidateBenchmark.Parameters = map[string]any{"task": "inspect_evals/gsm8k", "task_args": map[string]any{"fewshot": float64(5)}}
+	candidate = proposalWithBenchmarks(candidateBenchmark)
 	firstReference := testBenchmarkWithWeightScoreAndThreshold("inspect", "inspect/custom", 1, "accuracy", false, 0.2)
 	firstReference.Parameters = map[string]any{"task": "inspect_evals/gsm8k", "task_args": map[string]any{"fewshot": 0}}
 	matchingReference := testBenchmarkWithWeightScoreAndThreshold("inspect", "inspect/custom", 1, "accuracy", false, 0.9)
 	matchingReference.Parameters = map[string]any{"task": "inspect_evals/gsm8k", "task_args": map[string]any{"fewshot": float64(5)}}
-	source := &fakeCatalogSource{
+	source = &fakeCatalogSource{
 		providers: []api.ProviderResource{provider},
 		collections: []api.CollectionResource{
 			systemReference("evaluate-model-accuracy", firstReference, matchingReference),
 		},
 	}
-
-	_, issues, err := ValidateProposal(context.Background(), source, options, candidate)
+	_, issues, err = ValidateProposal(context.Background(), source, options, candidate)
 	if err != nil || len(issues) != 0 {
-		t.Fatalf("explicit metric on provider with unknown metrics was rejected: issues=%+v err=%v", issues, err)
+		t.Fatalf("advertised dynamic metric was rejected: issues=%+v err=%v", issues, err)
 	}
 
-	got, decisions, err := CalibrateProposal(context.Background(), source, options, candidate)
+	got, decisions, err = CalibrateProposal(context.Background(), source, options, candidate)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Benchmarks[0].PassCriteria == nil || got.Benchmarks[0].PassCriteria.Threshold == nil || *got.Benchmarks[0].PassCriteria.Threshold != 0.9 {
-		t.Fatalf("matching repeated reference did not calibrate threshold: %+v", got.Benchmarks[0].PassCriteria)
+	if got.Benchmarks[0].PassCriteria != nil {
+		t.Fatalf("calibration trusted the candidate and reference directions without a provider default: %+v", got.Benchmarks[0].PassCriteria)
 	}
-	if !reflect.DeepEqual(decisionIDs(decisions, "benchmarks[0].pass_criteria.threshold"), []string{"evaluate-model-accuracy"}) {
-		t.Fatalf("unexpected reference provenance: %+v", decisions)
+	if !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "provider does not advertise a default primary score") {
+		t.Fatalf("missing structured no-calibration reason: %+v", decisions)
+	}
+
+	provider = testProvider("inspect", "inspect/custom", []string{"precision"}, nil, nil)
+	_, issues, err = ValidateProposal(context.Background(), &fakeCatalogSource{providers: []api.ProviderResource{provider}}, options, candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasIssue(issues, issueMetricNotAdvertised, "benchmarks[0].primary_score.metric") {
+		t.Fatalf("metric absent from a non-empty provider metric list was accepted: %+v", issues)
+	}
+}
+
+func TestCalibrateProposalWeightUsesOnlyComparableReferences(t *testing.T) {
+	t.Parallel()
+	provider := testProvider("p1", "b1", []string{"accuracy"}, &api.PrimaryScore{Metric: "accuracy"}, nil)
+	candidate := validProposal()
+	candidateBenchmark := &candidate.Benchmarks[0]
+	candidateBenchmark.Parameters = map[string]any{"task": "gsm8k", "fewshot": float64(5)}
+	candidateBenchmark.TestDataRef = &api.TestDataRef{PVC: &api.PVCTestDataRef{ClaimName: "data-gsm8k"}}
+
+	reference := func(collectionID, task, key string, weight float32) api.CollectionResource {
+		benchmark := testBenchmarkWithWeight("p1", "b1", weight)
+		benchmark.Parameters = map[string]any{"task": task, "fewshot": 5}
+		benchmark.TestDataRef = &api.TestDataRef{PVC: &api.PVCTestDataRef{ClaimName: key}}
+		return systemReference(collectionID, benchmark)
+	}
+	source := &fakeCatalogSource{
+		providers: []api.ProviderResource{provider},
+		collections: []api.CollectionResource{
+			reference("matching-a", "gsm8k", "data-gsm8k", 2),
+			reference("matching-b", "gsm8k", "data-gsm8k", 2),
+			reference("different-parameters", "math", "data-gsm8k", 3),
+			reference("different-data", "gsm8k", "data-math", 4),
+		},
+	}
+
+	got, decisions, err := CalibrateProposal(context.Background(), source, proposalTestOptions(t, "", 2, StrictnessModerate), candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Benchmarks[0].Weight != 2 {
+		t.Fatalf("weight = %v, want consensus weight 2 from comparable references", got.Benchmarks[0].Weight)
+	}
+	if !reflect.DeepEqual(decisionIDs(decisions, "benchmarks[0].weight"), []string{"matching-a", "matching-b"}) {
+		t.Fatalf("weight provenance includes incomparable references: %+v", decisions)
+	}
+
+	noComparable := &fakeCatalogSource{
+		providers: []api.ProviderResource{provider},
+		collections: []api.CollectionResource{
+			reference("unmatched", "other-task", "data-other", 9),
+		},
+	}
+	got, decisions, err = CalibrateProposal(context.Background(), noComparable, proposalTestOptions(t, "", 2, StrictnessModerate), candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Benchmarks[0].Weight != 0 {
+		t.Fatalf("weight = %v, want omitted when no comparable evidence exists", got.Benchmarks[0].Weight)
+	}
+	if !hasDecision(decisions, "benchmarks[0].weight", "no comparable system references match the candidate parameters and test-data source") {
+		t.Fatalf("missing no-comparable-weight reason: %+v", decisions)
+	}
+}
+
+func TestCalibrateProposalUsesMutableDataSourceForWeightButNotThreshold(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name string
+		data *api.TestDataRef
+	}{
+		{
+			name: "git branch",
+			data: &api.TestDataRef{Git: &api.GitTestDataRef{URL: "https://example.com/data.git", Ref: "main", SubPath: "dataset"}},
+		},
+		{
+			name: "Hugging Face revision",
+			data: &api.TestDataRef{HF: &api.HFTestDataRef{RepoID: "org/data", Revision: "main", SubPath: "dataset"}},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			provider := testProvider("p1", "b1", []string{"accuracy"}, &api.PrimaryScore{Metric: "accuracy"}, nil)
+			candidate := validProposal()
+			candidate.Benchmarks[0].TestDataRef = test.data
+			reference := testBenchmarkWithWeightScoreAndThreshold("p1", "b1", 2, "accuracy", false, 0.73)
+			reference.TestDataRef = test.data
+			source := &fakeCatalogSource{
+				providers:   []api.ProviderResource{provider},
+				collections: []api.CollectionResource{systemReference("matching-source", reference)},
+			}
+
+			got, decisions, err := CalibrateProposal(context.Background(), source, proposalTestOptions(t, "", 2, StrictnessModerate), candidate)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Benchmarks[0].Weight != 2 {
+				t.Fatalf("weight = %v, want 2 from the matching configured source", got.Benchmarks[0].Weight)
+			}
+			if !reflect.DeepEqual(decisionIDs(decisions, "benchmarks[0].weight"), []string{"matching-source"}) {
+				t.Fatalf("weight provenance = %+v, want matching-source", decisions)
+			}
+			if got.Benchmarks[0].PassCriteria != nil {
+				t.Fatalf("threshold was inferred without a stable content identity: %+v", got.Benchmarks[0].PassCriteria)
+			}
+			if !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "matching mutable Git/Hugging Face sources need the same server-resolved content identity") {
+				t.Fatalf("missing stable-identity explanation: %+v", decisions)
+			}
+		})
+	}
+}
+
+func TestCalibrateProposalDoesNotUseUnadvertisedDefaultMetric(t *testing.T) {
+	t.Parallel()
+	provider := testProvider("p1", "b1", nil, &api.PrimaryScore{Metric: "accuracy"}, nil)
+	source := &fakeCatalogSource{
+		providers:   []api.ProviderResource{provider},
+		collections: []api.CollectionResource{systemReference("reference", testBenchmarkWithScoreAndThreshold("p1", "b1", "accuracy", false, 0.8))},
+	}
+	got, decisions, err := CalibrateProposal(context.Background(), source, proposalTestOptions(t, "", 2, StrictnessModerate), validProposal())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Benchmarks[0].PrimaryScore != nil || got.Benchmarks[0].PassCriteria != nil {
+		t.Fatalf("default score whose metric is not advertised was used: %+v", got.Benchmarks[0])
+	}
+	if !hasDecision(decisions, "benchmarks[0].primary_score", "provider-advertised default metric \"accuracy\" is not included") {
+		t.Fatalf("missing reason for unadvertised default metric: %+v", decisions)
+	}
+}
+
+func TestCalibrateProposalRequiresDefaultForSelectedMetric(t *testing.T) {
+	t.Parallel()
+	provider := testProvider("p1", "b1", []string{"accuracy", "loss"}, &api.PrimaryScore{Metric: "accuracy"}, nil)
+	candidate := proposalWithBenchmarks(testBenchmarkWithScore("p1", "b1", "loss", false))
+	source := &fakeCatalogSource{
+		providers: []api.ProviderResource{provider},
+		collections: []api.CollectionResource{
+			systemReference("accuracy-reference", testBenchmarkWithScoreAndThreshold("p1", "b1", "accuracy", false, 0.8)),
+		},
+	}
+
+	got, decisions, err := CalibrateProposal(context.Background(), source, proposalTestOptions(t, "", 2, StrictnessModerate), candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Benchmarks[0].PassCriteria != nil {
+		t.Fatalf("threshold was calibrated for a metric without a matching provider default: %+v", got.Benchmarks[0].PassCriteria)
+	}
+	if !hasDecision(decisions, "benchmarks[0].pass_criteria.threshold", "candidate primary score does not match the provider-advertised metric and direction") {
+		t.Fatalf("missing no-calibration reason for a non-default metric: %+v", decisions)
 	}
 }
 
@@ -747,7 +923,10 @@ func TestCalibrateProposalMissingEvidenceAndWeightConsensus(t *testing.T) {
 		}, wantWeightReason: "consensus positive weight", wantThresholdReason: "no finite thresholds"},
 		{name: "direction mismatches", refs: []api.CollectionResource{
 			systemReference("a", testBenchmarkWithWeightScoreAndThreshold("p1", "b1", 1, "accuracy", true, 0.4)),
-		}, wantWeight: 1, wantThresholdReason: "no finite thresholds"},
+		}, wantWeight: 1, wantThresholdReason: "references do not declare the selected primary-score metric and direction"},
+		{name: "metric mismatches", refs: []api.CollectionResource{
+			systemReference("a", testBenchmarkWithWeightScoreAndThreshold("p1", "b1", 1, "loss", false, 0.4)),
+		}, wantWeight: 1, wantThresholdReason: "references do not declare the selected primary-score metric and direction"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
