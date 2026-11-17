@@ -3,25 +3,25 @@ flowchart TB
     API -->|ordinary benchmark| JOB["Existing Kubernetes Job + sidecar<br/>tenant namespace, no sandbox compute"]
     API -->|sandbox required| REC["SandboxedEvaluation + TrustyAI reconciler<br/>durable lifecycle, status and finalizer"]
     subgraph P["Trusted platform module: gateway, identity, policy, recovery"]
-        PS["Platform sandbox service<br/>workspace setup and attempt identity"]
+        PS["Platform sandbox service<br/>tenant workspace setup and job identity"]
         GW["OpenShell gateway + Kubernetes driver<br/>authenticated TLS and workspace RBAC"]
         ADM["Sandbox namespace guardrails and admission<br/>profile, ownership, quota, policy, storage, Kueue"]
         PS -->|workspace and primary creation| GW
         GW -->|validate effective requests| ADM
     end
     REC --> PS
-    subgraph T["Trusted per-attempt services: outside evaluated code"]
-        BR["Compatibility broker<br/>Kubernetes subset to OpenShell<br/>identity for this workspace only"]
+    subgraph T["Trusted per-job services: outside evaluated code"]
+        BR["Compatibility broker<br/>Kubernetes subset to OpenShell<br/>job-scoped capability, tenant workspace"]
         REL["Integration relay<br/>job-bound callbacks, credentials and results"]
     end
-    PS -.->|issue attempt identity| BR
+    PS -.->|issue workspace membership and job capability| BR
     BR -->|child and streaming operations| GW
-    subgraph W["One dedicated platform sandbox namespace<br/>shared workspace namespace mode: {workspace}--{name}"]
+    subgraph W["One platform sandbox namespace for all evaluation job sandboxes<br/>shared mode: one workspace per tenant, {workspace}--{name}"]
         SUP["Trusted OpenShell supervisors<br/>policy and credential mediation"]
-        PRI["Untrusted primary evaluator<br/>one per sandbox-required benchmark"]
+        PRI["Untrusted job sandbox<br/>one primary per evaluation job"]
         CH["Untrusted child sandboxes<br/>bounded fan-out and lifetime"]
         RES["Enforced SCC / PSA, quota and network<br/>short-lived PVCs with verified deletion"]
-        NS["No namespace or workspace per sandbox<br/>sandboxes isolated from each other<br/>gateway-generated unique names"]
+        NS["One workspace per tenant, no namespace or workspace per sandbox<br/>sandboxes isolated from each other<br/>gateway-generated unique names"]
         SUP <-->|authenticated sandbox protocol| PRI
         SUP <-->|authenticated sandbox protocol| CH
         PRI --- RES
@@ -29,7 +29,7 @@ flowchart TB
     end
     GW -->|provision via Agent Sandbox controller| SUP
     ADM -.->|qualified once, enforced per sandbox| RES
-    PRI -->|attempt-authenticated requests| BR
+    PRI -->|job-authenticated requests| BR
     PRI -->|scoped events and artifacts| REL
     SUP -->|approved endpoint-bound requests| EXT["Model, judge and data endpoints"]
     REL --> STORE[("Tenant results / MLflow / OCI<br/>EvalHub callbacks")]

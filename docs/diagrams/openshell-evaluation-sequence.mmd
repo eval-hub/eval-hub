@@ -6,8 +6,8 @@ sequenceDiagram
     participant P as Platform sandbox service
     participant G as OpenShell gateway / driver
     participant K as Guardrails / K8s controllers
-    participant S as Primary evaluator sandbox
-    participant B as Trusted per-attempt broker
+    participant S as Job sandbox (primary evaluator)
+    participant B as Trusted per-job broker
     participant C as Child sandbox
     participant X as Trusted integration relay
 
@@ -19,13 +19,13 @@ sequenceDiagram
         E->>E: Persist evaluation and durable dispatch intent
         E->>R: Create versioned SandboxedEvaluation (idempotent)
         E-->>U: Evaluation ID through existing asynchronous API
-        R->>P: Ensure attempt (tenant UID, profiles, envelope, deadline)
+        R->>P: Ensure job (tenant UID, profiles, envelope, deadline)
         P->>P: Obtain aggregate / Kueue admission where enabled
-        P->>G: Ensure ephemeral workspace in the sandbox namespace, templates, providers, membership
-        Note over P,B: Unique workspace-user identity per attempt, broker outside sandbox
-        P->>B: Deliver only this attempt's gateway identity
-        R->>B: Provision bounded endpoint and attempt capability
-        P->>G: Ensure primary sandbox using complete approved profile
+        P->>G: Ensure tenant workspace in the sandbox namespace, templates, providers, membership
+        Note over P,B: One workspace per tenant, job-scoped capability, broker outside sandbox
+        P->>B: Deliver only this job's workspace membership and capability
+        R->>B: Provision bounded endpoint and job capability
+        P->>G: Ensure the job's sandbox using complete approved profile
         G->>K: Create sandbox resources in the dedicated sandbox namespace
         K->>K: Per-sandbox admission: image, limits, runtime, policy, storage
         Note over G,K: Namespace guardrails attested at install/upgrade, per-sandbox admission on every create
@@ -34,7 +34,7 @@ sequenceDiagram
         G-->>R: Workspace and sandbox names/IDs, sandbox namespace UID
         R->>E: Mirror benchmark Running and provenance
         loop Each qualified child request within declared limits
-            S->>B: Kubernetes-shaped create (attempt authentication)
+            S->>B: Kubernetes-shaped create (job authentication)
             B->>B: Bind caller and validate kind, image, fan-out, depth, TTL
             B->>G: Create child with pinned policy and provider bindings
             G->>G: Independently authorize workspace and effective profile
@@ -58,17 +58,17 @@ sequenceDiagram
             E->>R: Reconcile cancellation / deadline
         end
         R->>B: Revoke capability, reject creates and close streams
-        R->>P: Terminate attempt compute and export available results
-        P->>G: Stop primary and all child sandboxes, retain output storage
+        R->>P: Terminate job compute and export available results
+        P->>G: Stop the job's sandbox and children, retain output storage
         G->>K: Terminate workloads and supervisors
         R->>X: Finalize staged artifacts / qualified trusted storage export
         X-->>R: Export state / retained artifact references
         alt Required export complete or authorized data disposition
-            P->>G: Remove sandboxes, storage, templates, providers, services, settings
-            P->>G: Remove membership and delete workspace
-            G->>K: Delete workspace sandbox resources from the shared namespace
-            K-->>P: Verify sandbox / PVC / workspace-state cleanup
-            P->>P: Revoke attempt identity and release capacity after termination
+            P->>G: Remove the job's sandboxes, storage and job-scoped settings
+            P->>G: Revoke the job's capability, tenant workspace and bindings remain
+            G->>K: Delete the job's sandbox resources from the shared namespace
+            K-->>P: Verify sandbox and PVC cleanup
+            P->>P: Revoke job identity and release capacity after termination
             alt Cleanup verified
                 P-->>R: CleanupComplete plus audit / deletion evidence
                 R->>E: Final outcome + export / cleanup provenance
