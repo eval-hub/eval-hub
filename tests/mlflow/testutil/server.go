@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -19,8 +20,19 @@ import (
 )
 
 const (
-	defaultHost    = "127.0.0.1"
-	defaultPort    = 5000
+	defaultHost = "127.0.0.1"
+	defaultPort = 5000
+
+	// portScanLimit bounds how many consecutive ports are probed when the
+	// assigned port is already in use.
+	portScanLimit = 100
+
+	// startAttempts bounds how many ports StartMLFlowServer tries before it
+	// reports a start failure. A probe releases each candidate before MLflow
+	// binds it, so an unrelated process can still claim the port; the extra
+	// attempts cover that race.
+	startAttempts = 5
+
 	startTimeout   = 5 * time.Minute
 	stopTimeout    = 30 * time.Second
 	healthTimeout  = 30 * time.Second
@@ -51,6 +63,10 @@ type Server struct {
 }
 
 // StartMLFlowServer installs (if needed) and starts MLflow via make start-mlflow.
+// The assigned port is probed first: when another process already holds it, the
+// next free port is used and the switch is logged. A probe cannot reserve the
+// port, so a start that loses it to another process in the meantime is retried on
+// the next free port instead of failing the test.
 // Server start or health-check failures fail the test (t.Fatalf). If the
 // tests/mlflow directory cannot be found, the test is skipped (t.Skipf).
 func StartMLFlowServer(t *testing.T, opts ServerOptions) *Server {
@@ -62,29 +78,53 @@ func StartMLFlowServer(t *testing.T, opts ServerOptions) *Server {
 		t.Skipf("MLflow test directory not found: %v", err)
 	}
 
-	opts = opts.withDefaults()
-	trackingURI := fmt.Sprintf("http://%s:%d", opts.Host, opts.Port)
+	// base keeps the caller's options: the port is resolved before the storage
+	// paths are derived, so a fallback port gets its own database and artifact
+	// directories on every attempt.
+	base := opts.withConnectionDefaults()
 
 	startMu.Lock()
 	defer startMu.Unlock()
 
-	if err := runMakeTarget(t, dir, startTimeout, "start-mlflow", opts); err != nil {
-		opts.Logger.Error("Skipping tests: failed to start MLflow server", "error", err, "version", opts.Version, "workspaces", opts.EnableWorkspaces, "port", opts.Port)
-		t.Fatalf(
-			"failed to start MLflow server (version=%s workspaces=%t port=%d): %v",
-			opts.Version, opts.EnableWorkspaces, opts.Port, err,
+	var started ServerOptions
+	for attempt := 1; ; attempt++ {
+		started = base.withAvailablePort(t).withStorageDefaults()
+
+		err := runMakeTarget(t, dir, startTimeout, "start-mlflow", started)
+		if err == nil {
+			break
+		}
+		if !shouldRetryStart(started.Host, started.Port, attempt) {
+			started.Logger.Error("Skipping tests: failed to start MLflow server", "error", err, "version", started.Version, "workspaces", started.EnableWorkspaces, "port", started.Port)
+			t.Fatalf(
+				"failed to start MLflow server (version=%s workspaces=%t port=%d): %v",
+				started.Version, started.EnableWorkspaces, started.Port, err,
+			)
+		}
+		started.Logger.Warn(
+			"MLflow port was claimed before the server could bind; retrying on another port",
+			"port", started.Port,
+			"attempt", attempt,
+			"error", err,
 		)
+		t.Logf(
+			"MLflow port %d was claimed before the server could bind (attempt %d/%d); retrying on another port: %v",
+			started.Port, attempt, startAttempts, err,
+		)
+		// A half-started server would hold the port against the next attempt.
+		_ = runMakeTarget(t, dir, stopTimeout, "stop-mlflow", started)
 	}
 
+	trackingURI := fmt.Sprintf("http://%s:%d", started.Host, started.Port)
 	if err := waitForHealth(trackingURI, healthTimeout); err != nil {
-		_ = runMakeTarget(t, dir, stopTimeout, "stop-mlflow", opts)
-		opts.Logger.Error("Skipping tests: MLflow server at %s did not become healthy", "error", err, "trackingURI", trackingURI)
+		_ = runMakeTarget(t, dir, stopTimeout, "stop-mlflow", started)
+		started.Logger.Error("Skipping tests: MLflow server at %s did not become healthy", "error", err, "trackingURI", trackingURI)
 		t.Fatalf("MLflow server at %s did not become healthy: %v", trackingURI, err)
 	}
 
 	srv := &Server{
 		TrackingURI: trackingURI,
-		options:     opts,
+		options:     started,
 		dir:         dir,
 	}
 	t.Cleanup(func() {
@@ -92,8 +132,20 @@ func StartMLFlowServer(t *testing.T, opts ServerOptions) *Server {
 		defer startMu.Unlock()
 		srv.stop(t)
 	})
-	opts.Logger.Info("MLflow server ready", "trackingURI", trackingURI, "version", opts.Version, "workspaces", opts.EnableWorkspaces)
+	started.Logger.Info("MLflow server ready", "trackingURI", trackingURI, "version", started.Version, "workspaces", started.EnableWorkspaces)
 	return srv
+}
+
+// shouldRetryStart reports whether a failed start is retried on another port. It
+// retries only while attempts remain and the failed port can no longer be bound:
+// that means another process claimed the port between the availability probe and
+// the server bind. A failure on a port that is still free is reported unchanged,
+// so a genuine startup fault keeps its original error.
+func shouldRetryStart(host string, port, attempt int) bool {
+	if attempt >= startAttempts {
+		return false
+	}
+	return !PortAvailable(host, port)
 }
 
 func (s *Server) stop(t *testing.T) {
@@ -103,9 +155,18 @@ func (s *Server) stop(t *testing.T) {
 	}
 }
 
+// withDefaults fills unset options. It is split into connection and storage
+// defaults so the port-derived storage paths are only computed once the final
+// (available) port is known.
 func (opts ServerOptions) withDefaults() ServerOptions {
+	return opts.withConnectionDefaults().withStorageDefaults()
+}
+
+// withConnectionDefaults applies the version, host and port defaults needed to
+// probe for an available port.
+func (opts ServerOptions) withConnectionDefaults() ServerOptions {
 	if opts.Version == "" {
-		opts.Version = "3.13.0"
+		opts.Version = FallbackLatestVersion
 	}
 	if opts.Host == "" {
 		opts.Host = defaultHost
@@ -113,6 +174,12 @@ func (opts ServerOptions) withDefaults() ServerOptions {
 	if opts.Port == 0 {
 		opts.Port = defaultPort
 	}
+	return opts
+}
+
+// withStorageDefaults derives the storage paths from opts.Port for callers that
+// do not pin them explicitly.
+func (opts ServerOptions) withStorageDefaults() ServerOptions {
 	if opts.BackendStoreURI == "" {
 		opts.BackendStoreURI = fmt.Sprintf("sqlite:///bin/mlflow_test_%d.db", opts.Port)
 	}
@@ -123,6 +190,68 @@ func (opts ServerOptions) withDefaults() ServerOptions {
 		opts.ArtifactsDestination = fmt.Sprintf("./bin/mlartifacts_test_%d", opts.Port)
 	}
 	return opts
+}
+
+// withAvailablePort returns opts with a port that can actually be bound. When
+// another process (a stale tracking server, a developer tool) already holds the
+// assigned port, the next free port is used instead of failing the start.
+func (opts ServerOptions) withAvailablePort(t *testing.T) ServerOptions {
+	t.Helper()
+
+	port, err := NextAvailablePort(opts.Host, opts.Port, portScanLimit)
+	if err != nil {
+		opts.Logger.Error("No available port for MLflow server", "error", err, "assignedPort", opts.Port)
+		t.Fatalf("no available port for MLflow server starting at %d: %v", opts.Port, err)
+	}
+	if port != opts.Port {
+		opts.Logger.Warn(
+			"Assigned MLflow port is not available; trying the next one",
+			"assignedPort", opts.Port,
+			"port", port,
+		)
+		t.Logf("Assigned MLflow port %d is not available; using port %d instead", opts.Port, port)
+		opts.Port = port
+	}
+	return opts
+}
+
+// listenTCP opens a TCP listener and is net.Listen in production. Tests replace
+// it with a controllable binder so port availability assertions do not depend on
+// a released real socket staying free until the assertion runs.
+var listenTCP = net.Listen
+
+// PortAvailable reports whether a TCP listener can be bound to host:port, which
+// is the precondition for `mlflow server --host host --port port`.
+func PortAvailable(host string, port int) bool {
+	listener, err := listenTCP("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+	if err != nil {
+		return false
+	}
+	_ = listener.Close()
+	return true
+}
+
+// NextAvailablePort returns the first port at or after start that can be bound
+// on host, probing at most limit consecutive ports (portScanLimit when limit <=
+// 0). It returns an error when no candidate is free, so callers never silently
+// fall back to a port outside the probed range.
+func NextAvailablePort(host string, start, limit int) (int, error) {
+	if limit <= 0 {
+		limit = portScanLimit
+	}
+	if limit > 65535 {
+		limit = 65535
+	}
+	if start < 1 || start > 65535 {
+		return 0, fmt.Errorf("invalid start port %d: must be between 1 and 65535", start)
+	}
+	last := min(start+limit-1, 65535)
+	for port := start; port <= last; port++ {
+		if PortAvailable(host, port) {
+			return port, nil
+		}
+	}
+	return 0, fmt.Errorf("no available TCP port on %s in range %d-%d", host, start, last)
 }
 
 func (opts ServerOptions) env() []string {

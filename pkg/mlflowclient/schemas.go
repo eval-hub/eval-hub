@@ -1,8 +1,9 @@
 package mlflowclient
 
 import (
+	"encoding/json"
 	"errors"
-	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -30,19 +31,40 @@ type MLFlowError struct {
 func (e *APIError) Error() string {
 	sb := strings.Builder{}
 	sb.WriteString("MLflow API error")
-	if e.ResponseBody != "" {
+	if detail := e.detail(); detail != "" {
 		sb.WriteString(" with response body: ")
-		sb.WriteString(e.ResponseBody)
+		sb.WriteString(detail)
 	}
 	sb.WriteString(" with status code: ")
 	sb.WriteString(strconv.Itoa(e.StatusCode))
 	return sb.String()
 }
 
+// detail returns the most informative description available: the response body
+// when one was captured, otherwise the decoded MLflow message. A body outside
+// MLflow's error_code/message schema carries no error code, so the message (which
+// mlflow-go builds from the HTTP status and a bounded body excerpt) is all the
+// server told us and must not be dropped.
+func (e *APIError) detail() string {
+	if e.ResponseBody != "" {
+		return e.ResponseBody
+	}
+	if e.MLFlowError != nil {
+		return e.MLFlowError.Message
+	}
+	return ""
+}
+
 // mapError converts an mlflow-go error into the eval-hub *APIError shape when it
 // carries API status information, preserving status code and MLflow error code so
 // IsResourceAlreadyExistsError / IsResourceDoesNotExistError continue to work.
 // Non-API errors (network failures, validation errors) are returned unchanged.
+//
+// mlflow-go decodes error_code and message independently and, when the server
+// answers outside MLflow's schema (a workspace provider or proxy can do that —
+// see RHAI-17156), synthesizes a message from the HTTP status text plus a bounded
+// excerpt of the response body. Both are copied through verbatim so callers and
+// logs see the server's reason instead of empty error fields.
 func mapError(err error) error {
 	if err == nil {
 		return nil
@@ -51,42 +73,115 @@ func mapError(err error) error {
 	if !errors.As(err, &apiErr) {
 		return err
 	}
+	message := strings.TrimSpace(apiErr.Message)
+	if message == "" {
+		// Defensive: mlflow-go always synthesizes a message, but a custom
+		// transport may not. Never return an error with nothing in it.
+		message = http.StatusText(apiErr.StatusCode)
+		if message == "" {
+			message = "HTTP request failed"
+		}
+	}
 	return &APIError{
-		StatusCode: apiErr.StatusCode,
-		// Preserve the raw error code in the body too so the substring
-		// fallbacks in the IsResource* predicates keep working.
-		ResponseBody: fmt.Sprintf("{\"error_code\":%q,\"message\":%q}", apiErr.Code, apiErr.Message),
+		StatusCode:   apiErr.StatusCode,
+		ResponseBody: errorResponseBody(apiErr.Code, message),
 		MLFlowError: &MLFlowError{
 			ErrorCode: apiErr.Code,
-			Message:   apiErr.Message,
+			Message:   message,
 		},
 	}
 }
 
-func IsResourceAlreadyExistsError(err error) bool {
-	apiError := &APIError{}
-	if errors.As(err, &apiError) && (apiError.StatusCode == 400) {
-		if apiError.MLFlowError != nil && apiError.MLFlowError.ErrorCode == "RESOURCE_ALREADY_EXISTS" {
-			return true
-		}
-		if strings.Contains(apiError.ResponseBody, "RESOURCE_ALREADY_EXISTS") {
-			return true
-		}
+// errorResponseBody renders the mapped details in MLflow's JSON error shape when
+// an error code is present, so the legacy substring fallback in
+// IsResourceAlreadyExistsError keeps matching. A nonstandard body has no code, so
+// the message is kept as plain text rather than being wrapped in a bogus empty
+// error_code field.
+func errorResponseBody(code, message string) string {
+	if code == "" {
+		return message
 	}
-	return false
+	body, err := json.Marshal(MLFlowError{ErrorCode: code, Message: message})
+	if err != nil {
+		// Unreachable for a struct of two strings; keep the message readable.
+		return message
+	}
+	return string(body)
 }
 
+// IsResourceAlreadyExistsError reports whether err indicates the resource already
+// exists. MLflow returns RESOURCE_ALREADY_EXISTS with HTTP 400; a provider that
+// wraps MLflow can also report the conflict as HTTP 409 without MLflow's error
+// code, which is how mlflow-go's IsAlreadyExists classifies it.
+func IsResourceAlreadyExistsError(err error) bool {
+	apiError := &APIError{}
+	if !errors.As(err, &apiError) {
+		return false
+	}
+	// mlflow-go's IsAlreadyExists classifies HTTP 409 as already-exists no matter
+	// which error code accompanies it, so the conflict status keeps deciding.
+	if apiError.StatusCode == http.StatusConflict {
+		return true
+	}
+	// An explicit error code wins over the legacy RESOURCE_ALREADY_EXISTS
+	// substring, whether mlflow-go decoded it or it only appears in the body of a
+	// hand-built APIError. mapError renders the code into ResponseBody, and a
+	// provider message can quote the substring; a different explicit code such as
+	// PERMISSION_DENIED means the caller may not see the resource, not that it
+	// exists.
+	if code := apiError.explicitErrorCode(); code != "" {
+		return code == "RESOURCE_ALREADY_EXISTS"
+	}
+	// No code anywhere: keep matching a raw body that names the code.
+	return strings.Contains(apiError.ResponseBody, "RESOURCE_ALREADY_EXISTS")
+}
+
+// IsResourceDoesNotExistError reports whether err indicates the resource does not
+// exist. MLflow returns RESOURCE_DOES_NOT_EXIST with HTTP 404; a provider or proxy
+// can answer 404 outside that schema (RHAI-17156), leaving no error code, and then
+// the status is the only signal available. An explicit but different error code is
+// respected so a missing endpoint is not mistaken for a missing resource.
 func IsResourceDoesNotExistError(err error) bool {
 	apiError := &APIError{}
-	if errors.As(err, &apiError) && (apiError.StatusCode == 404) {
-		if apiError.MLFlowError != nil && apiError.MLFlowError.ErrorCode == "RESOURCE_DOES_NOT_EXIST" {
-			return true
-		}
-		if strings.Contains(apiError.ResponseBody, "RESOURCE_DOES_NOT_EXIST") {
-			return true
-		}
+	if !errors.As(err, &apiError) || apiError.StatusCode != http.StatusNotFound {
+		return false
 	}
-	return false
+	// An explicit error code wins over the status fallback, whether mlflow-go
+	// decoded it or it only appears in the body of a hand-built APIError. It also
+	// wins over the legacy RESOURCE_DOES_NOT_EXIST substring, because mapError
+	// renders the code into ResponseBody and a provider message can quote the
+	// substring; a different explicit code such as ENDPOINT_NOT_FOUND means the
+	// workspace route is missing, not the workspace.
+	if code := apiError.explicitErrorCode(); code != "" {
+		return code == "RESOURCE_DOES_NOT_EXIST"
+	}
+	// No code anywhere, so the server answered outside MLflow's schema: the 404
+	// status alone says the resource is missing (RHAI-17156).
+	return true
+}
+
+// explicitErrorCode returns the MLflow error code carried by the error, preferring
+// the one decoded by mlflow-go and falling back to MLflow's JSON error shape in the
+// captured response body. It returns "" when neither carries a code.
+func (e *APIError) explicitErrorCode() string {
+	if e.MLFlowError != nil && e.MLFlowError.ErrorCode != "" {
+		return e.MLFlowError.ErrorCode
+	}
+	return responseBodyErrorCode(e.ResponseBody)
+}
+
+// responseBodyErrorCode extracts MLflow's error_code from a raw response body, or
+// "" when the body is not in MLflow's JSON error shape.
+func responseBodyErrorCode(body string) string {
+	body = strings.TrimSpace(body)
+	if !strings.HasPrefix(body, "{") {
+		return ""
+	}
+	var decoded MLFlowError
+	if err := json.Unmarshal([]byte(body), &decoded); err != nil {
+		return ""
+	}
+	return decoded.ErrorCode
 }
 
 // Experiment represents an MLflow experiment

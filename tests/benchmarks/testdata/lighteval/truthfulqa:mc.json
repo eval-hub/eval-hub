@@ -1,9 +1,0 @@
-{
-  "notes": "One example per underlying task. Requires an endpoint supporting this task's request type and a compatible tokenizer.",
-  "parameters": {
-    "batch_size": 1,
-    "num_examples": 1,
-    "num_few_shot": 0
-  },
-  "timeout": "5m"
-}

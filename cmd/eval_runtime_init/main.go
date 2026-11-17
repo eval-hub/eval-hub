@@ -19,14 +19,17 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	"github.com/eval-hub/eval-hub/internal/runtimeenv"
 )
 
 const (
+	// Shared test data env vars
+	envInitTimeout = "TEST_DATA_INIT_TIMEOUT"
+
 	// S3 env vars
 	envBucket           = "TEST_DATA_S3_BUCKET"
 	envKey              = "TEST_DATA_S3_KEY"
-	envS3Timeout        = "TEST_DATA_S3_TIMEOUT"
 	regionOptionalKey   = "AWS_DEFAULT_REGION"
 	endpointKey         = "AWS_S3_ENDPOINT"
 	accessKeyIDKey      = "AWS_ACCESS_KEY_ID"
@@ -36,10 +39,24 @@ const (
 	envGitURL     = "TEST_DATA_GIT_URL"
 	envGitRef     = "TEST_DATA_GIT_REF"
 	envGitSubPath = "TEST_DATA_GIT_SUBPATH"
-	envGitTimeout = "TEST_DATA_GIT_TIMEOUT"
 
 	defaultTimeout = 10 * time.Minute
 )
+
+func resolveInitTimeout() (time.Duration, error) {
+	raw := strings.TrimSpace(os.Getenv(envInitTimeout))
+	if raw == "" {
+		return defaultTimeout, nil
+	}
+	parsed, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: %w", envInitTimeout, err)
+	}
+	if parsed <= 0 {
+		return 0, fmt.Errorf("invalid %s: must be a positive duration", envInitTimeout)
+	}
+	return parsed, nil
+}
 
 // Paths and URL validation are package vars so unit tests can redirect mounts and
 // exercise runGit against local file:// repos without writing under /.
@@ -54,57 +71,58 @@ func main() {
 	slog.SetDefault(logger)
 	if err := run(); err != nil {
 		logger.Error("eval-runtime-init failed", "error", err)
+		// Test-data init failures must leave a non-empty termination message so
+		// eval-hub can surface timeout/init failures instead of an empty message=.
+		reportInitFailure(err)
 		os.Exit(1)
 	}
 	logger.Info("eval-runtime-init completed")
 }
 
+// run selects job-based staging when requested, otherwise preserving evaluation source precedence.
 func run() error {
-	if strings.TrimSpace(os.Getenv(envHFRepoID)) != "" {
-		return runHF()
+	if path := os.Getenv(shared.InitJobSpecPathEnv); path != "" {
+		return runJobSources(path, shared.PostProcessorStagingRoot, shared.PostProcessorSecretRoot)
 	}
-	if strings.TrimSpace(os.Getenv(envGitURL)) != "" {
-		return runGit()
+	d := downloaderFromEnv()
+	if strings.TrimSpace(d.source.HF.RepoID) != "" {
+		return d.runHF()
 	}
-	return runS3()
+	if strings.TrimSpace(d.source.Git.URL) != "" {
+		return d.runGit()
+	}
+	return d.runS3()
 }
 
 // runS3 downloads test data from S3 into destDir.
-func runS3() error {
-	bucket := strings.TrimSpace(os.Getenv(envBucket))
-	keyPrefix := strings.TrimSpace(os.Getenv(envKey))
+func (d downloader) runS3() error {
+	bucket := strings.TrimSpace(d.source.S3.Bucket)
+	keyPrefix := strings.TrimSpace(d.source.S3.Key)
 	if bucket == "" || keyPrefix == "" {
 		return fmt.Errorf("%s and %s are required", envBucket, envKey)
 	}
 
 	keyPrefix = strings.TrimPrefix(keyPrefix, "/")
-	timeout := defaultTimeout
-	if raw := strings.TrimSpace(os.Getenv(envS3Timeout)); raw != "" {
-		parsed, err := time.ParseDuration(raw)
-		if err != nil {
-			return fmt.Errorf("invalid %s: %w", envS3Timeout, err)
-		}
-		if parsed <= 0 {
-			return fmt.Errorf("invalid %s: must be a positive duration", envS3Timeout)
-		}
-		timeout = parsed
+	timeout, err := resolveInitTimeout()
+	if err != nil {
+		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	accessKey, err := readSecret(accessKeyIDKey)
+	accessKey, err := d.readSecret(accessKeyIDKey)
 	if err != nil {
 		return fmt.Errorf("missing required secret %s: %w", accessKeyIDKey, err)
 	}
-	secretKey, err := readSecret(awsAccessKeyEnvName)
+	secretKey, err := d.readSecret(awsAccessKeyEnvName)
 	if err != nil {
 		return fmt.Errorf("missing required secret %s: %w", awsAccessKeyEnvName, err)
 	}
-	region, err := readSecret(regionOptionalKey)
+	region, err := d.readSecret(regionOptionalKey)
 	if err != nil {
 		return fmt.Errorf("missing required secret %s: %w", regionOptionalKey, err)
 	}
-	endpoint, err := readSecret(endpointKey)
+	endpoint, err := d.readSecret(endpointKey)
 	if err != nil {
 		return fmt.Errorf("missing required secret %s: %w", endpointKey, err)
 	}
@@ -122,11 +140,11 @@ func runS3() error {
 	})
 	tm := transfermanager.New(client)
 
-	if err := os.MkdirAll(destDir, 0o750); err != nil {
+	if err := os.MkdirAll(d.destDir, 0o750); err != nil {
 		return fmt.Errorf("create dest dir: %w", err)
 	}
 
-	destRoot, err := os.OpenRoot(destDir)
+	destRoot, err := os.OpenRoot(d.destDir)
 	if err != nil {
 		return fmt.Errorf("open dest root: %w", err)
 	}
@@ -145,7 +163,7 @@ func runS3() error {
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
-			return fmt.Errorf("list objects: %w", err)
+			return wrapInitTimeout("s3 list objects", timeout, fmt.Errorf("list objects: %w", err))
 		}
 		for _, obj := range page.Contents {
 			if obj.Key == nil || *obj.Key == "" {
@@ -157,7 +175,7 @@ func runS3() error {
 			found = true
 			written, err := downloadObject(ctx, tm, destRoot, bucket, keyPrefix, *obj.Key)
 			if err != nil {
-				return err
+				return wrapInitTimeout("s3 download", timeout, err)
 			}
 			fileCount++
 			totalBytes += written
@@ -173,7 +191,10 @@ func runS3() error {
 
 // copyDirFromRoot copies the contents of srcRoot into dst, skipping the .git directory.
 // All reads are confined by os.Root; destination writes use a second Root under dst.
-func copyDirFromRoot(srcRoot *os.Root, dst string) error {
+func copyDirFromRoot(ctx context.Context, srcRoot *os.Root, dst string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(dst, 0o750); err != nil {
 		return err
 	}
@@ -184,6 +205,9 @@ func copyDirFromRoot(srcRoot *os.Root, dst string) error {
 	defer func() { _ = dstRoot.Close() }()
 
 	return fs.WalkDir(srcRoot.FS(), ".", func(p string, d fs.DirEntry, err error) error {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
 		if err != nil {
 			return err
 		}
@@ -201,7 +225,7 @@ func copyDirFromRoot(srcRoot *os.Root, dst string) error {
 		if d.IsDir() {
 			return dstRoot.MkdirAll(rel, 0o750)
 		}
-		return copyFileBetweenRoots(srcRoot, dstRoot, rel)
+		return copyFileBetweenRoots(ctx, srcRoot, dstRoot, rel)
 	})
 }
 
@@ -209,7 +233,10 @@ func copyDirFromRoot(srcRoot *os.Root, dst string) error {
 // preserve the source mode, including the execute bit. That is intentional: evaluation
 // test data is read by the adapter, not executed; OpenShift SCCs use static UIDs so
 // owner-only perms remain readable by the job containers that share the pod UID.
-func copyFileBetweenRoots(srcRoot, dstRoot *os.Root, rel string) error {
+func copyFileBetweenRoots(ctx context.Context, srcRoot, dstRoot *os.Root, rel string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	in, err := srcRoot.Open(rel)
 	if err != nil {
 		return err
@@ -219,11 +246,43 @@ func copyFileBetweenRoots(srcRoot, dstRoot *os.Root, rel string) error {
 	if err != nil {
 		return err
 	}
-	if _, err = io.Copy(out, in); err != nil {
+	if _, err = copyWithContext(ctx, out, in); err != nil {
 		_ = out.Close()
 		return err
 	}
 	return out.Close()
+}
+
+func copyWithContext(ctx context.Context, dst, src *os.File) (int64, error) {
+	buf := make([]byte, 32*1024)
+	var written int64
+	for {
+		if err := ctx.Err(); err != nil {
+			return written, err
+		}
+		nr, er := src.Read(buf)
+		if nr > 0 {
+			if err := ctx.Err(); err != nil {
+				return written, err
+			}
+			nw, ew := dst.Write(buf[:nr])
+			if nw > 0 {
+				written += int64(nw)
+			}
+			if ew != nil {
+				return written, ew
+			}
+			if nw != nr {
+				return written, io.ErrShortWrite
+			}
+		}
+		if er != nil {
+			if er == io.EOF {
+				return written, nil
+			}
+			return written, er
+		}
+	}
 }
 
 func loadAWSConfig(ctx context.Context, region, accessKey, secretKey string) (aws.Config, error) {
@@ -292,11 +351,11 @@ func relativeDestPath(prefix, key string) (string, error) {
 // readSecret reads a key from the mounted secret dir. Keys must be a single path
 // segment; reads go through os.Root so they cannot escape scrtDir. Returns an
 // error if the key is invalid, missing, or empty after trimming.
-func readSecret(key string) (string, error) {
+func (d downloader) readSecret(key string) (string, error) {
 	if key == "" || key == "." || key == "/" || !filepath.IsLocal(key) || filepath.Base(key) != key {
 		return "", fmt.Errorf("secret key %q contains path separators and is not allowed", key)
 	}
-	root, err := os.OpenRoot(scrtDir)
+	root, err := os.OpenRoot(d.scrtDir)
 	if err != nil {
 		return "", fmt.Errorf("secret key %q not found in mounted secret: %w", key, err)
 	}
@@ -314,16 +373,16 @@ func readSecret(key string) (string, error) {
 
 // readOptionalSecret reads a key from the mounted secret dir when present.
 // Missing secret dir or key returns ("", nil) for optional credentials (e.g. HF token).
-func readOptionalSecret(key string) (string, error) {
+func (d downloader) readOptionalSecret(key string) (string, error) {
 	if key == "" || key == "." || key == "/" || !filepath.IsLocal(key) || filepath.Base(key) != key {
 		return "", fmt.Errorf("secret key %q contains path separators and is not allowed", key)
 	}
-	root, err := os.OpenRoot(scrtDir)
+	root, err := os.OpenRoot(d.scrtDir)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return "", nil
 		}
-		return "", fmt.Errorf("open secret dir %q: %w", scrtDir, err)
+		return "", fmt.Errorf("open secret dir %q: %w", d.scrtDir, err)
 	}
 	defer func() { _ = root.Close() }()
 

@@ -755,16 +755,37 @@ func (r *K8sRuntime) Name() string {
 
 // ListHardwareProfiles discovers enabled platform profiles. Queue-backed profiles
 // are visible only when their LocalQueue exists in the request tenant namespace.
+// Hardware profiles are optional: when the platform namespace is not configured or
+// the cluster does not serve the HardwareProfile CRD, discovery reports no profiles
+// so that /api/v1/info stays usable. Genuine lookup failures (for example RBAC
+// denials) are still returned to the caller.
 func (r *K8sRuntime) ListHardwareProfiles(ctx context.Context, namespace string) ([]api.HardwareProfileInfo, error) {
 	if namespace == "" {
 		return nil, fmt.Errorf("tenant namespace is required")
 	}
 	profileNamespace, err := hardwareProfilesNamespace()
 	if err != nil {
-		return nil, err
+		if r.logger != nil {
+			r.logger.Debug(
+				"hardware profile discovery is not configured; reporting no hardware profiles",
+				"error", err,
+				"env", hardwareProfilesNamespaceEnv,
+			)
+		}
+		return []api.HardwareProfileInfo{}, nil
 	}
 	profiles, err := r.helper.ListHardwareProfiles(ctx, profileNamespace)
 	if err != nil {
+		if isHardwareProfileCRDUnavailable(err) {
+			if r.logger != nil {
+				r.logger.Debug(
+					"hardware profile CRD is not installed; reporting no hardware profiles",
+					"namespace", profileNamespace,
+					"error", err,
+				)
+			}
+			return []api.HardwareProfileInfo{}, nil
+		}
 		return nil, err
 	}
 	var queues map[string]api.QueueInfo

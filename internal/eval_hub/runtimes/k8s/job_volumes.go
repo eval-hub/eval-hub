@@ -3,7 +3,9 @@ package k8s
 import (
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
@@ -201,12 +203,15 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 		})
 	}
 
-	// Post-processing calibration PVCs are independent of benchmark test data.
-	// They are mounted read-only in the adapter container, which receives a
-	// claim-name-to-path map through EVALHUB_POST_PROCESSOR_PVC_MOUNTS.
-	// Mount the claim root: the adapter applies each reference's sub_path.
-	// Setting SubPath here would apply it twice and prevent references to
-	// different subpaths of the same claim from sharing a mount.
+	if cfg.postProcessorDownloads != nil {
+		// Init owns writes; computation containers only read the staged inputs.
+		volumes = append(volumes, corev1.Volume{Name: postProcessorDataVolumeName, VolumeSource: corev1.VolumeSource{EmptyDir: testDataEmptyDirVolumeSource()}})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: postProcessorDataVolumeName, MountPath: shared.PostProcessorStagingRoot, ReadOnly: true})
+	}
+
+	// Post-processing results and calibration PVCs are independent of benchmark test data.
+	// Each reference is mounted directly, with Kubernetes applying sub_path as
+	// for evaluation test data. A shared claim needs only one volume definition.
 	for _, pvc := range cfg.postProcessorPVCs {
 		volumes = append(volumes, corev1.Volume{
 			Name: pvc.volumeName,
@@ -221,6 +226,7 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 			Name:      pvc.volumeName,
 			MountPath: pvc.mountPath,
 			ReadOnly:  true,
+			SubPath:   pvc.subPath,
 		})
 	}
 
@@ -414,6 +420,14 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			corev1.ResourceMemory: resource.MustParse(defaultInitMemoryLimit),
 		},
 	}
+	if cfg.postProcessorDownloads != nil {
+		// Use the shared init executable instead of the ordinary single-source setup.
+		container, sourceVolumes, err := postProcessorInitContainer(cfg, initResources)
+		if err != nil {
+			return nil, nil, err
+		}
+		return []corev1.Container{*container}, sourceVolumes, nil
+	}
 
 	if hasS3TestData(cfg) {
 		if cfg.testDataInitImage == "" {
@@ -434,16 +448,19 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			},
 		})
 
+		s3Env := []corev1.EnvVar{
+			{Name: envTestDataS3BucketName, Value: cfg.testDataS3.bucket},
+			{Name: envTestDataS3KeyName, Value: normalizeS3Key(cfg.testDataS3.key)},
+		}
+		s3Env = appendTestDataInitTimeoutEnv(s3Env, cfg.testDataInitTimeout)
+
 		initContainers = append(initContainers, corev1.Container{
 			Name:            initContainerName,
 			Image:           cfg.testDataInitImage,
 			ImagePullPolicy: corev1.PullIfNotPresent,
 			Command:         []string{defaultTestDataInitCmd},
 			Resources:       initResources,
-			Env: []corev1.EnvVar{
-				{Name: envTestDataS3BucketName, Value: cfg.testDataS3.bucket},
-				{Name: envTestDataS3KeyName, Value: normalizeS3Key(cfg.testDataS3.key)},
-			},
+			Env:             s3Env,
 			SecurityContext: defaultSecurityContext(),
 			VolumeMounts: []corev1.VolumeMount{
 				{
@@ -481,6 +498,7 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 			{Name: envTestDataGitURLName, Value: cfg.testDataGit.url},
 			{Name: envTestDataGitRefName, Value: cfg.testDataGit.ref},
 		}
+		envVars = appendTestDataInitTimeoutEnv(envVars, cfg.testDataInitTimeout)
 		if cfg.testDataGit.subPath != "" {
 			envVars = append(envVars, corev1.EnvVar{Name: envTestDataGitSubPathName, Value: cfg.testDataGit.subPath})
 		}
@@ -545,6 +563,7 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 		envVars := []corev1.EnvVar{
 			{Name: envTestDataHFRepoIDName, Value: cfg.testDataHF.repoID},
 		}
+		envVars = appendTestDataInitTimeoutEnv(envVars, cfg.testDataInitTimeout)
 		if cfg.testDataHF.revision != "" {
 			envVars = append(envVars, corev1.EnvVar{Name: envTestDataHFRevisionName, Value: cfg.testDataHF.revision})
 		}
@@ -591,6 +610,15 @@ func initContainerVolumesAndMounts(cfg *jobConfig) ([]corev1.Container, []corev1
 		})
 	}
 	return initContainers, volumes, nil
+}
+
+func appendTestDataInitTimeoutEnv(env []corev1.EnvVar, timeout time.Duration) []corev1.EnvVar {
+	if timeout <= 0 {
+		return env
+	}
+	value := timeout.String()
+	env = append(env, corev1.EnvVar{Name: envTestDataInitTimeoutName, Value: value})
+	return env
 }
 
 func ensureServiceCAVolume(volumes []corev1.Volume, configMapName string) []corev1.Volume {

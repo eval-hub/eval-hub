@@ -1,0 +1,22 @@
+type: object
+title: CollectionGenerationAction
+description: Bounded, redacted summary of a runner action; never a raw tool result or prompt.
+required:
+  - name
+  - outcome
+  - summary
+properties:
+  name:
+    type: string
+    minLength: 1
+    maxLength: 64
+    description: Fixed action/tool name.
+  outcome:
+    type: string
+    enum: [success, error]
+  summary:
+    type: string
+    minLength: 1
+    maxLength: 300
+    description: Sanitized short summary without credentials or arbitrary model text.
+additionalProperties: false

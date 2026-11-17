@@ -1,0 +1,27 @@
+type: object
+title: CollectionGenerationExplanation
+description: |
+  Reasons for the final selection and the highest-ranked eligible candidates
+  considered but not selected. References are validated against the visible catalog.
+required:
+  - selected_benchmarks
+  - rejected_benchmarks
+properties:
+  selected_benchmarks:
+    type: array
+    minItems: 1
+    description: |
+      One entry for each final collection benchmark, in collection order.
+      The count cannot exceed the accepted request's max_benchmarks.
+    items:
+      $ref: ./CollectionGenerationBenchmarkReason.yaml
+  rejected_benchmarks:
+    type: array
+    maxItems: 5
+    description: |
+      Up to five highest-ranked eligible candidates considered but not selected.
+      Ordered by the runner's relevance rank, with provider_id then id as tie-breakers.
+      No pair may also appear in selected_benchmarks.
+    items:
+      $ref: ./CollectionGenerationBenchmarkReason.yaml
+additionalProperties: false

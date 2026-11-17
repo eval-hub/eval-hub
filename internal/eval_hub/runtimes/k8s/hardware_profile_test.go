@@ -1,10 +1,17 @@
 package k8s
 
 import (
+	"errors"
+	"fmt"
+	"net/http"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 func TestParseHardwareProfileResources(t *testing.T) {
@@ -184,6 +191,54 @@ func TestHardwareProfilesNamespaceRequiresEnv(t *testing.T) {
 	_, err := hardwareProfilesNamespace()
 	if err == nil {
 		t.Fatal("expected error when env unset")
+	}
+}
+
+func TestIsHardwareProfileCRDUnavailable(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "nil error", err: nil, want: false},
+		{
+			name: "api server could not find the resource",
+			err: &apierrors.StatusError{ErrStatus: metav1.Status{
+				Status:  metav1.StatusFailure,
+				Code:    http.StatusNotFound,
+				Reason:  metav1.StatusReasonNotFound,
+				Message: "the server could not find the requested resource",
+			}},
+			want: true,
+		},
+		{
+			name: "wrapped not found",
+			err:  fmt.Errorf("list hardware profiles: %w", apierrors.NewNotFound(hardwareProfileGVR.GroupResource(), "")),
+			want: true,
+		},
+		{
+			name: "kind missing from discovery",
+			err: &meta.NoKindMatchError{
+				GroupKind:        schema.GroupKind{Group: hardwareProfileAPIGroup, Kind: "HardwareProfile"},
+				SearchedVersions: []string{hardwareProfileAPIVersion},
+			},
+			want: true,
+		},
+		{
+			name: "rbac denial stays a real error",
+			err:  apierrors.NewForbidden(hardwareProfileGVR.GroupResource(), "", errors.New("denied")),
+			want: false,
+		},
+		{name: "unrelated error", err: errors.New("boom"), want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := isHardwareProfileCRDUnavailable(tc.err); got != tc.want {
+				t.Fatalf("isHardwareProfileCRDUnavailable(%v) = %t, want %t", tc.err, got, tc.want)
+			}
+		})
 	}
 }
 

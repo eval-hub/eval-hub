@@ -4,5 +4,6 @@
     "num_examples": 1,
     "num_fewshot": 0
   },
-  "timeout": "5m"
+  "timeout": "5m",
+  "tokenizer_env": "LM_EVAL_TOKENIZER"
 }

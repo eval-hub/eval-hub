@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/evalcards"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/eval-hub/eval-hub/pkg/cards"
 )
@@ -49,9 +50,9 @@ type terminalTestExporter struct {
 	called bool
 }
 
-func (e *terminalTestExporter) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (string, error) {
+func (e *terminalTestExporter) Export(_ context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (evalcards.ExportResult, error) {
 	e.called = true
-	return "https://example.com/card.json", nil
+	return evalcards.ExportResult{CardURL: "https://example.com/card.json"}, nil
 }
 
 type terminalTestStorage struct {
@@ -79,7 +80,7 @@ func TestOnEvaluationJobUpdatedSkipsExportWhenNotTerminal(t *testing.T) {
 	h.onEvaluationJobUpdated(
 		context.Background(),
 		storage,
-		func() (*api.EvaluationJobResource, error) { return storage.job, nil },
+		func(context.Context) (*api.EvaluationJobResource, error) { return storage.job, nil },
 		api.OverallStatePending,
 		nil,
 	)
@@ -105,7 +106,7 @@ func TestOnEvaluationJobUpdatedSkipsExportWhenTerminalStateUnchanged(t *testing.
 	h.onEvaluationJobUpdated(
 		context.Background(),
 		storage,
-		func() (*api.EvaluationJobResource, error) { return storage.job, nil },
+		func(context.Context) (*api.EvaluationJobResource, error) { return storage.job, nil },
 		api.OverallStateCompleted,
 		nil,
 	)
@@ -115,7 +116,7 @@ func TestOnEvaluationJobUpdatedSkipsExportWhenTerminalStateUnchanged(t *testing.
 	}
 }
 
-func TestOnEvaluationJobUpdatedExportsOnFailedTransition(t *testing.T) {
+func TestOnEvaluationJobUpdatedSkipsExportOnFailedTransition(t *testing.T) {
 	t.Parallel()
 	exporter := &terminalTestExporter{}
 	storage := &terminalTestStorage{
@@ -131,13 +132,13 @@ func TestOnEvaluationJobUpdatedExportsOnFailedTransition(t *testing.T) {
 	h.onEvaluationJobUpdated(
 		context.Background(),
 		storage,
-		func() (*api.EvaluationJobResource, error) { return storage.job, nil },
+		func(context.Context) (*api.EvaluationJobResource, error) { return storage.job, nil },
 		api.OverallStateRunning,
 		nil,
 	)
 
-	if !exporter.called {
-		t.Fatal("expected export when job transitions to failed")
+	if exporter.called {
+		t.Fatal("expected export to be skipped when job transitions to failed")
 	}
 }
 
@@ -149,7 +150,7 @@ func TestOnEvaluationJobUpdatedSkipsWhenGetJobFails(t *testing.T) {
 	h.onEvaluationJobUpdated(
 		context.Background(),
 		&terminalTestStorage{},
-		func() (*api.EvaluationJobResource, error) { return nil, errors.New("load failed") },
+		func(context.Context) (*api.EvaluationJobResource, error) { return nil, errors.New("load failed") },
 		api.OverallStateRunning,
 		nil,
 	)
@@ -167,7 +168,7 @@ func TestOnEvaluationJobUpdatedSkipsWhenJobNil(t *testing.T) {
 	h.onEvaluationJobUpdated(
 		context.Background(),
 		&terminalTestStorage{},
-		func() (*api.EvaluationJobResource, error) { return nil, nil },
+		func(context.Context) (*api.EvaluationJobResource, error) { return nil, nil },
 		api.OverallStateRunning,
 		nil,
 	)
@@ -341,7 +342,7 @@ func TestOnEvaluationJobUpdatedFiresThresholdViolations(t *testing.T) {
 	h.onEvaluationJobUpdated(
 		context.Background(),
 		&terminalTestStorage{job: job},
-		func() (*api.EvaluationJobResource, error) { return job, nil },
+		func(context.Context) (*api.EvaluationJobResource, error) { return job, nil },
 		api.OverallStateRunning,
 		logger,
 	)
@@ -363,7 +364,7 @@ func TestOnEvaluationJobUpdatedSkipsThresholdWhenNilResults(t *testing.T) {
 	h.onEvaluationJobUpdated(
 		context.Background(),
 		&terminalTestStorage{job: job},
-		func() (*api.EvaluationJobResource, error) { return job, nil },
+		func(context.Context) (*api.EvaluationJobResource, error) { return job, nil },
 		api.OverallStateRunning,
 		nil,
 	)

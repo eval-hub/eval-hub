@@ -1,10 +1,10 @@
 {
-  "notes": "One interpreter-abuse sample. Requires JUDGE_MODEL_NAME, JUDGE_BASE_URL, and JUDGE_API_KEY for an independent OpenAI-compatible grader connection.",
+  "notes": "One interpreter-abuse sample. Requires JUDGE_MODEL_NAME; configure grader_api-key and grader_url in MODEL_AUTH_SECRET_REF for an independent OpenAI-compatible grader connection.",
   "parameters": {
     "epochs": 1,
     "max_tasks": 1,
     "model_roles": {
-      "grader": "{\"model\":\"openai/${JUDGE_MODEL_NAME}\",\"model_args\":{\"base_url\":\"${JUDGE_BASE_URL}\",\"api_key\":\"${JUDGE_API_KEY}\",\"responses_api\":false}}"
+      "grader": "openai/${JUDGE_MODEL_NAME}"
     },
     "num_examples": 1,
     "task": "inspect_evals/cyse2_interpreter_abuse",

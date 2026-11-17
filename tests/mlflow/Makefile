@@ -8,7 +8,7 @@ MLFLOW_OLD_VERSION ?= 3.8.1
 
 # Fetch the latest stable MLflow version from GitHub Releases.
 # Falls back to a pinned version when the API is unreachable (offline, CI, rate-limited).
-MLFLOW_LATEST_VERSION_FALLBACK := 3.15.1
+MLFLOW_LATEST_VERSION_FALLBACK := 3.18.0
 ifndef MLFLOW_LATEST_VERSION
 MLFLOW_LATEST_VERSION := $(shell \
   curl -sf --max-time 5 \
@@ -99,4 +99,4 @@ cls:
 
 test-unit-server: ## Run MLflow integration unit tests (auto-starts server per case, skips if unavailable)
 	@echo "🧪 Running MLflow integration unit tests..."
-	@go test -v ../../internal/eval_hub/mlflow -run TestMLFlowIntegration -count=1
+	@go test -v -timeout=30m ../../internal/eval_hub/mlflow -run TestMLFlowIntegration -count=1

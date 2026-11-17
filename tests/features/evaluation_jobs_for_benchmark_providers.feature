@@ -156,8 +156,6 @@ Feature: Evaluation Jobs for Benchmark Providers
     Then the response code should be 204
 
   # https://redhat.atlassian.net/browse/RHOAIENG-85389
-  # https://redhat.atlassian.net/browse/RHOAIENG-99094
-  # https://redhat.atlassian.net/browse/RHOAIENG-99100
   Scenario: Verifying results returned for Evaluation job - lm_evaluation_harness - group 2
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_lm_evaluation_harness_2.json"
@@ -182,7 +180,6 @@ Feature: Evaluation Jobs for Benchmark Providers
 
   # https://redhat.atlassian.net/browse/RHOAIENG-85389
   # https://redhat.atlassian.net/browse/RHOAIENG-97629
-  # https://redhat.atlassian.net/browse/RHOAIENG-99094
   Scenario: Verifying results returned for Evaluation job - lm_evaluation_harness - group 3
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_lm_evaluation_harness_3.json"
@@ -205,9 +202,6 @@ Feature: Evaluation Jobs for Benchmark Providers
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
-  # https://redhat.atlassian.net/browse/RHOAIENG-90798 - bbh benchmark
-  # https://redhat.atlassian.net/browse/RHOAIENG-99094
-  # https://redhat.atlassian.net/browse/RHOAIENG-99100
   Scenario: Verifying results returned for Evaluation job - lm_evaluation_harness - group 4
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_lm_evaluation_harness_4.json"
@@ -232,8 +226,6 @@ Feature: Evaluation Jobs for Benchmark Providers
 
   # https://redhat.atlassian.net/browse/RHOAIENG-85389
   # https://redhat.atlassian.net/browse/RHOAIENG-85393 - careqa_open_perplexity
-  # https://redhat.atlassian.net/browse/RHOAIENG-99094
-  # https://redhat.atlassian.net/browse/RHOAIENG-99100
   Scenario: Verifying results returned for Evaluation job - lm_evaluation_harness - group 5
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_lm_evaluation_harness_5.json"
@@ -257,10 +249,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     Then the response code should be 204
 
   # https://redhat.atlassian.net/browse/RHOAIENG-85393 - tinyTruthfulQA
-  # https://redhat.atlassian.net/browse/RHOAIENG-85410 - humaneval, mbpp
   # https://redhat.atlassian.net/browse/RHOAIENG-97651
-  # https://redhat.atlassian.net/browse/RHOAIENG-99094
-  # https://redhat.atlassian.net/browse/RHOAIENG-99100
   Scenario: Verifying results returned for Evaluation job - lm_evaluation_harness - group 6
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_lm_evaluation_harness_6.json"
@@ -305,8 +294,6 @@ Feature: Evaluation Jobs for Benchmark Providers
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 
-  # https://redhat.atlassian.net/browse/RHOAIENG-97740
-  # https://redhat.atlassian.net/browse/RHOAIENG-99504
   Scenario: Verifying results returned for Evaluation job - ragas
     Given the service is running
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_ragas.json"

@@ -119,6 +119,8 @@ type SidecarModelConfig struct {
 // Whether the OCI reverse proxy runs is determined from the job spec (exports.oci), not from
 // the presence of this block; when nil, the sidecar uses defaults for registry TLS.
 type SidecarOCIConfig struct {
+	// PushTimeout bounds the API service's complete registry publication.
+	PushTimeout time.Duration `mapstructure:"push_timeout,omitempty" json:"push_timeout,omitempty" validate:"gte=0"`
 	CACertPath  string        `mapstructure:"ca_cert_path,omitempty" json:"ca_cert_path,omitempty"` // optional PEM CA for registry TLS
 	HTTPTimeout time.Duration `mapstructure:"http_timeout,omitempty" json:"http_timeout,omitempty"` // HTTP client timeout for registry requests (e.g. 30s)
 }

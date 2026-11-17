@@ -1,0 +1,24 @@
+type: object
+title: CollectionGenerationBenchmarkReason
+description: |
+  Model-generated selection rationale. The provider/benchmark pair is checked
+  against the tenant-visible catalog; the prose is explanatory, not a verified fact.
+required:
+  - provider_id
+  - id
+  - reason
+properties:
+  provider_id:
+    type: string
+    minLength: 1
+    description: Provider ID from the visible catalog.
+  id:
+    type: string
+    minLength: 1
+    description: Benchmark ID, matching CollectionBenchmarkConfig.id.
+  reason:
+    type: string
+    minLength: 1
+    maxLength: 300
+    description: Concise reason for selecting or rejecting this benchmark.
+additionalProperties: false

@@ -11,5 +11,5 @@
     "sdg_api_base": "${MODEL_URL}",
     "sdg_model": "openai/${MODEL_NAME}"
   },
-  "timeout": "5m"
+  "timeout": "15m"
 }

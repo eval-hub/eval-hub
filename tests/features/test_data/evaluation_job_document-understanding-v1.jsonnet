@@ -1,22 +1,14 @@
 local test = import 'test.libsonnet';
-local rulerBenchmark(id) = {
-  id: id,
-  provider_id: 'ruler',
-  parameters: {
-    context_lengths: [4096],
-    num_samples: 1,
-  },
-} + test.hardwareConfigQueue();
 
 test.oobCollectionRefJobWithBenchmarks(
   'test-evaluation-job-oob-collection',
   'document-understanding-v1',
   [
-    rulerBenchmark('common-words-extraction'),
-    rulerBenchmark('frequency-words-extraction'),
-    rulerBenchmark('qa-squad'),
-    rulerBenchmark('qa-hotpotqa'),
-    rulerBenchmark('niah-single-essay'),
-    rulerBenchmark('variable-tracking'),
+    test.benchmark('common-words-extraction', 'ruler', { context_lengths: [4096], num_samples: 1 }),
+    test.benchmark('frequency-words-extraction', 'ruler', { context_lengths: [4096], num_samples: 1 }),
+    test.benchmark('qa-squad', 'ruler', { context_lengths: [4096], num_samples: 1 }),
+    test.benchmark('qa-hotpotqa', 'ruler', { context_lengths: [4096], num_samples: 1 }),
+    test.benchmark('niah-single-essay', 'ruler', { context_lengths: [4096], num_samples: 1 }),
+    test.benchmark('variable-tracking', 'ruler', { context_lengths: [4096], num_samples: 1 }),
   ],
 )

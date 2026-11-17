@@ -2,6 +2,7 @@ package validation
 
 import (
 	"fmt"
+	"path"
 	"reflect"
 	"regexp"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 	validator "github.com/go-playground/validator/v10"
 	"github.com/go-playground/validator/v10/non-standard/validators"
+	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 )
 
 var (
@@ -50,6 +52,12 @@ func register(instance *validator.Validate) {
 }
 
 func registerCustomValidators(instance *validator.Validate) error {
+	if err := instance.RegisterValidation("rfc1123_dns_subdomain", validateRFC1123DNSSubdomain); err != nil {
+		return fmt.Errorf("register secret name validator: %w", err)
+	}
+	if err := instance.RegisterValidation("pvc_sub_path", validatePVCSubPath); err != nil {
+		return fmt.Errorf("register PVC subpath validator: %w", err)
+	}
 	// https://github.com/go-playground/validator/blob/v10.30.2/non-standard/validators/notblank.go
 	if err := instance.RegisterValidation("notblank", validators.NotBlank); err != nil {
 		return fmt.Errorf("register validator failed for notblank: %w", err)
@@ -276,4 +284,24 @@ func evaluationJobConfigBenchmarksMin(sl validator.StructLevel) {
 			sl.ReportError(cfg.Benchmarks, "benchmarks", "benchmarks", "minimum one benchmark", "1")
 		}
 	}
+}
+
+// validateRFC1123DNSSubdomain accepts Kubernetes Secret names, including dots.
+func validateRFC1123DNSSubdomain(fl validator.FieldLevel) bool {
+	return len(k8svalidation.IsDNS1123Subdomain(fl.Field().String())) == 0
+}
+
+// validatePVCSubPath rejects absolute and dot-segment paths at the API boundary,
+// before runtime mount construction can turn a bad request into a server error.
+func validatePVCSubPath(fl validator.FieldLevel) bool {
+	value := fl.Field().String()
+	if path.IsAbs(value) {
+		return false
+	}
+	for _, segment := range strings.Split(value, "/") {
+		if segment == "." || segment == ".." {
+			return false
+		}
+	}
+	return true
 }

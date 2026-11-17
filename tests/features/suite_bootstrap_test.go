@@ -2,7 +2,6 @@ package features
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -48,8 +47,10 @@ func createApiFeature() (*apiFeature, error) {
 		}
 	}
 	// Avoid reusing idle connections that the ingress router may have closed.
-	// Clone to preserve the suite's TLS settings without changing other clients.
-	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport, err := testhelpers.NewFVTTransport()
+	if err != nil {
+		return nil, err
+	}
 	transport.DisableKeepAlives = true
 	client := &http.Client{
 		Timeout:   timeout,
@@ -296,7 +297,7 @@ func (a *apiFeature) setupMCPServer(logger *slog.Logger) error {
 
 	logger.Info("Setting up MCP server", "base_url", a.baseURL.String(), "tenant", tenant, "has_token", token != "")
 
-	evalhubClient := evalhubclient.NewClient(a.baseURL.String())
+	evalhubClient := evalhubclient.NewClient(a.baseURL.String()).WithHTTPClient(a.client)
 	if tenant != "" {
 		evalhubClient = evalhubClient.WithTenant(tenant)
 	}
@@ -417,14 +418,22 @@ func checkModelEndpoint() {
 
 	fmt.Printf("Checking model endpoint connectivity: %s\n", modelURL)
 
+	// Prefer FVT_CA_CERT_PATH when present. Only skip TLS verification for this
+	// preflight when the private CA is unset (Jenkins runners that do not yet
+	// have the MaaS CA). An unreadable FVT_CA_CERT_PATH fails earlier in
+	// setUpTestConf. EvalHub API requests still verify TLS.
+	transport, err := testhelpers.NewFVTTransport()
+	if err != nil {
+		// Defensive: setUpTestConf normally fails first when the CA is bad.
+		panic(logError(err))
+	}
+	if os.Getenv("FVT_CA_CERT_PATH") == "" {
+		logDebug("WARNING: FVT_CA_CERT_PATH not set; temporarily skipping TLS verification for model preflight\n")
+		transport.TLSClientConfig.InsecureSkipVerify = true //nolint:gosec
+	}
 	client := &http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				MinVersion:         tls.VersionTLS12,
-				InsecureSkipVerify: true, //nolint:gosec
-			},
-		},
+		Timeout:   10 * time.Second,
+		Transport: transport,
 	}
 
 	maxRetries := 3
@@ -564,13 +573,6 @@ func checkRegexes() {
 }
 
 func InitializeTestSuite(ctx *godog.TestSuiteContext) {
-	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		MaxVersion: tls.VersionTLS13,
-		//nolint:gosec
-		InsecureSkipVerify: true,
-	}
-
 	if authToken := os.Getenv("AUTH_TOKEN"); authToken != "" {
 		logDebug("Using Authorization header with token\n")
 	}
@@ -676,6 +678,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I wait for the evaluation job status to match "([^"]*)"$`, tc.iWaitForEvaluationJobStatusToMatch)
 
 	// OCI artifact steps
+	ctx.Step(`^I wait for the OCI export status to be "([^"]*)"$`, tc.iWaitForOCIExportStatus)
 	ctx.Step(`^I fetch the OCI manifest for repository "([^"]*)" and tag "([^"]*)"$`, tc.iFetchOCIManifestByRepoAndTag)
 	ctx.Step(`^the OCI manifest should not exist$`, tc.theOCIManifestShouldNotExist)
 	ctx.Step(`^the OCI manifest should contain annotation "([^"]*)" with value "([^"]*)"$`, tc.theOCIManifestShouldContainAnnotation)
