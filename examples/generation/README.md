@@ -52,11 +52,14 @@ The demo verifies these fixture-only behaviors:
    explanation for each, and several action summaries. Completed status omits
    `status.progress`, as required by the API contract. The JSON collection,
    YAML serialization, explanations, and both status shapes are checked by tests.
-5. `DELETE` is a repeatable no-op for the fixed fixture ID; unknown IDs return
+5. `GET ...?mock=failure` returns a fixed failed response with one safe
+   `status.error` (`guardrails_rejected`, `topic_relevance`), no proposal, and
+   no progress. It does not run a real guardrail check.
+6. `DELETE` is a repeatable no-op for the fixed fixture ID; unknown IDs return
    404.
 
 `POST` and `DELETE` require exactly one `mock=true` query value. `GET` accepts
-exactly one of `mock=progress`, `mock=complete`, or the compatibility alias
+exactly one of `mock=progress`, `mock=complete`, `mock=failure`, or the compatibility alias
 `mock=true` (which returns the completed fixture). Other values or repeated
 `mock` parameters return HTTP 400. These responses are static examples, not a
 real generation lifecycle: polling does not advance the resource from running
@@ -80,5 +83,5 @@ kubectl --kubeconfig "$KCFG" -n system create token evalhub-local-service --dura
 Use the first command's output for `@baseUrl` and the last command's output for
 `@token`. For a custom dev-deploy host port or cluster name, substitute the
 values used for that deployment. Do not commit the populated token; restore the
-placeholder after the demo. Run the POST, progress GET, complete GET, and DELETE
+placeholder after the demo. Run the POST, progress GET, complete GET, failure GET, and DELETE
 requests in order.

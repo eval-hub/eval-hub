@@ -123,7 +123,7 @@ func TestCollectionGenerationMockHandlers(t *testing.T) {
 		}
 	})
 
-	t.Run("get progress, completed result, invalid ID, and invalid option", func(t *testing.T) {
+	t.Run("get progress, completed result, failure, invalid ID, and invalid option", func(t *testing.T) {
 		t.Parallel()
 		progress := newGenerationMockRequest("GET", "?mock=progress", nil)
 		progress.pathValue["id"] = "550e8400-e29b-41d4-a716-446655440099"
@@ -153,6 +153,26 @@ func TestCollectionGenerationMockHandlers(t *testing.T) {
 		result := completeBody["result"].(map[string]any)
 		if result["collection"] == nil || result["yaml"] == nil || completeBody["status"].(map[string]any)["state"] != "completed" {
 			t.Fatalf("completed response missing collection proposal: %#v", completeBody)
+		}
+
+		failure := newGenerationMockRequest("GET", "?mock=failure", nil)
+		failureRecorder := httptestRecorder()
+		handler.HandleGetCollectionGeneration(ctx, failure, MockResponseWrapper{recorder: failureRecorder})
+		if failureRecorder.Code != 200 {
+			t.Fatalf("failure status = %d; response=%s", failureRecorder.Code, failureRecorder.Body.String())
+		}
+		var failureBody map[string]any
+		if err := json.Unmarshal(failureRecorder.Body.Bytes(), &failureBody); err != nil {
+			t.Fatalf("decode failure response: %v", err)
+		}
+		failureStatus := failureBody["status"].(map[string]any)
+		failureError := failureStatus["error"].(map[string]any)
+		if failureStatus["state"] != "failed" || failureStatus["completed_at"] == nil ||
+			failureError["code"] != "guardrails_rejected" || failureError["category"] != "topic_relevance" ||
+			failureError["message"] == "" || len(failureError) != 3 ||
+			failureBody["result"] != nil || failureStatus["progress"] != nil ||
+			failureRecorder.Header().Get("X-EvalHub-Mock") != "true" {
+			t.Fatalf("failed response does not match terminal error contract: %#v", failureBody)
 		}
 
 		unknown := newGenerationMockRequest("GET", "?mock=complete", nil)

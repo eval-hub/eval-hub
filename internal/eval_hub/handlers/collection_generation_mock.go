@@ -58,7 +58,7 @@ func (h *Handlers) HandleCreateCollectionGeneration(ctx *executioncontext.Execut
 // envelope uses the current caller's identity; no POST state, owner continuity,
 // or tenant continuity is retained.
 func (h *Handlers) HandleGetCollectionGeneration(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, resp httpwrappers.ResponseWrapper) {
-	mockResponse, ok := collectionGenerationMockRequested(ctx, req, resp, "progress", "complete", "true")
+	mockResponse, ok := collectionGenerationMockRequested(ctx, req, resp, "progress", "complete", "failure", "true")
 	if !ok {
 		return
 	}
@@ -69,6 +69,11 @@ func (h *Handlers) HandleGetCollectionGeneration(ctx *executioncontext.Execution
 	if mockResponse == "progress" {
 		setCollectionGenerationMockHeaders(resp)
 		resp.WriteJSON(collectionGenerationMockProgress(ctx), 200)
+		return
+	}
+	if mockResponse == "failure" {
+		setCollectionGenerationMockHeaders(resp)
+		resp.WriteJSON(collectionGenerationMockFailure(ctx), 200)
 		return
 	}
 
@@ -177,6 +182,37 @@ func collectionGenerationMockProgress(ctx *executioncontext.ExecutionContext) ma
 					"name":         "search_benchmarks",
 					"completed_at": updatedAt,
 				},
+			},
+		},
+	}
+}
+
+func collectionGenerationMockFailure(ctx *executioncontext.ExecutionContext) map[string]any {
+	const createdAt = "2026-10-29T12:00:00Z"
+	const completedAt = "2026-10-29T12:00:02Z"
+	return map[string]any{
+		"resource": map[string]any{
+			"id":         collectionGenerationMockID,
+			"tenant":     generationIdentity(ctx.Tenant.String(), "local"),
+			"owner":      generationIdentity(ctx.User.String(), "local"),
+			"created_at": createdAt,
+			"updated_at": completedAt,
+		},
+		"request": api.CollectionGenerationRequest{
+			EvaluationGoal:   "Plan a beach vacation",
+			Model:            api.ModelRef{Name: "fixture-generator", URL: "https://generator.example/v1"},
+			MaxBenchmarks:    2,
+			Strictness:       "moderate",
+			GenerationEffort: "standard",
+		},
+		"status": map[string]any{
+			"state":        "failed",
+			"started_at":   "2026-10-29T12:00:01Z",
+			"completed_at": completedAt,
+			"error": map[string]any{
+				"code":     "guardrails_rejected",
+				"category": "topic_relevance",
+				"message":  "Describe an AI evaluation goal and try again.",
 			},
 		},
 	}

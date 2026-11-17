@@ -237,6 +237,20 @@ poll_generation() {
   log PASS "GET mock=complete returned the completed proposal and aligned explanations."
   jq '{id:.resource.id,state:.status.state,collection:.result.collection.name,benchmarks:[.result.collection.benchmarks[] | {provider_id,id}]}' \
     "$WORK_DIR/generation-get.json"
+
+  api_request GET "/api/v1/evaluations/collections/generation/550e8400-e29b-41d4-a716-446655440099?mock=failure" 200 \
+    "$WORK_DIR/generation-failure.json"
+  jq -e '
+    .status.state == "failed" and .status.completed_at != null and
+    .status.error.code == "guardrails_rejected" and
+    .status.error.category == "topic_relevance" and
+    (.status.error.message | length > 0) and
+    (.status.error | length) == 3 and
+    (.status | has("progress") | not) and
+    (has("result") | not)
+  ' "$WORK_DIR/generation-failure.json" >/dev/null ||
+    fail "GET failure response did not match the failed CollectionGenerationResource contract."
+  log PASS "GET mock=failure returned a safe terminal error without a proposal."
 }
 
 check_delete_and_not_found() {
