@@ -635,3 +635,11 @@ benchmarks:
       lower_is_better: false
     pass_criteria:
       threshold: 0.25
+
+parameters:
+  - name: save_sample_results
+    type: boolean
+    default: false
+    description: >
+      Export per-example answers and scores when enabled. Requires an OCI export
+      configured for the evaluation job.
