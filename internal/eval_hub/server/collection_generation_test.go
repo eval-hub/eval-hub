@@ -36,14 +36,27 @@ func TestCollectionGenerationMockMatchesOpenAPIContract(t *testing.T) {
 			path   string
 		}{
 			{method: http.MethodGet, path: "/api/v1/evaluations/collections/generation"},
+			{method: http.MethodPost, path: "/api/v1/evaluations/collections/generation/" + collectionGenerationMockID},
 			{method: http.MethodPut, path: "/api/v1/evaluations/collections/generation/" + collectionGenerationMockID},
 			{method: http.MethodGet, path: "/api/v1/evaluations/collections/custom-collection/clones"},
+			{method: http.MethodDelete, path: "/api/v1/evaluations/collections/custom-collection/clones"},
+			{method: http.MethodPatch, path: "/api/v1/evaluations/collections/custom-collection/clones"},
 		} {
 			response := serveGenerationRequest(handler, test.method, test.path, "", "")
 			if response.Code != http.StatusMethodNotAllowed {
 				t.Errorf("%s %s status = %d, want 405; body = %s", test.method, test.path, response.Code, response.Body.String())
 			}
 			assertMessageCode(t, response, "method_not_allowed")
+		}
+	})
+
+	t.Run("unknown collection subresources return not found", func(t *testing.T) {
+		for _, method := range []string{http.MethodPost, http.MethodGet, http.MethodDelete, http.MethodPatch} {
+			path := "/api/v1/evaluations/collections/custom-collection/unknown"
+			response := serveGenerationRequest(handler, method, path, "", "")
+			if response.Code != http.StatusNotFound {
+				t.Errorf("%s %s status = %d, want 404; body = %s", method, path, response.Code, response.Body.String())
+			}
 		}
 	})
 

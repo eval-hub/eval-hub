@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"net/url"
 	"strconv"
 	"strings"
@@ -86,11 +85,11 @@ func parseCollectionGenerationRequest(body []byte) (api.CollectionGenerationRequ
 		if !ok {
 			return api.CollectionGenerationRequest{}, fmt.Errorf("max_benchmarks must be an integer from 1 to %d", api.MaxCollectionGenerationBenchmarks)
 		}
-		number, err := strconv.ParseFloat(value.String(), 64)
-		if err != nil || math.IsInf(number, 0) || math.IsNaN(number) || math.Trunc(number) != number || number < 1 || number > api.MaxCollectionGenerationBenchmarks {
+		number, ok := parseBoundedJSONInteger(value.String(), 1, api.MaxCollectionGenerationBenchmarks)
+		if !ok {
 			return api.CollectionGenerationRequest{}, fmt.Errorf("max_benchmarks must be an integer from 1 to %d", api.MaxCollectionGenerationBenchmarks)
 		}
-		request.MaxBenchmarks = int(number)
+		request.MaxBenchmarks = number
 	}
 	if raw, ok := fields["strictness"]; ok {
 		if err := decodeGenerationString(raw, &request.Strictness); err != nil {
@@ -111,6 +110,70 @@ func parseCollectionGenerationRequest(body []byte) (api.CollectionGenerationRequ
 	return request, nil
 }
 
+// parseBoundedJSONInteger validates the decimal value without converting
+// through float64, which can round fractional or out-of-range JSON numbers.
+func parseBoundedJSONInteger(value string, min, max int) (int, bool) {
+	if value == "" || value[0] == '-' {
+		return 0, false
+	}
+
+	mantissa := value
+	exponent := int64(0)
+	if exponentAt := strings.IndexAny(value, "eE"); exponentAt >= 0 {
+		parsedExponent, err := strconv.ParseInt(value[exponentAt+1:], 10, 64)
+		if err != nil {
+			return 0, false
+		}
+		exponent = parsedExponent
+		mantissa = value[:exponentAt]
+	}
+
+	fractionDigits := int64(0)
+	if decimalAt := strings.IndexByte(mantissa, '.'); decimalAt >= 0 {
+		fractionDigits = int64(len(mantissa) - decimalAt - 1)
+		mantissa = mantissa[:decimalAt] + mantissa[decimalAt+1:]
+	}
+	digits := strings.TrimLeft(mantissa, "0")
+	if digits == "" {
+		return 0, false
+	}
+
+	const minInt64 = -1 << 63
+	if exponent < minInt64+fractionDigits {
+		return 0, false
+	}
+	scale := exponent - fractionDigits
+	maxDigits := len(strconv.Itoa(max))
+	if scale >= 0 {
+		if scale > int64(maxDigits) || int64(len(digits))+scale > int64(maxDigits) {
+			return 0, false
+		}
+		digits += strings.Repeat("0", int(scale))
+	} else {
+		if scale == minInt64 {
+			return 0, false
+		}
+		trailingZeros := -scale
+		if trailingZeros > int64(len(digits)) {
+			return 0, false
+		}
+		integerEnd := len(digits) - int(trailingZeros)
+		if strings.Trim(digits[integerEnd:], "0") != "" {
+			return 0, false
+		}
+		digits = digits[:integerEnd]
+	}
+	if digits == "" || len(digits) > maxDigits {
+		return 0, false
+	}
+
+	integer, err := strconv.Atoi(digits)
+	if err != nil || integer < min || integer > max {
+		return 0, false
+	}
+	return integer, true
+}
+
 func decodeAndValidateGenerationModel(raw json.RawMessage, model *api.ModelRef) error {
 	if isJSONNull(raw) {
 		return errors.New("model must be an object")
@@ -128,6 +191,9 @@ func decodeAndValidateGenerationModel(raw json.RawMessage, model *api.ModelRef) 
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(model); err != nil {
 		return errors.New("model must match the evaluation job model shape")
+	}
+	if modelParametersContainCredentials(model.Parameters) {
+		return errors.New("model.parameters must not contain credentials; use model.auth.secret_ref")
 	}
 	if strings.TrimSpace(model.Name) == "" {
 		return errors.New("model.name is required")
@@ -154,6 +220,40 @@ func decodeAndValidateGenerationModel(raw json.RawMessage, model *api.ModelRef) 
 		}
 	}
 	return nil
+}
+
+func modelParametersContainCredentials(value any) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, nested := range typed {
+			normalizedKey := strings.NewReplacer("_", "", "-", "", ".", "").Replace(strings.ToLower(key))
+			if isCredentialModelParameterKey(normalizedKey) {
+				return true
+			}
+			if modelParametersContainCredentials(nested) {
+				return true
+			}
+		}
+	case []any:
+		for _, nested := range typed {
+			if modelParametersContainCredentials(nested) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isCredentialModelParameterKey(normalizedKey string) bool {
+	return normalizedKey == "auth" ||
+		normalizedKey == "authorization" ||
+		strings.Contains(normalizedKey, "apikey") ||
+		strings.Contains(normalizedKey, "accesskey") ||
+		strings.Contains(normalizedKey, "privatekey") ||
+		strings.HasSuffix(normalizedKey, "token") ||
+		strings.Contains(normalizedKey, "secret") ||
+		strings.Contains(normalizedKey, "password") ||
+		strings.Contains(normalizedKey, "credential")
 }
 
 func decodeGenerationString(raw json.RawMessage, target *string) error {

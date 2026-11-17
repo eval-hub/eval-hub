@@ -8,6 +8,8 @@ import (
 const generationTestModel = `"model":{"name":"generator","url":"https://generator.example/v1"}`
 
 func TestParseCollectionGenerationRequest(t *testing.T) {
+	t.Parallel()
+
 	t.Run("applies documented defaults and trims goal", func(t *testing.T) {
 		request, err := parseCollectionGenerationRequest([]byte(`{"evaluation_goal":"  evaluate safety  ",` + generationTestModel + `}`))
 		if err != nil {
@@ -21,7 +23,7 @@ func TestParseCollectionGenerationRequest(t *testing.T) {
 	t.Run("accepts every declared enum and integral JSON number representation", func(t *testing.T) {
 		for _, effort := range []string{"low", "standard", "high"} {
 			for _, strictness := range []string{"lenient", "moderate", "strict"} {
-				for _, benchmarkCount := range []string{"1", "1.0", "1e0", "100"} {
+				for _, benchmarkCount := range []string{"1", "1.0", "1e0", "1.000000000000000000000000", "100"} {
 					body := `{"evaluation_goal":"goal",` + generationTestModel + `,"provider_filter":"inspect,lighteval","max_benchmarks":` + benchmarkCount + `,"strictness":"` + strictness + `","generation_effort":"` + effort + `"}`
 					request, err := parseCollectionGenerationRequest([]byte(body))
 					if err != nil {
@@ -59,11 +61,15 @@ func TestParseCollectionGenerationRequest(t *testing.T) {
 		{name: "model with alternate name field casing", body: `{"evaluation_goal":"goal","model":{"Name":"generator","url":"https://generator.example/v1"}}`},
 		{name: "model auth with alternate secret ref field casing", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"https://generator.example/v1","auth":{"Secret_Ref":"generator-credentials"}}}`},
 		{name: "unsupported plaintext credential", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"https://generator.example/v1","auth":{"api_key":"plaintext"}}}`},
+		{name: "plaintext API key in model parameters", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"https://generator.example/v1","parameters":{"api_key":"plaintext"}}}`},
+		{name: "nested plaintext token in model parameters", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"https://generator.example/v1","parameters":{"client":{"access_token":"plaintext"}}}}`},
 		{name: "null provider filter", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"provider_filter":null}`},
 		{name: "empty provider filter", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"provider_filter":""}`},
 		{name: "max benchmark below minimum", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"max_benchmarks":0}`},
 		{name: "max benchmark above maximum", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"max_benchmarks":101}`},
 		{name: "fractional max benchmark", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"max_benchmarks":1.5}`},
+		{name: "fraction rounded to an integer by float64", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"max_benchmarks":1.00000000000000000001}`},
+		{name: "out-of-range fraction rounded to maximum by float64", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"max_benchmarks":100.00000000000000001}`},
 		{name: "null max benchmark", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"max_benchmarks":null}`},
 		{name: "string max benchmark", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"max_benchmarks":"12"}`},
 		{name: "invalid strictness", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"strictness":"high"}`},
@@ -102,11 +108,11 @@ func TestParseCollectionGenerationRequest(t *testing.T) {
 	})
 
 	t.Run("preserves the caller's model connection and Secret reference", func(t *testing.T) {
-		request, err := parseCollectionGenerationRequest([]byte(`{"evaluation_goal":"goal","model":{"name":"other-generator","url":"http://other.example/v1","auth":{"secret_ref":"generator-credentials"},"parameters":{"temperature":0}}}`))
+		request, err := parseCollectionGenerationRequest([]byte(`{"evaluation_goal":"goal","model":{"name":"other-generator","url":"http://other.example/v1","auth":{"secret_ref":"generator-credentials"},"parameters":{"temperature":0,"max_new_tokens":64}}}`))
 		if err != nil {
 			t.Fatalf("parseCollectionGenerationRequest: %v", err)
 		}
-		if request.Model.Name != "other-generator" || request.Model.URL != "http://other.example/v1" || request.Model.Auth == nil || request.Model.Auth.SecretRef != "generator-credentials" || request.Model.Parameters["temperature"] != float64(0) {
+		if request.Model.Name != "other-generator" || request.Model.URL != "http://other.example/v1" || request.Model.Auth == nil || request.Model.Auth.SecretRef != "generator-credentials" || request.Model.Parameters["temperature"] != float64(0) || request.Model.Parameters["max_new_tokens"] != float64(64) {
 			t.Fatalf("model connection changed: %+v", request.Model)
 		}
 	})

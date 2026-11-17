@@ -18,7 +18,7 @@ type CollectionGenerationRequest struct {
 
 	// Model identifies the generator model and its endpoint. Generation requires
 	// both the model name and URL; credentials, when needed, are referenced through
-	// the model's auth.secret_ref field.
+	// the model's auth.secret_ref field and must not be included in Parameters.
 	Model ModelRef `json:"model"`
 
 	// ProviderFilter optionally limits benchmark discovery to comma-separated

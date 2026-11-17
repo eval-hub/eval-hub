@@ -5040,7 +5040,8 @@ components:
         the goal and normalizes the options before persisting the generation job.
         The caller supplies the generator model's name and endpoint using the same
         model shape as an evaluation job. When authentication is needed, auth.secret_ref
-        names a Secret in the tenant namespace; do not include credentials in this request.
+        names a Secret in the tenant namespace; do not include credentials anywhere in
+        this request, including model.parameters.
       required:
         - evaluation_goal
         - model

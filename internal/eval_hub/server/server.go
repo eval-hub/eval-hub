@@ -204,12 +204,18 @@ func (s *Server) handleFunc(router *http.ServeMux, pattern string, handler func(
 }
 
 func spanNameFormatter(operation string, r *http.Request) string {
+	if route, ok := collectionSubresourceRoute(r.Method, r.URL.Path); ok {
+		operation = route
+	}
 	return fmt.Sprintf("%s %s", r.Method, operation)
 }
 
 func (s *Server) handle(router *http.ServeMux, pattern string, handler http.Handler) {
 	if s.isOTELEnabled() {
 		handler = otelhttp.NewHandler(handler, pattern, otelhttp.WithSpanNameFormatter(spanNameFormatter))
+		if pattern == collectionSubresourceRoutePattern {
+			handler = collectionSubresourcePatternMiddleware(handler)
+		}
 		s.logger.Info("Enabled OTEL handler", "pattern", pattern)
 	}
 	router.Handle(pattern, handler)
@@ -445,7 +451,7 @@ func (s *Server) setupCollectionGenerationRoutes(h *handlers.Handlers, router *h
 // /collections/generation/clones, so registering them separately makes ServeMux
 // reject the route table as ambiguous.
 func (s *Server) setupCollectionSubresourceRoutes(h *handlers.Handlers, router *http.ServeMux) {
-	pattern := fmt.Sprintf("/api/v1/evaluations/collections/{%s}/{id}", constants.PathParameterCollectionID)
+	pattern := collectionSubresourceRoutePattern
 	s.handleFunc(router, pattern, func(w http.ResponseWriter, r *http.Request) {
 		ctx := s.newExecutionContext(r)
 		resp := NewRespWrapper(w, ctx)
