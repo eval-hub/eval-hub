@@ -221,6 +221,15 @@ func decodeAndValidateGenerationModel(raw json.RawMessage, model *api.ModelRef) 
 	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" || parsedURL.User != nil {
 		return errors.New("model.url must be an HTTP(S) URL without embedded credentials")
 	}
+	query, err := url.ParseQuery(parsedURL.RawQuery)
+	if err != nil {
+		return errors.New("model.url must contain valid query parameters")
+	}
+	for key := range query {
+		if isCredentialModelParameterKey(normalizeModelParameterKey(key)) {
+			return errors.New("model.url query parameters must not contain credentials; use model.auth.secret_ref")
+		}
+	}
 	if auth, ok := fields["auth"]; ok {
 		if isJSONNull(auth) {
 			return errors.New("model.auth must be an object")
@@ -245,7 +254,7 @@ func modelParametersContainCredentials(value any) bool {
 	switch typed := value.(type) {
 	case map[string]any:
 		for key, nested := range typed {
-			normalizedKey := strings.NewReplacer("_", "", "-", "", ".", "").Replace(strings.ToLower(key))
+			normalizedKey := normalizeModelParameterKey(key)
 			if isCredentialModelParameterKey(normalizedKey) {
 				return true
 			}
@@ -263,12 +272,21 @@ func modelParametersContainCredentials(value any) bool {
 	return false
 }
 
+func normalizeModelParameterKey(key string) string {
+	return strings.NewReplacer("_", "", "-", "", ".", "").Replace(strings.ToLower(key))
+}
+
 func isCredentialModelParameterKey(normalizedKey string) bool {
 	return normalizedKey == "auth" ||
 		normalizedKey == "authorization" ||
+		normalizedKey == "cookie" ||
+		normalizedKey == "key" ||
+		normalizedKey == "proxyauthorization" ||
+		normalizedKey == "sig" ||
 		strings.Contains(normalizedKey, "apikey") ||
 		strings.Contains(normalizedKey, "accesskey") ||
 		strings.Contains(normalizedKey, "privatekey") ||
+		strings.Contains(normalizedKey, "signature") ||
 		strings.HasSuffix(normalizedKey, "token") ||
 		strings.Contains(normalizedKey, "secret") ||
 		strings.Contains(normalizedKey, "password") ||

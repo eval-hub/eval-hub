@@ -71,6 +71,8 @@ func TestParseCollectionGenerationRequest(t *testing.T) {
 		{name: "model without name", body: `{"evaluation_goal":"goal","model":{"url":"https://generator.example/v1"}}`},
 		{name: "model without url", body: `{"evaluation_goal":"goal","model":{"name":"generator"}}`},
 		{name: "model with embedded credentials", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"https://key:password@generator.example/v1"}}`},
+		{name: "model URL with API key query parameter", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"https://generator.example/v1?api_key=plaintext"}}`},
+		{name: "model URL with access token query parameter", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"https://generator.example/v1?access-token=plaintext"}}`},
 		{name: "model with unsupported scheme", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"file:///tmp/model"}}`},
 		{name: "model with null auth", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"https://generator.example/v1","auth":null}}`},
 		{name: "model with missing secret ref", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"https://generator.example/v1","auth":{}}}`},
@@ -81,6 +83,8 @@ func TestParseCollectionGenerationRequest(t *testing.T) {
 		{name: "unsupported plaintext credential", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"https://generator.example/v1","auth":{"api_key":"plaintext"}}}`},
 		{name: "plaintext API key in model parameters", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"https://generator.example/v1","parameters":{"api_key":"plaintext"}}}`},
 		{name: "nested plaintext token in model parameters", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"https://generator.example/v1","parameters":{"client":{"access_token":"plaintext"}}}}`},
+		{name: "cookie header in model parameters", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"https://generator.example/v1","parameters":{"headers":{"Cookie":"session=plaintext"}}}}`},
+		{name: "proxy authorization header in model parameters", body: `{"evaluation_goal":"goal","model":{"name":"generator","url":"https://generator.example/v1","parameters":{"headers":{"Proxy-Authorization":"Bearer plaintext"}}}}`},
 		{name: "null provider filter", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"provider_filter":null}`},
 		{name: "empty provider filter", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"provider_filter":""}`},
 		{name: "max benchmark below minimum", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"max_benchmarks":0}`},
@@ -143,6 +147,16 @@ func TestParseCollectionGenerationRequest(t *testing.T) {
 		}
 		if request.Model.Name != "other-generator" || request.Model.URL != "http://other.example/v1" || request.Model.Auth == nil || request.Model.Auth.SecretRef != "generator-credentials" || request.Model.Parameters["temperature"] != float64(0) || request.Model.Parameters["max_new_tokens"] != float64(64) {
 			t.Fatalf("model connection changed: %+v", request.Model)
+		}
+	})
+
+	t.Run("accepts noncredential model URL query parameters", func(t *testing.T) {
+		request, err := parseCollectionGenerationRequest([]byte(`{"evaluation_goal":"goal","model":{"name":"generator","url":"https://generator.example/v1?api-version=2024-01-01","parameters":{"temperature":0.2,"max_new_tokens":64}}}`))
+		if err != nil {
+			t.Fatalf("noncredential query parameter was rejected: %v", err)
+		}
+		if request.Model.URL != "https://generator.example/v1?api-version=2024-01-01" {
+			t.Fatalf("model URL = %q, want api-version query preserved", request.Model.URL)
 		}
 	})
 }

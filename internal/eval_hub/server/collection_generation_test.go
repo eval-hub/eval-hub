@@ -189,14 +189,17 @@ func TestCollectionGenerationMockMatchesOpenAPIContract(t *testing.T) {
 		}
 		for i, selected := range body.Result.Explanation.Selected {
 			benchmark := benchmarks[i].(map[string]any)
-			if selected["id"] != benchmark["id"] || selected["provider_id"] != benchmark["provider_id"] || selected["reason"] == "" {
+			id := requireNonEmptyStringField(t, selected, "id")
+			providerID := requireNonEmptyStringField(t, selected, "provider_id")
+			requireNonEmptyStringField(t, selected, "reason")
+			if id != benchmark["id"] || providerID != benchmark["provider_id"] {
 				t.Fatalf("selected explanation %d does not describe collection benchmark: %#v vs %#v", i, selected, benchmark)
 			}
 		}
-		for i, rejected := range body.Result.Explanation.Rejected {
-			if rejected["id"] == "" || rejected["provider_id"] == "" || rejected["reason"] == "" {
-				t.Fatalf("rejected explanation %d is incomplete: %#v", i, rejected)
-			}
+		for _, rejected := range body.Result.Explanation.Rejected {
+			requireNonEmptyStringField(t, rejected, "id")
+			requireNonEmptyStringField(t, rejected, "provider_id")
+			requireNonEmptyStringField(t, rejected, "reason")
 		}
 		if len(body.Result.Actions) < 5 {
 			t.Fatalf("GET result should demonstrate several actions; got %d", len(body.Result.Actions))
@@ -215,6 +218,15 @@ func TestCollectionGenerationMockMatchesOpenAPIContract(t *testing.T) {
 			t.Fatalf("mock DELETE should be a no-op; subsequent GET status = %d", afterDelete.Code)
 		}
 	})
+}
+
+func requireNonEmptyStringField(t *testing.T, object map[string]any, field string) string {
+	t.Helper()
+	value, ok := object[field].(string)
+	if !ok || strings.TrimSpace(value) == "" {
+		t.Fatalf("field %q must be a nonempty string, got %#v", field, object[field])
+	}
+	return value
 }
 
 func serveGenerationRequest(handler http.Handler, method, path, body, contentType string) *httptest.ResponseRecorder {
