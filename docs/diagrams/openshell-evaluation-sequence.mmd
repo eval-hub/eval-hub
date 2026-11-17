@@ -4,6 +4,7 @@ sequenceDiagram
     participant E as EvalHub API / runtime
     participant R as TrustyAI reconciler
     participant P as Platform sandbox service
+    participant I as Identity issuer / token broker
     participant G as OpenShell gateway / driver
     participant K as Guardrails / K8s controllers
     participant S as Job sandbox (primary evaluator)
@@ -21,24 +22,30 @@ sequenceDiagram
         E-->>U: Evaluation ID through existing asynchronous API
         R->>P: Ensure job (tenant UID, profiles, envelope, deadline)
         P->>P: Obtain aggregate / Kueue admission where enabled
-        P->>G: Ensure tenant workspace in the sandbox namespace, templates, providers, membership
+        P->>I: Obtain automation and job identity (audience, subject, role claim)
+        P->>G: Ensure tenant workspace in the sandbox namespace, templates, credential and provider bindings, membership
         Note over P,B: One workspace per tenant, job-scoped capability, broker outside sandbox
-        P->>B: Deliver only this job's workspace membership and capability
-        R->>B: Provision bounded endpoint and job capability
-        P->>G: Ensure the job's sandbox using complete approved profile
+        R->>R: Create the per-job broker and relay outside the sandbox namespace
+        P->>B: Issue workspace membership and the job-bound broker capability
+        P->>G: Ensure the job's sandbox using the complete approved profile
+        G->>I: Validate token audience, subject and workspace role
         G->>K: Create sandbox resources in the dedicated sandbox namespace
         K->>K: Per-sandbox admission: image, limits, runtime, policy, storage
         Note over G,K: Namespace guardrails attested at install/upgrade, per-sandbox admission on every create
         K-->>G: Attest readiness and release approved execution
         G->>S: Start sandbox runtime / evaluator
+        Note over S: Receives only the job-scoped broker capability, never a gateway credential or pod-creation token
         G-->>R: Workspace and sandbox names/IDs, sandbox namespace UID
         R->>E: Mirror benchmark Running and provenance
-        loop Each qualified child request within declared limits
+        loop Each qualified child request within declared limits (provider-gated, pending open question)
             S->>B: Kubernetes-shaped create (job authentication)
-            B->>B: Bind caller and validate kind, image, fan-out, depth, TTL
+            B->>B: Reject foreign jobs, bind caller and validate kind, image, fan-out, depth, TTL
+            B->>I: Obtain user-role token for this workspace
             B->>G: Create child with pinned policy and provider bindings
+            G->>I: Validate token audience, subject and workspace role
             G->>G: Independently authorize workspace and effective profile
-            G->>K: Reconcile approved child workload and supervisor
+            G->>K: Submit child Sandbox for the same admission path
+            K->>K: Per-sandbox admission: image, limits, runtime, policy, storage
             K->>C: Start child sandbox
             G-->>B: Child sandbox ID and state
             B-->>S: Logical Pod-compatible result
@@ -50,6 +57,7 @@ sequenceDiagram
             B-->>S: Qualified Kubernetes-compatible stream
         end
         S->>X: Job-bound events and result artifacts
+        X->>X: Bind tenant, evaluation and benchmark, enforce destination allowlist
         X->>E: Authorized tenant / evaluation / benchmark update
         alt Completion or failure
             R->>R: Record execution outcome and freeze child spawning
@@ -57,17 +65,17 @@ sequenceDiagram
             U->>E: Cancel evaluation (or deadline fires)
             E->>R: Reconcile cancellation / deadline
         end
-        R->>B: Revoke capability, reject creates and close streams
-        R->>P: Terminate job compute and export available results
+        R->>P: Revoke the job's broker capability, terminate compute and export available results
+        P->>B: Revoke capability, reject creates and close streams
         P->>G: Stop the job's sandbox and children, retain output storage
         G->>K: Terminate workloads and supervisors
         R->>X: Finalize staged artifacts / qualified trusted storage export
         X-->>R: Export state / retained artifact references
         alt Required export complete or authorized data disposition
             P->>G: Remove the job's sandboxes, storage and job-scoped settings
-            P->>G: Revoke the job's capability, tenant workspace and bindings remain
+            P->>G: Revoke the job's capability, leaving the tenant workspace and bindings in place
             G->>K: Delete the job's sandbox resources from the shared namespace
-            K-->>P: Verify sandbox and PVC cleanup
+            K-->>P: Verify sandbox deletion, PVC/PV reclamation and job-scoped state absence
             P->>P: Revoke job identity and release capacity after termination
             alt Cleanup verified
                 P-->>R: CleanupComplete plus audit / deletion evidence
@@ -82,4 +90,5 @@ sequenceDiagram
             R->>E: Results failure and visible cleanup / retention state
         end
         Note over R,K: Platform TTL sweeper recovers after crashes, timeout is not cleanup success
+        Note over I,G: Issuer outage or an invalid or expired identity fails closed, with no shared service identity
     end

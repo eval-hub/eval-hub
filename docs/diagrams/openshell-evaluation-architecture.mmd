@@ -2,12 +2,18 @@ flowchart TB
     U["Client / SDK"] --> API["EvalHub API + tenant authorization<br/>trusted provider / benchmark dispatch"]
     API -->|ordinary benchmark| JOB["Existing Kubernetes Job + sidecar<br/>tenant namespace, no sandbox compute"]
     API -->|sandbox required| REC["SandboxedEvaluation + TrustyAI reconciler<br/>durable lifecycle, status and finalizer"]
-    subgraph P["Trusted platform module: gateway, identity, policy, recovery"]
-        PS["Platform sandbox service<br/>tenant workspace setup and job identity"]
+    subgraph P["Trusted platform module: gateway, identity, policy, lifecycle, recovery"]
+        PS["Platform sandbox service<br/>tenant workspace, templates, credential and provider bindings, job identity"]
+        IDP["OIDC issuer / token broker<br/>required audience, stable subject, array role claim"]
         GW["OpenShell gateway + Kubernetes driver<br/>authenticated TLS and workspace RBAC"]
         ADM["Sandbox namespace guardrails and admission<br/>profile, ownership, quota, policy, storage, Kueue"]
-        PS -->|workspace and primary creation| GW
+        ASC["Agent Sandbox controller<br/>only it and the driver administer the namespace"]
+        LC["Sandbox lifecycle controller and TTL sweeper<br/>expiry, orphan records, bounded retry"]
+        PS -->|obtain automation and job identity| IDP
+        GW -->|validate audience and role claims| IDP
+        PS -->|workspace, templates, bindings and primary creation| GW
         GW -->|validate effective requests| ADM
+        GW -->|Sandbox CR per create| ASC
     end
     REC --> PS
     subgraph T["Trusted per-job services: outside evaluated code"]
@@ -16,24 +22,36 @@ flowchart TB
     end
     PS -.->|issue workspace membership and job capability| BR
     BR -->|child and streaming operations| GW
-    subgraph W["One platform sandbox namespace for all evaluation job sandboxes<br/>shared mode: one workspace per tenant, {workspace}--{name}"]
+    subgraph W["Installation-wide sandbox namespace shared by every consumer of the gateway<br/>shared mode: one workspace per EvalHub tenant, {workspace}--{name}"]
         SUP["Trusted OpenShell supervisors<br/>policy and credential mediation"]
         PRI["Untrusted job sandbox<br/>one primary per evaluation job"]
-        CH["Untrusted child sandboxes<br/>bounded fan-out and lifetime"]
-        RES["Enforced SCC / PSA, quota and network<br/>short-lived PVCs with verified deletion"]
+        CH["Untrusted child sandboxes<br/>bounded fan-out and lifetime<br/>provider-gated, pending open question"]
+        RES["Guardrails for the shared namespace<br/>SCC / PSA, quota and network<br/>short-lived PVCs with verified reclamation"]
         NS["One workspace per tenant, no namespace or workspace per sandbox<br/>sandboxes isolated from each other<br/>gateway-generated unique names"]
         SUP <-->|authenticated sandbox protocol| PRI
         SUP <-->|authenticated sandbox protocol| CH
         PRI --- RES
         CH --- RES
     end
-    GW -->|provision via Agent Sandbox controller| SUP
+    ASC -->|supervisor Pod| SUP
+    ASC -->|workload Pod| PRI
+    ASC -->|workload Pod| CH
+    LC -->|TTL expiry and abandoned-resource reconciliation| GW
     ADM -.->|qualified once, enforced per sandbox| RES
+    PS -.->|bind only the job's broker capability| PRI
     PRI -->|job-authenticated requests| BR
     PRI -->|scoped events and artifacts| REL
     SUP -->|approved endpoint-bound requests| EXT["Model, judge and data endpoints"]
     REL --> STORE[("Tenant results / MLflow / OCI<br/>EvalHub callbacks")]
     classDef trusted fill:#edf3f7,stroke:#3d586b,color:#132c3b
     classDef untrusted fill:#fff3df,stroke:#8d6429,color:#453213
-    class PS,GW,ADM,BR,REL,SUP trusted
+    classDef external fill:#f5f5f5,stroke:#7a7a7a,color:#333333
+    classDef annotation fill:#ffffff,stroke:#8a8a8a,stroke-dasharray:4 3,color:#333333
+    class PS,IDP,GW,ADM,ASC,LC,BR,REL,SUP,RES,JOB trusted
+    class API,REC trusted
     class PRI,CH untrusted
+    class U,EXT,STORE external
+    class NS annotation
+    style P fill:#f4f8fb,stroke:#3d586b,color:#132c3b
+    style T fill:#f4f8fb,stroke:#3d586b,color:#132c3b
+    style W fill:#fbfbfb,stroke:#6b6b6b,color:#333333
