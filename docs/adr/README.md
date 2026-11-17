@@ -5,7 +5,7 @@ ADRs describe significant EvalHub decisions using numbered files with context, d
 ## Index
 
 - **0001 — reserved, not used.** The sandboxed evaluation runtime proposal in [PR 1059](https://github.com/eval-hub/eval-hub/pull/1059) was closed unmerged on 2026-10-19 without landing as an ADR. The number stays reserved and must not be reused for a different decision.
-- **[0002 — Evaluation sandboxes through the internal OpenShell gateway](0002-evaluation-sandboxes-through-internal-openshell-gateway.md).** Proposed, 2026-10-19; revised 2026-11-17. Decision 4 records the model decided with the OpenShift AI architecture team: one static sandbox namespace for all evaluation job sandboxes, one OpenShell workspace per EvalHub tenant, one sandbox per evaluation job. References and analysis are aligned with PR 174 head `97a0c4d` (`ODH-ADR-Operator-0021`); PR 174 still has to record the namespace model. Restates, and partially supersedes, the unmerged PR 1059 proposal, and the acceptance gates are grouped by owner.
+- **[0002 — Evaluation sandboxes through the internal OpenShell gateway](0002-evaluation-sandboxes-through-internal-openshell-gateway.md).** Proposed, 2026-10-19; revised 2026-11-17. Decision 4 records the model decided with the OpenShift AI architecture team: one static sandbox namespace for all evaluation job sandboxes in the driver's `shared` workspace namespace mode, one OpenShell workspace per EvalHub tenant, one sandbox per evaluation job. References and analysis are aligned with PR 174 head `97a0c4d` (`ODH-ADR-Operator-0021`); PR 174 still has to record the namespace model. Acceptance gates are grouped by owner.
 
 ## Conventions
 
