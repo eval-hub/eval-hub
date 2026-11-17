@@ -192,11 +192,11 @@ check_not_configured_response() {
 }
 
 create_generation() {
-  jq -n '{evaluation_goal:"Assess safe tool use and reasoning",model:{name:"fixture-generator",url:"https://generator.example/v1"},max_benchmarks:2,strictness:"moderate",generation_effort:"standard"}' \
+  jq -n '{evaluation_goal:"Assess safe tool use and reasoning",collection_name:"Mock generated collection",collection_description:"Temporary stateless collection-generation fixture.",model:{name:"fixture-generator",url:"https://generator.example/v1"},max_benchmarks:2,strictness:"moderate",generation_effort:"standard"}' \
     >"$WORK_DIR/generation-request.json"
   api_request POST '/api/v1/evaluations/collections/generation?mock=true' 202 \
     "$WORK_DIR/generation-create.json" "$WORK_DIR/generation-request.json"
-  jq -e '.resource.id != null and .request.evaluation_goal == "Assess safe tool use and reasoning" and .request.model.name == "fixture-generator" and .request.model.url == "https://generator.example/v1" and .request.max_benchmarks == 2 and .request.strictness == "moderate" and .request.generation_effort == "standard" and .status.state == "pending" and has("result") == false' \
+  jq -e '.resource.id != null and .request.evaluation_goal == "Assess safe tool use and reasoning" and .request.collection_name == "Mock generated collection" and .request.collection_description == "Temporary stateless collection-generation fixture." and .request.model.name == "fixture-generator" and .request.model.url == "https://generator.example/v1" and .request.max_benchmarks == 2 and .request.strictness == "moderate" and .request.generation_effort == "standard" and .status.state == "pending" and has("result") == false' \
     "$WORK_DIR/generation-create.json" >/dev/null || fail "POST response did not match the pending CollectionGenerationResource contract."
   local location
   location="$(awk 'tolower($1) == "location:" { sub(/\r$/, "", $2); print $2; exit }' "$WORK_DIR/headers")"
@@ -226,7 +226,9 @@ poll_generation() {
   jq -e '
     .resource.id != null and .request.model.name == "fixture-generator" and .request.model.url == "https://generator.example/v1" and
     .request.generation_effort == "standard" and .status.state == "completed" and
-    (.result.collection.name | length > 0) and (.result.collection.benchmarks | length > 0) and
+    .request.collection_name == .result.collection.name and
+    .request.collection_description == .result.collection.description and
+    (.result.collection.benchmarks | length > 0) and
     (.result.yaml | length > 0) and (.result.rationale | length > 0) and
     (.result.explanation.selected_benchmarks | length) == (.result.collection.benchmarks | length) and
     ([.result.collection.benchmarks[] | [.provider_id,.id]] == [.result.explanation.selected_benchmarks[] | [.provider_id,.id]]) and
@@ -251,6 +253,19 @@ poll_generation() {
   ' "$WORK_DIR/generation-failure.json" >/dev/null ||
     fail "GET failure response did not match the failed CollectionGenerationResource contract."
   log PASS "GET mock=failure returned a safe terminal error without a proposal."
+
+  api_request GET "/api/v1/evaluations/collections/generation/550e8400-e29b-41d4-a716-446655440099?mock=no_relevant_benchmarks" 200 \
+    "$WORK_DIR/generation-no-relevant.json"
+  jq -e '
+    .status.state == "failed" and .status.completed_at != null and
+    .status.error.code == "no_relevant_benchmarks" and
+    (.status.error.message | length > 0) and
+    (.status.error | length) == 2 and
+    (.status | has("progress") | not) and
+    (has("result") | not)
+  ' "$WORK_DIR/generation-no-relevant.json" >/dev/null ||
+    fail "GET no-relevant-benchmarks response did not match the failed CollectionGenerationResource contract."
+  log PASS "GET mock=no_relevant_benchmarks returned a safe terminal error without a proposal."
 }
 
 check_delete_and_not_found() {

@@ -19,6 +19,9 @@ import (
 
 const collectionGenerationMockID = "550e8400-e29b-41d4-a716-446655440099"
 
+const collectionGenerationMockName = "Mock generated collection"
+const collectionGenerationMockDescription = "Temporary stateless collection-generation fixture."
+
 // HandleCreateCollectionGeneration is part of the temporary mock. It validates
 // the durable request contract, then returns a stateless pending fixture.
 func (h *Handlers) HandleCreateCollectionGeneration(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, resp httpwrappers.ResponseWrapper) {
@@ -58,7 +61,7 @@ func (h *Handlers) HandleCreateCollectionGeneration(ctx *executioncontext.Execut
 // envelope uses the current caller's identity; no POST state, owner continuity,
 // or tenant continuity is retained.
 func (h *Handlers) HandleGetCollectionGeneration(ctx *executioncontext.ExecutionContext, req httpwrappers.RequestWrapper, resp httpwrappers.ResponseWrapper) {
-	mockResponse, ok := collectionGenerationMockRequested(ctx, req, resp, "progress", "complete", "failure", "true")
+	mockResponse, ok := collectionGenerationMockRequested(ctx, req, resp, "progress", "complete", "failure", "no_relevant_benchmarks", "true")
 	if !ok {
 		return
 	}
@@ -76,6 +79,11 @@ func (h *Handlers) HandleGetCollectionGeneration(ctx *executioncontext.Execution
 		resp.WriteJSON(collectionGenerationMockFailure(ctx), 200)
 		return
 	}
+	if mockResponse == "no_relevant_benchmarks" {
+		setCollectionGenerationMockHeaders(resp)
+		resp.WriteJSON(collectionGenerationMockNoRelevantBenchmarks(ctx), 200)
+		return
+	}
 
 	const createdAt = "2026-10-29T12:00:00Z"
 	const completedAt = "2026-10-29T12:00:30Z"
@@ -88,11 +96,13 @@ func (h *Handlers) HandleGetCollectionGeneration(ctx *executioncontext.Execution
 			"updated_at": completedAt,
 		},
 		"request": api.CollectionGenerationRequest{
-			EvaluationGoal:   "Assess safe tool use and reasoning",
-			Model:            api.ModelRef{Name: "fixture-generator", URL: "https://generator.example/v1"},
-			MaxBenchmarks:    2,
-			Strictness:       "moderate",
-			GenerationEffort: "standard",
+			EvaluationGoal:        "Assess safe tool use and reasoning",
+			CollectionName:        collectionGenerationMockName,
+			CollectionDescription: collectionGenerationMockDescription,
+			Model:                 api.ModelRef{Name: "fixture-generator", URL: "https://generator.example/v1"},
+			MaxBenchmarks:         2,
+			Strictness:            "moderate",
+			GenerationEffort:      "standard",
 		},
 		"status": map[string]any{
 			"state":        "completed",
@@ -166,11 +176,13 @@ func collectionGenerationMockProgress(ctx *executioncontext.ExecutionContext) ma
 			"updated_at": updatedAt,
 		},
 		"request": api.CollectionGenerationRequest{
-			EvaluationGoal:   "Assess safe tool use and reasoning",
-			Model:            api.ModelRef{Name: "fixture-generator", URL: "https://generator.example/v1"},
-			MaxBenchmarks:    2,
-			Strictness:       "moderate",
-			GenerationEffort: "standard",
+			EvaluationGoal:        "Assess safe tool use and reasoning",
+			CollectionName:        collectionGenerationMockName,
+			CollectionDescription: collectionGenerationMockDescription,
+			Model:                 api.ModelRef{Name: "fixture-generator", URL: "https://generator.example/v1"},
+			MaxBenchmarks:         2,
+			Strictness:            "moderate",
+			GenerationEffort:      "standard",
 		},
 		"status": map[string]any{
 			"state":      "running",
@@ -218,10 +230,42 @@ func collectionGenerationMockFailure(ctx *executioncontext.ExecutionContext) map
 	}
 }
 
+// collectionGenerationMockNoRelevantBenchmarks illustrates a catalog-coverage
+// failure. It does not search the catalog or execute the generation workload.
+func collectionGenerationMockNoRelevantBenchmarks(ctx *executioncontext.ExecutionContext) map[string]any {
+	const createdAt = "2026-10-29T12:00:00Z"
+	const completedAt = "2026-10-29T12:00:02Z"
+	return map[string]any{
+		"resource": map[string]any{
+			"id":         collectionGenerationMockID,
+			"tenant":     generationIdentity(ctx.Tenant.String(), "local"),
+			"owner":      generationIdentity(ctx.User.String(), "local"),
+			"created_at": createdAt,
+			"updated_at": completedAt,
+		},
+		"request": api.CollectionGenerationRequest{
+			EvaluationGoal:   "Evaluate quantum processor error correction",
+			Model:            api.ModelRef{Name: "fixture-generator", URL: "https://generator.example/v1"},
+			MaxBenchmarks:    2,
+			Strictness:       "moderate",
+			GenerationEffort: "standard",
+		},
+		"status": map[string]any{
+			"state":        "failed",
+			"started_at":   "2026-10-29T12:00:01Z",
+			"completed_at": completedAt,
+			"error": map[string]any{
+				"code":    "no_relevant_benchmarks",
+				"message": "No relevant benchmarks were found in the visible catalog.",
+			},
+		},
+	}
+}
+
 func collectionGenerationMockResult() (map[string]any, error) {
 	collection := map[string]any{
-		"name":        "Mock generated collection",
-		"description": "Temporary stateless collection-generation fixture.",
+		"name":        collectionGenerationMockName,
+		"description": collectionGenerationMockDescription,
 		"domains":     []string{"knowledge_and_reasoning"},
 		"benchmarks": []map[string]any{
 			{

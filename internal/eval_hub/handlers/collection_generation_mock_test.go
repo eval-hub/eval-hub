@@ -67,7 +67,7 @@ func TestCollectionGenerationMockHandlers(t *testing.T) {
 
 	handler := newGenerationMockHandler()
 	ctx := newGenerationMockContext()
-	validBody := []byte(`{"evaluation_goal":"goal","model":{"name":"generator","url":"https://generator.example/v1"}}`)
+	validBody := []byte(`{"evaluation_goal":"goal","collection_name":"  Mock generated collection  ","collection_description":"  Temporary stateless collection-generation fixture.  ","model":{"name":"generator","url":"https://generator.example/v1"}}`)
 
 	t.Run("create request and mock validation branches", func(t *testing.T) {
 		t.Parallel()
@@ -121,6 +121,10 @@ func TestCollectionGenerationMockHandlers(t *testing.T) {
 		if resource["tenant"] != "tenant-a" || resource["owner"] != "user-a" || response["status"].(map[string]any)["state"] != "pending" {
 			t.Fatalf("unexpected create response: %#v", response)
 		}
+		requestSummary := response["request"].(map[string]any)
+		if requestSummary["collection_name"] != "Mock generated collection" || requestSummary["collection_description"] != "Temporary stateless collection-generation fixture." {
+			t.Fatalf("requested collection fields missing or not trimmed: %#v", requestSummary)
+		}
 	})
 
 	t.Run("get progress, completed result, failure, invalid ID, and invalid option", func(t *testing.T) {
@@ -154,6 +158,13 @@ func TestCollectionGenerationMockHandlers(t *testing.T) {
 		if result["collection"] == nil || result["yaml"] == nil || completeBody["status"].(map[string]any)["state"] != "completed" {
 			t.Fatalf("completed response missing collection proposal: %#v", completeBody)
 		}
+		completedRequest := completeBody["request"].(map[string]any)
+		collection := result["collection"].(map[string]any)
+		if completedRequest["collection_name"] != collection["name"] || completedRequest["collection_description"] != collection["description"] ||
+			!strings.Contains(result["yaml"].(string), "name: Mock generated collection") ||
+			!strings.Contains(result["yaml"].(string), "description: Temporary stateless collection-generation fixture.") {
+			t.Fatalf("completed fixture request, collection, and YAML disagree: %#v", completeBody)
+		}
 
 		failure := newGenerationMockRequest("GET", "?mock=failure", nil)
 		failureRecorder := httptestRecorder()
@@ -173,6 +184,24 @@ func TestCollectionGenerationMockHandlers(t *testing.T) {
 			failureBody["result"] != nil || failureStatus["progress"] != nil ||
 			failureRecorder.Header().Get("X-EvalHub-Mock") != "true" {
 			t.Fatalf("failed response does not match terminal error contract: %#v", failureBody)
+		}
+
+		noRelevant := newGenerationMockRequest("GET", "?mock=no_relevant_benchmarks", nil)
+		noRelevantRecorder := httptestRecorder()
+		handler.HandleGetCollectionGeneration(ctx, noRelevant, MockResponseWrapper{recorder: noRelevantRecorder})
+		if noRelevantRecorder.Code != 200 {
+			t.Fatalf("no-relevant status = %d; response=%s", noRelevantRecorder.Code, noRelevantRecorder.Body.String())
+		}
+		var noRelevantBody map[string]any
+		if err := json.Unmarshal(noRelevantRecorder.Body.Bytes(), &noRelevantBody); err != nil {
+			t.Fatalf("decode no-relevant response: %v", err)
+		}
+		noRelevantStatus := noRelevantBody["status"].(map[string]any)
+		noRelevantError := noRelevantStatus["error"].(map[string]any)
+		if noRelevantStatus["state"] != "failed" || noRelevantError["code"] != "no_relevant_benchmarks" ||
+			noRelevantError["message"] == "" || len(noRelevantError) != 2 ||
+			noRelevantBody["result"] != nil || noRelevantStatus["progress"] != nil {
+			t.Fatalf("no-relevant response does not match terminal error contract: %#v", noRelevantBody)
 		}
 
 		unknown := newGenerationMockRequest("GET", "?mock=complete", nil)

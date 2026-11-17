@@ -15,8 +15,19 @@ func TestParseCollectionGenerationRequest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("parseCollectionGenerationRequest: %v", err)
 		}
-		if request.EvaluationGoal != "evaluate safety" || request.Model.Name != "generator" || request.Model.URL != "https://generator.example/v1" || request.MaxBenchmarks != 12 || request.Strictness != "moderate" || request.GenerationEffort != "standard" {
+		if request.EvaluationGoal != "evaluate safety" || request.CollectionName != "" || request.CollectionDescription != "" || request.Model.Name != "generator" || request.Model.URL != "https://generator.example/v1" || request.MaxBenchmarks != 12 || request.Strictness != "moderate" || request.GenerationEffort != "standard" {
 			t.Fatalf("unexpected normalized request: %+v", request)
+		}
+	})
+
+	t.Run("accepts and trims requested collection name and description", func(t *testing.T) {
+		body := `{"evaluation_goal":"goal",` + generationTestModel + `,"collection_name":"  Risk review  ","collection_description":"  Check safe agent behavior.  "}`
+		request, err := parseCollectionGenerationRequest([]byte(body))
+		if err != nil {
+			t.Fatalf("parseCollectionGenerationRequest: %v", err)
+		}
+		if request.CollectionName != "Risk review" || request.CollectionDescription != "Check safe agent behavior." {
+			t.Fatalf("requested collection fields were not normalized: %+v", request)
 		}
 	})
 
@@ -47,6 +58,13 @@ func TestParseCollectionGenerationRequest(t *testing.T) {
 		{name: "missing required goal", body: `{}`},
 		{name: "null goal", body: `{"evaluation_goal":null,` + generationTestModel + `}`},
 		{name: "blank goal", body: `{"evaluation_goal":" \t\n ",` + generationTestModel + `}`},
+		{name: "null collection name", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"collection_name":null}`},
+		{name: "non-string collection name", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"collection_name":42}`},
+		{name: "blank collection name", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"collection_name":" \t "}`},
+		{name: "null collection description", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"collection_description":null}`},
+		{name: "non-string collection description", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"collection_description":true}`},
+		{name: "blank collection description", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"collection_description":" \n "}`},
+		{name: "collection description above create limit", body: `{"evaluation_goal":"goal",` + generationTestModel + `,"collection_description":"` + strings.Repeat("é", 1025) + `"}`},
 		{name: "goal too long before trimming", body: `{"evaluation_goal":" ` + strings.Repeat("x", 10_000) + ` ",` + generationTestModel + `}`},
 		{name: "missing model", body: `{"evaluation_goal":"goal"}`},
 		{name: "null model", body: `{"evaluation_goal":"goal","model":null}`},
@@ -94,6 +112,17 @@ func TestParseCollectionGenerationRequest(t *testing.T) {
 		}
 		if len(request.EvaluationGoal) != 10_000 || request.MaxBenchmarks != 100 {
 			t.Fatalf("maximum values were not preserved: goal length=%d max_benchmarks=%d", len(request.EvaluationGoal), request.MaxBenchmarks)
+		}
+	})
+
+	t.Run("accepts the collection description character limit", func(t *testing.T) {
+		body := `{"evaluation_goal":"goal",` + generationTestModel + `,"collection_description":"` + strings.Repeat("é", 1024) + `"}`
+		request, err := parseCollectionGenerationRequest([]byte(body))
+		if err != nil {
+			t.Fatalf("maximum valid collection description was rejected: %v", err)
+		}
+		if len([]rune(request.CollectionDescription)) != 1024 {
+			t.Fatalf("collection description length changed: %d", len([]rune(request.CollectionDescription)))
 		}
 	})
 

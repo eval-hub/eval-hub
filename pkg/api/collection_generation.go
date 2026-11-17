@@ -16,6 +16,14 @@ type CollectionGenerationRequest struct {
 	// EvaluationGoal is a non-blank natural-language goal, up to 10,000 characters.
 	EvaluationGoal string `json:"evaluation_goal"`
 
+	// CollectionName, when supplied, is the exact name requested for the
+	// proposed collection. The runner generates a name when it is omitted.
+	CollectionName string `json:"collection_name,omitempty"`
+
+	// CollectionDescription, when supplied, is the exact description requested
+	// for the proposed collection. The runner generates one when it is omitted.
+	CollectionDescription string `json:"collection_description,omitempty"`
+
 	// Model identifies the generator model and its endpoint. Generation requires
 	// both the model name and URL; credentials, when needed, are referenced through
 	// the model's auth.secret_ref field and must not be included in Parameters.

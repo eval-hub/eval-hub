@@ -17,6 +17,22 @@ properties:
     maxLength: 10000
     pattern: '\S'
     description: Non-blank natural-language evaluation goal, up to 10000 characters; leading and trailing whitespace is trimmed.
+  collection_name:
+    type: string
+    minLength: 1
+    pattern: '\S'
+    description: >
+      Optional exact name for the proposed collection. Leading and trailing
+      whitespace is trimmed. When omitted, the generator chooses a name.
+  collection_description:
+    type: string
+    minLength: 1
+    maxLength: 1024
+    pattern: '\S'
+    description: >
+      Optional exact description for the proposed collection, up to 1024
+      characters as in CollectionConfig. Leading and trailing whitespace is
+      trimmed. When omitted, the generator chooses a description.
   model:
     description: >
       Model that generates the proposal, distinct from any future evaluation

@@ -43,7 +43,8 @@ The demo verifies these fixture-only behaviors:
 1. Omitting the mock parameter returns HTTP 503 with
    `message_code: collection_generation_not_configured`.
 2. `POST .../generation?mock=true` accepts a caller-supplied generator model
-   connection and returns HTTP 202 with normalized request defaults,
+   connection and optional `collection_name`/`collection_description` and
+   returns HTTP 202 with normalized request defaults,
    pending status, and a relative `Location` ending in `?mock=complete`.
 3. `GET ...?mock=progress` returns a fixed running response with the API's
    `status.progress` object and last completed action.
@@ -55,18 +56,22 @@ The demo verifies these fixture-only behaviors:
 5. `GET ...?mock=failure` returns a fixed failed response with one safe
    `status.error` (`guardrails_rejected`, `topic_relevance`), no proposal, and
    no progress. It does not run a real guardrail check.
-6. `DELETE` is a repeatable no-op for the fixed fixture ID; unknown IDs return
+6. `GET ...?mock=no_relevant_benchmarks` returns a fixed failed response with
+   that error code and no proposal. It does not run a real catalog search.
+7. `DELETE` is a repeatable no-op for the fixed fixture ID; unknown IDs return
    404.
 
 `POST` and `DELETE` require exactly one `mock=true` query value. `GET` accepts
-exactly one of `mock=progress`, `mock=complete`, `mock=failure`, or the compatibility alias
-`mock=true` (which returns the completed fixture). Other values or repeated
-`mock` parameters return HTTP 400. These responses are static examples, not a
-real generation lifecycle: polling does not advance the resource from running
-to completed, and the fixture stores no request or state.
+exactly one of `mock=progress`, `mock=complete`, `mock=failure`,
+`mock=no_relevant_benchmarks`, or the compatibility alias `mock=true` (which
+returns the completed fixture). Other values or repeated `mock` parameters
+return HTTP 400. These responses are static examples, not a real generation
+lifecycle: polling does not advance the resource from running to completed, and
+the fixture stores no request or state.
 The fixture accepts a model URL and name but never calls that endpoint or reads
 its optional Secret reference. Its fixed GET response contains an example model
-and does not retain the model submitted in POST.
+and requested collection name/description, and does not retain the values
+submitted in POST. The demo POST uses values matching that fixed GET fixture.
 
 ## Send the requests manually
 
@@ -83,5 +88,5 @@ kubectl --kubeconfig "$KCFG" -n system create token evalhub-local-service --dura
 Use the first command's output for `@baseUrl` and the last command's output for
 `@token`. For a custom dev-deploy host port or cluster name, substitute the
 values used for that deployment. Do not commit the populated token; restore the
-placeholder after the demo. Run the POST, progress GET, complete GET, failure GET, and DELETE
+placeholder after the demo. Run the POST, progress GET, complete GET, both failure GETs, and DELETE
 requests in order.

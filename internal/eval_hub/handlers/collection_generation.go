@@ -20,6 +20,7 @@ const collectionGenerationBasePath = "/api/v1/evaluations/collections/generation
 var collectionGenerationRequestAllowedFields = map[string]struct{}{
 	"evaluation_goal": {}, "model": {}, "provider_filter": {},
 	"max_benchmarks": {}, "strictness": {}, "generation_effort": {},
+	"collection_name": {}, "collection_description": {},
 }
 
 var collectionGenerationModelAllowedFields = map[string]struct{}{
@@ -56,6 +57,24 @@ func parseCollectionGenerationRequest(body []byte) (api.CollectionGenerationRequ
 		return api.CollectionGenerationRequest{}, fmt.Errorf("evaluation_goal must contain 1 to %d non-whitespace characters", api.MaxCollectionGenerationGoalLength)
 	}
 	request.EvaluationGoal = strings.TrimSpace(request.EvaluationGoal)
+	if raw, ok := fields["collection_name"]; ok {
+		if err := decodeGenerationString(raw, &request.CollectionName); err != nil {
+			return api.CollectionGenerationRequest{}, fmt.Errorf("collection_name must be a string: %w", err)
+		}
+		request.CollectionName = strings.TrimSpace(request.CollectionName)
+		if request.CollectionName == "" {
+			return api.CollectionGenerationRequest{}, errors.New("collection_name must not be blank when provided")
+		}
+	}
+	if raw, ok := fields["collection_description"]; ok {
+		if err := decodeGenerationString(raw, &request.CollectionDescription); err != nil {
+			return api.CollectionGenerationRequest{}, fmt.Errorf("collection_description must be a string: %w", err)
+		}
+		request.CollectionDescription = strings.TrimSpace(request.CollectionDescription)
+		if request.CollectionDescription == "" || utf8.RuneCountInString(request.CollectionDescription) > 1024 {
+			return api.CollectionGenerationRequest{}, errors.New("collection_description must contain 1 to 1024 non-whitespace characters")
+		}
+	}
 	if raw, ok := fields["model"]; !ok {
 		return api.CollectionGenerationRequest{}, errors.New("model is required")
 	} else if err := decodeAndValidateGenerationModel(raw, &request.Model); err != nil {

@@ -34,6 +34,8 @@ Content-Type: application/json
 
 {
   "evaluation_goal": "Assess safe tool use and reasoning",
+  "collection_name": "Mock generated collection",
+  "collection_description": "Temporary stateless collection-generation fixture.",
   "model": {
     "name": "fixture-generator",
     "url": "https://generator.example/v1"
@@ -59,6 +61,12 @@ X-Tenant: system
 ### the response has no result or status.progress. This example is independent
 ### of the POST fixture and does not run a real guardrail check.
 GET {{baseUrl}}/api/v1/evaluations/collections/generation/{{generationId}}?mock=failure
+Authorization: Bearer {{token}}
+X-Tenant: system
+
+### Poll a fixed no-match failure. The request goal is valid, but the fixture
+### illustrates a catalog with no relevant benchmarks. No catalog search runs.
+GET {{baseUrl}}/api/v1/evaluations/collections/generation/{{generationId}}?mock=no_relevant_benchmarks
 Authorization: Bearer {{token}}
 X-Tenant: system
 
