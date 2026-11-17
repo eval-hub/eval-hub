@@ -365,8 +365,6 @@ type EvaluationJobState struct {
 // JobMeta.ResolvedSHA; adapters must not set it.
 type StatusEvent struct {
 	BenchmarkStatusEvent *BenchmarkStatusEvent `json:"benchmark_status_event" validate:"required"`
-	// ReceivedAt is supplied by the service, never by the event's JSON payload.
-	ReceivedAt time.Time `json:"-" validate:"-"`
 }
 
 type BenchmarkResult struct {

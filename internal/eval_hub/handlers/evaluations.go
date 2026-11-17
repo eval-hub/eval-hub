@@ -699,7 +699,7 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	var status = &api.StatusEvent{ReceivedAt: ctx.StartedAt}
+	var status = &api.StatusEvent{}
 
 	err := h.withSpan(
 		ctx,
@@ -720,8 +720,13 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	if status.BenchmarkStatusEvent != nil {
-		status.BenchmarkStatusEvent.StampRuntimeMessageOrigins()
+	if event := status.BenchmarkStatusEvent; event != nil {
+		event.StampRuntimeMessageOrigins()
+		// Resolve the omitted start time before storage work or transaction retries.
+		// Storage preserves the first accepted running event's start time.
+		if event.Status == api.StateRunning && event.StartedAt == "" {
+			event.StartedAt = api.DateTimeToString(ctx.StartedAt.UTC())
+		}
 	}
 
 	ctx.Logger.Debug("Updating evaluation job", "id", evaluationJobID, "state", status.BenchmarkStatusEvent.Status, "status", status)

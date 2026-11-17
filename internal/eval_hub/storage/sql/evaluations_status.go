@@ -275,10 +275,8 @@ func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runSt
 
 // UpdateEvaluationJobWithRunStatus runs in a transaction: fetches the job, merges RunStatusInternal into the entity, and persists.
 func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
-	receivedAt := runStatus.ReceivedAt
-	if receivedAt.IsZero() {
-		receivedAt = time.Now()
-	}
+	// Capture once for internal runtime callers that bypass the events handler.
+	receivedAt := time.Now()
 	return s.withTransaction("update evaluation job", id, func(txn *sql.Tx) error {
 		s.logger.Info("Updating evaluation job", "id", id, "status", runStatus.BenchmarkStatusEvent.Status, "runStatus", runStatus)
 

@@ -165,16 +165,23 @@ func TestBenchmarkStartUsesOnlyFirstRunningEvent(t *testing.T) {
 	for _, supplied := range []api.DateTime{"", "2026-01-02T05:00:00+02:00"} {
 		t.Run(string(supplied), func(t *testing.T) {
 			store, job := newBenchmarkTimestampJob(t)
-			received := job.Resource.CreatedAt.Add(time.Minute)
-			first := &api.StatusEvent{ReceivedAt: received, BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			before := time.Now().UTC().Truncate(time.Second)
+			first := &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 				ID: "repeated", ProviderID: "provider", Status: api.StateRunning, StartedAt: supplied,
 			}}
 			if err := store.UpdateEvaluationJob(job.Resource.ID, first); err != nil {
 				t.Fatal(err)
 			}
-			want := supplied
-			if want == "" {
-				want = api.DateTimeToString(received)
+			want := readBenchmarkTimestampStatus(t, store, job.Resource.ID, 0).StartedAt
+			if supplied != "" {
+				if want != supplied {
+					t.Fatalf("first runtime start was replaced: got %q, want %q", want, supplied)
+				}
+			} else {
+				started, err := api.DateTimeFromString(want)
+				if err != nil || started.Before(before) || started.After(time.Now()) {
+					t.Fatalf("invalid internal runtime start fallback %q: %v", want, err)
+				}
 			}
 			// Even a valid earlier runtime timestamp on a later event must be ignored.
 			for _, state := range []api.State{api.StateRunning, api.StatePending, api.StateRunning, api.StateCompleted} {
