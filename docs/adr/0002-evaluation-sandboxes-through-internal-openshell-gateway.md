@@ -150,6 +150,7 @@ Each question names an owner and what it blocks.
 
 ### Platform contract and ownership
 
+- Which named approvers accept this record for EvalHub, TrustyAI Service Operator, the platform and Security? Owner: the deciders listed in the front matter. Blocking for acceptance.
 - How are tenant workspaces provisioned, named and decommissioned, and who reconciles membership when a tenant or an EvalHub instance is removed? Owner: platform and EvalHub. Blocking for tenant onboarding and removal.
 - Which platform operator owns the gateway and sandbox lifecycle controller, and what are the HA, backup/restore, version-skew and cleanup SLOs? Owner: platform. Blocking for readiness.
 - How are the gateway database, KEK, JWT signing key, PKI and stable gateway ID preserved across restore or clone, and how are the workspace-to-tenant mappings revalidated? Owner: platform. Blocking for recovery.
@@ -228,6 +229,7 @@ Approval of this design does not assert implementation readiness. A provider is 
 - [ ] Cross-tenant and cross-job calls are denied: a broker in one tenant gets `PermissionDenied` for another tenant's workspace, and for another job's sandbox inside its own tenant (owner: EvalHub broker and Security).
 - [ ] Broker and relay authentication, relay destination allowlisting and the absence of cluster-wide Secret read are verified (owner: EvalHub broker and platform credential owners).
 - [ ] Supervisor egress is denied on the supported CNI for the API server, node metadata, unapproved endpoints, IP literals, redirects and IPv6, and an unqualified CNI fails closed (owner: platform and Security).
+- [ ] Security signs off the adversary, asset, trust-boundary and residual-risk record for this path, including the residual risks recorded in decisions 2 and 3 (owner: Security).
 - [ ] Effective policy and credentials are server-enforced; a template reference alone never enables dispatch, and an unenforceable profile fails closed (owner: platform guardrail controller).
 
 ### Lifecycle, storage and data handling
