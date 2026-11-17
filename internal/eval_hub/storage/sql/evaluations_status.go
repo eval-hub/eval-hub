@@ -89,7 +89,7 @@ func (s *sqlStorage) UpdateEvaluationJobStatus(id string, state api.OverallState
 				if !api.IsBenchmarkTerminalState(benchmarks[i].Status) {
 					benchmarks[i].Status = benchmarkState
 					benchmarks[i].ErrorMessage = message
-					stampBenchmarkTimestamps(&benchmarks[i], now)
+					setBenchmarkCompletionTime(&benchmarks[i], now)
 				}
 			}
 		}
@@ -223,12 +223,10 @@ func (s *sqlStorage) getOverallJobStatus(txn *sql.Tx, job *api.EvaluationJobReso
 	}, api.MessageOriginServer), nil
 }
 
-// stampBenchmarkTimestamps fills server-managed timestamps, including completion
-// when a terminal runtime event omitted its completion time.
-func stampBenchmarkTimestamps(benchmark *api.BenchmarkStatus, now time.Time) {
-	benchmark.UpdatedAt = api.DateTimeToString(now.UTC())
+// setBenchmarkCompletionTime records completion when a terminal event omitted it.
+func setBenchmarkCompletionTime(benchmark *api.BenchmarkStatus, now time.Time) {
 	if api.IsBenchmarkTerminalState(benchmark.Status) && benchmark.CompletedAt == "" {
-		benchmark.CompletedAt = benchmark.UpdatedAt
+		benchmark.CompletedAt = api.DateTimeToString(now.UTC())
 	}
 }
 
@@ -260,19 +258,18 @@ func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runSt
 			if api.IsBenchmarkTerminalState(benchmark.Status) && !api.IsBenchmarkTerminalState(benchmarkStatus.Status) {
 				return
 			}
-			benchmarkStatus.CreatedAt = benchmark.CreatedAt
 			if benchmark.StartedAt != "" {
 				benchmarkStatus.StartedAt = benchmark.StartedAt
 			}
 			if api.IsBenchmarkTerminalState(benchmark.Status) && benchmark.CompletedAt != "" {
 				benchmarkStatus.CompletedAt = benchmark.CompletedAt
 			}
-			stampBenchmarkTimestamps(benchmarkStatus, time.Now())
+			setBenchmarkCompletionTime(benchmarkStatus, time.Now())
 			job.Status.Benchmarks[index] = *benchmarkStatus
 			return
 		}
 	}
-	stampBenchmarkTimestamps(benchmarkStatus, time.Now())
+	setBenchmarkCompletionTime(benchmarkStatus, time.Now())
 	job.Status.Benchmarks = append(job.Status.Benchmarks, *benchmarkStatus)
 }
 

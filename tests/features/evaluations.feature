@@ -398,11 +398,9 @@ Feature: Evaluations Endpoint
                 "type": "array",
                 "minItems": 1,
                 "items": {
-                  "required": ["started_at", "updated_at"],
+                  "required": ["started_at"],
                   "properties": {
-                    "created_at": {"type": "string", "format": "date-time"},
-                    "started_at": {"type": "string", "format": "date-time"},
-                    "updated_at": {"type": "string", "format": "date-time"}
+                    "started_at": {"type": "string", "format": "date-time"}
                   },
                   "not": {"required": ["completed_at"]}
                 }
@@ -429,11 +427,9 @@ Feature: Evaluations Endpoint
                 "type": "array",
                 "minItems": 1,
                 "items": {
-                  "required": ["started_at", "updated_at", "completed_at"],
+                  "required": ["started_at", "completed_at"],
                   "properties": {
-                    "created_at": {"type": "string", "format": "date-time"},
                     "started_at": {"type": "string", "format": "date-time"},
-                    "updated_at": {"type": "string", "format": "date-time"},
                     "completed_at": {"type": "string", "format": "date-time"}
                   }
                 }

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
@@ -18,7 +17,7 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
-func TestHandleCreateEvaluationInitializesBenchmarkTimestamps(t *testing.T) {
+func TestHandleCreateEvaluationInitializesPendingBenchmarks(t *testing.T) {
 	for _, scenario := range []struct {
 		name    string
 		runtime abstractions.Runtime
@@ -47,37 +46,28 @@ func TestHandleCreateEvaluationInitializesBenchmarkTimestamps(t *testing.T) {
 			if storage.createdJob == nil {
 				t.Fatal("job was not persisted")
 			}
-			assertInitialBenchmarkTimestamps(t, storage.createdJob, storage.createdJob.Benchmarks)
+			assertInitialBenchmarkStatuses(t, storage.createdJob, storage.createdJob.Benchmarks)
 			if response.Code == http.StatusAccepted {
 				var job api.EvaluationJobResource
 				if err := json.Unmarshal(response.Body.Bytes(), &job); err != nil {
 					t.Fatal(err)
 				}
-				assertInitialBenchmarkTimestamps(t, &job, job.Benchmarks)
+				assertInitialBenchmarkStatuses(t, &job, job.Benchmarks)
 			}
 		})
 	}
 }
 
-func assertInitialBenchmarkTimestamps(t *testing.T, job *api.EvaluationJobResource, benchmarks []api.EvaluationBenchmarkConfig) {
+func assertInitialBenchmarkStatuses(t *testing.T, job *api.EvaluationJobResource, benchmarks []api.EvaluationBenchmarkConfig) {
 	t.Helper()
-	if job.Resource.CreatedAt.IsZero() || job.Status == nil || len(job.Status.Benchmarks) != len(benchmarks) {
-		t.Fatalf("missing benchmark creation statuses: %+v", job)
+	if job.Status == nil || len(job.Status.Benchmarks) != len(benchmarks) {
+		t.Fatalf("missing pending benchmark statuses: %+v", job)
 	}
-	var createdAt api.DateTime
 	for index, benchmark := range benchmarks {
 		status := job.Status.Benchmarks[index]
-		created, err := api.DateTimeFromString(status.CreatedAt)
-		if err != nil || created.Before(job.Resource.CreatedAt.UTC().Truncate(time.Second)) || created.After(time.Now()) {
-			t.Fatalf("benchmark %d creation time is outside the service creation interval: %q (%v)", index, status.CreatedAt, err)
-		}
-		if index == 0 {
-			createdAt = status.CreatedAt
-		}
 		if status.ID != benchmark.ID || status.ProviderID != benchmark.ProviderID || status.BenchmarkIndex != index ||
-			status.Status != api.StatePending || status.CreatedAt != createdAt || status.UpdatedAt != createdAt ||
-			status.StartedAt != "" || status.CompletedAt != "" {
-			t.Errorf("benchmark %d was not initialized at job creation: %+v", index, status)
+			status.Status != api.StatePending || status.StartedAt != "" || status.CompletedAt != "" {
+			t.Errorf("benchmark %d was not initialized as pending: %+v", index, status)
 		}
 	}
 }

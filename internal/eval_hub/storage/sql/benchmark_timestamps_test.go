@@ -11,11 +11,6 @@ import (
 
 func newBenchmarkTimestampJob(t *testing.T) (abstractions.Storage, *api.EvaluationJobResource) {
 	t.Helper()
-	return newBenchmarkTimestampJobWithStatus(t, true)
-}
-
-func newBenchmarkTimestampJobWithStatus(t *testing.T, initializeStatus bool) (abstractions.Storage, *api.EvaluationJobResource) {
-	t.Helper()
 	store, err := getTestStorage(t, drivers[0], getDBName())
 	if err != nil {
 		t.Fatal(err)
@@ -30,13 +25,9 @@ func newBenchmarkTimestampJobWithStatus(t *testing.T, initializeStatus bool) (ab
 	}
 	for index := range 3 {
 		job.Benchmarks = append(job.Benchmarks, api.EvaluationBenchmarkConfig{Ref: api.Ref{ID: "repeated"}, ProviderID: "provider"})
-		if initializeStatus {
-			status := api.BenchmarkStatus{
-				ID: "repeated", ProviderID: "provider", BenchmarkIndex: index, Status: api.StatePending,
-				CreatedAt: api.DateTimeToString(created), UpdatedAt: api.DateTimeToString(created),
-			}
-			job.Status.Benchmarks = append(job.Status.Benchmarks, status)
-		}
+		job.Status.Benchmarks = append(job.Status.Benchmarks, api.BenchmarkStatus{
+			ID: "repeated", ProviderID: "provider", BenchmarkIndex: index, Status: api.StatePending,
+		})
 	}
 	if err := store.CreateEvaluationJob(job); err != nil {
 		t.Fatal(err)
@@ -59,26 +50,8 @@ func readBenchmarkTimestampStatus(t *testing.T, store abstractions.Storage, id s
 	return api.BenchmarkStatus{}
 }
 
-func TestBenchmarkCreationIndependentOfDatabaseTime(t *testing.T) {
-	before := time.Now().UTC().Truncate(time.Second)
-	store, job := newBenchmarkTimestampJob(t)
-	stored, err := store.GetEvaluationJob(job.Resource.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if stored.Resource.CreatedAt.Before(before) || stored.Resource.CreatedAt.After(time.Now()) || stored.Resource.CreatedAt.Equal(job.Resource.CreatedAt) {
-		t.Fatalf("evaluation creation time did not use the database default: %v", stored.Resource.CreatedAt)
-	}
-	for _, benchmark := range stored.Status.Benchmarks {
-		if benchmark.CreatedAt != api.DateTimeToString(job.Resource.CreatedAt) {
-			t.Fatalf("database creation time replaced benchmark creation time: %+v", benchmark)
-		}
-	}
-}
-
 func TestEvaluationBenchmarkTimestampsLifecycle(t *testing.T) {
 	store, job := newBenchmarkTimestampJob(t)
-	created := api.DateTimeToString(job.Resource.CreatedAt)
 	started := api.DateTimeToString(job.Resource.CreatedAt.Add(time.Minute))
 	update := func(index int, state api.State, startedAt, completedAt api.DateTime) api.BenchmarkStatus {
 		t.Helper()
@@ -93,34 +66,31 @@ func TestEvaluationBenchmarkTimestampsLifecycle(t *testing.T) {
 	}
 
 	pending := update(0, api.StatePending, started, "")
-	if pending.CreatedAt != created || pending.StartedAt != "" || pending.CompletedAt != "" || pending.UpdatedAt == "" {
+	if pending.StartedAt != "" || pending.CompletedAt != "" {
 		t.Fatalf("pending event changed lifecycle timestamps: %+v", pending)
 	}
-	before := time.Now().UTC().Truncate(time.Second)
 	running := update(0, api.StateRunning, started, "")
-	updated, err := api.DateTimeFromString(running.UpdatedAt)
-	if err != nil || updated.Before(before) || updated.After(time.Now()) {
-		t.Fatalf("invalid server update time %q: %v", running.UpdatedAt, err)
-	}
-	if running.CreatedAt != created || running.StartedAt != started || running.CompletedAt != "" {
+	if running.StartedAt != started || running.CompletedAt != "" {
 		t.Fatalf("unexpected running timestamps: %+v", running)
 	}
 	untouched := readBenchmarkTimestampStatus(t, store, job.Resource.ID, 1)
-	if untouched.CreatedAt != created || untouched.UpdatedAt != created || untouched.CompletedAt != "" {
+	if untouched.Status != api.StatePending || untouched.StartedAt != "" || untouched.CompletedAt != "" {
 		t.Fatalf("another occurrence was updated: %+v", untouched)
 	}
 
 	// Phase/status events often omit runtime timestamps. Preserve the original start.
 	progress := update(0, api.StateRunning, api.DateTimeToString(time.Now()), "")
-	if progress.StartedAt != started || progress.CreatedAt != created {
+	if progress.StartedAt != started {
 		t.Fatalf("progress lost timestamps: %+v", progress)
 	}
+	before := time.Now().UTC().Truncate(time.Second)
 	completed := update(0, api.StateCompleted, "", "")
-	if completed.CompletedAt == "" || completed.CompletedAt != completed.UpdatedAt || completed.StartedAt != started {
+	completionTime, err := api.DateTimeFromString(completed.CompletedAt)
+	if err != nil || completionTime.Before(before) || completionTime.After(time.Now()) || completed.StartedAt != started {
 		t.Fatalf("missing terminal timestamp fallback: %+v", completed)
 	}
-	duplicate := update(0, api.StateCompleted, created, created)
-	if duplicate.CompletedAt != completed.CompletedAt || duplicate.StartedAt != started || duplicate.CreatedAt != created {
+	duplicate := update(0, api.StateCompleted, started, started)
+	if duplicate.CompletedAt != completed.CompletedAt || duplicate.StartedAt != started {
 		t.Fatalf("duplicate event rewrote lifecycle timestamps: %+v", duplicate)
 	}
 	downgrade := update(0, api.StateRunning, "", "")
@@ -130,11 +100,11 @@ func TestEvaluationBenchmarkTimestampsLifecycle(t *testing.T) {
 
 	runtimeCompleted := api.DateTimeToString(job.Resource.CreatedAt.Add(2 * time.Minute))
 	otherRunning := update(1, api.StateRunning, "", "")
-	if otherRunning.CreatedAt != created || otherRunning.StartedAt == "" {
-		t.Fatalf("runtime event lost job creation time or omitted start fallback: %+v", otherRunning)
+	if otherRunning.StartedAt == "" {
+		t.Fatalf("runtime event omitted start fallback: %+v", otherRunning)
 	}
 	failed := update(1, api.StateFailed, "", runtimeCompleted)
-	if failed.CreatedAt != otherRunning.CreatedAt || failed.CompletedAt != runtimeCompleted || failed.UpdatedAt == "" {
+	if failed.CompletedAt != runtimeCompleted || failed.StartedAt != otherRunning.StartedAt {
 		t.Fatalf("runtime completion time was not retained: %+v", failed)
 	}
 	if got := readBenchmarkTimestampStatus(t, store, job.Resource.ID, 0); got != duplicate {
@@ -154,6 +124,7 @@ func TestEvaluationBenchmarkTimestampsJobFinalization(t *testing.T) {
 				}
 			}
 			completed := readBenchmarkTimestampStatus(t, store, job.Resource.ID, 0)
+			running := readBenchmarkTimestampStatus(t, store, job.Resource.ID, 1)
 			if err := store.UpdateEvaluationJobStatus(job.Resource.ID, state, nil); err != nil {
 				t.Fatal(err)
 			}
@@ -163,9 +134,11 @@ func TestEvaluationBenchmarkTimestampsJobFinalization(t *testing.T) {
 			}
 			for _, index := range []int{1, 2} {
 				status := readBenchmarkTimestampStatus(t, store, job.Resource.ID, index)
-				wantCreated := api.DateTimeToString(job.Resource.CreatedAt)
-				if status.Status != wantState || status.CompletedAt == "" || status.UpdatedAt != status.CompletedAt || status.CreatedAt != wantCreated {
+				if status.Status != wantState || status.CompletedAt == "" {
 					t.Fatalf("unfinished benchmark was not finalized: %+v", status)
+				}
+				if (index == 1 && status.StartedAt != running.StartedAt) || (index == 2 && status.StartedAt != "") {
+					t.Fatalf("job finalization changed benchmark start: %+v", status)
 				}
 			}
 			if got := readBenchmarkTimestampStatus(t, store, job.Resource.ID, 0); got != completed {
@@ -183,7 +156,7 @@ func TestEvaluationBenchmarkTimestampsFailureBeforeRunning(t *testing.T) {
 		t.Fatal(err)
 	}
 	status := readBenchmarkTimestampStatus(t, store, job.Resource.ID, 0)
-	if status.CreatedAt != api.DateTimeToString(job.Resource.CreatedAt) || status.StartedAt != "" || status.UpdatedAt == "" || status.CompletedAt == "" {
+	if status.StartedAt != "" || status.CompletedAt == "" {
 		t.Fatalf("unexpected timestamps for a benchmark that never ran: %+v", status)
 	}
 }
@@ -212,36 +185,6 @@ func TestBenchmarkStartUsesOnlyFirstRunningEvent(t *testing.T) {
 				}
 				if got := readBenchmarkTimestampStatus(t, store, job.Resource.ID, 0); got.StartedAt != want {
 					t.Fatalf("%s event changed first start: got %q, want %q", state, got.StartedAt, want)
-				}
-			}
-		})
-	}
-}
-
-// Jobs persisted before benchmark timestamps were introduced may have no
-// benchmark status entries, or entries without creation metadata.
-func TestBenchmarkEventsDoNotBackfillCreationTime(t *testing.T) {
-	for _, initializeStatus := range []bool{false, true} {
-		t.Run(map[bool]string{false: "missing status", true: "missing timestamps"}[initializeStatus], func(t *testing.T) {
-			store, job := newBenchmarkTimestampJobWithStatus(t, false)
-			if initializeStatus {
-				job.Status.Benchmarks = []api.BenchmarkStatus{{ID: "repeated", ProviderID: "provider", Status: api.StatePending}}
-				if err := store.DeleteEvaluationJob(job.Resource.ID); err != nil {
-					t.Fatal(err)
-				}
-				if err := store.CreateEvaluationJob(job); err != nil {
-					t.Fatal(err)
-				}
-			}
-			for _, state := range []api.State{api.StatePending, api.StateRunning, api.StateCompleted} {
-				if err := store.UpdateEvaluationJob(job.Resource.ID, &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
-					ID: "repeated", ProviderID: "provider", Status: state,
-				}}); err != nil {
-					t.Fatal(err)
-				}
-				status := readBenchmarkTimestampStatus(t, store, job.Resource.ID, 0)
-				if status.CreatedAt != "" {
-					t.Fatalf("%s event backfilled missing creation time: %+v", state, status)
 				}
 			}
 		})

@@ -318,8 +318,6 @@ type BenchmarkStatus struct {
 	Phase          JobPhase     `json:"phase,omitempty"`
 	ErrorMessage   *MessageInfo `json:"error_message,omitempty"`
 	WarningMessage *MessageInfo `json:"warning_message,omitempty"`
-	CreatedAt      DateTime     `json:"created_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
-	UpdatedAt      DateTime     `json:"updated_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
 	StartedAt      DateTime     `json:"started_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
 	CompletedAt    DateTime     `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
 }

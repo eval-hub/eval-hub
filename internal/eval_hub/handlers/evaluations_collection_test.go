@@ -162,7 +162,7 @@ func TestHandleCreateEvaluationUpdatesCustomCollectionRunCount(t *testing.T) {
 			if storage.createdJob == nil {
 				t.Fatal("expected evaluation job to be persisted")
 			}
-			assertInitialBenchmarkTimestamps(t, storage.createdJob, []api.EvaluationBenchmarkConfig{{
+			assertInitialBenchmarkStatuses(t, storage.createdJob, []api.EvaluationBenchmarkConfig{{
 				Ref: api.Ref{ID: "benchmark-1"}, ProviderID: "provider-1",
 			}})
 			if storage.atomicCalls != 1 {
