@@ -1,11 +1,11 @@
 flowchart TB
     U["Client / SDK"] --> API["EvalHub API + tenant authorization<br/>trusted provider / benchmark dispatch"]
-    API -->|ordinary benchmark| JOB["Existing Kubernetes Job + sidecar"]
+    API -->|ordinary benchmark| JOB["Existing Kubernetes Job + sidecar<br/>tenant namespace, no sandbox compute"]
     API -->|sandbox required| REC["SandboxedEvaluation + TrustyAI reconciler<br/>durable lifecycle, status and finalizer"]
     subgraph P["Trusted platform module: gateway, identity, policy, recovery"]
         PS["Platform sandbox service<br/>workspace setup and attempt identity"]
         GW["OpenShell gateway + Kubernetes driver<br/>authenticated TLS and workspace RBAC"]
-        ADM["Admission and namespace guardrails<br/>profile, ownership, quota, policy, storage, Kueue"]
+        ADM["Sandbox namespace guardrails and admission<br/>profile, ownership, quota, policy, storage, Kueue"]
         PS -->|workspace and primary creation| GW
         GW -->|validate effective requests| ADM
     end
@@ -16,18 +16,19 @@ flowchart TB
     end
     PS -.->|issue attempt identity| BR
     BR -->|child and streaming operations| GW
-    subgraph W["One ephemeral workspace / managed namespace per evaluation attempt"]
+    subgraph W["One dedicated platform sandbox namespace<br/>shared workspace namespace mode: {workspace}--{name}"]
         SUP["Trusted OpenShell supervisors<br/>policy and credential mediation"]
         PRI["Untrusted primary evaluator<br/>one per sandbox-required benchmark"]
         CH["Untrusted child sandboxes<br/>bounded fan-out and lifetime"]
         RES["Enforced SCC / PSA, quota and network<br/>short-lived PVCs with verified deletion"]
+        NS["No namespace or workspace per sandbox<br/>sandboxes isolated from each other<br/>gateway-generated unique names"]
         SUP <-->|authenticated sandbox protocol| PRI
         SUP <-->|authenticated sandbox protocol| CH
         PRI --- RES
         CH --- RES
     end
     GW -->|provision via Agent Sandbox controller| SUP
-    ADM -.->|readiness before execution| RES
+    ADM -.->|qualified once, enforced per sandbox| RES
     PRI -->|attempt-authenticated requests| BR
     PRI -->|scoped events and artifacts| REL
     SUP -->|approved endpoint-bound requests| EXT["Model, judge and data endpoints"]

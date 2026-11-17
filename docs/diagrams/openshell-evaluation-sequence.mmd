@@ -21,17 +21,17 @@ sequenceDiagram
         E-->>U: Evaluation ID through existing asynchronous API
         R->>P: Ensure attempt (tenant UID, profiles, envelope, deadline)
         P->>P: Obtain aggregate / Kueue admission where enabled
-        P->>G: Ensure ephemeral workspace, templates, providers, membership
+        P->>G: Ensure ephemeral workspace in the sandbox namespace, templates, providers, membership
         Note over P,B: Unique workspace-user identity per attempt, broker outside sandbox
         P->>B: Deliver only this attempt's gateway identity
         R->>B: Provision bounded endpoint and attempt capability
         P->>G: Ensure primary sandbox using complete approved profile
-        G->>K: Prepare managed namespace and sandbox resources
-        K->>K: SCC allocation, quota, limits, PSA, effective policy, storage
-        Note over G,K: Required platform extension: deny execution until guardrails ready
+        G->>K: Create sandbox resources in the dedicated sandbox namespace
+        K->>K: Per-sandbox admission: image, limits, runtime, policy, storage
+        Note over G,K: Namespace guardrails attested at install/upgrade, per-sandbox admission on every create
         K-->>G: Attest readiness and release approved execution
         G->>S: Start sandbox runtime / evaluator
-        G-->>R: Workspace, namespace UID and sandbox ready
+        G-->>R: Workspace and sandbox names/IDs, sandbox namespace UID
         R->>E: Mirror benchmark Running and provenance
         loop Each qualified child request within declared limits
             S->>B: Kubernetes-shaped create (attempt authentication)
@@ -66,8 +66,8 @@ sequenceDiagram
         alt Required export complete or authorized data disposition
             P->>G: Remove sandboxes, storage, templates, providers, services, settings
             P->>G: Remove membership and delete workspace
-            G->>K: Delete managed namespace and owned resources
-            K-->>P: Verify namespace UID / PVC / volume cleanup
+            G->>K: Delete workspace sandbox resources from the shared namespace
+            K-->>P: Verify sandbox / PVC / workspace-state cleanup
             P->>P: Revoke attempt identity and release capacity after termination
             alt Cleanup verified
                 P-->>R: CleanupComplete plus audit / deletion evidence
