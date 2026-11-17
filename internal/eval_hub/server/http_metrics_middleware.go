@@ -38,8 +38,10 @@ func HTTPMetricsMiddleware(next http.Handler, metricsEnabled bool, logger *slog.
 }
 
 func httpRoutePattern(r *http.Request) string {
-	if route, ok := collectionSubresourceRoute(r.Method, r.URL.Path); ok {
-		return route
+	if r.Pattern == collectionSubresourceRoutePattern {
+		if route, ok := collectionSubresourceRoute(r.Method, r.URL.Path); ok {
+			return route
+		}
 	}
 	return r.Pattern
 }

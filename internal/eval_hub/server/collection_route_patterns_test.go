@@ -74,6 +74,15 @@ func TestCollectionSubresourceRouteRejectsUnmatchedPath(t *testing.T) {
 	}
 }
 
+func TestHTTPRoutePatternLeavesUndispatchedPathsUnlabeled(t *testing.T) {
+	t.Parallel()
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/evaluations/collections/custom-collection/clones/", nil)
+	if got := httpRoutePattern(request); got != "" {
+		t.Fatalf("httpRoutePattern() = %q, want empty route for an undispatched path", got)
+	}
+}
+
 func TestCollectionSubresourcePatternMiddleware(t *testing.T) {
 	t.Parallel()
 
