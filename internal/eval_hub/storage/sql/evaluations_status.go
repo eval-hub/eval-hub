@@ -231,12 +231,14 @@ func setBenchmarkCompletionTime(benchmark *api.BenchmarkStatus, now time.Time) {
 }
 
 func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runStatus *api.StatusEvent, benchmarkStatus *api.BenchmarkStatus, receivedAt time.Time) {
-	// Only the first accepted running event may supply a start time. In particular,
-	// timestamps on pending or terminal events must not invent a runtime start.
-	if benchmarkStatus.Status != api.StateRunning {
+	// A pending benchmark can start on its first running event, or use an
+	// explicitly supplied start when an adapter skips running and reports terminal.
+	if benchmarkStatus.Status == api.StateRunning {
+		if benchmarkStatus.StartedAt == "" {
+			benchmarkStatus.StartedAt = api.DateTimeToString(receivedAt.UTC())
+		}
+	} else if !api.IsBenchmarkTerminalState(benchmarkStatus.Status) {
 		benchmarkStatus.StartedAt = ""
-	} else if benchmarkStatus.StartedAt == "" {
-		benchmarkStatus.StartedAt = api.DateTimeToString(receivedAt.UTC())
 	}
 	if !api.IsBenchmarkTerminalState(benchmarkStatus.Status) {
 		benchmarkStatus.CompletedAt = ""
@@ -258,7 +260,9 @@ func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runSt
 			if api.IsBenchmarkTerminalState(benchmark.Status) && !api.IsBenchmarkTerminalState(benchmarkStatus.Status) {
 				return
 			}
-			if benchmark.StartedAt != "" {
+			// Only a transition out of pending may establish a start. Preserve
+			// even an absent start on later running or terminal status updates.
+			if benchmark.StartedAt != "" || benchmark.Status != api.StatePending {
 				benchmarkStatus.StartedAt = benchmark.StartedAt
 			}
 			if api.IsBenchmarkTerminalState(benchmark.Status) && benchmark.CompletedAt != "" {

@@ -9,7 +9,7 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
-func newBenchmarkTimestampJob(t *testing.T) (abstractions.Storage, *api.EvaluationJobResource) {
+func newBenchmarkTimestampJob(t *testing.T, initialStates ...api.State) (abstractions.Storage, *api.EvaluationJobResource) {
 	t.Helper()
 	store, err := getTestStorage(t, drivers[0], getDBName())
 	if err != nil {
@@ -24,9 +24,16 @@ func newBenchmarkTimestampJob(t *testing.T) (abstractions.Storage, *api.Evaluati
 		Status: &api.EvaluationJobStatus{EvaluationJobState: api.EvaluationJobState{State: api.OverallStatePending}},
 	}
 	for index := range 3 {
+		state := api.StatePending
+		if index < len(initialStates) {
+			state = initialStates[index]
+			if state == api.StateRunning {
+				job.Status.State = api.OverallStateRunning
+			}
+		}
 		job.Benchmarks = append(job.Benchmarks, api.EvaluationBenchmarkConfig{Ref: api.Ref{ID: "repeated"}, ProviderID: "provider"})
 		job.Status.Benchmarks = append(job.Status.Benchmarks, api.BenchmarkStatus{
-			ID: "repeated", ProviderID: "provider", BenchmarkIndex: index, Status: api.StatePending,
+			ID: "repeated", ProviderID: "provider", BenchmarkIndex: index, Status: state,
 		})
 	}
 	if err := store.CreateEvaluationJob(job); err != nil {
@@ -148,16 +155,54 @@ func TestEvaluationBenchmarkTimestampsJobFinalization(t *testing.T) {
 	}
 }
 
-func TestEvaluationBenchmarkTimestampsFailureBeforeRunning(t *testing.T) {
-	store, job := newBenchmarkTimestampJob(t)
-	if err := store.UpdateEvaluationJob(job.Resource.ID, &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
-		ID: "repeated", ProviderID: "provider", Status: api.StateFailed, StartedAt: "2026-01-02T03:05:05Z",
-	}}); err != nil {
-		t.Fatal(err)
+func TestBenchmarkTerminalEventWithoutRunning(t *testing.T) {
+	for _, state := range []api.State{api.StateCompleted, api.StateFailed, api.StateCancelled} {
+		for _, supplied := range []api.DateTime{"", "2026-01-02T05:00:00+02:00"} {
+			t.Run(string(state)+"/"+string(supplied), func(t *testing.T) {
+				store, job := newBenchmarkTimestampJob(t)
+				before := time.Now().UTC().Truncate(time.Second)
+				if err := store.UpdateEvaluationJob(job.Resource.ID, &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+					ID: "repeated", ProviderID: "provider", Status: state, StartedAt: supplied,
+				}}); err != nil {
+					t.Fatal(err)
+				}
+				status := readBenchmarkTimestampStatus(t, store, job.Resource.ID, 0)
+				completed, err := api.DateTimeFromString(status.CompletedAt)
+				if status.StartedAt != supplied || err != nil || completed.Before(before) || completed.After(time.Now()) {
+					t.Fatalf("unexpected timestamps for direct terminal event: %+v (%v)", status, err)
+				}
+				// A duplicate terminal event must not replace or backfill the first start.
+				if err := store.UpdateEvaluationJob(job.Resource.ID, &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+					ID: "repeated", ProviderID: "provider", Status: state, StartedAt: "2000-01-01T00:00:00Z",
+				}}); err != nil {
+					t.Fatal(err)
+				}
+				duplicate := readBenchmarkTimestampStatus(t, store, job.Resource.ID, 0)
+				if duplicate.StartedAt != supplied || duplicate.CompletedAt != status.CompletedAt {
+					t.Fatalf("duplicate terminal event changed timestamps: before=%+v after=%+v", status, duplicate)
+				}
+			})
+		}
 	}
-	status := readBenchmarkTimestampStatus(t, store, job.Resource.ID, 0)
-	if status.StartedAt != "" || status.CompletedAt == "" {
-		t.Fatalf("unexpected timestamps for a benchmark that never ran: %+v", status)
+}
+
+func TestBenchmarkStartRequiresPendingTransition(t *testing.T) {
+	for _, state := range []api.State{api.StateRunning, api.StateCompleted, api.StateFailed, api.StateCancelled} {
+		for _, supplied := range []api.DateTime{"", "2026-01-02T05:00:00+02:00"} {
+			t.Run(string(state)+"/"+string(supplied), func(t *testing.T) {
+				// An existing running status without a start must not be backfilled.
+				store, job := newBenchmarkTimestampJob(t, api.StateRunning)
+				if err := store.UpdateEvaluationJob(job.Resource.ID, &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+					ID: "repeated", ProviderID: "provider", Status: state, StartedAt: supplied,
+				}}); err != nil {
+					t.Fatal(err)
+				}
+				status := readBenchmarkTimestampStatus(t, store, job.Resource.ID, 0)
+				if status.StartedAt != "" {
+					t.Fatalf("%s update backfilled a running benchmark's start: %+v", state, status)
+				}
+			})
+		}
 	}
 }
 

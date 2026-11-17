@@ -723,9 +723,13 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 	if event := status.BenchmarkStatusEvent; event != nil {
 		event.StampRuntimeMessageOrigins()
 		// Resolve the omitted start time before storage work or transaction retries.
-		// Storage preserves the first accepted running event's start time.
+		// Storage decides whether this transition may record the start time.
 		if event.Status == api.StateRunning && event.StartedAt == "" {
-			event.StartedAt = api.DateTimeToString(ctx.StartedAt.UTC())
+			receivedAt := ctx.StartedAt
+			if receivedAt.IsZero() {
+				receivedAt = time.Now()
+			}
+			event.StartedAt = api.DateTimeToString(receivedAt.UTC())
 		}
 	}
 

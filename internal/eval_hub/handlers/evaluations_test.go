@@ -969,16 +969,21 @@ func TestHandleUpdateEvaluationStartTime(t *testing.T) {
 	t.Parallel()
 	received := time.Date(2026, 1, 2, 3, 4, 5, 0, time.FixedZone("request", 2*60*60))
 	for _, test := range []struct {
-		name     string
-		state    api.State
-		supplied api.DateTime
-		want     api.DateTime
+		name        string
+		state       api.State
+		supplied    api.DateTime
+		want        api.DateTime
+		zeroContext bool
 	}{
-		{"running without start", api.StateRunning, "", "2026-01-02T01:04:05Z"},
-		{"running with start", api.StateRunning, "2026-01-02T05:00:00+02:00", "2026-01-02T05:00:00+02:00"},
-		{"pending without start", api.StatePending, "", ""},
-		{"completed without start", api.StateCompleted, "", ""},
-		{"failed without start", api.StateFailed, "", ""},
+		{"running without start", api.StateRunning, "", "2026-01-02T01:04:05Z", false},
+		{"running with start", api.StateRunning, "2026-01-02T05:00:00+02:00", "2026-01-02T05:00:00+02:00", false},
+		{"running with zero context time", api.StateRunning, "", "", true},
+		{"supplied start with zero context time", api.StateRunning, "2026-01-02T05:00:00+02:00", "2026-01-02T05:00:00+02:00", true},
+		{"pending without start", api.StatePending, "", "", false},
+		{"completed without start", api.StateCompleted, "", "", false},
+		{"failed without start", api.StateFailed, "", "", false},
+		{"completed with start", api.StateCompleted, "2026-01-02T05:00:00+02:00", "2026-01-02T05:00:00+02:00", false},
+		{"failed with start", api.StateFailed, "2026-01-02T05:00:00+02:00", "2026-01-02T05:00:00+02:00", false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{}}
@@ -1003,6 +1008,10 @@ func TestHandleUpdateEvaluationStartTime(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			ctx := executioncontext.NewExecutionContext(context.Background(), "req-start", logger, "test-user", "test-tenant")
 			ctx.StartedAt = received
+			if test.zeroContext {
+				ctx.StartedAt = time.Time{}
+			}
+			before := time.Now().UTC().Truncate(time.Second)
 
 			h.HandleUpdateEvaluation(ctx, req, MockResponseWrapper{recorder: recorder})
 
@@ -1012,7 +1021,13 @@ func TestHandleUpdateEvaluationStartTime(t *testing.T) {
 			if storage.lastStatusEvent == nil || storage.lastStatusEvent.BenchmarkStatusEvent == nil {
 				t.Fatal("status event was not passed to storage")
 			}
-			if got := storage.lastStatusEvent.BenchmarkStatusEvent.StartedAt; got != test.want {
+			got := storage.lastStatusEvent.BenchmarkStatusEvent.StartedAt
+			if test.zeroContext && test.supplied == "" {
+				started, err := api.DateTimeFromString(got)
+				if err != nil || started.Before(before) || started.After(time.Now()) {
+					t.Fatalf("invalid start fallback with zero context time %q: %v", got, err)
+				}
+			} else if got != test.want {
 				t.Fatalf("unexpected start time passed to storage: got %q, want %q", got, test.want)
 			}
 		})
