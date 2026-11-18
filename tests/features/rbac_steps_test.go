@@ -366,16 +366,8 @@ func (tc *scenarioConfig) currentUserCannotUpdateCreatedMLflowExperiment() error
 	if status != http.StatusForbidden {
 		return tc.logError(fmt.Errorf("update MLflow experiment returned HTTP %d, expected 403: %s", status, body))
 	}
-	var response struct {
-		Error struct {
-			Code string `json:"code"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(body, &response); err != nil {
-		return tc.logError(fmt.Errorf("decode MLflow update denial: %w", err))
-	}
-	if response.Error.Code != "PERMISSION_DENIED" {
-		return tc.logError(fmt.Errorf("MLflow update returned error code %q, expected PERMISSION_DENIED: %s", response.Error.Code, body))
+	if !isMLflowPermissionDenied(body) {
+		return tc.logError(fmt.Errorf("MLflow update returned HTTP 403 without a PERMISSION_DENIED response: %s", body))
 	}
 	return nil
 }
@@ -392,16 +384,8 @@ func (tc *scenarioConfig) currentUserCannotDeleteCreatedMLflowExperiment() error
 	if status != http.StatusForbidden {
 		return tc.logError(fmt.Errorf("delete MLflow experiment returned HTTP %d, expected 403: %s", status, body))
 	}
-	var response struct {
-		Error struct {
-			Code string `json:"code"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(body, &response); err != nil {
-		return tc.logError(fmt.Errorf("decode MLflow delete denial: %w", err))
-	}
-	if response.Error.Code != "PERMISSION_DENIED" {
-		return tc.logError(fmt.Errorf("MLflow delete returned error code %q, expected PERMISSION_DENIED: %s", response.Error.Code, body))
+	if !isMLflowPermissionDenied(body) {
+		return tc.logError(fmt.Errorf("MLflow delete returned HTTP 403 without a PERMISSION_DENIED response: %s", body))
 	}
 	return nil
 }
