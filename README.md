@@ -319,6 +319,20 @@ make dev-deploy ADAPTERS=all ADAPTER_IMAGES="$(make adapter-images)"
 make adapter-images ADAPTERS=inspect,ruler
 ```
 
+The curated community images are published for `linux/amd64` only, so an arm64
+machine (Apple silicon) needs the podman machine's qemu-user-static emulation to
+run them:
+
+```bash
+make dev-deploy ADAPTERS=all ADAPTER_IMAGES="$(make adapter-images)" \
+  ADAPTER_IMAGES_PLATFORM=linux/amd64
+```
+
+The adapter Pods then run under emulation and are much slower, and dev-deploy
+warns which images are foreign to the nodes. Leaving an adapter out of both
+`ADAPTERS` and `ADAPTER_IMAGES` builds it natively for the host instead, which
+is the faster option when you only need a few adapters.
+
 Each repository is searched as
 a sibling of
 the EvalHub checkout first and then as `<parent>/<repo>` under each

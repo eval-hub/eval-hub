@@ -22,8 +22,8 @@ harness, so they pin the contract the deploy relies on:
 Pulling the image, publishing it to the kind-local registry, and recording the
 manifest run against a real container runtime and cluster. `adapter_source_image`
 and `load_adapter_image` are pinned here against a stub runtime, because they
-decide whether a deploy pulls at all; publishing and manifest recording stay
-covered by the e2e suite.
+decide whether a deploy pulls at all and for which platform; publishing and
+manifest recording stay covered by the e2e suite.
 """
 
 import os
@@ -117,15 +117,26 @@ PUBLISH_FUNCTIONS = [
     "load_adapter_image",
 ]
 
-# The stub answers `image inspect` from a file of present references and records
-# every call, so a case can assert that a present image was not pulled.
+# The stub answers `image inspect` from a file of present references, reports a
+# configurable architecture for `--format` queries, and records every call, so a
+# case can assert what was pulled, for which platform, and whether a present
+# image was pulled again.
 RUNTIME_STUB = """#!/usr/bin/env bash
 printf '%s\\n' "$*" >>"${FAKE_RUNTIME_LOG}"
-case "$1 $2" in
+args=("$@")
+ref="${args[${#args[@]}-1]}"
+case "${args[0]} ${args[1]}" in
   "image inspect")
-    grep -qxF -- "$3" "${FAKE_RUNTIME_PRESENT}" 2>/dev/null
+    grep -qxF -- "$ref" "${FAKE_RUNTIME_PRESENT}" 2>/dev/null || exit 1
+    for arg in "${args[@]}"; do
+      if [[ "$arg" == --format ]]; then
+        printf '%s\\n' "${FAKE_IMAGE_ARCH:-arm64}"
+        exit 0
+      fi
+    done
+    exit 0
     ;;
-  "image pull") exit 0 ;;
+  "image pull") exit "${FAKE_PULL_EXIT:-0}" ;;
   *) exit 1 ;;
 esac
 """
@@ -150,7 +161,8 @@ done
 case "$4" in
   load)
     for adapter in "${{SELECTED_ADAPTERS[@]}}"; do
-      load_adapter_image "$adapter" "$(adapter_source_image "$adapter")"
+      load_adapter_image "$adapter" "$(adapter_source_image "$adapter")" \
+        "${{ADAPTER_IMAGES_PLATFORM:-}}" "${{FAKE_NODE_ARCH:-}}"
     done
     ;;
   require)
@@ -376,21 +388,24 @@ class PrebuiltImageResolutionTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.work.cleanup()
 
-    def run_case(self, adapters, adapter_images, mode, present=()):
+    def run_case(self, adapters, adapter_images, mode, present=(), **extra_env):
         """Run one selection, returning (returncode, sources, runtime calls, output)."""
         present_file = self.work_dir / "present.txt"
         present_file.write_text("".join(f"{ref}\n" for ref in present))
         call_log = self.work_dir / "calls.txt"
         call_log.write_text("")
+        env = {
+            "PATH": str(self.work_dir) + ":" + os.environ["PATH"],
+            "FAKE_RUNTIME_PRESENT": str(present_file),
+            "FAKE_RUNTIME_LOG": str(call_log),
+        }
+        for key, value in extra_env.items():
+            env[key.upper()] = str(value)
         proc = subprocess.run(
             ["bash", str(self.harness), str(self.runtime), adapters, adapter_images, mode],
             capture_output=True,
             text=True,
-            env={
-                "PATH": str(self.work_dir) + ":" + os.environ["PATH"],
-                "FAKE_RUNTIME_PRESENT": str(present_file),
-                "FAKE_RUNTIME_LOG": str(call_log),
-            },
+            env=env,
         )
         sources = {}
         for line in proc.stdout.splitlines():
@@ -445,6 +460,64 @@ class PrebuiltImageResolutionTests(unittest.TestCase):
             [call for call in calls if call.startswith("image pull")],
             f"SKIP_BUILD must not pull: {calls}",
         )
+
+    def test_a_pull_uses_the_host_platform_by_default(self):
+        override = "quay.io/evalhub/community-inspect:latest"
+        code, _, calls, output = self.run_case("inspect", f"inspect={override}", "load")
+        self.assertEqual(code, 0, output)
+        self.assertEqual(
+            [call for call in calls if call.startswith("image pull")],
+            [f"image pull {override}"],
+            calls,
+        )
+
+    def test_a_platform_pulls_that_platform(self):
+        """The curated community images are amd64 only, so an arm64 host opts in."""
+        override = "quay.io/evalhub/community-inspect:latest"
+        code, _, calls, output = self.run_case(
+            "inspect", f"inspect={override}", "load", ADAPTER_IMAGES_PLATFORM="linux/amd64"
+        )
+        self.assertEqual(code, 0, output)
+        self.assertEqual(
+            [call for call in calls if call.startswith("image pull")],
+            [f"image pull --platform linux/amd64 {override}"],
+            calls,
+        )
+
+    def test_a_foreign_architecture_warns_about_emulation(self):
+        override = "quay.io/evalhub/community-inspect:latest"
+        code, _, _, output = self.run_case(
+            "inspect",
+            f"inspect={override}",
+            "load",
+            present=(override,),
+            FAKE_IMAGE_ARCH="amd64",
+            FAKE_NODE_ARCH="arm64",
+        )
+        self.assertEqual(code, 0, output)
+        self.assertIn("run under emulation", output)
+
+    def test_a_matching_architecture_is_silent(self):
+        override = "quay.io/evalhub/community-inspect:latest"
+        code, _, _, output = self.run_case(
+            "inspect",
+            f"inspect={override}",
+            "load",
+            present=(override,),
+            FAKE_IMAGE_ARCH="arm64",
+            FAKE_NODE_ARCH="arm64",
+        )
+        self.assertEqual(code, 0, output)
+        self.assertNotIn("emulation", output)
+
+    def test_a_failed_pull_suggests_the_platform_input(self):
+        override = "quay.io/evalhub/community-inspect:latest"
+        code, _, _, output = self.run_case(
+            "inspect", f"inspect={override}", "load", FAKE_PULL_EXIT=1
+        )
+        self.assertNotEqual(code, 0, f"expected a pull failure, got: {output}")
+        self.assertIn("ADAPTER_IMAGES_PLATFORM=linux/amd64", output)
+        self.assertIn("dev-deploy builds it from source", output)
 
 
 if __name__ == "__main__":

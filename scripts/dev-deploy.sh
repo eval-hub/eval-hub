@@ -14,6 +14,7 @@ SKIP_BUILD="${SKIP_BUILD:-false}"
 AIRGAP="${AIRGAP:-false}"
 ADAPTERS="${ADAPTERS:-followbench}"
 ADAPTER_IMAGES="${ADAPTER_IMAGES:-}"
+ADAPTER_IMAGES_PLATFORM="${ADAPTER_IMAGES_PLATFORM:-}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-}"
 EVALHUB_HOST_PORT="${EVALHUB_HOST_PORT:-18443}"
 EVALHUB_NODE_PORT="${EVALHUB_NODE_PORT:-30443}"
@@ -85,6 +86,16 @@ Inputs (also accepted as environment variables):
                            because the pull happens on the host before the
                            registry push; SKIP_BUILD=true with a present image
                            needs no network at all.
+  ADAPTER_IMAGES_PLATFORM=<platform>
+                           platform to pull prebuilt adapter images for, for
+                           example linux/amd64. It applies only to adapters in
+                           ADAPTER_IMAGES. The curated community images are
+                           published for linux/amd64 only, so an arm64 machine
+                           needs linux/amd64 together with the podman machine's
+                           qemu-user-static emulation: the adapter Pods then run
+                           under emulation and are much slower. Without this
+                           input a prebuilt image must match the node platform,
+                           which follows the host.
   AIRGAP=true              create/use a Calico kind cluster and deny external
                           egress from system-namespace evaluation jobs (default: false)
   CONTAINER_RUNTIME        container engine for image builds, the local registry,
@@ -420,6 +431,13 @@ validate_inputs() {
   case "$AIRGAP" in true|false) ;; *) fail "AIRGAP must be true or false." ;; esac
   parse_adapters
   parse_adapter_images
+  ADAPTER_IMAGES_PLATFORM="$(trim_whitespace "$ADAPTER_IMAGES_PLATFORM")"
+  if [[ -n "$ADAPTER_IMAGES_PLATFORM" ]]; then
+    [[ "$ADAPTER_IMAGES_PLATFORM" =~ ^linux/[a-z0-9_]+$ ]] ||
+      fail "ADAPTER_IMAGES_PLATFORM must be a platform such as linux/amd64."
+    ((${#ADAPTER_IMAGE_OVERRIDES[@]})) ||
+      fail "ADAPTER_IMAGES_PLATFORM is set but ADAPTER_IMAGES supplies no prebuilt image; it applies only to adapters in ADAPTER_IMAGES."
+  fi
   [[ "$KIND_CLUSTER_NAME" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
     fail "Invalid kind cluster name: $KIND_CLUSTER_NAME"
   ((${#KIND_CLUSTER_NAME} <= 63)) || fail "KIND_CLUSTER_NAME must be at most 63 characters."
@@ -682,15 +700,31 @@ adapter_source_image() {
 # cluster-local registry, so AIRGAP=true (which denies egress from evaluation
 # pods only) still deploys. SKIP_BUILD=true never reaches the network and fails
 # for a missing image instead.
+#
+# PLATFORM pulls that platform instead of the host's. The curated community
+# images are published for linux/amd64 only, so an arm64 machine needs
+# ADAPTER_IMAGES_PLATFORM=linux/amd64 and the podman machine's qemu-user-static:
+# NODE_ARCH then reports that the Pods run under emulation instead of leaving a
+# silent, very slow deployment.
 load_adapter_image() {
-  local adapter="$1" image="$2"
+  local adapter="$1" image="$2" platform="${3:-}" node_arch="${4:-}"
+  local actual
+  local -a pull_args=(image pull)
   if "$CONTAINER_RUNTIME" image inspect "$image" >/dev/null 2>&1; then
     log PASS "Found prebuilt $adapter image $image"
-    return 0
+  else
+    [[ -z "$platform" ]] || pull_args+=(--platform "$platform")
+    log INFO "Pulling prebuilt $adapter image $image${platform:+ for $platform} instead of building it."
+    "$CONTAINER_RUNTIME" "${pull_args[@]}" "$image" ||
+      fail "Could not pull prebuilt $adapter image: $image. If the image is not published for this machine's architecture, set ADAPTER_IMAGES_PLATFORM=linux/amd64 to run it under emulation (the podman machine provides qemu-user-static), or drop '$adapter' from ADAPTER_IMAGES so dev-deploy builds it from source."
+    log PASS "Loaded prebuilt $adapter image $image"
   fi
-  log INFO "Pulling prebuilt $adapter image $image instead of building it."
-  "$CONTAINER_RUNTIME" image pull "$image" || fail "Could not pull prebuilt $adapter image: $image"
-  log PASS "Loaded prebuilt $adapter image $image"
+  if [[ -n "$node_arch" ]]; then
+    actual="$("$CONTAINER_RUNTIME" image inspect --format '{{.Architecture}}' "$image" 2>/dev/null || true)"
+    if [[ -n "$actual" && "$actual" != "$node_arch" ]]; then
+      log WARN "Prebuilt $adapter image $image is linux/$actual but the kind nodes are linux/$node_arch: its Pods run under emulation and are much slower."
+    fi
+  fi
 }
 
 build_images() {
@@ -717,7 +751,8 @@ build_images() {
     "$OPERATOR_REPO/Dockerfile" "$target_arch"
   for adapter in "${SELECTED_ADAPTERS[@]}"; do
     if [[ -n "$(adapter_override_image "$adapter")" ]]; then
-      load_adapter_image "$adapter" "$(adapter_source_image "$adapter")"
+      load_adapter_image "$adapter" "$(adapter_source_image "$adapter")" \
+        "$ADAPTER_IMAGES_PLATFORM" "$target_arch"
       continue
     fi
     case "$adapter" in

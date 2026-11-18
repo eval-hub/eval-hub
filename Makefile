@@ -101,6 +101,14 @@ ADAPTERS ?= followbench
 # ConfigMaps, the recorded manifest, and the e2e image checks are unchanged. An
 # adapter supplied this way needs no source checkout.
 ADAPTER_IMAGES ?=
+# Platform to pull ADAPTER_IMAGES for, for example linux/amd64. The curated
+# community images are published for linux/amd64 only, so an arm64 machine needs
+#   make dev-deploy ADAPTERS=all ADAPTER_IMAGES="$(make adapter-images)" \
+#     ADAPTER_IMAGES_PLATFORM=linux/amd64
+# with qemu-user-static in the podman machine; the adapter Pods then run under
+# emulation and are much slower. It applies only to adapters in ADAPTER_IMAGES,
+# and without it a prebuilt image must match the node platform (the host's).
+ADAPTER_IMAGES_PLATFORM ?=
 EVALHUB_HOST_PORT ?= 18443
 EVALHUB_NODE_PORT ?= 30443
 EVALHUB_HOST_BIND_ADDRESS ?= 127.0.0.1
@@ -136,6 +144,7 @@ dev-deploy: ## Build and deploy the local EvalHub stack to podman/Docker-backed 
 	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" IMAGE_TAG="$(IMAGE_TAG)" \
 		SKIP_BUILD="$(SKIP_BUILD)" AIRGAP="$(AIRGAP)" ADAPTERS="$(ADAPTERS)" \
 		ADAPTER_IMAGES="$(ADAPTER_IMAGES)" \
+		ADAPTER_IMAGES_PLATFORM="$(ADAPTER_IMAGES_PLATFORM)" \
 		CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" \
 		EVALHUB_HOST_PORT="$(EVALHUB_HOST_PORT)" EVALHUB_NODE_PORT="$(EVALHUB_NODE_PORT)" \
 		EVALHUB_HOST_BIND_ADDRESS="$(EVALHUB_HOST_BIND_ADDRESS)" \
@@ -555,6 +564,8 @@ test-benchmarks: $(GOTESTSUM) ## Run live benchmark smoke tests (requires SERVER
 #
 #   make test-benchmarks-kind ADAPTERS=all
 #   make test-benchmarks-kind ADAPTER_IMAGES="$(make adapter-images)"
+#   make test-benchmarks-kind ADAPTERS=all ADAPTER_IMAGES="$(make adapter-images)" \
+#     ADAPTER_IMAGES_PLATFORM=linux/amd64
 #   make test-benchmarks-kind ADAPTERS=inspect,lm-evaluation-harness \
 #     ADAPTER_IMAGES='inspect=quay.io/evalhub/community-inspect@sha256:...'
 #   make test-benchmarks-kind ADAPTERS=all \
@@ -623,9 +634,11 @@ test-benchmarks-kind-token-check:
 
 # Deploy (or reuse) the kind cluster with the adapter set the benchmark run
 # needs; `make dev-deploy` on its own keeps its smaller ADAPTERS default.
-# ADAPTER_IMAGES passes through, so a run can use prebuilt adapter images.
+# ADAPTER_IMAGES passes through, so a run can use prebuilt adapter images;
+# ADAPTER_IMAGES_PLATFORM passes through with it for amd64-only images.
 test-benchmarks-kind-deploy: test-benchmarks-kind-token-check
-	@ADAPTERS="$(KIND_BENCHMARK_ADAPTERS)" ADAPTER_IMAGES="$(ADAPTER_IMAGES)" $(MAKE) dev-deploy
+	@ADAPTERS="$(KIND_BENCHMARK_ADAPTERS)" ADAPTER_IMAGES="$(ADAPTER_IMAGES)" \
+		ADAPTER_IMAGES_PLATFORM="$(ADAPTER_IMAGES_PLATFORM)" $(MAKE) dev-deploy
 
 test-benchmarks-kind: test-benchmarks-kind-deploy ## Run benchmark smoke tests on kind (deploys first; ADAPTERS=all|inspect,lm-evaluation-harness,lighteval,ruler,ifbench,followbench; ADAPTER_IMAGES=<adapter=image>[,<adapter=image>...]; SKIP_BUILD=true reuses built images)
 	@set -eu; \

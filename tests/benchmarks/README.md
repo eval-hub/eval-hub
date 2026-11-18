@@ -114,6 +114,10 @@ building it:
 `make adapter-images` prints that value for the selected adapters from the
 references in `config/providers`, so a run can use the whole set without typing
 each pair: `make test-benchmarks-kind ADAPTER_IMAGES="$(make adapter-images)"`.
+Those images are `linux/amd64` only, so add
+`ADAPTER_IMAGES_PLATFORM=linux/amd64` on an arm64 machine to run them under the
+podman machine's qemu-user-static emulation, or leave them out of
+`ADAPTER_IMAGES` and build them for the host instead.
 garak and garak-kfp
 are not curated adapters, so they keep their operator-packaged image. It also
 mints a short-lived service-account token, creates or refreshes the

@@ -54,6 +54,12 @@ without typing each pair:
 
     make dev-deploy AIRGAP=true ADAPTERS=all ADAPTER_IMAGES="$(make adapter-images)"
 
+Those images are published for `linux/amd64` only. On an arm64 machine, add
+`ADAPTER_IMAGES_PLATFORM=linux/amd64` to pull them for emulation through the
+podman machine's qemu-user-static; without it the pull fails with
+`no image found in image index for architecture "arm64"`, and the alternative is
+to leave the adapter out of `ADAPTER_IMAGES` so dev-deploy builds it for arm64.
+
 For `ADAPTERS=all`, leave at least 4 GiB available for LightEval's pod memory
 request in addition to the running service, operator, mocks, and Kubernetes
 components. Increase the container VM's memory if the LightEval pod remains
