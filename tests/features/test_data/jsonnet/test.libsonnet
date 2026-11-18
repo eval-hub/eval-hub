@@ -154,6 +154,18 @@ local harness = std.parseJson(std.extVar('harness'));
       } + overrides,
     },
 
+  // ETHICS commonsense CSVs used by the lm-evaluation-harness ethics_cm task.
+  ethicsCmTestDataRef():: $.hfTestDataRef({
+    repo_id: $.env('TEST_DATA_ETHICS_HF_REPO_ID', 'hendrycks/ethics'),
+    revision: $.env('TEST_DATA_ETHICS_HF_REVISION', 'b8b47c589f8bee77175b8648e5497278b68da48a'),
+    sub_path: $.env('TEST_DATA_ETHICS_HF_SUB_PATH', 'data/commonsense'),
+  }),
+
+  // ethics_cm with its dataset staged under /test_data by the runtime init container.
+  ethicsCmBenchmark(parameters={})::
+    local base = $.benchmark('ethics_cm', 'lm_evaluation_harness', parameters);
+    base + { test_data_ref: $.ethicsCmTestDataRef() },
+
   // Benchmark that always downloads offline data from Hugging Face Hub (tokenizer under /test_data).
   hfBenchmark(id, providerId, parameters, hfOverrides={})::
     {
