@@ -170,16 +170,24 @@ from `.claude/settings.json`.
 
 **Other harnesses** (Cursor, Codex CLI, …) do not read Claude Code plugins. Keep
 a shallow clone current and symlink the skills into your harness's skills
-directory (`~/.claude/skills` by default; Codex CLI loads user skills from
-`~/.agents/skills`):
+directory (`~/.agents/skills` by default, the cross-harness user skills directory
+read by Cursor and Codex CLI; Claude Code reads `~/.claude/skills`, so pass
+`DEV_SKILLS_TARGET_DIR=~/.claude/skills` for it):
 
 ```bash
-make install-dev-skills     # optional: DEV_SKILLS_REF=<ref> DEV_SKILLS_CLONE_DIR=<path> DEV_SKILLS_TARGET_DIR=<path>
+make install-dev-skills     # optional: DEV_SKILLS_REF=<ref> DEV_SKILLS_CLONE_DIR=<path> DEV_SKILLS_TARGET_DIR=<path> DEV_SKILLS_FORCE=true
 make uninstall-dev-skills   # honours DEV_SKILLS_TARGET_DIR and DEV_SKILLS_CLONE_DIR
 ```
 
-For Codex CLI, point the target at its global skills directory, for example
-`make install-dev-skills DEV_SKILLS_TARGET_DIR=~/.agents/skills`.
+`DEV_SKILLS_FORCE=true` passes `--force` through to
+`scripts/install-dev-skills.sh`, which is what a refused install needs: the script
+will not replace a pre-existing skill entry or discard uncommitted changes in the
+cached clone (`~/.cache/eval-hub-skills`) without it. Those changes are usually
+local edits to a skill file made through the symlink — the link points into the
+clone, so editing the skill in the harness directory edits the checkout.
+
+For Claude Code, point the target at its user skills directory, for example
+`make install-dev-skills DEV_SKILLS_TARGET_DIR=~/.claude/skills`.
 
 Then attach the skill file from the clone, for example
 `@~/.cache/eval-hub-skills/dev-skills/release-notes/SKILL.md`, or from any
