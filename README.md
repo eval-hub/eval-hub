@@ -310,7 +310,16 @@ adapter would use, so the rendered provider ConfigMaps, the recorded
 `source.<adapter>.prebuilt=true` and `source.<adapter>.image`), and the e2e image
 checks are unchanged. The pull happens on the host before the registry push, so
 `AIRGAP=true` still deploys; `SKIP_BUILD=true` never reaches the network and
-requires the image to be present locally instead. Each repository is searched as
+requires the image to be present locally instead. `make adapter-images` prints
+the value for the selected adapters from the references the provider configs
+declare, ready to substitute:
+
+```bash
+make dev-deploy ADAPTERS=all ADAPTER_IMAGES="$(make adapter-images)"
+make adapter-images ADAPTERS=inspect,ruler
+```
+
+Each repository is searched as
 a sibling of
 the EvalHub checkout first and then as `<parent>/<repo>` under each
 colon-separated `DEV_REPO_PARENT_PATHS` entry (default `~/code`); set that

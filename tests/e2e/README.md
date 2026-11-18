@@ -48,6 +48,12 @@ identical to a built adapter. The pull runs on the host before the registry
 push, so `AIRGAP=true` still works; add `SKIP_BUILD=true` to deploy from a
 locally present image with no network access at all.
 
+`make adapter-images` prints that value for the selected adapters from the
+references the provider configs declare, so a deploy can use the whole set
+without typing each pair:
+
+    make dev-deploy AIRGAP=true ADAPTERS=all ADAPTER_IMAGES="$(make adapter-images)"
+
 For `ADAPTERS=all`, leave at least 4 GiB available for LightEval's pod memory
 request in addition to the running service, operator, mocks, and Kubernetes
 components. Increase the container VM's memory if the LightEval pod remains

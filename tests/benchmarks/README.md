@@ -111,6 +111,9 @@ can also be supplied prebuilt with `ADAPTER_IMAGES`, a comma-separated list of
 pulls that reference once and re-tags it into the kind-local registry instead of
 building it:
 `make test-benchmarks-kind ADAPTERS=all ADAPTER_IMAGES='lighteval=quay.io/…@sha256:…'`.
+`make adapter-images` prints that value for the selected adapters from the
+references in `config/providers`, so a run can use the whole set without typing
+each pair: `make test-benchmarks-kind ADAPTER_IMAGES="$(make adapter-images)"`.
 garak and garak-kfp
 are not curated adapters, so they keep their operator-packaged image. It also
 mints a short-lived service-account token, creates or refreshes the

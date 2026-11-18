@@ -144,6 +144,29 @@ dev-deploy: ## Build and deploy the local EvalHub stack to podman/Docker-backed 
 dev-deploy-help: ## Show dev-deploy inputs and usage
 	@bash scripts/dev-deploy.sh --help
 
+# Echo the ADAPTER_IMAGES value for the selected adapters, using the image
+# reference each provider declares in config/providers (for the curated set:
+# quay.io/evalhub/community-<adapter>:latest, and the pinned
+# quay.io/opendatahub/ta-lmes-job tag for lm-evaluation-harness). Substitute the
+# output directly:
+#
+#   make dev-deploy ADAPTERS=all ADAPTER_IMAGES="$(make adapter-images)"
+#   make test-benchmarks-kind ADAPTER_IMAGES="$(make adapter-images)"
+#
+# The tags are copied as declared, so `latest` stays floating: a deploy pulls
+# whatever it points at when it runs. No network access, container runtime, or
+# cluster is needed. ADAPTERS behaves as it does for dev-deploy, but this target
+# defaults to the whole curated set: naming one adapter is the exception here.
+ADAPTER_IMAGES_SELECTION ?= $(if $(filter command line environment,$(origin ADAPTERS)),$(ADAPTERS),all)
+
+.PHONY: adapter-images adapter-images-help
+adapter-images: ## Echo ADAPTER_IMAGES from the image references the provider configs declare
+	@ADAPTERS="$(ADAPTER_IMAGES_SELECTION)" bash scripts/adapter-images.sh
+
+adapter-images-help: ## Show the adapter-images inputs and usage
+	@bash scripts/adapter-images.sh --help
+
+
 DELETE_CLUSTER ?= false
 
 dev-clean: ## Remove the local EvalHub deployment; optionally delete its kind cluster
@@ -531,6 +554,7 @@ test-benchmarks: $(GOTESTSUM) ## Run live benchmark smoke tests (requires SERVER
 # eval-hub-contrib nor the lm-evaluation-harness checkout:
 #
 #   make test-benchmarks-kind ADAPTERS=all
+#   make test-benchmarks-kind ADAPTER_IMAGES="$(make adapter-images)"
 #   make test-benchmarks-kind ADAPTERS=inspect,lm-evaluation-harness \
 #     ADAPTER_IMAGES='inspect=quay.io/evalhub/community-inspect@sha256:...'
 #   make test-benchmarks-kind ADAPTERS=all \
