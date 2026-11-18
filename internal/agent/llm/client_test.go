@@ -173,6 +173,85 @@ func TestClientClassifiesRetryableStatuses(t *testing.T) {
 	}
 }
 
+func TestClientRejectsInvalidRequests(t *testing.T) {
+	var nilClient *Client
+	if _, err := nilClient.Complete(context.Background(), modelRequest()); !errors.Is(err, ErrInvalidResponse) {
+		t.Fatalf("nil client error = %v", err)
+	}
+
+	client := testClient(t, "http://127.0.0.1:8080", roundTripFunc(func(*http.Request) (*http.Response, error) {
+		t.Fatal("invalid request reached the transport")
+		return nil, nil
+	}))
+	cases := []struct {
+		name    string
+		ctx     context.Context
+		request loop.ModelRequest
+	}{
+		{name: "nil context", request: modelRequest()},
+		{name: "blank model", ctx: context.Background(), request: loop.ModelRequest{MaxOutputTokens: 1}},
+		{name: "no output allowance", ctx: context.Background(), request: loop.ModelRequest{Model: "m"}},
+		{name: "invalid raw tool schema", ctx: context.Background(), request: loop.ModelRequest{
+			Model: "m", MaxOutputTokens: 1,
+			Tools: []loop.ToolDefinition{{Type: "function", Function: loop.FunctionMetadata{Name: "bad", Parameters: json.RawMessage("{")}}},
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := client.Complete(tc.ctx, tc.request); !errors.Is(err, ErrInvalidResponse) {
+				t.Fatalf("Complete() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestClientSanitizesTransportErrorsAndPropagatesCancellation(t *testing.T) {
+	t.Run("transport error", func(t *testing.T) {
+		client := testClient(t, "http://127.0.0.1:8080", roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return nil, errors.New("private host and credential")
+		}))
+		_, err := client.Complete(context.Background(), modelRequest())
+		if !errors.Is(err, ErrTransport) || strings.Contains(err.Error(), "private host") || strings.Contains(err.Error(), "credential") {
+			t.Fatalf("transport error was not safely wrapped: %v", err)
+		}
+	})
+
+	t.Run("request canceled", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		client := testClient(t, "http://127.0.0.1:8080", roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return nil, errors.New("transport cancellation")
+		}))
+		if _, err := client.Complete(ctx, modelRequest()); !errors.Is(err, context.Canceled) {
+			t.Fatalf("Complete() error = %v, want context cancellation", err)
+		}
+	})
+}
+
+func TestClientRejectsResponseReadErrors(t *testing.T) {
+	client := testClient(t, "http://127.0.0.1:8080", roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		response := testResponse(r, http.StatusOK, "")
+		response.Body = failingReadCloser{}
+		return response, nil
+	}))
+	if _, err := client.Complete(context.Background(), modelRequest()); !errors.Is(err, ErrInvalidResponse) {
+		t.Fatalf("Complete() error = %v, want invalid response", err)
+	}
+}
+
+func TestDecodeResponseIncludesToolCallsAndAllUsageFields(t *testing.T) {
+	response, err := decodeResponse([]byte(`{"choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","tool_calls":[{"id":"call-1","type":"function","function":{"name":"list_catalog","arguments":"{\"limit\":1}"}}]}}],"usage":{"prompt_tokens":9,"completion_tokens":4,"total_tokens":13}}`))
+	if err != nil {
+		t.Fatalf("decodeResponse() error = %v", err)
+	}
+	if len(response.Message.ToolCalls) != 1 || response.Message.ToolCalls[0].ID != "call-1" || response.Message.ToolCalls[0].Function.Name != "list_catalog" {
+		t.Fatalf("decoded tool calls = %+v", response.Message.ToolCalls)
+	}
+	if response.FinishReason != "tool_calls" || response.Usage == nil || !response.Usage.TotalTokensPresent || response.Usage.TotalTokens != 13 {
+		t.Fatalf("decoded response metadata = %+v", response)
+	}
+}
+
 func TestDecodeResponseRejectsUnsupportedShapes(t *testing.T) {
 	for _, body := range []string{
 		`{`, `{"choices":[]}`, `{"choices":[{"message":{"role":"user","content":"x"}}]}`,
@@ -212,6 +291,11 @@ func testClient(t *testing.T, baseURL string, transport http.RoundTripper) *Clie
 func testResponse(request *http.Request, status int, body string) *http.Response {
 	return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: request}
 }
+
+type failingReadCloser struct{}
+
+func (failingReadCloser) Read([]byte) (int, error) { return 0, errors.New("private read failure") }
+func (failingReadCloser) Close() error             { return nil }
 
 func modelRequest() loop.ModelRequest {
 	return loop.ModelRequest{Model: "m", Messages: []loop.Message{{Role: loop.RoleUser, Content: "x"}}, MaxOutputTokens: 10}

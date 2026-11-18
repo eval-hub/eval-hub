@@ -3,6 +3,7 @@ package loop
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 )
 
@@ -93,5 +94,87 @@ func TestRegistryReturnsDetachedDefinitions(t *testing.T) {
 	toolAgain, ok := registry.Lookup("list_catalog")
 	if !ok || toolAgain.Definition.Function.Parameters[1] == 'y' {
 		t.Fatal("Lookup() exposed mutable registry schema bytes")
+	}
+}
+
+func TestRegistryHandlesNilAndUnknownLookups(t *testing.T) {
+	var registry *Registry
+	if registry.Definitions() != nil {
+		t.Fatal("nil registry returned definitions")
+	}
+	if _, ok := registry.Lookup("missing"); ok {
+		t.Fatal("nil registry found a tool")
+	}
+	registry, err := NewRegistry(testTool(func(context.Context, json.RawMessage) (json.RawMessage, error) {
+		return json.RawMessage(`null`), nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := registry.Lookup("missing"); ok {
+		t.Fatal("registry found an unknown tool")
+	}
+	definitions := registry.Definitions()
+	if len(definitions) != 1 || definitions[0].Function.Name != "list_catalog" {
+		t.Fatalf("Definitions() = %+v", definitions)
+	}
+}
+
+func TestNewRegistryRejectsInvalidTypeSchemaAndProgressLabel(t *testing.T) {
+	handler := func(context.Context, json.RawMessage) (json.RawMessage, error) { return json.RawMessage(`null`), nil }
+	tests := []struct {
+		name   string
+		mutate func(*Tool)
+	}{
+		{name: "wrong type", mutate: func(tool *Tool) { tool.Definition.Type = "http" }},
+		{name: "invalid schema semantics", mutate: func(tool *Tool) {
+			tool.Definition.Function.Parameters = json.RawMessage(`{"type":"object","properties":{"v":{"type":"not-a-json-type"}}}`)
+		}},
+		{name: "newline in progress label", mutate: func(tool *Tool) { tool.ProgressLabel = "first\nsecond" }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tool := testTool(handler)
+			tc.mutate(&tool)
+			if _, err := NewRegistry(tool); err == nil {
+				t.Fatal("NewRegistry() accepted an invalid tool")
+			}
+		})
+	}
+}
+
+func TestHasExternalSchemaReferenceAllowsLocalRefsAndRejectsMalformedRefs(t *testing.T) {
+	if hasExternalSchemaReference(json.RawMessage(`{"type":"object","properties":{"a":{"$ref":"#/definitions/a"}}}`)) {
+		t.Fatal("local reference was rejected")
+	}
+	for _, raw := range []json.RawMessage{
+		json.RawMessage(`{"type":"object","properties":{"a":{"$ref":12}}}`),
+		json.RawMessage(`{"type":"object","properties":{"a":{"$ref":"schema.json"}}}`),
+		json.RawMessage(`{`),
+	} {
+		if !hasExternalSchemaReference(raw) {
+			t.Errorf("unsafe or malformed reference accepted: %s", raw)
+		}
+	}
+}
+
+func TestExecuteToolNormalizesEmptyResultAndHidesHandlerErrors(t *testing.T) {
+	tool := testTool(func(context.Context, json.RawMessage) (json.RawMessage, error) { return nil, nil })
+	result, succeeded, err := executeTool(context.Background(), tool, `{"limit":1}`, 100, 100)
+	if err != nil || !succeeded || string(result) != "null" {
+		t.Fatalf("empty result = %s, succeeded=%v, error=%v", result, succeeded, err)
+	}
+
+	tool.Handler = func(context.Context, json.RawMessage) (json.RawMessage, error) {
+		return nil, errors.New("secret handler detail")
+	}
+	result, succeeded, err = executeTool(context.Background(), tool, `{"limit":1}`, 100, 100)
+	if err != nil || succeeded || string(result) != `{"error":"tool_execution_failed"}` {
+		t.Fatalf("handler failure = %s, succeeded=%v, error=%v", result, succeeded, err)
+	}
+
+	tool.Handler = func(context.Context, json.RawMessage) (json.RawMessage, error) { return json.RawMessage(`{`), nil }
+	if _, _, err := executeTool(context.Background(), tool, `{"limit":1}`, 100, 100); err == nil {
+		t.Fatal("executeTool() accepted invalid handler JSON")
 	}
 }

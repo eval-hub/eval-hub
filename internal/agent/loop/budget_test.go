@@ -73,3 +73,25 @@ func TestPresetsRejectMissingInvalidAndOverCapValues(t *testing.T) {
 		t.Fatal("Resolve(unknown effort) succeeded")
 	}
 }
+
+func TestPresetValidationRejectsInvalidServiceCapsAndBudgetDeadline(t *testing.T) {
+	if err := DefaultPresets().Validate(HardLimits{}); err == nil {
+		t.Fatal("Validate() accepted zero service ceilings")
+	}
+	caps := DefaultHardLimits()
+	caps.MaxDeadline += time.Second
+	if err := DefaultPresets().Validate(caps); err == nil {
+		t.Fatal("Validate() accepted service ceilings above shipped limits")
+	}
+
+	presets := DefaultPresets()
+	budget := presets[EffortLow]
+	budget.Deadline = DefaultHardLimits().MaxDeadline + time.Second
+	presets[EffortLow] = budget
+	if err := presets.Validate(DefaultHardLimits()); err == nil {
+		t.Fatal("Validate() accepted a preset deadline beyond the hard cap")
+	}
+	if _, err := presets.Resolve(EffortLow, DefaultHardLimits()); err == nil {
+		t.Fatal("Resolve() accepted invalid presets")
+	}
+}

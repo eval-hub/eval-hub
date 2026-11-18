@@ -385,6 +385,322 @@ func TestAccountedUsageConservativelyUsesReportedOrEstimatedCounts(t *testing.T)
 	}
 }
 
+type registryStub struct {
+	definitions []ToolDefinition
+}
+
+func (r registryStub) Definitions() []ToolDefinition { return r.definitions }
+
+func (r registryStub) Lookup(name string) (Tool, bool) {
+	for _, definition := range r.definitions {
+		if definition.Function.Name == name {
+			return Tool{Definition: definition}, true
+		}
+	}
+	return Tool{}, false
+}
+
+func TestNewRunnerRejectsInvalidDependenciesConfigurationAndRegistrySize(t *testing.T) {
+	validRegistry := registryStub{definitions: []ToolDefinition{testTool(func(context.Context, json.RawMessage) (json.RawMessage, error) {
+		return json.RawMessage(`null`), nil
+	}).Definition}}
+	validModel := &fakeModel{}
+	if _, err := NewRunner(nil, validRegistry, DefaultConfig()); err == nil {
+		t.Fatal("NewRunner() accepted a nil model")
+	}
+	if _, err := NewRunner(validModel, nil, DefaultConfig()); err == nil {
+		t.Fatal("NewRunner() accepted a nil registry")
+	}
+
+	tests := []struct {
+		name   string
+		config Config
+	}{
+		{name: "invalid hard limits", config: func() Config { c := DefaultConfig(); c.HardLimits.MaxModelCalls = 0; return c }()},
+		{name: "hard limits exceed service cap", config: func() Config { c := DefaultConfig(); c.HardLimits.MaxModelCalls++; return c }()},
+		{name: "negative retries", config: func() Config { c := DefaultConfig(); c.MaxRetries = -1; return c }()},
+		{name: "excessive retries", config: func() Config { c := DefaultConfig(); c.MaxRetries = 6; return c }()},
+		{name: "negative retry delay", config: func() Config { c := DefaultConfig(); c.RetryBackoff = -1; return c }()},
+		{name: "excessive retry delay", config: func() Config { c := DefaultConfig(); c.RetryBackoff = 6 * time.Second; return c }()},
+		{name: "zero tool batch", config: func() Config { c := DefaultConfig(); c.MaxToolBatchSize = 0; return c }()},
+		{name: "zero argument limit", config: func() Config { c := DefaultConfig(); c.MaxToolArgumentBytes = 0; return c }()},
+		{name: "zero result limit", config: func() Config { c := DefaultConfig(); c.MaxToolResultBytes = 0; return c }()},
+		{name: "zero history limit", config: func() Config { c := DefaultConfig(); c.MaxHistoryBytes = 0; return c }()},
+		{name: "zero response limit", config: func() Config { c := DefaultConfig(); c.MaxModelResponseBytes = 0; return c }()},
+		{name: "zero progress summary limit", config: func() Config { c := DefaultConfig(); c.MaxActionSummaryBytes = 0; return c }()},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := NewRunner(validModel, validRegistry, tc.config); err == nil {
+				t.Fatal("NewRunner() accepted invalid configuration")
+			}
+		})
+	}
+
+	config := DefaultConfig()
+	tooMany := make([]ToolDefinition, config.MaxToolBatchSize*16+1)
+	for i := range tooMany {
+		tooMany[i] = validRegistry.definitions[0]
+	}
+	if _, err := NewRunner(validModel, registryStub{definitions: tooMany}, config); err == nil {
+		t.Fatal("NewRunner() accepted a tool registry over its count limit")
+	}
+	config.MaxHistoryBytes = 1
+	if _, err := NewRunner(validModel, registryStub{}, config); err == nil {
+		t.Fatal("NewRunner() accepted definitions over the history byte limit")
+	}
+}
+
+func TestRunnerRejectsInvalidInputsAndBudgets(t *testing.T) {
+	model := &fakeModel{responses: []ModelResponse{finalResponse("unused")}}
+	registry := newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) {
+		return json.RawMessage(`null`), nil
+	})
+	runner := newTestRunner(t, model, registry, DefaultConfig())
+	tests := []struct {
+		name  string
+		ctx   context.Context
+		input Input
+	}{
+		{name: "nil context", input: testInput()},
+		{name: "blank model", ctx: context.Background(), input: func() Input { v := testInput(); v.Model = "  "; return v }()},
+		{name: "blank system prompt", ctx: context.Background(), input: func() Input { v := testInput(); v.SystemPrompt = ""; return v }()},
+		{name: "blank user prompt", ctx: context.Background(), input: func() Input { v := testInput(); v.UserPrompt = "\n "; return v }()},
+		{name: "invalid budget", ctx: context.Background(), input: func() Input { v := testInput(); v.Budget.MaxModelCalls = 0; return v }()},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := runner.Run(tc.ctx, tc.input); err == nil {
+				t.Fatal("Run() accepted invalid input")
+			}
+		})
+	}
+	if model.index != 0 {
+		t.Fatalf("invalid requests made %d model calls", model.index)
+	}
+}
+
+func TestValidateDefinitionsRejectsMalformedAndUnsafeTools(t *testing.T) {
+	base := testTool(func(context.Context, json.RawMessage) (json.RawMessage, error) { return json.RawMessage(`null`), nil }).Definition
+	tests := []struct {
+		name        string
+		definitions []ToolDefinition
+	}{
+		{name: "wrong type", definitions: []ToolDefinition{func() ToolDefinition { d := base; d.Type = "other"; return d }()}},
+		{name: "invalid name", definitions: []ToolDefinition{func() ToolDefinition { d := base; d.Function.Name = "bad name"; return d }()}},
+		{name: "missing schema", definitions: []ToolDefinition{func() ToolDefinition { d := base; d.Function.Parameters = nil; return d }()}},
+		{name: "malformed schema", definitions: []ToolDefinition{func() ToolDefinition { d := base; d.Function.Parameters = json.RawMessage(`{`); return d }()}},
+		{name: "non-object schema", definitions: []ToolDefinition{func() ToolDefinition {
+			d := base
+			d.Function.Parameters = json.RawMessage(`{"type":"string"}`)
+			return d
+		}()}},
+		{name: "invalid schema keyword", definitions: []ToolDefinition{func() ToolDefinition {
+			d := base
+			d.Function.Parameters = json.RawMessage(`{"type":"object","properties":{"v":{"type":"not-a-json-type"}}}`)
+			return d
+		}()}},
+		{name: "external schema ref", definitions: []ToolDefinition{func() ToolDefinition {
+			d := base
+			d.Function.Parameters = json.RawMessage(`{"type":"object","properties":{"v":{"$ref":"https://example.invalid/schema"}}}`)
+			return d
+		}()}},
+		{name: "duplicate names", definitions: []ToolDefinition{base, base}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := validateDefinitions(tc.definitions); !errors.Is(err, ErrToolRegistryInvalid) {
+				t.Fatalf("validateDefinitions() error = %v", err)
+			}
+		})
+	}
+	if err := validateDefinitions(nil); err != nil {
+		t.Fatalf("validateDefinitions(empty) error = %v", err)
+	}
+}
+
+func TestRunnerRejectsInvalidRegistryBeforeCallingModel(t *testing.T) {
+	model := &fakeModel{}
+	definitions := testTool(func(context.Context, json.RawMessage) (json.RawMessage, error) { return nil, nil }).Definition
+	definitions.Function.Parameters = json.RawMessage(`{"type":"object","properties":{"v":{"$ref":"https://example.invalid/schema"}}}`)
+	runner := newTestRunner(t, model, registryStub{definitions: []ToolDefinition{definitions}}, DefaultConfig())
+	if _, err := runner.Run(context.Background(), testInput()); !errors.Is(err, ErrToolRegistryInvalid) {
+		t.Fatalf("Run() error = %v, want invalid registry", err)
+	}
+	if model.index != 0 {
+		t.Fatalf("invalid registry made %d model calls", model.index)
+	}
+}
+
+func TestValidateAssistantResponseRejectsUnsupportedTurns(t *testing.T) {
+	validToolCall := validCall("call-1", "list_catalog")
+	tests := []struct {
+		name     string
+		response ModelResponse
+		maxBytes int
+		maxBatch int
+	}{
+		{name: "wrong role", response: ModelResponse{Message: Message{Role: RoleUser, Content: "x"}}},
+		{name: "oversized message", response: finalResponse("response too long"), maxBytes: 1},
+		{name: "too many calls", response: callResponse(validToolCall, validCall("call-2", "list_catalog")), maxBatch: 1},
+		{name: "truncated completion", response: ModelResponse{Message: Message{Role: RoleAssistant, Content: "x"}, FinishReason: "length"}},
+		{name: "tool calls with non-tool finish", response: ModelResponse{Message: Message{Role: RoleAssistant, ToolCalls: []ToolCall{validToolCall}}, FinishReason: "stop"}},
+		{name: "no tool calls with tool finish", response: ModelResponse{Message: Message{Role: RoleAssistant, Content: "x"}, FinishReason: "tool_calls"}},
+		{name: "oversized argument", response: callResponse(func() ToolCall { c := validToolCall; c.Function.Arguments = strings.Repeat("x", 20); return c }()), maxBytes: 10},
+		{name: "oversized call id", response: callResponse(func() ToolCall { c := validToolCall; c.ID = strings.Repeat("i", 257); return c }())},
+		{name: "oversized function name", response: callResponse(func() ToolCall { c := validToolCall; c.Function.Name = strings.Repeat("n", 65); return c }())},
+		{name: "negative prompt usage", response: ModelResponse{Message: Message{Role: RoleAssistant, Content: "x"}, Usage: &TokenUsage{PromptTokens: -1, PromptTokensPresent: true}}},
+		{name: "negative completion usage", response: ModelResponse{Message: Message{Role: RoleAssistant, Content: "x"}, Usage: &TokenUsage{CompletionTokens: -1, CompletionTokensPresent: true}}},
+		{name: "negative total usage", response: ModelResponse{Message: Message{Role: RoleAssistant, Content: "x"}, Usage: &TokenUsage{TotalTokens: -1, TotalTokensPresent: true}}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.maxBytes == 0 {
+				tc.maxBytes = 1 << 20
+			}
+			if tc.maxBatch == 0 {
+				tc.maxBatch = 8
+			}
+			if err := validateAssistantResponse(tc.response, tc.maxBytes, tc.maxBatch); !errors.Is(err, ErrInvalidModelResponse) {
+				t.Fatalf("validateAssistantResponse() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestRunnerRejectsBudgetOverrunsAndEmptyFinalText(t *testing.T) {
+	t.Run("reported usage exceeds budget", func(t *testing.T) {
+		input := testInput()
+		input.Budget.MaxTotalTokens = 10_000
+		input.Budget.MaxOutputTokens = 2_048
+		model := &fakeModel{responses: []ModelResponse{{Message: Message{Role: RoleAssistant, Content: "done"}, Usage: &TokenUsage{TotalTokens: 20_000, TotalTokensPresent: true}}}}
+		runner := newTestRunner(t, model, newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) { return json.RawMessage(`null`), nil }), DefaultConfig())
+		if _, err := runner.Run(context.Background(), input); !errors.Is(err, ErrBudgetExceeded) {
+			t.Fatalf("Run() error = %v, want budget exceeded", err)
+		}
+	})
+	t.Run("empty final response", func(t *testing.T) {
+		model := &fakeModel{responses: []ModelResponse{finalResponse(" \n")}}
+		runner := newTestRunner(t, model, newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) { return json.RawMessage(`null`), nil }), DefaultConfig())
+		if _, err := runner.Run(context.Background(), testInput()); !errors.Is(err, ErrInvalidModelResponse) {
+			t.Fatalf("Run() error = %v, want invalid response", err)
+		}
+	})
+	t.Run("tool batch exceeds budget", func(t *testing.T) {
+		model := &fakeModel{responses: []ModelResponse{callResponse(validCall("a", "list_catalog"), validCall("b", "list_catalog"))}}
+		input := testInput()
+		input.Budget.MaxToolCalls = 1
+		runner := newTestRunner(t, model, newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) { return json.RawMessage(`null`), nil }), DefaultConfig())
+		if _, err := runner.Run(context.Background(), input); !errors.Is(err, ErrBudgetExceeded) {
+			t.Fatalf("Run() error = %v, want budget exceeded", err)
+		}
+	})
+}
+
+func TestRunnerHandlesModelErrorsAndRetryCancellation(t *testing.T) {
+	t.Run("non-retryable failure", func(t *testing.T) {
+		model := &fakeModel{errors: []error{errors.New("private failure")}}
+		runner := newTestRunner(t, model, newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) { return json.RawMessage(`null`), nil }), DefaultConfig())
+		if _, err := runner.Run(context.Background(), testInput()); !errors.Is(err, ErrModelCallFailed) {
+			t.Fatalf("Run() error = %v, want model call failed", err)
+		}
+	})
+	t.Run("retry limit", func(t *testing.T) {
+		model := &fakeModel{errors: []error{retryError{}, retryError{}, retryError{}}}
+		config := DefaultConfig()
+		config.RetryBackoff = 0
+		runner := newTestRunner(t, model, newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) { return json.RawMessage(`null`), nil }), config)
+		if _, err := runner.Run(context.Background(), testInput()); !errors.Is(err, ErrModelCallFailed) {
+			t.Fatalf("Run() error = %v, want model call failed after retries", err)
+		}
+	})
+	t.Run("canceled during retry delay", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+		defer cancel()
+		model := &fakeModel{errors: []error{retryError{}}}
+		config := DefaultConfig()
+		config.RetryBackoff = time.Second
+		runner := newTestRunner(t, model, newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) { return json.RawMessage(`null`), nil }), config)
+		if _, err := runner.Run(ctx, testInput()); !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("Run() error = %v, want caller deadline", err)
+		}
+	})
+}
+
+func TestRunnerEnforcesHistoryLimitsAfterResponseAndTool(t *testing.T) {
+	t.Run("assistant response", func(t *testing.T) {
+		config := DefaultConfig()
+		config.MaxHistoryBytes = 2_000
+		model := &fakeModel{responses: []ModelResponse{finalResponse(strings.Repeat("x", 2_000))}}
+		runner := newTestRunner(t, model, newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) { return json.RawMessage(`null`), nil }), config)
+		if _, err := runner.Run(context.Background(), testInput()); !errors.Is(err, ErrInvalidModelResponse) {
+			t.Fatalf("Run() error = %v, want invalid response", err)
+		}
+	})
+	t.Run("tool reply", func(t *testing.T) {
+		input := testInput()
+		messages := []Message{
+			{Role: RoleSystem, Content: input.SystemPrompt},
+			{Role: RoleSystem, Content: budgetNotice(input.Budget.MaxModelCalls, input.Budget.MaxIterations, input.Budget.MaxToolCalls, input.Budget.MaxTotalTokens)},
+			{Role: RoleUser, Content: input.UserPrompt},
+		}
+		assistant := callResponse(validCall("call-1", "list_catalog")).Message
+		limit := historySize(append(cloneMessages(messages), assistant)) + 50
+		config := DefaultConfig()
+		config.MaxHistoryBytes = limit
+		model := &fakeModel{responses: []ModelResponse{callResponse(validCall("call-1", "list_catalog"))}}
+		runner := newTestRunner(t, model, newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) {
+			return json.RawMessage(`"` + strings.Repeat("x", 200) + `"`), nil
+		}), config)
+		if _, err := runner.Run(context.Background(), input); !errors.Is(err, ErrInvalidModelResponse) {
+			t.Fatalf("Run() error = %v, want history limit error", err)
+		}
+	})
+}
+
+func TestRunnerBoundsProgressSummary(t *testing.T) {
+	var events []ProgressEvent
+	config := DefaultConfig()
+	config.MaxActionSummaryBytes = 4
+	config.Progress = func(event ProgressEvent) { events = append(events, event) }
+	model := &fakeModel{responses: []ModelResponse{finalResponse("done")}}
+	registry, err := NewRegistry(Tool{
+		Definition:    testTool(func(context.Context, json.RawMessage) (json.RawMessage, error) { return json.RawMessage(`null`), nil }).Definition,
+		ProgressLabel: strings.Repeat("L", 80),
+		Handler:       func(context.Context, json.RawMessage) (json.RawMessage, error) { return json.RawMessage(`null`), nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := newTestRunner(t, model, registry, config)
+	if _, err := runner.Run(context.Background(), testInput()); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(events) != 2 || len(events[0].Summary) != config.MaxActionSummaryBytes {
+		t.Fatalf("progress summaries were not truncated: %+v", events)
+	}
+}
+
+func TestTokenAccountingAndWaitHelpersRejectInvalidValues(t *testing.T) {
+	if _, err := promptTokenEstimate(nil, []ToolDefinition{{Function: FunctionMetadata{Parameters: json.RawMessage("{")}}}); err == nil {
+		t.Fatal("promptTokenEstimate() accepted invalid raw JSON")
+	}
+	if _, err := accountedUsage(-1, 1, nil); !errors.Is(err, ErrInvalidModelResponse) {
+		t.Fatalf("accountedUsage(negative) error = %v", err)
+	}
+	if _, err := accountedUsage(int64(^uint64(0)>>1), 1, nil); err == nil {
+		t.Fatal("accountedUsage() accepted overflow")
+	}
+	if err := waitContext(context.Background(), 0); err != nil {
+		t.Fatalf("waitContext(zero) error = %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := waitContext(ctx, time.Second); !errors.Is(err, context.Canceled) {
+		t.Fatalf("waitContext(canceled) error = %v", err)
+	}
+}
+
 type modelFunc func(context.Context, ModelRequest) (ModelResponse, error)
 
 func (f modelFunc) Complete(ctx context.Context, request ModelRequest) (ModelResponse, error) {
