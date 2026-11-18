@@ -26,6 +26,10 @@ post:
     selected model/provider. The running status may expose trusted progress phases and
     activity timestamps; it does not expose a model-generated percentage or ETA.
 
+    Optional collection_name and collection_description request exact values in
+    the proposed collection. The runner must preserve supplied values in the
+    validated collection JSON and matching YAML; it generates them when omitted.
+
     The POST response's resource.id and Location are the tracking contract.
     Clients should retain the Location and poll it. The ordinary
     /api/v1/evaluations/jobs list excludes collection-generation workloads and
@@ -51,6 +55,8 @@ post:
             summary: Generate a collection for agent safety
             value:
               evaluation_goal: Assess agent safety and tool-use risks
+              collection_name: Agent safety checks
+              collection_description: Evaluate agent safety and tool-use risks.
               provider_filter: inspect
               max_benchmarks: 12
               strictness: moderate
@@ -92,6 +98,8 @@ post:
                   updated_at: '2026-10-29T12:00:00Z'
                 request:
                   evaluation_goal: Assess agent safety and tool-use risks
+                  collection_name: Agent safety checks
+                  collection_description: Evaluate agent safety and tool-use risks.
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate

@@ -7,6 +7,10 @@ properties:
   state:
     type: string
     enum: [pending, running, completed, failed, cancelled]
+    description: >
+      Cancelled can be observed only if cancellation is recorded while this
+      resource is retained. DELETE on the generation resource removes it, so
+      a later GET after successful DELETE returns 404, not cancelled.
   started_at:
     type: string
     format: date-time
