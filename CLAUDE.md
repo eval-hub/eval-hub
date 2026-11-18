@@ -16,7 +16,8 @@ and that fetch needs network access, so install the ones you rely on before you
 need them. An install only helps a later offline session once its download has
 finished — offline work can use just the plugins that are already downloaded, and
 nothing new is fetched without network. (`make install-dev-skills` links the same
-skills into `~/.claude/skills` from a local clone for other harnesses.) See
+skills into `~/.agents/skills` from a local clone for other harnesses; pass
+`DEV_SKILLS_TARGET_DIR=~/.claude/skills` for Claude Code.) See
 `AGENTS.md` → Development Skills.
 
 ## Release notes
