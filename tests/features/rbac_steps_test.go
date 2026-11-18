@@ -3,8 +3,10 @@ package features
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -85,7 +87,11 @@ func (tc *scenarioConfig) sendMLflowRBACRequestWithToken(method, path string, pa
 		request.Header.Set("Content-Type", "application/json")
 	}
 
-	response, err := getMLflowHTTPClient().Do(request)
+	client, err := getVerifiedMLflowHTTPClient()
+	if err != nil {
+		return 0, nil, fmt.Errorf("configure verified MLflow client: %w", err)
+	}
+	response, err := client.Do(request)
 	if err != nil {
 		return 0, nil, fmt.Errorf("send MLflow request: %w", err)
 	}
@@ -158,10 +164,26 @@ func (tc *scenarioConfig) viewerCannotAccessMLflowExperiments() error {
 		if status != http.StatusForbidden {
 			return tc.logError(fmt.Errorf("viewer MLflow %s returned HTTP %d, expected 403: %s", request.operation, status, body))
 		}
+		if !isMLflowPermissionDenied(body) {
+			return tc.logError(fmt.Errorf("viewer MLflow %s returned HTTP 403 without a PERMISSION_DENIED response: %s", request.operation, body))
+		}
 	}
 
 	tc.logDebug("Viewer MLflow experiment get, list, create, update, and delete requests were denied\n")
 	return nil
+}
+
+func isMLflowPermissionDenied(body []byte) bool {
+	var response struct {
+		ErrorCode string `json:"error_code"`
+		Error     struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		return false
+	}
+	return response.ErrorCode == "PERMISSION_DENIED" || response.Error.Code == "PERMISSION_DENIED"
 }
 
 func (tc *scenarioConfig) createMLflowExperimentAsCurrentUser() error {
@@ -240,8 +262,23 @@ func (tc *scenarioConfig) cleanupMLflowExperimentAfterScenario(ctx context.Conte
 		}
 	}
 
+	const maxDeleteAttempts = 3
 	for _, experimentID := range experimentIDs {
-		status, body, err := tc.sendMLflowRBACRequestWithToken(http.MethodPost, "/api/2.0/mlflow/experiments/delete", map[string]any{"experiment_id": experimentID}, token)
+		var status int
+		var body []byte
+		var err error
+		for attempt := 1; attempt <= maxDeleteAttempts; attempt++ {
+			status, body, err = tc.sendMLflowRBACRequestWithToken(http.MethodPost, "/api/2.0/mlflow/experiments/delete", map[string]any{"experiment_id": experimentID}, token)
+			if err == nil && (status == http.StatusOK || status == http.StatusNotFound) {
+				break
+			}
+			if attempt == maxDeleteAttempts || !isTransientMLflowCleanupFailure(status, err) {
+				break
+			}
+			delay := time.Duration(attempt) * time.Second
+			tc.logDebug("Transient MLflow delete failure for experiment %q (attempt %d/%d); retrying in %s\n", experimentID, attempt, maxDeleteAttempts, delay)
+			time.Sleep(delay)
+		}
 		if err != nil {
 			return ctx, tc.logError(fmt.Errorf("delete temporary MLflow experiment %q during cleanup: %w", experimentID, err))
 		}
@@ -252,6 +289,14 @@ func (tc *scenarioConfig) cleanupMLflowExperimentAfterScenario(ctx context.Conte
 	}
 
 	return ctx, nil
+}
+
+func isTransientMLflowCleanupFailure(status int, err error) bool {
+	if err != nil {
+		var networkErr net.Error
+		return errors.As(err, &networkErr) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
+	}
+	return status == http.StatusRequestTimeout || status == http.StatusTooManyRequests || status >= http.StatusInternalServerError
 }
 
 func (tc *scenarioConfig) currentUserCanGetCreatedMLflowExperiment() error {

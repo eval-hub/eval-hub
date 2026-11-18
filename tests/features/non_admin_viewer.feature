@@ -146,7 +146,7 @@ Feature: Evaluation Hub RBAC for a viewer
   Scenario: Viewer cannot patch a provider
     Given the service is running
     # Target a nonexistent ID so a permission regression cannot alter a shared provider.
-    When I send a PATCH request to "/api/v1/evaluations/providers/00000000-0000-0000-0000-000000000000" with body "file:/user_provider_with_agent_metadata_full.json"
+    When I send a PATCH request to "/api/v1/evaluations/providers/00000000-0000-0000-0000-000000000000" with body "file:/user_provider_patch.json"
     Then the response code should be 403
     And the response body should contain "user={{env:X_USER|test-viewer}}, verb=patch, resource=providers"
 

@@ -209,12 +209,13 @@ feature and tag above. Supply these additional variables:
 
 | Job | Additional environment variables |
 | --- | --- |
-| User | `USER_COLLECTION_ID`, `USER_PROVIDER_ID`, `MODEL_URL`, `MODEL_NAME`, `MODEL_AUTH_SECRET_REF`, `MLFLOW_TRACKING_URI`, `MLFLOW_CLEANUP_TOKEN`, `WAIT_DEADLINE` |
-| Viewer | `VIEWER_JOB_ID`, `VIEWER_COLLECTION_ID`, `VIEWER_PROVIDER_ID`, `VIEWER_MLFLOW_EXPERIMENT_ID`, `MLFLOW_TRACKING_URI`, `WAIT_DEADLINE` |
+| User | `USER_COLLECTION_ID`, `USER_PROVIDER_ID`, `MODEL_URL`, `MODEL_NAME`, `MODEL_AUTH_SECRET_REF`, `MLFLOW_TRACKING_URI`, `MLFLOW_CA_CERT_PATH` (optional for a private MLflow CA), `MLFLOW_CLEANUP_TOKEN`, `WAIT_DEADLINE` |
+| Viewer | `VIEWER_JOB_ID`, `VIEWER_COLLECTION_ID`, `VIEWER_PROVIDER_ID`, `VIEWER_MLFLOW_EXPERIMENT_ID`, `MLFLOW_TRACKING_URI`, `MLFLOW_CA_CERT_PATH` (optional for a private MLflow CA), `WAIT_DEADLINE` |
 
 For example, the user job can run:
 
 ```bash
+mkdir -p bin
 GODOG_PATHS=tests/features/non_admin_user.feature \
 GODOG_TAGS='@non-admin_user' \
 go test -v -timeout=360m ./tests/features
@@ -227,12 +228,15 @@ The resource IDs must identify existing resources in the selected tenant. The
 viewer's `VIEWER_JOB_ID` must identify a job that the viewer can read.
 
 The `@mlflow` scenarios need `MLFLOW_TRACKING_URI` for the same workspace. The
+direct RBAC probes verify MLflow TLS; they use system trust by default and add
+the PEM bundle in `MLFLOW_CA_CERT_PATH` when set. This is separate from
+`FVT_CA_CERT_PATH`, which configures the EvalHub API and other FVT clients. The
 user job feature submits model-backed evaluations, so `MODEL_URL` and
 `MODEL_NAME` must be usable and `MODEL_AUTH_SECRET_REF` must name a model-auth
 Secret in the tenant. `MLFLOW_CLEANUP_TOKEN` must be a separate credential
-authorized to delete experiments in that workspace; keep it in the Jenkins
-credential store. Configure `WAIT_DEADLINE` if the default 30-minute job wait
-is unsuitable.
+authorized to search for and delete experiments in that workspace; keep it in
+the Jenkins credential store. Configure `WAIT_DEADLINE` if the default
+30-minute job wait is unsuitable.
 
 The expected permissions are:
 
@@ -246,14 +250,15 @@ The expected permissions are:
 The user MLflow scenario creates a uniquely named experiment with `AUTH_TOKEN`
 and removes it in scenario teardown. The cleanup credential must not match
 `AUTH_TOKEN`. Cleanup runs even if an assertion fails after creation. For a
-local run, the approved cleanup identity can supply the token without printing
-it:
+local run, disable Bash tracing before exporting the token so xtrace does not
+write its expanded value to stderr:
 
 ```bash
+set +x
 export MLFLOW_CLEANUP_TOKEN="$(oc whoami -t)"
 ```
 
-The cleanup token is never logged.
+With tracing disabled before the export, this command does not print the token.
 
 ### Disconnected benchmark fixture assets
 
