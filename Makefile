@@ -83,9 +83,9 @@ KIND_CLUSTER_NAME ?= evalhub-dev
 IMAGE_TAG ?= kind-$(KIND_CLUSTER_NAME)
 SKIP_BUILD ?= false
 AIRGAP ?= false
-# Keep the default comparable to the existing small local workflow. Use
-# ADAPTERS=all when you explicitly want the full curated-adapter image set.
-ADAPTERS ?= inspect,lm-evaluation-harness,followbench
+# Keep the default lightweight for local deployments. Use ADAPTERS=all when
+# you explicitly want the full curated-adapter image set.
+ADAPTERS ?= followbench
 EVALHUB_HOST_PORT ?= 18443
 EVALHUB_NODE_PORT ?= 30443
 EVALHUB_HOST_BIND_ADDRESS ?= 127.0.0.1
@@ -103,9 +103,9 @@ EVALHUB_KUBECONFIG_FILE ?=
 #                              inspect, followbench, lighteval, ruler, or ifbench
 #   lm-evaluation-harness      requires Dockerfile.lmes-job                ADAPTERS includes lm-evaluation-harness
 #
-# ADAPTERS=all builds all six curated adapter images. The default builds the
-# existing Inspect, LMES, and FollowBench set. Narrow ADAPTERS (comma-separated)
-# to build only what you need. Nothing is cloned automatically; the
+# ADAPTERS=all builds all six curated adapter images. The default builds only
+# FollowBench. Narrow ADAPTERS (comma-separated) to build the adapters you need.
+# Nothing is cloned automatically; the
 # lm-evaluation-harness checkout is the fork at
 # https://github.com/opendatahub-io/lm-evaluation-harness.git, checked out on
 # its incubation (or stable) branch — the default main branch does not contain
@@ -538,7 +538,7 @@ KIND_BENCHMARK_TIMEOUT ?= $(if $(filter command line environment,$(origin BENCHM
 # allowance instead of only matching the deadline.
 KIND_BENCHMARK_SETUP_MARGIN ?= 15m
 KIND_BENCHMARK_REQUIRED_TOKEN_DURATION ?= $(shell bash scripts/go-duration.sh add $(KIND_BENCHMARK_TIMEOUT) $(KIND_BENCHMARK_SETUP_MARGIN))
-# dev-deploy's own ADAPTERS default is the small set used for manual work; a
+# dev-deploy's own ADAPTERS default is the lightweight FollowBench image; a
 # benchmark run needs every curated adapter, so default the deployment to
 # ADAPTERS=all and keep an explicit ADAPTERS (command line or environment).
 KIND_BENCHMARK_ADAPTERS ?= $(if $(filter command line environment,$(origin ADAPTERS)),$(ADAPTERS),all)

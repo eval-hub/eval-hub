@@ -26,7 +26,7 @@ func HTTPMetricsMiddleware(next http.Handler, metricsEnabled bool, logger *slog.
 		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 		next.ServeHTTP(rw, r)
 
-		route := r.Pattern
+		route := httpRoutePattern(r)
 		metrics.RecordHTTPServerRequest(r.Context(), r.Method, route, rw.statusCode)
 
 		collection, provider := extractDomainLabels(r.URL.Path)
@@ -35,6 +35,15 @@ func HTTPMetricsMiddleware(next http.Handler, metricsEnabled bool, logger *slog.
 		// full ExecutionContext, which isn't constructed at this middleware layer).
 		metrics.ObserveAPIRequestDuration(r.Context(), route, r.Method, collection, provider, duration, r.Header.Get(TenantHeader))
 	})
+}
+
+func httpRoutePattern(r *http.Request) string {
+	if r.Pattern == collectionSubresourceRoutePattern {
+		if route, ok := collectionSubresourceRoute(r.Method, r.URL.Path); ok {
+			return route
+		}
+	}
+	return r.Pattern
 }
 
 // extractDomainLabels parses collection and provider from the request path when available.

@@ -17,8 +17,8 @@ instance is reported as skipped.
 ## Kind adapter image selection
 
 `make dev-deploy` can build and deploy a subset of the curated-collection adapter
-images. The default remains the existing Inspect, LM Evaluation Harness, and
-FollowBench image set. Select any supported subset explicitly, or use
+images. The default builds only FollowBench to keep the local deployment quick
+and small. Select any supported subset explicitly, or use
 `ADAPTERS=all` for all six:
 
     make dev-deploy AIRGAP=true ADAPTERS=inspect,lm-evaluation-harness
