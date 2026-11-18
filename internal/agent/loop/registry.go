@@ -1,0 +1,168 @@
+package loop
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"regexp"
+	"sort"
+	"strings"
+
+	"github.com/xeipuuv/gojsonschema"
+)
+
+var toolNamePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+// Registry is an immutable set of trusted tools.
+type Registry struct {
+	tools map[string]Tool
+}
+
+// NewRegistry validates definitions and creates an immutable registry.
+func NewRegistry(tools ...Tool) (*Registry, error) {
+	registry := &Registry{tools: make(map[string]Tool, len(tools))}
+	for _, tool := range tools {
+		name := tool.Definition.Function.Name
+		if !toolNamePattern.MatchString(name) {
+			return nil, fmt.Errorf("invalid tool name")
+		}
+		if _, exists := registry.tools[name]; exists {
+			return nil, fmt.Errorf("duplicate tool name")
+		}
+		if tool.Definition.Type != "function" || tool.Handler == nil {
+			return nil, fmt.Errorf("tool definition and handler are required")
+		}
+		if len(tool.Definition.Function.Parameters) == 0 || !json.Valid(tool.Definition.Function.Parameters) {
+			return nil, fmt.Errorf("tool parameters must be a valid JSON schema")
+		}
+		var schema struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(tool.Definition.Function.Parameters, &schema); err != nil || schema.Type != "object" {
+			return nil, fmt.Errorf("tool parameters schema must describe an object")
+		}
+		if hasExternalSchemaReference(tool.Definition.Function.Parameters) {
+			return nil, fmt.Errorf("tool parameters schema cannot reference external resources")
+		}
+		if _, err := gojsonschema.NewSchema(gojsonschema.NewBytesLoader(tool.Definition.Function.Parameters)); err != nil {
+			return nil, fmt.Errorf("invalid tool parameters schema")
+		}
+		if len(tool.ProgressLabel) > 80 || strings.ContainsAny(tool.ProgressLabel, "\r\n") {
+			return nil, fmt.Errorf("tool progress label must be a short single-line string")
+		}
+		tool.Definition.Function.Parameters = bytes.Clone(tool.Definition.Function.Parameters)
+		registry.tools[name] = tool
+	}
+	return registry, nil
+}
+
+// Definitions returns detached copies so callers cannot mutate the registry.
+func (r *Registry) Definitions() []ToolDefinition {
+	if r == nil {
+		return nil
+	}
+	out := make([]ToolDefinition, 0, len(r.tools))
+	for _, tool := range r.tools {
+		definition := tool.Definition
+		definition.Function.Parameters = bytes.Clone(definition.Function.Parameters)
+		out = append(out, definition)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Function.Name < out[j].Function.Name })
+	return out
+}
+
+// Lookup returns a registered tool by exact name.
+func (r *Registry) Lookup(name string) (Tool, bool) {
+	if r == nil {
+		return Tool{}, false
+	}
+	tool, ok := r.tools[name]
+	tool.Definition.Function.Parameters = bytes.Clone(tool.Definition.Function.Parameters)
+	return tool, ok
+}
+
+func validateArguments(schema json.RawMessage, raw string, maxBytes int) error {
+	if maxBytes <= 0 || len(raw) == 0 || len(raw) > maxBytes {
+		return errors.New("tool arguments are empty or exceed the configured limit")
+	}
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return errors.New("tool arguments are not valid JSON")
+	}
+	if _, ok := value.(map[string]any); !ok {
+		return errors.New("tool arguments must be a JSON object")
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		return errors.New("tool arguments contain trailing data")
+	}
+	result, err := gojsonschema.Validate(gojsonschema.NewBytesLoader(schema), gojsonschema.NewStringLoader(raw))
+	if err != nil || result == nil || !result.Valid() {
+		return errors.New("tool arguments do not match the registered schema")
+	}
+	return nil
+}
+
+// hasExternalSchemaReference rejects schema references that could cause the
+// validator to resolve network resources. Tool schemas are trusted and fixed;
+// local fragment references remain useful and do not add an outbound target.
+func hasExternalSchemaReference(raw json.RawMessage) bool {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var value any
+	if decoder.Decode(&value) != nil {
+		return true
+	}
+	var visit func(any) bool
+	visit = func(node any) bool {
+		switch typed := node.(type) {
+		case map[string]any:
+			for key, child := range typed {
+				if key == "$ref" {
+					reference, ok := child.(string)
+					if !ok || !strings.HasPrefix(reference, "#") {
+						return true
+					}
+				}
+				if visit(child) {
+					return true
+				}
+			}
+		case []any:
+			for _, child := range typed {
+				if visit(child) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	return visit(value)
+}
+
+// Execute runs a trusted handler and returns only valid bounded JSON to the
+// model. Handler error details are deliberately not returned to the model.
+func executeTool(ctx context.Context, tool Tool, arguments string, maxArgumentBytes, maxResultBytes int) (json.RawMessage, bool, error) {
+	if err := validateArguments(tool.Definition.Function.Parameters, arguments, maxArgumentBytes); err != nil {
+		return nil, false, err
+	}
+	result, err := tool.Handler(ctx, json.RawMessage(arguments))
+	if err != nil {
+		return json.RawMessage(`{"error":"tool_execution_failed"}`), false, nil
+	}
+	if len(result) == 0 {
+		result = json.RawMessage("null")
+	}
+	if len(result) > maxResultBytes {
+		return nil, true, errors.New("tool result exceeds the configured limit")
+	}
+	if !json.Valid(result) {
+		return nil, true, errors.New("tool returned invalid JSON")
+	}
+	return bytes.Clone(result), true, nil
+}
