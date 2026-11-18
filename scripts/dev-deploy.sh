@@ -13,6 +13,7 @@ IMAGE_TAG="${IMAGE_TAG:-kind-${KIND_CLUSTER_NAME}}"
 SKIP_BUILD="${SKIP_BUILD:-false}"
 AIRGAP="${AIRGAP:-false}"
 ADAPTERS="${ADAPTERS:-followbench}"
+ADAPTER_IMAGES="${ADAPTER_IMAGES:-}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-}"
 EVALHUB_HOST_PORT="${EVALHUB_HOST_PORT:-18443}"
 EVALHUB_NODE_PORT="${EVALHUB_NODE_PORT:-30443}"
@@ -23,6 +24,8 @@ OPERATOR_REPO=""
 LMES_REPO=""
 SELECTED_ADAPTERS=()
 SELECTED_ADAPTER_IMAGES=()
+# "adapter=image" entries from ADAPTER_IMAGES, in the order they were given.
+ADAPTER_IMAGE_OVERRIDES=()
 CALICO_VERSION="v3.33.0"
 KUBECONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/evalhub/kubeconfigs"
 KUBECONFIG_FILE="${KUBECONFIG_DIR}/${KIND_CLUSTER_NAME}.yaml"
@@ -68,6 +71,20 @@ Inputs (also accepted as environment variables):
   ADAPTERS=all             build all six curated adapter images
   ADAPTERS=<list>          comma-separated selection (default: followbench):
                           inspect, lm-evaluation-harness, lighteval, ruler, ifbench, followbench
+  ADAPTER_IMAGES=<pairs>   comma-separated adapter=image pairs that supply a
+                           prebuilt image for a selected adapter instead of
+                           building it from source, for example
+                           ADAPTER_IMAGES='inspect=quay.io/evalhub/community-inspect@sha256:...'
+                           Every adapter named here must also be selected by
+                           ADAPTERS. The image is pulled into the container
+                           runtime when it is not present locally (SKIP_BUILD=true
+                           requires it to be present instead) and is re-tagged
+                           into the cluster-local registry, so Pods keep pulling
+                           localhost:<port> references. An overridden adapter
+                           needs no source checkout. AIRGAP=true still works
+                           because the pull happens on the host before the
+                           registry push; SKIP_BUILD=true with a present image
+                           needs no network at all.
   AIRGAP=true              create/use a Calico kind cluster and deny external
                           egress from system-namespace evaluation jobs (default: false)
   CONTAINER_RUNTIME        container engine for image builds, the local registry,
@@ -292,16 +309,58 @@ adapter_selected() {
   return 1
 }
 
-contrib_adapter_selected() {
+# adapter_image_name prints the local image name dev-deploy builds and publishes
+# for an adapter. It is the single mapping used by every stage, so an
+# ADAPTER_IMAGES override is published under the same registry path as a built
+# image and the rendered provider ConfigMaps stay unchanged.
+adapter_image_name() {
+  case "$1" in
+    lm-evaluation-harness) printf 'community-lmes' ;;
+    *) printf 'community-%s' "$1" ;;
+  esac
+}
+
+# adapter_override_image prints the prebuilt image ADAPTER_IMAGES supplies for an
+# adapter, or nothing when dev-deploy has to build it from source.
+adapter_override_image() {
+  local entry
+  ((${#ADAPTER_IMAGE_OVERRIDES[@]})) || return 0
+  for entry in "${ADAPTER_IMAGE_OVERRIDES[@]}"; do
+    if [[ "${entry%%=*}" == "$1" ]]; then
+      printf '%s' "${entry#*=}"
+      return 0
+    fi
+  done
+  return 0
+}
+
+# adapter_build_required reports whether dev-deploy must build an adapter image:
+# the adapter is selected and no ADAPTER_IMAGES override supplies it.
+adapter_build_required() {
+  adapter_selected "$1" || return 1
+  [[ -z "$(adapter_override_image "$1")" ]]
+}
+
+# contrib_adapter_build_required reports whether any adapter still to be built
+# lives in the eval-hub-contrib checkout, so a deployment that supplies every
+# selected contrib adapter prebuilt needs no contrib checkout at all.
+contrib_adapter_build_required() {
   local adapter
   for adapter in inspect followbench lighteval ruler ifbench; do
-    adapter_selected "$adapter" && return 0
+    adapter_build_required "$adapter" && return 0
   done
   return 1
 }
 
+# validate_image_reference accepts the characters a registry reference may
+# contain: it must not be empty, must not start with a dash (which the container
+# runtime would read as an option), and may not carry shell metacharacters.
+validate_image_reference() {
+  [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$ ]]
+}
+
 parse_adapters() {
-  local requested adapter image
+  local requested adapter
   local -a requested_adapters=()
 
   ADAPTERS="$(trim_whitespace "$ADAPTERS")"
@@ -317,18 +376,42 @@ parse_adapters() {
   for requested in "${requested_adapters[@]}"; do
     adapter="$(trim_whitespace "$requested")"
     case "$adapter" in
-      inspect) image=community-inspect ;;
-      followbench) image=community-followbench ;;
-      lm-evaluation-harness) image=community-lmes ;;
-      lighteval) image=community-lighteval ;;
-      ruler) image=community-ruler ;;
-      ifbench) image=community-ifbench ;;
+      inspect|followbench|lm-evaluation-harness|lighteval|ruler|ifbench) ;;
       "") fail "ADAPTERS contains an empty entry. Use one or more supported adapter names." ;;
       *) fail "Unsupported adapter '$adapter' in ADAPTERS. Supported values: inspect, lm-evaluation-harness, lighteval, ruler, ifbench, followbench." ;;
     esac
     adapter_selected "$adapter" && fail "ADAPTERS contains duplicate entry '$adapter'."
     SELECTED_ADAPTERS+=("$adapter")
-    SELECTED_ADAPTER_IMAGES+=("$image")
+    SELECTED_ADAPTER_IMAGES+=("$(adapter_image_name "$adapter")")
+  done
+}
+
+# parse_adapter_images validates ADAPTER_IMAGES and records the overrides. An
+# override must name a selected adapter: silently ignoring it would deploy the
+# image dev-deploy built while the caller expected the prebuilt one.
+parse_adapter_images() {
+  local entry adapter image
+  local -a requested=()
+
+  ADAPTER_IMAGE_OVERRIDES=()
+  ADAPTER_IMAGES="$(trim_whitespace "$ADAPTER_IMAGES")"
+  [[ -n "$ADAPTER_IMAGES" ]] || return 0
+
+  IFS=, read -r -a requested <<<"$ADAPTER_IMAGES"
+  for entry in "${requested[@]}"; do
+    entry="$(trim_whitespace "$entry")"
+    [[ -n "$entry" ]] || fail "ADAPTER_IMAGES contains an empty entry. Use adapter=image pairs."
+    [[ "$entry" == *=* ]] || fail "ADAPTER_IMAGES entry '$entry' is not an adapter=image pair."
+    adapter="$(trim_whitespace "${entry%%=*}")"
+    image="$(trim_whitespace "${entry#*=}")"
+    adapter_selected "$adapter" ||
+      fail "ADAPTER_IMAGES names '$adapter', which ADAPTERS does not select (${SELECTED_ADAPTERS[*]}). Add it to ADAPTERS or drop the override."
+    [[ -n "$image" ]] || fail "ADAPTER_IMAGES entry '$adapter' has an empty image reference."
+    validate_image_reference "$image" ||
+      fail "ADAPTER_IMAGES entry '$adapter' has an invalid image reference: $image"
+    [[ -z "$(adapter_override_image "$adapter")" ]] ||
+      fail "ADAPTER_IMAGES contains duplicate entry '$adapter'."
+    ADAPTER_IMAGE_OVERRIDES+=("$adapter=$image")
   done
 }
 
@@ -336,6 +419,7 @@ validate_inputs() {
   case "$SKIP_BUILD" in true|false) ;; *) fail "SKIP_BUILD must be true or false." ;; esac
   case "$AIRGAP" in true|false) ;; *) fail "AIRGAP must be true or false." ;; esac
   parse_adapters
+  parse_adapter_images
   [[ "$KIND_CLUSTER_NAME" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] ||
     fail "Invalid kind cluster name: $KIND_CLUSTER_NAME"
   ((${#KIND_CLUSTER_NAME} <= 63)) || fail "KIND_CLUSTER_NAME must be at most 63 characters."
@@ -570,10 +654,48 @@ build_image() {
   log PASS "Built $image"
 }
 
+# require_local_image fails unless the host engine already has an image, so
+# SKIP_BUILD=true never reaches the network.
+require_local_image() {
+  local image="$1"
+  "$CONTAINER_RUNTIME" image inspect "$image" >/dev/null 2>&1 || fail "Required local image is missing: $image"
+  log PASS "Found $image"
+}
+
+# adapter_source_image prints the host-engine image dev-deploy publishes for an
+# adapter: the ADAPTER_IMAGES override when one is given, otherwise the local tag
+# built from source. Publishing uses the same registry path either way, so the
+# rendered provider ConfigMaps, the recorded manifest, and the e2e image checks
+# are identical for built and prebuilt adapters.
+adapter_source_image() {
+  local adapter="$1" source
+  source="$(adapter_override_image "$adapter")"
+  if [[ -n "$source" ]]; then
+    printf '%s' "$source"
+    return 0
+  fi
+  image_ref "$(adapter_image_name "$adapter")"
+}
+
+# load_adapter_image makes a prebuilt adapter image available without building
+# it. The pull runs on the host engine, before publish_images pushes into the
+# cluster-local registry, so AIRGAP=true (which denies egress from evaluation
+# pods only) still deploys. SKIP_BUILD=true never reaches the network and fails
+# for a missing image instead.
+load_adapter_image() {
+  local adapter="$1" image="$2"
+  if "$CONTAINER_RUNTIME" image inspect "$image" >/dev/null 2>&1; then
+    log PASS "Found prebuilt $adapter image $image"
+    return 0
+  fi
+  log INFO "Pulling prebuilt $adapter image $image instead of building it."
+  "$CONTAINER_RUNTIME" image pull "$image" || fail "Could not pull prebuilt $adapter image: $image"
+  log PASS "Loaded prebuilt $adapter image $image"
+}
+
 build_images() {
-  local target_arch name image adapter
-  local -a image_names=(eval-hub trustyai-service-operator)
-  image_names+=("${SELECTED_ADAPTER_IMAGES[@]}")
+  local target_arch name adapter
+  local -a core_images=(eval-hub trustyai-service-operator)
   case "$(uname -m)" in
     x86_64) target_arch=amd64 ;;
     aarch64|arm64) target_arch=arm64 ;;
@@ -581,10 +703,11 @@ build_images() {
   esac
   if [[ "$SKIP_BUILD" == true ]]; then
     log INFO "SKIP_BUILD=true; verifying core and selected adapter image tags exist locally."
-    for name in "${image_names[@]}"; do
-      image="$(image_ref "$name")"
-      "$CONTAINER_RUNTIME" image inspect "$image" >/dev/null 2>&1 || fail "Required local image is missing: $image"
-      log PASS "Found $image"
+    for name in "${core_images[@]}"; do
+      require_local_image "$(image_ref "$name")"
+    done
+    for adapter in "${SELECTED_ADAPTERS[@]}"; do
+      require_local_image "$(adapter_source_image "$adapter")"
     done
     return
   fi
@@ -593,6 +716,10 @@ build_images() {
   build_image trustyai-service-operator "$OPERATOR_REPO" \
     "$OPERATOR_REPO/Dockerfile" "$target_arch"
   for adapter in "${SELECTED_ADAPTERS[@]}"; do
+    if [[ -n "$(adapter_override_image "$adapter")" ]]; then
+      load_adapter_image "$adapter" "$(adapter_source_image "$adapter")"
+      continue
+    fi
     case "$adapter" in
       inspect)
         build_image community-inspect "$CONTRIB_REPO/adapters/inspect" \
@@ -704,14 +831,21 @@ build_kube_rbac_proxy_arm64() {
 }
 
 publish_images() {
-  local name source destination proxy_source
-  local -a image_names=(eval-hub trustyai-service-operator)
-  image_names+=("${SELECTED_ADAPTER_IMAGES[@]}")
-  for name in "${image_names[@]}"; do
+  local name source destination proxy_source adapter
+  local -a core_images=(eval-hub trustyai-service-operator)
+  for name in "${core_images[@]}"; do
     source="$(image_ref "$name")"
     destination="$(registry_image "$name")"
     log INFO "Publishing $name to the cluster-local registry."
     tag_and_push "$source" "$destination"
+  done
+  # A prebuilt adapter is published under the same registry path as a built one,
+  # so the provider ConfigMaps and the recorded manifest never learn whether the
+  # image came from source or from ADAPTER_IMAGES.
+  for adapter in "${SELECTED_ADAPTERS[@]}"; do
+    name="$(adapter_image_name "$adapter")"
+    log INFO "Publishing the $adapter image to the cluster-local registry."
+    tag_and_push "$(adapter_source_image "$adapter")" "$(registry_image "$name")"
   done
   local mock_source=docker.io/library/python:3.12-slim
   case "$(uname -m)" in
@@ -1199,7 +1333,7 @@ git_source_dirty() {
 }
 
 record_deployment_manifest() {
-  local adapter image_name repo
+  local adapter image_name repo prebuilt
   local -a data_args=(
     --from-literal=schema_version=1
     --from-literal=cluster_name="$KIND_CLUSTER_NAME"
@@ -1213,19 +1347,32 @@ record_deployment_manifest() {
     --from-literal=source.trustyai-service-operator.dirty="$(git_source_dirty "$OPERATOR_REPO")"
   )
 
-  if contrib_adapter_selected; then
+  if contrib_adapter_build_required; then
     data_args+=(
       --from-literal=source.eval-hub-contrib.revision="$(git_source_revision "$CONTRIB_REPO")"
       --from-literal=source.eval-hub-contrib.dirty="$(git_source_dirty "$CONTRIB_REPO")"
     )
   fi
   for adapter in "${SELECTED_ADAPTERS[@]}"; do
+    image_name="$(adapter_image_name "$adapter")"
+    data_args+=(--from-literal="image.$adapter=$(registry_image "$image_name")")
+    prebuilt="$(adapter_override_image "$adapter")"
+    if [[ -n "$prebuilt" ]]; then
+      # No source checkout was used, so the provenance is the supplied image
+      # rather than a revision this deployment built. The extra keys are
+      # additive, which keeps schema_version at 1.
+      data_args+=(
+        --from-literal="source.$adapter.prebuilt=true"
+        --from-literal="source.$adapter.image=$prebuilt"
+        --from-literal="source.$adapter.revision=prebuilt"
+      )
+      continue
+    fi
     case "$adapter" in
-      lm-evaluation-harness) image_name=community-lmes; repo="$LMES_REPO" ;;
-      *) image_name="community-$adapter"; repo="$CONTRIB_REPO" ;;
+      lm-evaluation-harness) repo="$LMES_REPO" ;;
+      *) repo="$CONTRIB_REPO" ;;
     esac
     data_args+=(
-      --from-literal="image.$adapter=$(registry_image "$image_name")"
       --from-literal="source.$adapter.revision=$(git_source_revision "$repo")"
       --from-literal="source.$adapter.dirty=$(git_source_dirty "$repo")"
     )
@@ -1721,15 +1868,19 @@ main() {
   trap cleanup EXIT
   log INFO "Deploying EvalHub development environment to kind cluster '$KIND_CLUSTER_NAME'."
   log INFO "Selected adapter frameworks: ${SELECTED_ADAPTERS[*]}"
+  if ((${#ADAPTER_IMAGE_OVERRIDES[@]})); then
+    log INFO "Using prebuilt adapter images instead of building them: ${ADAPTER_IMAGE_OVERRIDES[*]}"
+  fi
   log INFO "This applies a CRD and cluster-scoped RBAC to this kind cluster, plus resources in namespace system."
   check_prerequisites
   check_repository eval-hub "$EVALHUB_REPO" Containerfile
   OPERATOR_REPO="$(find_repo_checkout trustyai-service-operator Dockerfile)"
   check_repository trustyai-service-operator "$OPERATOR_REPO" Dockerfile
-  if contrib_adapter_selected; then
+  if contrib_adapter_build_required; then
     for adapter in "${SELECTED_ADAPTERS[@]}"; do
       case "$adapter" in
         inspect|followbench|lighteval|ruler|ifbench)
+          adapter_build_required "$adapter" || continue
           contrib_required_file="adapters/$adapter/Containerfile"
           if [[ -z "$CONTRIB_REPO" ]]; then
             CONTRIB_REPO="$(find_repo_checkout eval-hub-contrib "$contrib_required_file")"
@@ -1739,7 +1890,7 @@ main() {
       esac
     done
   fi
-  if adapter_selected lm-evaluation-harness; then
+  if adapter_build_required lm-evaluation-harness; then
     LMES_REPO="$(find_repo_checkout lm-evaluation-harness Dockerfile.lmes-job)"
     check_repository lm-evaluation-harness "$LMES_REPO" Dockerfile.lmes-job
   fi

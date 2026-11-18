@@ -31,6 +31,23 @@ published to the kind-local registry. The deployment records the selection,
 image references, source revisions, and air-gap setting in
 `system/evalhub-dev-deploy-manifest`. The test checks the resolved image ID from
 each completed adapter Pod. The manifest contains no credentials.
+
+A selected adapter can be supplied prebuilt instead of built from source, which
+is useful when the adapter images already exist in a registry:
+
+    make dev-deploy AIRGAP=true ADAPTERS=inspect \
+      ADAPTER_IMAGES='inspect=quay.io/evalhub/community-inspect@sha256:...'
+
+`ADAPTER_IMAGES` takes comma-separated `adapter=image` pairs, and each adapter
+must also be selected by `ADAPTERS`. dev-deploy pulls the image into the
+container runtime, re-tags it into the kind-local registry, and records
+`source.<adapter>.prebuilt=true` plus `source.<adapter>.image` in the manifest
+instead of a build revision. The image checks above still apply, because the
+registry reference, the provider ConfigMap, and the manifest entry are
+identical to a built adapter. The pull runs on the host before the registry
+push, so `AIRGAP=true` still works; add `SKIP_BUILD=true` to deploy from a
+locally present image with no network access at all.
+
 For `ADAPTERS=all`, leave at least 4 GiB available for LightEval's pod memory
 request in addition to the running service, operator, mocks, and Kubernetes
 components. Increase the container VM's memory if the LightEval pod remains

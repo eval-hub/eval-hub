@@ -92,6 +92,15 @@ AIRGAP ?= false
 # Keep the default lightweight for local deployments. Use ADAPTERS=all when
 # you explicitly want the full curated-adapter image set.
 ADAPTERS ?= followbench
+# Supply a prebuilt image for a selected adapter instead of building it from
+# source, for example
+#   make dev-deploy ADAPTERS=inspect \
+#     ADAPTER_IMAGES='inspect=quay.io/evalhub/community-inspect@sha256:...'
+# The image is pulled into the container runtime (unless SKIP_BUILD=true, which
+# requires it locally) and re-tagged into the kind-local registry, so provider
+# ConfigMaps, the recorded manifest, and the e2e image checks are unchanged. An
+# adapter supplied this way needs no source checkout.
+ADAPTER_IMAGES ?=
 EVALHUB_HOST_PORT ?= 18443
 EVALHUB_NODE_PORT ?= 30443
 EVALHUB_HOST_BIND_ADDRESS ?= 127.0.0.1
@@ -111,6 +120,9 @@ EVALHUB_KUBECONFIG_FILE ?=
 #
 # ADAPTERS=all builds all six curated adapter images. The default builds only
 # FollowBench. Narrow ADAPTERS (comma-separated) to build the adapters you need.
+# ADAPTER_IMAGES supplies a prebuilt image for a selected adapter, which then
+# needs no source checkout; an adapter that is selected but not overridden keeps
+# the requirement listed above.
 # Nothing is cloned automatically; the
 # lm-evaluation-harness checkout is the fork at
 # https://github.com/opendatahub-io/lm-evaluation-harness.git, checked out on
@@ -123,6 +135,7 @@ CONTAINER_RUNTIME ?=
 dev-deploy: ## Build and deploy the local EvalHub stack to podman/Docker-backed kind (optional air-gap mode)
 	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" IMAGE_TAG="$(IMAGE_TAG)" \
 		SKIP_BUILD="$(SKIP_BUILD)" AIRGAP="$(AIRGAP)" ADAPTERS="$(ADAPTERS)" \
+		ADAPTER_IMAGES="$(ADAPTER_IMAGES)" \
 		CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" \
 		EVALHUB_HOST_PORT="$(EVALHUB_HOST_PORT)" EVALHUB_NODE_PORT="$(EVALHUB_NODE_PORT)" \
 		EVALHUB_HOST_BIND_ADDRESS="$(EVALHUB_HOST_BIND_ADDRESS)" \
@@ -563,8 +576,9 @@ test-benchmarks-kind-token-check:
 
 # Deploy (or reuse) the kind cluster with the adapter set the benchmark run
 # needs; `make dev-deploy` on its own keeps its smaller ADAPTERS default.
+# ADAPTER_IMAGES passes through, so a run can use prebuilt adapter images.
 test-benchmarks-kind-deploy: test-benchmarks-kind-token-check
-	@ADAPTERS="$(KIND_BENCHMARK_ADAPTERS)" $(MAKE) dev-deploy
+	@ADAPTERS="$(KIND_BENCHMARK_ADAPTERS)" ADAPTER_IMAGES="$(ADAPTER_IMAGES)" $(MAKE) dev-deploy
 
 test-benchmarks-kind: test-benchmarks-kind-deploy ## Run benchmark smoke tests against the local kind cluster (deploys it first; SKIP_BUILD=true reuses built images)
 	@set -eu; \

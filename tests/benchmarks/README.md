@@ -105,7 +105,13 @@ server source is `scripts/kind-openai-mock.py`; its protocol regression tests
 run with `make test-scripts`. It builds every curated adapter image
 (`ADAPTERS=all`) unless `ADAPTERS` is set, so the discovered providers run
 images from this checkout rather than operator-packaged ones; pass
-`SKIP_BUILD=true` to reuse images that are already built. garak and garak-kfp
+`SKIP_BUILD=true` to reuse images that are already built. A selected adapter
+can also be supplied prebuilt with `ADAPTER_IMAGES`, a comma-separated list of
+`adapter=image` pairs (every adapter must also be selected by `ADAPTERS`), which
+pulls that reference once and re-tags it into the kind-local registry instead of
+building it:
+`make test-benchmarks-kind ADAPTERS=all ADAPTER_IMAGES='lighteval=quay.io/…@sha256:…'`.
+garak and garak-kfp
 are not curated adapters, so they keep their operator-packaged image. It also
 mints a short-lived service-account token, creates or refreshes the
 dev-deploy-owned mock-auth Secret (failing if a same-named Secret belongs to

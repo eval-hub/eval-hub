@@ -293,7 +293,25 @@ branches provide the `Dockerfile.lmes-job` used for the LMES adapter image,
 not the default `main` branch. The operator
 checkout is always required. By default, `ADAPTERS` selects only FollowBench,
 so the contrib checkout is needed. Set `ADAPTERS=all` to build all six curated
-adapters, or select a different list. Each repository is searched as a sibling of
+adapters, or select a different list. An adapter can instead be supplied
+prebuilt, which skips its build and its source checkout:
+
+```bash
+make dev-deploy ADAPTERS=inspect \
+  ADAPTER_IMAGES='inspect=quay.io/evalhub/community-inspect@sha256:...'
+```
+
+`ADAPTER_IMAGES` is a comma-separated list of `adapter=image` pairs, and every
+adapter it names must also be selected by `ADAPTERS`. The image is pulled into
+the container runtime when it is not present locally, then re-tagged into the
+kind-local registry under the same `localhost:<port>/evalhub/...` path a built
+adapter would use, so the rendered provider ConfigMaps, the recorded
+`system/evalhub-dev-deploy-manifest` (which gains
+`source.<adapter>.prebuilt=true` and `source.<adapter>.image`), and the e2e image
+checks are unchanged. The pull happens on the host before the registry push, so
+`AIRGAP=true` still deploys; `SKIP_BUILD=true` never reaches the network and
+requires the image to be present locally instead. Each repository is searched as
+a sibling of
 the EvalHub checkout first and then as `<parent>/<repo>` under each
 colon-separated `DEV_REPO_PARENT_PATHS` entry (default `~/code`); set that
 variable when the repositories live elsewhere. The command
