@@ -56,7 +56,7 @@ assisted-by-trailer: ## Print the Assisted-by trailer for the current AI session
 # Development skills (evalhub-bug-review, fix-fvt-test, golang-toolchain-update,
 # release-notes) are maintained in https://github.com/eval-hub/eval-hub-skills so
 # they can be shared by every eval-hub repository. This clones that repository
-# into a cache directory and symlinks the skills into ~/.claude/skills, where
+# into a cache directory and symlinks the skills into ~/.agents/skills, where
 # agent harnesses load them by name. See AGENTS.md -> Development Skills.
 #
 # Overrides:
@@ -64,16 +64,22 @@ assisted-by-trailer: ## Print the Assisted-by trailer for the current AI session
 #   DEV_SKILLS_CLONE_DIR  shallow clone location (default: ~/.cache/eval-hub-skills);
 #                         uninstall-dev-skills only removes links pointing into it
 #   DEV_SKILLS_TARGET_DIR harness skills directory to link into (default:
-#                         ~/.claude/skills). Codex CLI loads user skills from
-#                         ~/.agents/skills, so install for it with:
-#                           make install-dev-skills DEV_SKILLS_TARGET_DIR=~/.agents/skills
+#                         ~/.agents/skills, the cross-harness user skills
+#                         directory read by Cursor and Codex CLI). Claude Code
+#                         reads ~/.claude/skills instead, so install for it with:
+#                           make install-dev-skills DEV_SKILLS_TARGET_DIR=~/.claude/skills
+#   DEV_SKILLS_FORCE      set to true to pass --force, replacing pre-existing
+#                         skill entries and discarding uncommitted changes in the
+#                         cached clone (the script refuses to throw local work
+#                         away otherwise)
 DEV_SKILLS_REF ?=
 DEV_SKILLS_CLONE_DIR ?=
 DEV_SKILLS_TARGET_DIR ?= ~/.agents/skills
+DEV_SKILLS_FORCE ?=
 
 .PHONY: install-dev-skills uninstall-dev-skills
-install-dev-skills: ## Install dev skills from eval-hub/eval-hub-skills (into ~/.claude/skills; Codex CLI: DEV_SKILLS_TARGET_DIR=~/.agents/skills)
-	@bash scripts/install-dev-skills.sh $(if $(DEV_SKILLS_REF),--ref "$(DEV_SKILLS_REF)",) $(if $(DEV_SKILLS_CLONE_DIR),--dir "$(DEV_SKILLS_CLONE_DIR)",) $(if $(DEV_SKILLS_TARGET_DIR),--target "$(DEV_SKILLS_TARGET_DIR)",)
+install-dev-skills: ## Install dev skills from eval-hub/eval-hub-skills (into ~/.agents/skills; Claude Code: DEV_SKILLS_TARGET_DIR=~/.claude/skills)
+	@bash scripts/install-dev-skills.sh $(if $(filter true,$(DEV_SKILLS_FORCE)),--force,) $(if $(DEV_SKILLS_REF),--ref "$(DEV_SKILLS_REF)",) $(if $(DEV_SKILLS_CLONE_DIR),--dir "$(DEV_SKILLS_CLONE_DIR)",) $(if $(DEV_SKILLS_TARGET_DIR),--target "$(DEV_SKILLS_TARGET_DIR)",)
 
 uninstall-dev-skills: ## Remove the dev skill symlinks installed by install-dev-skills (honours DEV_SKILLS_TARGET_DIR and DEV_SKILLS_CLONE_DIR)
 	@bash scripts/install-dev-skills.sh --uninstall $(if $(DEV_SKILLS_CLONE_DIR),--dir "$(DEV_SKILLS_CLONE_DIR)",) $(if $(DEV_SKILLS_TARGET_DIR),--target "$(DEV_SKILLS_TARGET_DIR)",)

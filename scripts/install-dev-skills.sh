@@ -7,7 +7,7 @@
 # shared by every eval-hub repository instead of being copied around. This
 # script keeps a shallow clone of that repository up to date and symlinks each
 # development skill into the harness skills directory (default:
-# ~/.claude/skills).
+# ~/.agents/skills).
 #
 #   make install-dev-skills
 #   make uninstall-dev-skills
@@ -16,15 +16,17 @@
 #   EVALHUB_SKILLS_REPO_URL  git remote (default: the eval-hub-skills GitHub repo)
 #   EVALHUB_SKILLS_REF       branch, tag, or commit (default: main)
 #   EVALHUB_SKILLS_DIR       shallow clone location (default: ~/.cache/eval-hub-skills)
-#   CLAUDE_SKILLS_DIR        symlink target (default: ~/.claude/skills; set this
-#                            or pass --target to install for another harness,
-#                            for example Codex CLI's ~/.agents/skills)
+#   CLAUDE_SKILLS_DIR        symlink target (default: ~/.agents/skills, the
+#                            cross-harness user skills directory read by Cursor and
+#                            Codex CLI; set this or pass --target to install for
+#                            another harness, for example Claude Code's
+#                            ~/.claude/skills)
 set -Eeuo pipefail
 
 REPO_URL="${EVALHUB_SKILLS_REPO_URL:-https://github.com/eval-hub/eval-hub-skills.git}"
 REF="${EVALHUB_SKILLS_REF:-main}"
 CHECKOUT_DIR="${EVALHUB_SKILLS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/eval-hub-skills}"
-SKILLS_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
+SKILLS_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.agents/skills}"
 UNINSTALL=false
 FORCE=false
 SKILLS=(evalhub-bug-review fix-fvt-test golang-toolchain-update release-notes)
@@ -55,8 +57,8 @@ Options:
   --ref <ref>      branch, tag, or commit to check out (default: main)
   --dir <path>     shallow clone location (default: ~/.cache/eval-hub-skills);
                    with --uninstall it selects the clone whose links are removed
-  --target <path>  harness skills directory (default: ~/.claude/skills; for
-                   Codex CLI pass ~/.agents/skills)
+  --target <path>  harness skills directory (default: ~/.agents/skills; for
+                   Claude Code pass ~/.claude/skills)
   -h, --help       show this help
 
 Environment: EVALHUB_SKILLS_REPO_URL, EVALHUB_SKILLS_REF, EVALHUB_SKILLS_DIR,
