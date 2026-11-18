@@ -517,6 +517,29 @@ test-benchmarks: $(GOTESTSUM) ## Run live benchmark smoke tests (requires SERVER
 # built. garak and garak-kfp are not curated adapters, so they keep their
 # operator-packaged image either way.
 #
+# ADAPTERS accepts the full curated list, or any comma-separated subset of it:
+#
+#   inspect  lm-evaluation-harness  lighteval  ruler  ifbench  followbench
+#
+# ADAPTER_IMAGES supplies a prebuilt image for a selected adapter instead of
+# building it, as comma-separated adapter=image pairs. Every adapter named there
+# must also be selected by ADAPTERS; the image is pulled into the container
+# runtime (SKIP_BUILD=true requires it to be present instead) and re-tagged into
+# the kind-local registry under the same localhost:<port>/evalhub/... path a
+# built adapter gets, so provider ConfigMaps, the dev-deploy manifest, and the
+# e2e image checks are unchanged. An adapter supplied prebuilt needs neither the
+# eval-hub-contrib nor the lm-evaluation-harness checkout:
+#
+#   make test-benchmarks-kind ADAPTERS=all
+#   make test-benchmarks-kind ADAPTERS=inspect,lm-evaluation-harness \
+#     ADAPTER_IMAGES='inspect=quay.io/evalhub/community-inspect@sha256:...'
+#   make test-benchmarks-kind ADAPTERS=all \
+#     ADAPTER_IMAGES='lighteval=quay.io/evalhub/community-lighteval@sha256:...,ruler=quay.io/evalhub/community-ruler@sha256:...'
+#
+# With ADAPTER_IMAGES empty every selected adapter is built from source. The
+# pairs cover the whole curated list, so any of inspect, lm-evaluation-harness,
+# lighteval, ruler, ifbench, or followbench can be supplied prebuilt.
+#
 # A full run is large, so KIND_BENCHMARK_PARALLEL bounds how many evaluation
 # jobs run at once and KIND_BENCHMARK_TIMEOUT bounds total wall time; lower the
 # concurrency and raise the deadline on a small kind cluster. The token that
@@ -580,7 +603,7 @@ test-benchmarks-kind-token-check:
 test-benchmarks-kind-deploy: test-benchmarks-kind-token-check
 	@ADAPTERS="$(KIND_BENCHMARK_ADAPTERS)" ADAPTER_IMAGES="$(ADAPTER_IMAGES)" $(MAKE) dev-deploy
 
-test-benchmarks-kind: test-benchmarks-kind-deploy ## Run benchmark smoke tests against the local kind cluster (deploys it first; SKIP_BUILD=true reuses built images)
+test-benchmarks-kind: test-benchmarks-kind-deploy ## Run benchmark smoke tests on kind (deploys first; ADAPTERS=all|inspect,lm-evaluation-harness,lighteval,ruler,ifbench,followbench; ADAPTER_IMAGES=<adapter=image>[,<adapter=image>...]; SKIP_BUILD=true reuses built images)
 	@set -eu; \
 	if [ ! -f "$(KIND_KUBECONFIG)" ]; then \
 		echo "FAIL: private dev-deploy kubeconfig not found: $(KIND_KUBECONFIG). Run make dev-deploy first."; exit 1; \
