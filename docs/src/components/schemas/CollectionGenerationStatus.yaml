@@ -7,6 +7,10 @@ properties:
   state:
     type: string
     enum: [pending, running, completed, failed, cancelled]
+    description: >
+      Cancelled can be observed only if cancellation is recorded while this
+      resource is retained. DELETE on the generation resource removes it, so
+      a later GET after successful DELETE returns 404, not cancelled.
   started_at:
     type: string
     format: date-time
@@ -15,17 +19,65 @@ properties:
     type: string
     format: date-time
     description: Set when the workload reaches a terminal state.
+  progress:
+    $ref: ./CollectionGenerationProgress.yaml
+    description: Present only while running; describes the most recent durable progress update.
   error:
     $ref: ./CollectionGenerationStatusError.yaml
     description: Required for failed generations; absent in every other state.
-if:
-  properties:
-    state:
-      const: failed
-  required: [state]
-then:
-  required: [error]
-else:
-  not:
-    required: [error]
+oneOf:
+  - properties:
+      state:
+        const: pending
+    required: [state]
+    not:
+      anyOf:
+        - properties:
+            error: {}
+          required: [error]
+        - properties:
+            progress: {}
+          required: [progress]
+  - properties:
+      state:
+        const: running
+    required: [state]
+    not:
+      properties:
+        error: {}
+      required: [error]
+  - properties:
+      state:
+        const: completed
+    required: [state]
+    not:
+      anyOf:
+        - properties:
+            error: {}
+          required: [error]
+        - properties:
+            progress: {}
+          required: [progress]
+  - properties:
+      state:
+        const: failed
+      error:
+        $ref: ./CollectionGenerationStatusError.yaml
+    required: [state, error]
+    not:
+      properties:
+        progress: {}
+      required: [progress]
+  - properties:
+      state:
+        const: cancelled
+    required: [state]
+    not:
+      anyOf:
+        - properties:
+            error: {}
+          required: [error]
+        - properties:
+            progress: {}
+          required: [progress]
 additionalProperties: false

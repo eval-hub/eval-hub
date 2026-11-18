@@ -107,8 +107,8 @@ func (s *runtimeStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEve
 		return err
 	}
 
-	s.handlers.onEvaluationJobUpdated(s.ctx, s.scopedStorage(), func() (*api.EvaluationJobResource, error) {
-		return s.scopedStorage().GetEvaluationJob(id)
+	s.handlers.onEvaluationJobUpdated(s.ctx, s.scopedStorage(), func(readCtx context.Context) (*api.EvaluationJobResource, error) {
+		return s.scopedStorage().WithContext(readCtx).GetEvaluationJob(id)
 	}, previousState, s.logger)
 	return nil
 }
@@ -763,8 +763,8 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 				h.runtime.WithLogger(ctx.Logger).NotifyJobPhaseTransition(runtimeCtx, job, status.BenchmarkStatusEvent.BenchmarkIndex, status.BenchmarkStatusEvent.Status)
 			}
 
-			h.onEvaluationJobUpdated(runtimeCtx, scoped, func() (*api.EvaluationJobResource, error) {
-				return scoped.GetEvaluationJob(evaluationJobID)
+			h.onEvaluationJobUpdated(runtimeCtx, scoped, func(readCtx context.Context) (*api.EvaluationJobResource, error) {
+				return scoped.WithContext(readCtx).GetEvaluationJob(evaluationJobID)
 			}, previousState, ctx.Logger)
 			w.WriteJSON(nil, 204)
 			return nil

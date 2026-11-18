@@ -48,7 +48,14 @@ type ServiceConfig struct {
 	// LogStreamTimeout is the maximum duration for streaming log responses.
 	// Zero or unset uses DefaultLogStreamTimeout (5 minutes). This is independent of the
 	// server WriteTimeout and allows log streams to run longer than normal responses.
-	LogStreamTimeout time.Duration `mapstructure:"log_stream_timeout,omitempty"`
+	LogStreamTimeout time.Duration     `mapstructure:"log_stream_timeout,omitempty"`
+	Init             ServiceInitConfig `mapstructure:"init,omitempty"`
+}
+
+type ServiceInitConfig struct {
+	// TestDataTimeout is forwarded to test-data init containers.
+	// Zero or unset keeps the init binary default (10 minutes).
+	TestDataTimeout time.Duration `mapstructure:"test_data_timeout,omitempty"`
 }
 
 // TLSEnabled returns true when both TLS cert and key paths are configured.
@@ -179,6 +186,9 @@ func (c *ServiceConfig) ValidateHTTPConfig() error {
 	}
 	if c.LogStreamTimeout < 0 {
 		return fmt.Errorf("service.log_stream_timeout must not be negative")
+	}
+	if c.Init.TestDataTimeout < 0 {
+		return fmt.Errorf("service.init.test_data_timeout must not be negative")
 	}
 	return nil
 }

@@ -163,7 +163,7 @@ type PassCriteria struct {
 type S3TestDataRef struct {
 	Bucket    string `json:"bucket" validate:"required"`
 	Key       string `json:"key" validate:"required"`
-	SecretRef string `json:"secret_ref" validate:"required"`
+	SecretRef string `json:"secret_ref" validate:"required,rfc1123_dns_subdomain"`
 }
 
 // PVCTestDataRef represents a PersistentVolumeClaim source for test data.
@@ -171,7 +171,7 @@ type S3TestDataRef struct {
 // read-only at /test_data in the adapter container. No init container is used.
 type PVCTestDataRef struct {
 	ClaimName string `json:"claim_name" mapstructure:"claim_name" validate:"required,rfc1123_dns_label"`
-	SubPath   string `json:"sub_path,omitempty" mapstructure:"sub_path,omitempty"`
+	SubPath   string `json:"sub_path,omitempty" mapstructure:"sub_path,omitempty" validate:"omitempty,pvc_sub_path"`
 }
 
 // GitTestDataRef represents a git repository source for test data.

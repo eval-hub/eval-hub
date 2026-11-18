@@ -5,12 +5,19 @@
 set -Eeuo pipefail
 umask 077
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Runtime selection helpers, shared with the other dev scripts.
+. "${SCRIPT_DIR}/lib/dev-runtime.sh"
+
 KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-evalhub-dev}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-}"
 EVALHUB_HOST_PORT="${EVALHUB_HOST_PORT:-18443}"
 DEMO_SOURCE_COLLECTION_ID="${DEMO_SOURCE_COLLECTION_ID:-instruction-output-v1}"
 DEMO_JOB_TIMEOUT_SECONDS="${DEMO_JOB_TIMEOUT_SECONDS:-900}"
 KUBECONFIG_FILE="${EVALHUB_KUBECONFIG_FILE:-${XDG_CONFIG_HOME:-${HOME}/.config}/evalhub/kubeconfigs/${KIND_CLUSTER_NAME}.yaml}"
+# The engine dev-deploy recorded for KIND_CLUSTER_NAME (see record_runtime in
+# dev-deploy.sh), so kind queries use the provider that owns the cluster.
+RUNTIME_STATE_FILE="${XDG_CONFIG_HOME:-${HOME}/.config}/evalhub/kubeconfigs/${KIND_CLUSTER_NAME}.runtime"
 API_BASE_URL="${EVALHUB_API_BASE_URL:-https://127.0.0.1:${EVALHUB_HOST_PORT}}"
 API_BASE_URL="${API_BASE_URL%/}"
 NAMESPACE=system
@@ -49,8 +56,9 @@ Inputs (also accepted as environment variables):
   EVALHUB_KUBECONFIG_FILE       kubeconfig override (default: private dev-deploy kubeconfig)
   DEMO_SOURCE_COLLECTION_ID     source system collection (default: instruction-output-v1)
   CONTAINER_RUNTIME             container engine that backs the kind cluster
-                                (podman or docker; default: the engine that
-                                already owns KIND_CLUSTER_NAME)
+                                (podman or docker; default: the engine
+                                dev-deploy recorded for KIND_CLUSTER_NAME,
+                                otherwise the engine that owns it)
   DEMO_JOB_TIMEOUT_SECONDS      job polling timeout (default: 900)
   API_TOKEN                     optional caller token; otherwise a short-lived
                                 token is minted for evalhub-local-service.
@@ -89,63 +97,67 @@ validate_inputs() {
     fail "EVALHUB_API_BASE_URL must be an HTTPS localhost URL, for example https://127.0.0.1:18443."
 }
 
-kind_cmd() {
-  if [[ "$CONTAINER_RUNTIME" == podman ]]; then
-    KIND_EXPERIMENTAL_PROVIDER=podman kind "$@"
-  else
-    env -u KIND_EXPERIMENTAL_PROVIDER kind "$@"
-  fi
-}
-
-# Return 0 when KIND_CLUSTER_NAME already exists under the given container
-# runtime, using the kind provider that runtime requires. A runtime that is not
-# installed or not reachable cannot own a cluster, so it reports false.
-kind_cluster_in_runtime() {
-  local runtime="$1" clusters
-  command -v "$runtime" >/dev/null 2>&1 || return 1
-  "$runtime" info >/dev/null 2>&1 || return 1
-  case "$runtime" in
-    podman)
-      clusters="$(KIND_EXPERIMENTAL_PROVIDER=podman kind get clusters 2>/dev/null || true)"
+# Container runtime policy for a read-only query. resolve_runtime_decision (in
+# scripts/lib/dev-runtime.sh) works out which engine runs KIND_CLUSTER_NAME and
+# why; this table decides what dev-demo does about it. dev-demo never builds,
+# pushes, creates a cluster, or removes a record, so it can be gentler than a
+# deploy: it follows the record while that engine can still describe the cluster,
+# prefers an explicit value over a record that describes nothing, and answers a
+# remaining mismatch with the engine that actually runs the cluster instead of
+# failing. When nothing runs the cluster it queries docker so that check_cluster
+# reports the missing cluster.
+detect_container_runtime() {
+  resolve_runtime_decision query
+  case "$RESOLVED_EVIDENCE" in
+    explicit-invalid)
+      fail "CONTAINER_RUNTIME must be 'podman' or 'docker'."
       ;;
-    docker)
-      clusters="$(env -u KIND_EXPERIMENTAL_PROVIDER kind get clusters 2>/dev/null || true)"
+    explicit-missing)
+      need_command "$RESOLVED_RUNTIME"
+      # An installed engine that is not reachable still has to be selected by its
+      # canonical name: keeping the raw value would send a podman-docker shim's
+      # `docker` to kind with the docker provider (see canonical_runtime).
+      CONTAINER_RUNTIME="$RESOLVED_RUNTIME"
+      ;;
+    explicit-mismatch)
+      log WARN "Kind cluster '$KIND_CLUSTER_NAME' was deployed with $RESOLVED_RECORDED (see $RUNTIME_STATE_FILE); querying kind with $RESOLVED_RECORDED instead of $RESOLVED_RUNTIME."
+      CONTAINER_RUNTIME="$RESOLVED_RECORDED"
+      ;;
+    explicit-mismatch-stale|explicit-mismatch-gone)
+      log WARN "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $RESOLVED_RECORDED-backed in $RUNTIME_STATE_FILE, but $RESOLVED_RECORDED no longer runs it; ignoring the stale record and querying kind with $RESOLVED_RUNTIME."
+      CONTAINER_RUNTIME="$RESOLVED_RUNTIME"
+      ;;
+    explicit-recorded-stale)
+      log WARN "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $RESOLVED_RECORDED-backed in $RUNTIME_STATE_FILE, but $RESOLVED_RECORDED no longer runs it; it exists under $RESOLVED_OWNER. Unset CONTAINER_RUNTIME to query it with $RESOLVED_OWNER."
+      CONTAINER_RUNTIME="$RESOLVED_RUNTIME"
+      ;;
+    explicit-other-owns)
+      log WARN "Kind cluster '$KIND_CLUSTER_NAME' exists under $RESOLVED_OWNER, not $RESOLVED_RUNTIME; kind will not list it under $RESOLVED_RUNTIME."
+      CONTAINER_RUNTIME="$RESOLVED_RUNTIME"
+      ;;
+    recorded-stale)
+      log WARN "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $RESOLVED_RECORDED-backed in $RUNTIME_STATE_FILE, but $RESOLVED_RECORDED no longer runs it; querying kind with $RESOLVED_OWNER instead."
+      CONTAINER_RUNTIME="$RESOLVED_OWNER"
+      ;;
+    recorded-gone)
+      log WARN "Kind cluster '$KIND_CLUSTER_NAME' is recorded as $RESOLVED_RECORDED-backed in $RUNTIME_STATE_FILE, but $RESOLVED_RECORDED no longer runs it; ignoring the stale record."
+      CONTAINER_RUNTIME="$(canonical_runtime docker)"
+      ;;
+    owner)
+      log INFO "Kind cluster '$KIND_CLUSTER_NAME' exists under $RESOLVED_RUNTIME; querying kind with $RESOLVED_RUNTIME."
+      CONTAINER_RUNTIME="$RESOLVED_RUNTIME"
+      ;;
+    no-owner)
+      CONTAINER_RUNTIME="$(canonical_runtime docker)"
+      ;;
+    explicit-owned|explicit-no-owner|explicit-recorded-unverified|recorded-owned|recorded-stopped)
+      CONTAINER_RUNTIME="$RESOLVED_RUNTIME"
       ;;
     *)
-      return 1
+      fail "Unhandled runtime decision: $RESOLVED_EVIDENCE"
       ;;
   esac
-  grep -Fqx -- "$KIND_CLUSTER_NAME" <<<"$clusters"
-}
-
-# Select the container runtime that backs the kind cluster so kind queries the
-# provider that owns it (see detect_container_runtime in dev-deploy.sh). Set
-# CONTAINER_RUNTIME to force a specific runtime; otherwise the runtime that owns
-# KIND_CLUSTER_NAME wins, and Docker is used when no runtime owns it so that
-# check_cluster reports the missing cluster. dev-demo never builds or pushes
-# images, so an unreachable engine is only a problem when it is forced.
-detect_container_runtime() {
-  local runtime
-  if [[ -n "$CONTAINER_RUNTIME" ]]; then
-    case "$CONTAINER_RUNTIME" in
-      podman|docker)
-        need_command "$CONTAINER_RUNTIME"
-        ;;
-      *)
-        fail "CONTAINER_RUNTIME must be 'podman' or 'docker'."
-        ;;
-    esac
-    log INFO "Using $CONTAINER_RUNTIME as the container runtime for kind queries."
-    return 0
-  fi
-  for runtime in docker podman; do
-    if kind_cluster_in_runtime "$runtime"; then
-      CONTAINER_RUNTIME="$runtime"
-      log INFO "Kind cluster '$KIND_CLUSTER_NAME' exists under $runtime; querying kind with $runtime."
-      return 0
-    fi
-  done
-  CONTAINER_RUNTIME=docker
+  log INFO "Using $CONTAINER_RUNTIME as the container runtime for kind queries."
 }
 
 check_cluster() {

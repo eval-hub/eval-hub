@@ -63,19 +63,40 @@ func TestBenchmarkSmoke(t *testing.T) {
 			t.Fatalf("BENCHMARK_POLL_INTERVAL: %v", err)
 		}
 	}
+	beatEvery, err := progressInterval()
+	if err != nil {
+		t.Fatal(err)
+	}
+	progress := &benchmarkProgress{}
 	var configured, skipped, submitted atomic.Int64
 	t.Cleanup(func() {
 		t.Logf("benchmarks: configured=%d skipped=%d submitted=%d", configured.Load(), skipped.Load(), submitted.Load())
+		t.Log(progress.line())
 		if submitted.Load() == 0 {
 			t.Error("no configured benchmarks were submitted")
 		}
 	})
+	catalog := 0
+	for _, provider := range providers {
+		catalog += len(provider.Benchmarks)
+	}
+	t.Logf("benchmarks: discovered=%d providers=%d", catalog, len(providers))
 	// A single level of parallel subtests gives one global -parallel bound even
 	// when benchmarks belong to different providers.
 	for _, provider := range providers {
 		for _, benchmark := range provider.Benchmarks {
 			t.Run(provider.Resource.ID+"/"+benchmark.ID, func(t *testing.T) {
+				// Count the selection before pausing, so benchmarks excluded by
+				// -run are not reported as still needing to run. Subtests only
+				// resume after this loop returns, so the parent reports the
+				// final selection.
+				progress.selected.Add(1)
 				t.Parallel()
+				progress.running.Add(1)
+				// Registered before the other cleanups below so it runs last
+				// (cleanups are LIFO): the outcome then includes failures from
+				// cleanups such as cleanupJob, which a defer would precede.
+				t.Cleanup(func() { progress.finish(t) })
 				path := fixturePath(fixtureRoot, provider.Resource.ID, benchmark.ID)
 				fixture, err := loadFixture(path, smokeEnv)
 				if errors.Is(err, os.ErrNotExist) {
@@ -141,6 +162,97 @@ func TestBenchmarkSmoke(t *testing.T) {
 			})
 		}
 	}
+	// The subtests only resume once this function returns, so the selection is
+	// final here. Report it before the run starts, then keep reporting it while
+	// benchmarks are in flight so a long full-catalog sweep is readable.
+	t.Log(progress.line())
+	t.Cleanup(progress.heartbeat(t, beatEvery))
+}
+
+// benchmarkProgress counts benchmarks from the moment the -run selection is
+// known until the suite ends, so a long full-catalog sweep reports how many
+// benchmarks have finished and how many still need to run. Subtests run in
+// parallel, so every counter is atomic.
+type benchmarkProgress struct {
+	selected atomic.Int64 // benchmarks the -run selection executes
+	running  atomic.Int64 // benchmarks currently in flight
+	finished atomic.Int64 // benchmarks with a pass, fail, or skip outcome
+	passed   atomic.Int64
+	failed   atomic.Int64
+	skipped  atomic.Int64
+}
+
+// finish records a benchmark's outcome and logs the updated counts. It is
+// registered as the subtest's first cleanup, so it runs after every later
+// cleanup (LIFO) and also runs for skipped and failed benchmarks.
+func (p *benchmarkProgress) finish(t *testing.T) {
+	p.finished.Add(1)
+	p.running.Add(-1)
+	switch {
+	case t.Skipped():
+		p.skipped.Add(1)
+	case t.Failed():
+		p.failed.Add(1)
+	default:
+		p.passed.Add(1)
+	}
+	t.Log(p.line())
+}
+
+// line renders one progress line. remaining counts every selected benchmark
+// that has not finished yet, including the ones currently running.
+func (p *benchmarkProgress) line() string {
+	total := p.selected.Load()
+	finished := p.finished.Load()
+	return fmt.Sprintf("benchmarks: total=%d finished=%d running=%d passed=%d failed=%d skipped=%d remaining=%d",
+		total, finished, p.running.Load(), p.passed.Load(), p.failed.Load(), p.skipped.Load(), total-finished)
+}
+
+// heartbeat logs the progress line every interval until the returned stop
+// function is called, so a run that is waiting behind one long job still shows
+// how much is left. A non-positive interval disables it.
+func (p *benchmarkProgress) heartbeat(t *testing.T, interval time.Duration) (stop func()) {
+	if interval <= 0 {
+		return func() {}
+	}
+	done := make(chan struct{})
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				t.Log(p.line())
+			}
+		}
+	}()
+	// Register the returned stop function with t.Cleanup after the summary
+	// cleanup so it runs first and the goroutine cannot outlive the test.
+	return func() {
+		close(done)
+		<-stopped
+	}
+}
+
+// progressInterval reads BENCHMARK_PROGRESS_INTERVAL, defaulting to five
+// minutes. Zero disables the periodic progress line.
+func progressInterval() (time.Duration, error) {
+	value := strings.TrimSpace(os.Getenv("BENCHMARK_PROGRESS_INTERVAL"))
+	if value == "" {
+		return 5 * time.Minute, nil
+	}
+	if value == "0" {
+		return 0, nil
+	}
+	interval, err := positiveDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("BENCHMARK_PROGRESS_INTERVAL: %w", err)
+	}
+	return interval, nil
 }
 
 // smokeEnv accepts the aliases exported by the Shepard benchmark pipeline.
@@ -173,18 +285,19 @@ func requiredEnv(t *testing.T, key string) string {
 }
 
 type fixture struct {
-	Parameters     map[string]any               `json:"parameters"`
-	MaxLengthEnv   string                       `json:"max_length_env,omitempty"`
-	TokenizerEnv   string                       `json:"tokenizer_env,omitempty"`
-	Timeout        string                       `json:"timeout"`
-	TestDataRef    *api.TestDataRef             `json:"test_data_ref,omitempty"`
-	TestDataRefEnv string                       `json:"test_data_ref_env,omitempty"`
-	HardwareConfig *api.BenchmarkHardwareConfig `json:"hardware_config,omitempty"`
-	Model          *api.ModelRef                `json:"model,omitempty"`
-	Experiment     bool                         `json:"experiment,omitempty"`
-	ExperimentName string                       `json:"experiment_name,omitempty"`
-	Unbounded      bool                         `json:"unbounded,omitempty"`
-	Notes          string                       `json:"notes,omitempty"`
+	Parameters       map[string]any               `json:"parameters"`
+	MaxLengthEnv     string                       `json:"max_length_env,omitempty"`
+	TokenizerEnv     string                       `json:"tokenizer_env,omitempty"`
+	TokenizerPathEnv string                       `json:"tokenizer_path_env,omitempty"`
+	Timeout          string                       `json:"timeout"`
+	TestDataRef      *api.TestDataRef             `json:"test_data_ref,omitempty"`
+	TestDataRefEnv   string                       `json:"test_data_ref_env,omitempty"`
+	HardwareConfig   *api.BenchmarkHardwareConfig `json:"hardware_config,omitempty"`
+	Model            *api.ModelRef                `json:"model,omitempty"`
+	Experiment       bool                         `json:"experiment,omitempty"`
+	ExperimentName   string                       `json:"experiment_name,omitempty"`
+	Unbounded        bool                         `json:"unbounded,omitempty"`
+	Notes            string                       `json:"notes,omitempty"`
 }
 
 // PathEscape encodes '/' and '%' so IDs cannot create directory traversals.
@@ -312,6 +425,17 @@ func loadFixture(path string, lookup func(string) (string, bool)) (fixture, erro
 		if value, ok := lookup(f.TokenizerEnv); ok && strings.TrimSpace(value) != "" {
 			if _, pinned := f.Parameters["tokenizer"]; !pinned {
 				f.Parameters["tokenizer"] = strings.TrimSpace(value)
+			}
+		}
+	}
+	if f.TokenizerPathEnv != "" {
+		// RULER generates its synthetic datasets with a tokenizer resolved from
+		// parameters.tokenizer_path, falling back to the model name. The same
+		// non-Hub model name caveat applies, so let the environment supply a
+		// real tokenizer; a tokenizer the fixture pins always wins.
+		if value, ok := lookup(f.TokenizerPathEnv); ok && strings.TrimSpace(value) != "" {
+			if _, pinned := f.Parameters["tokenizer_path"]; !pinned {
+				f.Parameters["tokenizer_path"] = strings.TrimSpace(value)
 			}
 		}
 	}

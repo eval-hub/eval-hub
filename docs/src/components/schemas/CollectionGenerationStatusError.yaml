@@ -15,6 +15,7 @@ properties:
       - model_failed
       - tool_failed
       - validation_failed
+      - no_relevant_benchmarks
       - timeout
       - launch_failed
       - workload_failed

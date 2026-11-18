@@ -44,8 +44,10 @@ cluster routes with untrusted certificates. Identity headers are not forwarded t
 
 Default concurrency is **2 evaluation jobs across all providers**. Each job uses
 its fixture deadline (initially five minutes), and the suite has a 30-minute
-deadline. All 341 benchmarks can take longer than 30 minutes even with tiny inputs:
-select a provider or benchmark first, or increase the suite deadline deliberately.
+deadline. The catalog this checkout deploys is 307 benchmarks, 285 of which
+submit a job (the rest skip for a missing fixture or a missing input), and a full
+sweep can take longer than 30 minutes even with tiny inputs: select a provider or
+benchmark first, or increase the suite deadline deliberately.
 
 ```bash
 make test-benchmarks BENCHMARK_RUN='TestBenchmarkSmoke/lm_evaluation_harness/arc_easy$'
@@ -65,6 +67,25 @@ BENCHMARK_SMOKE=1 go test ./tests/benchmarks \
 the default `2s` polling interval. Standard `go test -json` output provides
 per-benchmark results for CI consumers.
 
+Each benchmark logs a `benchmarks:` progress line when it finishes, and the suite
+repeats one every `BENCHMARK_PROGRESS_INTERVAL` (default `5m`; `0` disables the
+periodic line) while benchmarks are in flight, so a long sweep shows at a glance
+how much is left:
+
+```text
+benchmarks: total=285 finished=42 running=8 passed=38 failed=2 skipped=2 remaining=243
+```
+
+`total` is the number of benchmarks the `-run` selection executes, `finished`
+counts the benchmarks that passed, failed, or skipped (a prerequisite skip is
+still done), and `remaining` counts every selected benchmark that has not
+finished yet, including the ones currently running. The suite also logs the
+discovered catalog size before the run starts, and its final summary repeats the
+counts with the number of configured, skipped, and submitted benchmarks. Because
+benchmarks are parallel subtests, the progress lines from each benchmark belong
+to that benchmark's test case, while the start line, heartbeats, and summary
+belong to the parent `TestBenchmarkSmoke` test case.
+
 Ordinary `go test ./tests/benchmarks/...` runs offline harness checks and skips live
 evaluations. Live runs fail on invalid configuration, discovery errors, failed
 jobs, timeouts, missing fixture files, or zero submitted benchmarks. Missing
@@ -82,20 +103,75 @@ per token, exact `max_tokens=0` echo scoring, token-id prompt echo, and
 LM Evaluation Harness loglikelihood benchmarks execute against it. The mock
 server source is `scripts/kind-openai-mock.py`; its protocol regression tests
 run with `make test-scripts`. It builds every curated adapter image
-(`ADAPTERS=all`) unless `ADAPTERS` is set, so the
-discovered providers run images from this checkout rather than
-operator-packaged ones; pass `SKIP_BUILD=true` to reuse images that are already
-built. garak and garak-kfp are not curated adapters, so they keep their
-operator-packaged image. It also mints a short-lived service-account token,
-creates or refreshes the dev-deploy-owned mock-auth Secret (failing if a
-same-named Secret belongs to something else), and exports `JUDGE_MODEL_NAME`,
-`JUDGE_BASE_URL`, and `LM_EVAL_TOKENIZER` so judge-based and LM Evaluation
-Harness benchmarks execute instead of skipping or failing. The Secret contains
-the primary `api-key` and both `judge_api-key`/`judge_url` and
+(`ADAPTERS=all`) unless `ADAPTERS` is set, so the discovered providers run
+images from this checkout rather than operator-packaged ones; pass
+`SKIP_BUILD=true` to reuse images that are already built. garak and garak-kfp
+are not curated adapters, so they keep their operator-packaged image. It also
+mints a short-lived service-account token, creates or refreshes the
+dev-deploy-owned mock-auth Secret (failing if a same-named Secret belongs to
+something else), and exports `JUDGE_MODEL_NAME`, `JUDGE_BASE_URL`,
+`LM_EVAL_TOKENIZER`, and `RULER_TOKENIZER` so judge-based, LM Evaluation
+Harness, and RULER benchmarks execute instead of skipping or failing. The
+Secret contains the primary `api-key` and both `judge_api-key`/`judge_url` and
 `grader_api-key`/`grader_url`. The judge and grader pairs share
 `KIND_BENCHMARK_JUDGE_API_KEY` and `KIND_BENCHMARK_JUDGE_URL`, so both roles use
 the mock judge endpoint. The key is provisioned in the Secret; fixtures do not
 need a `JUDGE_API_KEY` environment variable.
+
+The mock also answers the tool and text contracts that strict scorers parse,
+on both the chat-completions and Responses API endpoints: the structured
+`answer` tool that inspect_scout's `generate_answer` declares (Petri/Bloom
+judges), the tool a request forces through `tool_choice` (inspect_evals'
+`schema_tool_graded_scorer`, for example simpleqa's `submit`), and the text
+shapes CyberSecEval 2 (`GRADE:`), MASK (`Final Answer:`, JSON bounds) and
+agentic-misalignment (its blackmail classifier's `<answer>yes|no</answer>` and
+its deliberation classifier's three-category `<answer>`) require. Arguments and
+replies are synthesized from each request's own declared schema, including
+`minItems` values for array properties. A plain reply
+to any of these leaves the sample unscored; the resulting `NaN` or `inf` metrics
+then break JSON serialization of the results event, the adapter never reports the
+terminal job status, and the job hangs in `post_processing` until its fixture
+deadline. Requests that declare other tools (agent scaffolds such as
+`submit_understanding`) keep the plain-text reply. Both mock Deployments serve
+requests concurrently (a threaded HTTP server), so one slow or stuck client
+cannot stall the rest of a parallel run.
+
+The single-node kind cluster has roughly 8 GiB of allocatable memory, and
+`dev-deploy` lowers the rendered inspect (8Gi→2Gi), lighteval (4Gi→2Gi) and
+garak (4Gi→2Gi) provider memory requests for that reason; with the default
+`KIND_BENCHMARK_PARALLEL=8`, only about three 2Gi job pods schedule at once
+next to the system pods, and the rest queue until earlier jobs finish. garak is
+not a curated adapter, so it runs the operator-packaged
+`quay.io/trustyai/trustyai-garak-lls-provider-dsp` image: it is public, about
+950MB, and its fixtures carry a 15m deadline so the first pull does not consume
+the whole budget. With its packaged 4Gi request no garak job pod is ever
+admitted alongside the other providers, so every garak benchmark stays
+`pending` until its deadline; that is why `dev-deploy` lowers it too.
+
+Container storage is the other hard bound on this cluster, and unlike memory it
+fails in ways that look like adapter bugs. Every `dev-deploy` run rebuilds the
+curated adapter images and pushes copies into the local registry and the kind
+node, so repeated runs fill the node's 100GB overlay. Past that point image
+unpacking and dataset downloads fail with `no space left on device`: LightEval's
+dataset builder surfaces `OSError: [Errno 28] No space left on device` (observed
+for `lighteval/mmlu` and `lighteval/knowledge`), and job pods report
+`Failed to pull image … no space left on device`. Check free space before a full
+run and reclaim it when it is low:
+
+```bash
+make clean-container-storage DRY_RUN=true            # print the commands only
+make clean-container-storage ALL=true VOLUMES=true   # also drop unused images and volumes
+```
+
+Images and volumes used by the running kind node and the local registry are
+never removed; `make dev-clean DELETE_CLUSTER=true` releases those.
+
+A fixture deadline also counts the time a job spends queued. On this node a job
+that never gets a scheduling slot fails with
+`context deadline exceeded; last status: {"state":"pending"}` instead of running,
+so a full run at the default `KIND_BENCHMARK_PARALLEL=8` reports benchmarks that
+never started. Size the run (see below) rather than widening every fixture
+deadline, which hides the queueing instead of fixing it.
 
 The default `KIND_BENCHMARK_RUN` selects the
 whole catalog the deployed EvalHub discovers, so every configured provider's
@@ -109,9 +185,9 @@ kind cluster. The run mints one ServiceAccount token and reuses it for every
 request, so `KIND_BENCHMARK_TOKEN_DURATION` defaults to
 `KIND_BENCHMARK_TIMEOUT` plus `KIND_BENCHMARK_TOKEN_MARGIN` (1h) rather than a
 fixed hour a long run outlives. The token is minted before the suite's
-gotestsum install and test compilation, so an explicit token duration must cover
-`KIND_BENCHMARK_TIMEOUT` plus `KIND_BENCHMARK_SETUP_MARGIN` (15m); a shorter one
-fails before the deployment builds start.
+gotestsum install and test compilation, so an explicit token duration must
+cover `KIND_BENCHMARK_TIMEOUT` plus `KIND_BENCHMARK_SETUP_MARGIN` (15m); a
+shorter one fails before the deployment builds start.
 
 ## Fixtures
 
@@ -150,6 +226,12 @@ Supported fixture fields:
 
 - `parameters`: required object of adapter-specific options.
 - `timeout`: required positive Go duration, including submission and polling.
+  The default is `5m`; benchmarks whose datasets are large downloads or whose
+  evaluations are known to exceed that budget carry wider fixture timeouts of
+  15m-20m so a slow-but-working run is not cut off at the deadline. That covers
+  lighteval datasets such as `triviaqa`, inspect `docvqa`, and the RULER
+  variants whose essay haystack downloads 218 Paul Graham essays before data
+  generation starts.
 - `max_length_env`: optional environment variable overriding the integer
   `parameters.max_length`. Unset or empty values keep the fixture's fallback;
   supplied values must be integers greater than one. Values are sent as JSON
@@ -161,6 +243,13 @@ Supported fixture fields:
   staged `/test_data/tokenizer` bundle) always wins. The
   `test-benchmarks-kind` target sets `LM_EVAL_TOKENIZER` because the kind mock
   target model name does not resolve on the Hub.
+- `tokenizer_path_env`: optional environment variable supplying
+  `parameters.tokenizer_path` for providers that generate synthetic data with a
+  tokenizer resolved from that parameter and fall back to the model name, such
+  as RULER. Unset or empty values keep the fixture's fallback, and a
+  `parameters.tokenizer_path` the fixture pins itself always wins. The
+  `test-benchmarks-kind` target sets `RULER_TOKENIZER` for the same
+  non-Hub-model-name reason as `LM_EVAL_TOKENIZER`.
 - `test_data_ref`: optional API `TestDataRef` object for staged test input.
 - `test_data_ref_env`: alternatively, the name of an environment variable containing
   a complete JSON `TestDataRef` object. It must be set when the fixture is used.
@@ -201,7 +290,7 @@ exported environment value with a direct Go invocation:
 
 ```bash
 export MLFLOW_EXPERIMENT_NAME=benchmark-smoke
-BENCHMARK_SMOKE=1 go test ./tests/benchmarks -run TestBenchmarkSmoke -v
+BENCHMARK_SMOKE=1 go test ./tests/benchmarks -run TestBenchmarkSmoke -timeout=30m -v
 ```
 
 The environment variable alone does not change fixtures: they must reference it
@@ -436,3 +525,43 @@ requirements, and `LM_EVAL_OFFLINE_HF_REPO_ID` / `LM_EVAL_OFFLINE_HF_REVISION`
 inputs. Point these at the prepared bundle, not the original dataset repository.
 Qasper data is included in the bundle, but its job remains unchanged because the
 SCROLLS adapter also needs to handle its metric cache on a read-only data mount.
+
+## Known failures that need adapter, image, or dataset changes
+
+A full-catalog run also exercises benchmarks whose prerequisites this suite
+cannot supply, so its residual failures are expected and are not fixture
+regressions. Each entry in the first table needs a change outside `testdata/`;
+recording them here is what lets a later run be read at a glance. Adding ignored
+flags, widening every deadline, or dropping the benchmark would hide the defect
+rather than track it. Environment failures are not defects and are not listed
+here: a full node disk, and a job that exhausts its fixture deadline while still
+queued, are described under **Run** above.
+
+| Benchmarks | Observed failure | Needs |
+| --- | --- | --- |
+| LM `blimp` and its 14 `blimp_*` tasks, `truthfulqa_mc1`, `lambada_standard_cloze_yaml` | `Invalid HF URI 'hf://datasets/blimp@<sha>/.huggingface.yaml'. Repository id must be 'namespace/name', got 'blimp'` | Adapter support for lm-eval's legacy bare dataset paths (`blimp`, `truthful_qa`, `lambada`), or prepared offline data as above |
+| LM `humaneval`, `mbpp`, `careqa_open_perplexity` | `module 'huggingface_hub.hf_api' has no attribute 'HfFolder'` | LM Evaluation Harness image dependency pin |
+| LM `humaneval_instruct` | `Evaluation failed: 'humaneval_instruct'` (unregistered task name) | LM Evaluation Harness task/alias resolution |
+| LM `tinyTruthfulQA` | `index 1 is out of bounds for axis 0 with size 1` | LM Evaluation Harness metric that assumes more than the one sample this fixture requests |
+| LM `scrolls_qasper`, `cruxeval_output` | SCROLLS metric cache on a read-only `/test_data`; `confirm_run_unsafe_code` not forwarded | Adapter support (see the Qasper note in `offline/README.md`) |
+| LM `paloma_wikitext_103`, `leaderboard_gpqa`; LightEval `gpqa:diamond`; Inspect `gaia`, `hle` | gated HuggingFace dataset (`Idavidrein/gpqa`, `cais/hle`, …) | Dataset access plus an `hf-token` key in the model auth Secret |
+| Inspect `swe-bench`, `bigcodebench` | missing `swebench` optional dependency; no `docker` binary | Inspect adapter image |
+| Inspect `cybench`, `theagentcompany` | `ModuleNotFoundError: No module named 'inspect_cyber'` | Inspect adapter image |
+| Inspect `agentdojo` | `ImportError: email-validator is not installed` | Inspect adapter image |
+| Inspect `strong-reject` | `parameters.grader_model requires OPENAI_JUDGE_API_KEY in the adapter environment` | Inspect adapter image that routes `grader_model` through the judge Secret pair |
+| Inspect `gdm-stealth` | sample setup script cannot create `/home/agent` (permission denied) | Task-specific sandbox user or image |
+| Inspect `gdm-self-proliferation` | upstream `secrets.zip` returns HTTP 404 from GitHub | Network access and an inspect-evals release that ships the fixture |
+
+`cybergym` imports the same `inspect_cyber` module as `cybench` and
+`theagentcompany`, but the last full run only observed it `pending` until its
+fixture deadline, so its failure mode on this cluster is inferred from that
+module rather than reproduced. Re-check it once the queueing above is fixed.
+
+Two failures are recorded separately because they may be fixture-level rather
+than adapter, image, or dataset defects, and neither has been checked against the
+task list shipped in inspect-evals v0.26.0:
+
+| Benchmarks | Observed failure | Suspected cause |
+| --- | --- | --- |
+| Inspect `mbpp` | `Error: No inspect tasks were found at the specified paths` | No task resolves for this benchmark ID. Most `inspect/*` fixtures carry no `parameters.task` and rely on the adapter mapping the ID to an inspect-evals task, so compare with a fixture that pins one (`inspect/arc` pins `inspect_evals/arc_easy`) and pin the MBPP task name before treating this as an image defect. |
+| Inspect `bloom-sycophancy` | `ValueError: The specified dataset is empty (has no samples)` | The Bloom pipeline generated no scenarios. This fixture sets neither `behavior_dir` nor the `bloom_template` its catalog description names (`delusion_sycophancy`); pin the template first. |

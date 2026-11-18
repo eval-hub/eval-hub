@@ -8,7 +8,12 @@ test.mergeOptional(
       name: 'test-evaluation-job-for-guidellm-benchmark',
     } + if collectionId == '' then {
       benchmarks: [
-        test.benchmark('throughput', 'guidellm', { num_examples: 1 }),
+        test.benchmark('throughput', 'guidellm', {
+          num_examples: 10,
+          max_requests: 10,
+          max_seconds: 30,
+          rate: 1,
+        }),
       ],
       tags: ['benchmark-providers', 'guidellm'],
     } else {},

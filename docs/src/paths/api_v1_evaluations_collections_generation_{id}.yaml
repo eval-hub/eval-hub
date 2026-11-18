@@ -5,12 +5,30 @@ get:
   description: |
     Poll a dry-run generation. An authorized user in the same tenant may read
     the resource; a user in another tenant cannot. The request summary is
-    tenant-visible and contains normalized search options, never credentials.
+    tenant-visible and contains normalized search options and the generator
+    model connection (including its endpoint and optional Secret reference),
+    never Secret contents. If collection_name or collection_description was
+    supplied, the completed proposal preserves that exact normalized value.
     Only completed resources contain result. Its collection is a postable
     CollectionConfig, and result.yaml describes that same config. Catalog
     changes between generation and the later collection-create POST may make
     the proposal invalid. Generation results remain readable after the pod
     exits until configured retention expires or the resource is deleted.
+
+    While running, status.progress may report a trusted phase and the timestamp
+    of the last completed allowlisted runner action. This is durable activity
+    information, not a percentage, ETA, or heartbeat. The ordinary
+    /api/v1/evaluations/jobs list excludes generation workloads; retain the
+    POST Location URL to continue polling. Catalog validity at finalization does
+    not guarantee that a benchmark can execute with a particular evaluation
+    model, judge, dataset, tokenizer, adapter image, or disconnected setup.
+    If no visible benchmark is relevant to the goal and provider filter, the
+    generation fails with no_relevant_benchmarks rather than inventing a
+    benchmark or returning an empty collection.
+
+    A cancelled state is observable only if the backing workload's cancellation
+    is recorded while this resource is still retained. DELETE on this resource
+    removes it; after a successful DELETE, GET returns 404, not cancelled.
 
     Unknown IDs, backing jobs of a different workload type, expired resources,
     and jobs outside the caller's tenant return 404. In cluster mode, requests
@@ -46,6 +64,12 @@ get:
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                    auth:
+                      secret_ref: generator-credentials
+                  generation_effort: standard
                 status:
                   state: pending
             running:
@@ -56,15 +80,27 @@ get:
                   tenant: team-a
                   owner: user-a
                   created_at: '2026-10-29T12:00:00Z'
-                  updated_at: '2026-10-29T12:00:01Z'
+                  updated_at: '2026-10-29T12:00:15Z'
                 request:
                   evaluation_goal: Assess agent safety and tool-use risks
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                    auth:
+                      secret_ref: generator-credentials
+                  generation_effort: standard
                 status:
                   state: running
                   started_at: '2026-10-29T12:00:01Z'
+                  progress:
+                    phase: catalog_discovery
+                    updated_at: '2026-10-29T12:00:15Z'
+                    last_completed_action:
+                      name: search_benchmarks
+                      completed_at: '2026-10-29T12:00:15Z'
             completed:
               summary: Validated collection proposal with explanations
               value:
@@ -76,9 +112,17 @@ get:
                   updated_at: '2026-10-29T12:00:30Z'
                 request:
                   evaluation_goal: Assess agent safety and tool-use risks
+                  collection_name: Agent safety checks
+                  collection_description: Evaluate agent safety and tool-use risks.
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                    auth:
+                      secret_ref: generator-credentials
+                  generation_effort: standard
                 status:
                   state: completed
                   started_at: '2026-10-29T12:00:01Z'
@@ -86,12 +130,14 @@ get:
                 result:
                   collection:
                     name: Agent safety checks
+                    description: Evaluate agent safety and tool-use risks.
                     domains: [trustworthiness]
                     benchmarks:
                       - provider_id: inspect
                         id: inspect/agentharm
                   yaml: |
                     name: Agent safety checks
+                    description: Evaluate agent safety and tool-use risks.
                     domains:
                       - trustworthiness
                     benchmarks:
@@ -125,6 +171,12 @@ get:
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                    auth:
+                      secret_ref: generator-credentials
+                  generation_effort: standard
                 status:
                   state: failed
                   started_at: '2026-10-29T12:00:01Z'
@@ -147,6 +199,12 @@ get:
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                    auth:
+                      secret_ref: generator-credentials
+                  generation_effort: standard
                 status:
                   state: failed
                   started_at: '2026-10-29T12:00:01Z'
@@ -154,8 +212,32 @@ get:
                   error:
                     code: guardrails_unavailable
                     message: The evaluation goal could not be checked.
+            failed_no_relevant_benchmarks:
+              summary: No tenant-visible benchmarks match the requested evaluation goal
+              value:
+                resource:
+                  id: 550e8400-e29b-41d4-a716-446655440000
+                  tenant: team-a
+                  owner: user-a
+                  created_at: '2026-10-29T12:00:00Z'
+                  updated_at: '2026-10-29T12:00:02Z'
+                request:
+                  evaluation_goal: Evaluate quantum processor error correction
+                  max_benchmarks: 12
+                  strictness: moderate
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                  generation_effort: standard
+                status:
+                  state: failed
+                  started_at: '2026-10-29T12:00:01Z'
+                  completed_at: '2026-10-29T12:00:02Z'
+                  error:
+                    code: no_relevant_benchmarks
+                    message: No relevant benchmarks were found in the visible catalog.
             cancelled:
-              summary: Generation cancelled before completion
+              summary: Backing workload cancelled while its resource remains retained
               value:
                 resource:
                   id: 550e8400-e29b-41d4-a716-446655440000
@@ -168,6 +250,12 @@ get:
                   provider_filter: inspect
                   max_benchmarks: 12
                   strictness: moderate
+                  model:
+                    name: generator-model
+                    url: https://generator.example/v1
+                    auth:
+                      secret_ref: generator-credentials
+                  generation_effort: standard
                 status:
                   state: cancelled
                   started_at: '2026-10-29T12:00:01Z'
@@ -186,6 +274,8 @@ delete:
     Cancel an active generation and remove its retained resource. A delayed
     callback cannot recreate a deleted or cancelled result. A second DELETE
     or an unknown, wrong-type, expired, or cross-tenant ID returns 404.
+    Once DELETE succeeds, subsequent GET also returns 404; DELETE does not
+    leave a pollable cancelled resource.
     Any authorized user in the same tenant may delete the resource. Cluster
     requests require the existing authenticated/authorized X-Tenant context.
     Kubernetes Job TTL and API-result retention are separate.

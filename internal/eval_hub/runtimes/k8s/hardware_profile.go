@@ -8,6 +8,8 @@ import (
 
 	"github.com/eval-hub/eval-hub/pkg/api"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -233,6 +235,21 @@ func hardwareProfilesNamespace() (string, error) {
 		return ns, nil
 	}
 	return "", fmt.Errorf("%s is not set", hardwareProfilesNamespaceEnv)
+}
+
+// isHardwareProfileCRDUnavailable reports whether err means the cluster does not
+// serve the HardwareProfile API, so there is nothing to discover. Clusters without
+// the OpenDataHub operator (for example the kind dev stack) have no
+// HardwareProfile CRD and the API server answers 404 "the server could not find
+// the requested resource"; client-go surfaces that as a NotFound status error and
+// can also return meta.NoKindMatchError when the type is missing from discovery.
+// A list in a namespace that does not exist returns an empty list rather than a
+// 404, so a NotFound here identifies a missing API resource type.
+func isHardwareProfileCRDUnavailable(err error) bool {
+	if err == nil {
+		return false
+	}
+	return apierrors.IsNotFound(err) || meta.IsNoMatchError(err)
 }
 
 func applyHardwareProfileResources(cfg *jobConfig, profile *hardwareProfileResources) {

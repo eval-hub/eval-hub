@@ -17,7 +17,7 @@ func Requirements(catalogDescription string) string {
 }
 
 // CalibrationGuidelines is shared text, not a rule for clamping every metric.
-// RHAI-3804 will add deterministic, metric-aware validation and calibration.
+// Proposal validation and calibration apply deterministic, metric-aware rules.
 func CalibrationGuidelines(strictness string) string {
 	return strings.ReplaceAll(guidanceSection("calibration"), "{strictness}", strictness)
 }

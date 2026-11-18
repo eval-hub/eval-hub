@@ -6,5 +6,5 @@
     "num_examples": 1,
     "task": "inspect_evals/mmlu_0_shot"
   },
-  "timeout": "5m"
+  "timeout": "15m"
 }
