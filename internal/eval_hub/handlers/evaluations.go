@@ -418,6 +418,12 @@ func (h *Handlers) createPreparedEvaluationJob(
 				},
 				EvaluationJobConfig: *evaluation,
 			}
+			for index, benchmark := range benchmarks {
+				job.Status.Benchmarks = append(job.Status.Benchmarks, api.BenchmarkStatus{
+					ID: benchmark.ID, ProviderID: benchmark.ProviderID, BenchmarkIndex: index,
+					Status: api.StatePending,
+				})
+			}
 			if collection != nil {
 				return storage.WithContext(runtimeCtx).CreateEvaluationJobAndUpdateCollection(job)
 			}
@@ -714,8 +720,17 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	if status.BenchmarkStatusEvent != nil {
-		status.BenchmarkStatusEvent.StampRuntimeMessageOrigins()
+	if event := status.BenchmarkStatusEvent; event != nil {
+		event.StampRuntimeMessageOrigins()
+		// Resolve the omitted start time before storage work or transaction retries.
+		// Storage decides whether this transition may record the start time.
+		if event.Status == api.StateRunning && event.StartedAt == "" {
+			receivedAt := ctx.StartedAt
+			if receivedAt.IsZero() {
+				receivedAt = time.Now()
+			}
+			event.StartedAt = api.DateTimeToString(receivedAt.UTC())
+		}
 	}
 
 	ctx.Logger.Debug("Updating evaluation job", "id", evaluationJobID, "state", status.BenchmarkStatusEvent.Status, "status", status)
