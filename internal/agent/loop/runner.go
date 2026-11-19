@@ -67,7 +67,7 @@ func NewRunner(model ModelClient, registry ToolRegistry, config Config) (*Runner
 	if config.HardLimits == (HardLimits{}) {
 		config.HardLimits = DefaultHardLimits()
 	}
-	if err := validateHardLimits(config.HardLimits); err != nil || exceedsHardLimits(config.HardLimits, DefaultHardLimits()) {
+	if err := config.HardLimits.validate(); err != nil || config.HardLimits.exceeds(DefaultHardLimits()) {
 		return nil, errors.New("agent hard limits are invalid")
 	}
 	if config.MaxRetries < 0 || config.MaxRetries > 5 || config.RetryBackoff < 0 || config.RetryBackoff > 5*time.Second || config.MaxToolBatchSize <= 0 || config.MaxToolArgumentBytes <= 0 || config.MaxToolResultBytes <= 0 || config.MaxHistoryBytes <= 0 || config.MaxModelResponseBytes <= 0 || config.MaxActionSummaryBytes <= 0 {
@@ -90,7 +90,7 @@ func (r *Runner) Run(parent context.Context, input Input) (Result, error) {
 	if parent == nil || strings.TrimSpace(input.Model) == "" || strings.TrimSpace(input.SystemPrompt) == "" || strings.TrimSpace(input.UserPrompt) == "" {
 		return Result{}, errors.New("context, model, system prompt, and user prompt are required")
 	}
-	if err := validateBudget(input.Budget, r.config.HardLimits); err != nil {
+	if err := input.Budget.validateAgainst(r.config.HardLimits); err != nil {
 		return Result{}, ErrBudgetExceeded
 	}
 	ctx, cancel := context.WithTimeout(parent, input.Budget.MaxDuration)

@@ -91,10 +91,10 @@ func DefaultPresets() Presets {
 // Validate requires all supported presets and validates each against the
 // service's hard ceilings.
 func (p Presets) Validate(caps HardLimits) error {
-	if err := validateHardLimits(caps); err != nil {
+	if err := caps.validate(); err != nil {
 		return fmt.Errorf("invalid hard limits: %w", err)
 	}
-	if exceedsHardLimits(caps, DefaultHardLimits()) {
+	if caps.exceeds(DefaultHardLimits()) {
 		return errors.New("configured hard limits exceed the shipped service ceilings")
 	}
 	for _, effort := range orderedEfforts {
@@ -102,7 +102,7 @@ func (p Presets) Validate(caps HardLimits) error {
 		if !ok {
 			return fmt.Errorf("missing %q generation effort preset", effort)
 		}
-		if err := validateBudget(budget, caps); err != nil {
+		if err := budget.validateAgainst(caps); err != nil {
 			return fmt.Errorf("invalid %q generation effort preset: %w", effort, err)
 		}
 	}
@@ -131,18 +131,18 @@ func (p Presets) Resolve(effort Effort, caps HardLimits) (Budget, error) {
 	return budget, nil
 }
 
-func validateHardLimits(c HardLimits) error {
-	if c.MaxIterations <= 0 || c.MaxModelCalls <= 0 || c.MaxToolCalls <= 0 || c.MaxTotalTokens <= 0 || c.MaxOutputTokens <= 0 || c.MaxDuration <= 0 {
+func (l HardLimits) validate() error {
+	if l.MaxIterations <= 0 || l.MaxModelCalls <= 0 || l.MaxToolCalls <= 0 || l.MaxTotalTokens <= 0 || l.MaxOutputTokens <= 0 || l.MaxDuration <= 0 {
 		return errors.New("all hard limits must be positive")
 	}
 	return nil
 }
 
-func exceedsHardLimits(value, ceiling HardLimits) bool {
-	return value.MaxIterations > ceiling.MaxIterations || value.MaxModelCalls > ceiling.MaxModelCalls || value.MaxToolCalls > ceiling.MaxToolCalls || value.MaxTotalTokens > ceiling.MaxTotalTokens || value.MaxOutputTokens > ceiling.MaxOutputTokens || value.MaxDuration > ceiling.MaxDuration
+func (l HardLimits) exceeds(ceiling HardLimits) bool {
+	return l.MaxIterations > ceiling.MaxIterations || l.MaxModelCalls > ceiling.MaxModelCalls || l.MaxToolCalls > ceiling.MaxToolCalls || l.MaxTotalTokens > ceiling.MaxTotalTokens || l.MaxOutputTokens > ceiling.MaxOutputTokens || l.MaxDuration > ceiling.MaxDuration
 }
 
-func validateBudget(b Budget, c HardLimits) error {
+func (b Budget) validateAgainst(l HardLimits) error {
 	if b.MaxIterations <= 0 || b.MaxModelCalls <= 0 || b.MaxToolCalls <= 0 || b.MaxTotalTokens <= 0 || b.MaxOutputTokens <= 0 || b.MaxDuration <= 0 {
 		return errors.New("all budget values must be positive")
 	}
@@ -152,7 +152,7 @@ func validateBudget(b Budget, c HardLimits) error {
 	if int64(b.MaxOutputTokens) > b.MaxTotalTokens {
 		return errors.New("max_output_tokens cannot exceed max_total_tokens")
 	}
-	if b.MaxIterations > c.MaxIterations || b.MaxModelCalls > c.MaxModelCalls || b.MaxToolCalls > c.MaxToolCalls || b.MaxTotalTokens > c.MaxTotalTokens || b.MaxOutputTokens > c.MaxOutputTokens || b.MaxDuration > c.MaxDuration {
+	if b.MaxIterations > l.MaxIterations || b.MaxModelCalls > l.MaxModelCalls || b.MaxToolCalls > l.MaxToolCalls || b.MaxTotalTokens > l.MaxTotalTokens || b.MaxOutputTokens > l.MaxOutputTokens || b.MaxDuration > l.MaxDuration {
 		return errors.New("budget exceeds a service hard limit")
 	}
 	return nil
