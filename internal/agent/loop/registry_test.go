@@ -45,6 +45,11 @@ func TestNewRegistryValidatesDefinitions(t *testing.T) {
 			v.Definition.Function.Parameters = json.RawMessage(`{"type":"object","properties":{"value":{"$ref":"https://example.invalid/schema.json"}}}`)
 			return v
 		}()}},
+		{name: "external schema reference in dependency", tools: []Tool{func() Tool {
+			v := testTool(handler)
+			v.Definition.Function.Parameters = json.RawMessage(`{"type":"object","dependencies":{"value":{"$ref":"https://example.invalid/schema.json"}}}`)
+			return v
+		}()}},
 		{name: "absolute identifier with local reference", tools: []Tool{func() Tool {
 			v := testTool(handler)
 			v.Definition.Function.Parameters = json.RawMessage(`{"type":"object","id":"https://example.invalid/tool.json#scope","definitions":{"value":{"type":"string"}},"properties":{"value":{"$ref":"#/definitions/value"}}}`)
@@ -160,6 +165,7 @@ func TestHasExternalSchemaReferenceAllowsLocalRefsAndRejectsMalformedRefs(t *tes
 	for _, raw := range []json.RawMessage{
 		json.RawMessage(`{"type":"object","properties":{"a":{"$ref":12}}}`),
 		json.RawMessage(`{"type":"object","properties":{"a":{"$ref":"schema.json"}}}`),
+		json.RawMessage(`{"type":"object","dependencies":{"value":{"$ref":"https://example.invalid/schema.json"}}}`),
 		json.RawMessage(`{"type":"object","$id":"https://example.invalid/tool.json#scope","properties":{"a":{"$ref":"#/definitions/a"}}}`),
 		json.RawMessage(`{`),
 	} {

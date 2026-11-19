@@ -214,7 +214,7 @@ func (r *Runner) canFitFinalTurnAfterTools(input Input, iteration int, definitio
 		input.Budget.MaxToolCalls-result.ToolCalls-len(calls),
 		remainingTokens,
 	)
-	maxResult := strings.Repeat("x", r.config.MaxToolResultBytes)
+	maxResult := worstCaseToolResult(r.config.MaxToolResultBytes)
 	for _, call := range calls {
 		projectedMessages = append(projectedMessages, Message{
 			Role: RoleTool, Name: call.Function.Name, ToolCallID: call.ID, Content: maxResult,
@@ -227,6 +227,17 @@ func (r *Runner) canFitFinalTurnAfterTools(input Input, iteration int, definitio
 	// completeTurn requires a non-zero output allowance after the prompt fits.
 	const minimumOutputAllowance = int64(1)
 	return promptEstimate <= remainingTokens-minimumOutputAllowance
+}
+
+// worstCaseToolResult returns valid JSON at the configured byte limit whose
+// contents expand maximally when embedded as a JSON string. encoding/json
+// HTML-escapes each '<' to six bytes, so budgeting this payload prevents a
+// handler result from consuming more prompt budget than the preflight reserved.
+func worstCaseToolResult(maxBytes int) string {
+	if maxBytes < 2 {
+		return "0"
+	}
+	return `"` + strings.Repeat("<", maxBytes-2) + `"`
 }
 
 type retryable interface {

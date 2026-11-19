@@ -139,18 +139,21 @@ func hasExternalSchemaReference(raw json.RawMessage) bool {
 			}
 			for key, child := range typed {
 				switch key {
-				case "properties", "patternProperties", "definitions", "$defs":
+				case "properties", "patternProperties", "definitions", "$defs", "dependencies":
 					// These objects map arbitrary property/definition names to
 					// schemas. Do not interpret a property literally named "id"
 					// as the schema identifier keyword.
 					if schemas, ok := child.(map[string]any); ok {
 						for _, schema := range schemas {
+							// A dependency can also be a list of property names; those
+							// strings are harmless to visit and schema-valued
+							// dependencies are traversed recursively.
 							if visitSchema(schema) {
 								return true
 							}
 						}
 					}
-				case "items", "additionalItems", "additionalProperties", "not", "allOf", "anyOf", "oneOf", "contains", "propertyNames", "if", "then", "else", "dependencies":
+				case "items", "additionalItems", "additionalProperties", "not", "allOf", "anyOf", "oneOf", "contains", "propertyNames", "if", "then", "else":
 					if visitSchema(child) {
 						return true
 					}

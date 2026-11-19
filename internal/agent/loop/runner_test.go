@@ -39,10 +39,12 @@ func (retryError) Retryable() bool { return true }
 
 func testBudget() Budget {
 	return Budget{
-		MaxIterations:   4,
-		MaxModelCalls:   5,
-		MaxToolCalls:    8,
-		MaxTotalTokens:  100_000,
+		MaxIterations: 4,
+		MaxModelCalls: 5,
+		MaxToolCalls:  8,
+		// Match the default high-effort preset so tests that exercise registered
+		// tools can reserve their full worst-case escaped result size.
+		MaxTotalTokens:  524_288,
 		MaxOutputTokens: 2_048,
 		Deadline:        time.Minute,
 	}
@@ -234,6 +236,26 @@ func TestRunnerDoesNotDispatchWhenToolResultsLeaveNoFinalTokenBudget(t *testing.
 	runner := newTestRunner(t, model, newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) {
 		executions++
 		return json.RawMessage(`null`), nil
+	}), config)
+	input := testInput()
+	input.Budget = budget
+	_, err := runner.Run(context.Background(), input)
+	if !errors.Is(err, ErrBudgetExceeded) || executions != 0 || len(model.requests) != 1 {
+		t.Fatalf("Run() error=%v executions=%d model calls=%d, want budget rejection before tool dispatch", err, executions, len(model.requests))
+	}
+}
+
+func TestRunnerDoesNotDispatchWhenEscapedToolResultExceedsTokenBudget(t *testing.T) {
+	executions := 0
+	budget := testBudget()
+	budget.MaxTotalTokens = 10_000
+	budget.MaxOutputTokens = 512
+	config := DefaultConfig()
+	config.MaxToolResultBytes = 4_096
+	model := &fakeModel{responses: []ModelResponse{callResponse(validCall("c1", "list_catalog"))}}
+	runner := newTestRunner(t, model, newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) {
+		executions++
+		return json.RawMessage(worstCaseToolResult(config.MaxToolResultBytes)), nil
 	}), config)
 	input := testInput()
 	input.Budget = budget
