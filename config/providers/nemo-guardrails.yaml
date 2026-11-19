@@ -298,6 +298,10 @@ benchmarks:
         block_labels: ["injection"]
         pass_labels: ["safe"]
 parameters:
+  - name: save_sample_results
+    type: boolean
+    default: false
+    description: Opt in to classification per-sample CI artifacts; persistence failures fail the evaluation.
   - name: nemo_config
     type: string
     default: null
