@@ -73,6 +73,16 @@ func NewClient(config Config) (*Client, error) {
 		httpClient = &http.Client{}
 	}
 	clientCopy := *httpClient
+	clientCopy.Jar = nil
+	transport := clientCopy.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	if standardTransport, ok := transport.(*http.Transport); ok {
+		transportCopy := standardTransport.Clone()
+		transportCopy.Proxy = nil
+		clientCopy.Transport = transportCopy
+	}
 	if clientCopy.Timeout <= 0 {
 		clientCopy.Timeout = config.RequestTimeout
 	}
@@ -129,7 +139,10 @@ func (c *Client) Complete(ctx context.Context, request loop.ModelRequest) (loop.
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, c.maxResponseBytes+1))
 	if err != nil {
-		return loop.ModelResponse{}, ErrInvalidResponse
+		if ctx.Err() != nil {
+			return loop.ModelResponse{}, ctx.Err()
+		}
+		return loop.ModelResponse{}, &TransportError{}
 	}
 	if int64(len(data)) > c.maxResponseBytes {
 		return loop.ModelResponse{}, ErrResponseTooLarge
@@ -243,13 +256,25 @@ func parseBaseURL(raw string) (*url.URL, error) {
 	}
 	host := strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
 	if host == "localhost" {
+		u.Host = canonicalHost(host, u.Port())
 		return u, nil
 	}
 	ip := net.ParseIP(host)
 	if ip == nil || !ip.IsLoopback() {
 		return nil, ErrInvalidEndpoint
 	}
+	u.Host = canonicalHost(ip.String(), u.Port())
 	return u, nil
+}
+
+func canonicalHost(host, port string) string {
+	if port != "" {
+		return net.JoinHostPort(host, port)
+	}
+	if strings.Contains(host, ":") {
+		return "[" + host + "]"
+	}
+	return host
 }
 
 func completionsURL(base url.URL) url.URL {

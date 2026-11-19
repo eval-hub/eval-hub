@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
@@ -108,9 +109,10 @@ func validateArguments(schema json.RawMessage, raw string, maxBytes int) error {
 	return nil
 }
 
-// hasExternalSchemaReference rejects schema references that could cause the
-// validator to resolve network resources. Tool schemas are trusted and fixed;
-// local fragment references remain useful and do not add an outbound target.
+// hasExternalSchemaReference rejects schema references or identifier scopes
+// that could cause the validator to load another document. Tool schemas are
+// trusted and fixed; fragment references remain useful when no identifier
+// changes their base document.
 func hasExternalSchemaReference(raw json.RawMessage) bool {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
@@ -118,31 +120,61 @@ func hasExternalSchemaReference(raw json.RawMessage) bool {
 	if decoder.Decode(&value) != nil {
 		return true
 	}
-	var visit func(any) bool
-	visit = func(node any) bool {
+	var visitSchema func(any) bool
+	visitSchema = func(node any) bool {
 		switch typed := node.(type) {
 		case map[string]any:
 			for key, child := range typed {
+				if key == "id" || key == "$id" {
+					if identifierCanLoadExternalDocument(child) {
+						return true
+					}
+				}
 				if key == "$ref" {
 					reference, ok := child.(string)
 					if !ok || !strings.HasPrefix(reference, "#") {
 						return true
 					}
 				}
-				if visit(child) {
-					return true
+			}
+			for key, child := range typed {
+				switch key {
+				case "properties", "patternProperties", "definitions", "$defs":
+					// These objects map arbitrary property/definition names to
+					// schemas. Do not interpret a property literally named "id"
+					// as the schema identifier keyword.
+					if schemas, ok := child.(map[string]any); ok {
+						for _, schema := range schemas {
+							if visitSchema(schema) {
+								return true
+							}
+						}
+					}
+				case "items", "additionalItems", "additionalProperties", "not", "allOf", "anyOf", "oneOf", "contains", "propertyNames", "if", "then", "else", "dependencies":
+					if visitSchema(child) {
+						return true
+					}
 				}
 			}
 		case []any:
 			for _, child := range typed {
-				if visit(child) {
+				if visitSchema(child) {
 					return true
 				}
 			}
 		}
 		return false
 	}
-	return visit(value)
+	return visitSchema(value)
+}
+
+func identifierCanLoadExternalDocument(value any) bool {
+	identifier, ok := value.(string)
+	if !ok {
+		return true
+	}
+	reference, err := url.Parse(identifier)
+	return err != nil || reference.Scheme != "" || reference.Host != "" || reference.Path != "" || reference.RawQuery != "" || reference.Opaque != ""
 }
 
 // Execute runs a trusted handler and returns only valid bounded JSON to the

@@ -154,12 +154,15 @@ func (r *Runner) Run(parent context.Context, input Input) (Result, error) {
 		if err != nil {
 			return Result{}, ErrInvalidModelResponse
 		}
-		// A tool batch is not dispatched unless the budget still permits at least
-		// one later model call to produce the required final response.
+		// A tool batch is not dispatched unless its maximum accepted results still
+		// leave room for a later model call to produce the required final response.
 		if result.ModelCalls >= input.Budget.MaxModelCalls || iteration+1 >= input.Budget.MaxIterations || result.AccountedTokens >= input.Budget.MaxTotalTokens {
 			return Result{}, ErrBudgetExceeded
 		}
 		if result.ToolCalls > input.Budget.MaxToolCalls-len(assistant.ToolCalls) {
+			return Result{}, ErrBudgetExceeded
+		}
+		if !r.canFitFinalTurnAfterTools(input, iteration, definitions, messages, assistant.ToolCalls, result) {
 			return Result{}, ErrBudgetExceeded
 		}
 		for i, call := range assistant.ToolCalls {
@@ -197,6 +200,33 @@ func (r *Runner) Run(parent context.Context, input Input) (Result, error) {
 		}
 	}
 	return Result{}, ErrBudgetExceeded
+}
+
+func (r *Runner) canFitFinalTurnAfterTools(input Input, iteration int, definitions []ToolDefinition, messages []Message, calls []ToolCall, result Result) bool {
+	remainingTokens := input.Budget.MaxTotalTokens - result.AccountedTokens
+	if remainingTokens <= 0 || len(messages) < 2 {
+		return false
+	}
+	projectedMessages := cloneMessages(messages)
+	projectedMessages[1].Content = budgetNotice(
+		input.Budget.MaxModelCalls-result.ModelCalls,
+		input.Budget.MaxIterations-iteration-1,
+		input.Budget.MaxToolCalls-result.ToolCalls-len(calls),
+		remainingTokens,
+	)
+	maxResult := strings.Repeat("x", r.config.MaxToolResultBytes)
+	for _, call := range calls {
+		projectedMessages = append(projectedMessages, Message{
+			Role: RoleTool, Name: call.Function.Name, ToolCallID: call.ID, Content: maxResult,
+		})
+	}
+	promptEstimate, err := promptTokenEstimate(projectedMessages, definitions)
+	if err != nil {
+		return false
+	}
+	// completeTurn requires a non-zero output allowance after the prompt fits.
+	const minimumOutputAllowance = int64(1)
+	return promptEstimate <= remainingTokens-minimumOutputAllowance
 }
 
 type retryable interface {

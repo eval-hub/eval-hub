@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -94,6 +96,66 @@ func TestClientRejectsNonLoopbackAndMalformedEndpoints(t *testing.T) {
 	}
 	if _, err := NewClient(Config{BaseURL: "http://[::1]:8080/v1"}); err != nil {
 		t.Fatalf("IPv6 loopback rejected: %v", err)
+	}
+	client := testClient(t, "http://LOCALHOST.:8082/v1", roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if got, want := r.URL.Host, "localhost:8082"; got != want {
+			t.Errorf("canonical endpoint host = %q, want %q", got, want)
+		}
+		return testResponse(r, http.StatusOK, `{"choices":[{"message":{"role":"assistant","content":"ok"}}]}`), nil
+	}))
+	if _, err := client.Complete(context.Background(), modelRequest()); err != nil {
+		t.Fatalf("Complete() with localhost alias: %v", err)
+	}
+}
+
+func TestClientDoesNotUseCookiesOrEnvironmentProxy(t *testing.T) {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint, err := url.Parse("http://localhost:8082/v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	jar.SetCookies(endpoint, []*http.Cookie{{Name: "session", Value: "private"}})
+	t.Setenv("HTTP_PROXY", "http://proxy.example:3128")
+	t.Setenv("NO_PROXY", "")
+	var cookieHeader string
+	originalClient := &http.Client{
+		Jar: jar,
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			cookieHeader = r.Header.Get("Cookie")
+			return testResponse(r, http.StatusOK, `{"choices":[{"message":{"role":"assistant","content":"ok"}}]}`), nil
+		}),
+	}
+	client, err := NewClient(Config{BaseURL: endpoint.String(), HTTPClient: originalClient})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Complete(context.Background(), modelRequest()); err != nil {
+		t.Fatalf("Complete() with cookie jar: %v", err)
+	}
+	if cookieHeader != "" {
+		t.Fatalf("request Cookie header = %q, want empty", cookieHeader)
+	}
+	if originalClient.Jar != jar {
+		t.Fatal("NewClient() mutated the supplied HTTP client's cookie jar")
+	}
+
+	originalTransport := &http.Transport{Proxy: http.ProxyFromEnvironment}
+	client, err = NewClient(Config{BaseURL: endpoint.String(), HTTPClient: &http.Client{Transport: originalTransport}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport, ok := client.httpClient.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("client transport = %T, want *http.Transport", client.httpClient.Transport)
+	}
+	if transport.Proxy != nil {
+		t.Fatal("client transport still uses an environment proxy")
+	}
+	if originalTransport.Proxy == nil {
+		t.Fatal("NewClient() mutated the supplied transport")
 	}
 }
 
@@ -228,15 +290,32 @@ func TestClientSanitizesTransportErrorsAndPropagatesCancellation(t *testing.T) {
 	})
 }
 
-func TestClientRejectsResponseReadErrors(t *testing.T) {
-	client := testClient(t, "http://127.0.0.1:8080", roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		response := testResponse(r, http.StatusOK, "")
-		response.Body = failingReadCloser{}
-		return response, nil
-	}))
-	if _, err := client.Complete(context.Background(), modelRequest()); !errors.Is(err, ErrInvalidResponse) {
-		t.Fatalf("Complete() error = %v, want invalid response", err)
-	}
+func TestClientClassifiesResponseReadErrors(t *testing.T) {
+	t.Run("transport failure", func(t *testing.T) {
+		client := testClient(t, "http://127.0.0.1:8080", roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			response := testResponse(r, http.StatusOK, "")
+			response.Body = failingReadCloser{}
+			return response, nil
+		}))
+		_, err := client.Complete(context.Background(), modelRequest())
+		var transportErr *TransportError
+		if !errors.As(err, &transportErr) || !transportErr.Retryable() || errors.Is(err, ErrInvalidResponse) {
+			t.Fatalf("Complete() error = %v, want retryable transport error", err)
+		}
+	})
+
+	t.Run("canceled while reading", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		client := testClient(t, "http://127.0.0.1:8080", roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			response := testResponse(r, http.StatusOK, "")
+			response.Body = cancelingReadCloser{cancel: cancel}
+			return response, nil
+		}))
+		_, err := client.Complete(ctx, modelRequest())
+		if !errors.Is(err, context.Canceled) || errors.Is(err, ErrTransport) {
+			t.Fatalf("Complete() error = %v, want context cancellation", err)
+		}
+	})
 }
 
 func TestDecodeResponseIncludesToolCallsAndAllUsageFields(t *testing.T) {
@@ -296,6 +375,14 @@ type failingReadCloser struct{}
 
 func (failingReadCloser) Read([]byte) (int, error) { return 0, errors.New("private read failure") }
 func (failingReadCloser) Close() error             { return nil }
+
+type cancelingReadCloser struct{ cancel context.CancelFunc }
+
+func (r cancelingReadCloser) Read([]byte) (int, error) {
+	r.cancel()
+	return 0, errors.New("private read failure")
+}
+func (cancelingReadCloser) Close() error { return nil }
 
 func modelRequest() loop.ModelRequest {
 	return loop.ModelRequest{Model: "m", Messages: []loop.Message{{Role: loop.RoleUser, Content: "x"}}, MaxOutputTokens: 10}

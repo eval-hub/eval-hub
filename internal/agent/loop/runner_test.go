@@ -223,6 +223,26 @@ func TestRunnerDoesNotDispatchWhenNoFinalTurnRemains(t *testing.T) {
 	}
 }
 
+func TestRunnerDoesNotDispatchWhenToolResultsLeaveNoFinalTokenBudget(t *testing.T) {
+	executions := 0
+	budget := testBudget()
+	budget.MaxTotalTokens = 3_000
+	budget.MaxOutputTokens = 512
+	model := &fakeModel{responses: []ModelResponse{callResponse(validCall("c1", "list_catalog"))}}
+	config := DefaultConfig()
+	config.MaxToolResultBytes = 4_096
+	runner := newTestRunner(t, model, newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) {
+		executions++
+		return json.RawMessage(`null`), nil
+	}), config)
+	input := testInput()
+	input.Budget = budget
+	_, err := runner.Run(context.Background(), input)
+	if !errors.Is(err, ErrBudgetExceeded) || executions != 0 || len(model.requests) != 1 {
+		t.Fatalf("Run() error=%v executions=%d model calls=%d, want budget rejection before tool dispatch", err, executions, len(model.requests))
+	}
+}
+
 func TestRunnerCanReturnFinalAtLastAllowedCall(t *testing.T) {
 	budget := testBudget()
 	budget.MaxModelCalls = 1

@@ -22,6 +22,11 @@ func TestNewRegistryValidatesDefinitions(t *testing.T) {
 	if _, err := NewRegistry(testTool(handler)); err != nil {
 		t.Fatalf("NewRegistry() error = %v", err)
 	}
+	localReference := testTool(handler)
+	localReference.Definition.Function.Parameters = json.RawMessage(`{"type":"object","id":"#scope","definitions":{"value":{"type":"string"}},"properties":{"value":{"$ref":"#/definitions/value"}}}`)
+	if _, err := NewRegistry(localReference); err != nil {
+		t.Fatalf("NewRegistry() rejected a fragment-only identifier with an in-document reference: %v", err)
+	}
 	cases := []struct {
 		name  string
 		tools []Tool
@@ -38,6 +43,11 @@ func TestNewRegistryValidatesDefinitions(t *testing.T) {
 		{name: "external schema reference", tools: []Tool{func() Tool {
 			v := testTool(handler)
 			v.Definition.Function.Parameters = json.RawMessage(`{"type":"object","properties":{"value":{"$ref":"https://example.invalid/schema.json"}}}`)
+			return v
+		}()}},
+		{name: "absolute identifier with local reference", tools: []Tool{func() Tool {
+			v := testTool(handler)
+			v.Definition.Function.Parameters = json.RawMessage(`{"type":"object","id":"https://example.invalid/tool.json#scope","definitions":{"value":{"type":"string"}},"properties":{"value":{"$ref":"#/definitions/value"}}}`)
 			return v
 		}()}},
 		{name: "long progress label", tools: []Tool{func() Tool { v := testTool(handler); v.ProgressLabel = string(make([]byte, 81)); return v }()}},
@@ -144,12 +154,13 @@ func TestNewRegistryRejectsInvalidTypeSchemaAndProgressLabel(t *testing.T) {
 }
 
 func TestHasExternalSchemaReferenceAllowsLocalRefsAndRejectsMalformedRefs(t *testing.T) {
-	if hasExternalSchemaReference(json.RawMessage(`{"type":"object","properties":{"a":{"$ref":"#/definitions/a"}}}`)) {
+	if hasExternalSchemaReference(json.RawMessage(`{"type":"object","id":"#scope","properties":{"id":{"type":"string"},"a":{"$ref":"#/definitions/a"}}}`)) {
 		t.Fatal("local reference was rejected")
 	}
 	for _, raw := range []json.RawMessage{
 		json.RawMessage(`{"type":"object","properties":{"a":{"$ref":12}}}`),
 		json.RawMessage(`{"type":"object","properties":{"a":{"$ref":"schema.json"}}}`),
+		json.RawMessage(`{"type":"object","$id":"https://example.invalid/tool.json#scope","properties":{"a":{"$ref":"#/definitions/a"}}}`),
 		json.RawMessage(`{`),
 	} {
 		if !hasExternalSchemaReference(raw) {
