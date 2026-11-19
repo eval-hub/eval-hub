@@ -13,7 +13,7 @@ import (
 type ModelRequest struct {
 	Model           string
 	Messages        []Message
-	Tools           []ToolDefinition
+	Tools           ToolDefinitions
 	MaxOutputTokens int
 	ReasoningEffort string
 }
@@ -105,7 +105,7 @@ type Tool struct {
 
 // ToolRegistry exposes definitions and trusted handlers to the loop.
 type ToolRegistry interface {
-	Definitions() []ToolDefinition
+	Definitions() ToolDefinitions
 	Lookup(string) (Tool, bool)
 }
 

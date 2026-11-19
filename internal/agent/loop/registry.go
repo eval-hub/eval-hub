@@ -94,11 +94,11 @@ func NewRegistry(tools ...Tool) (*Registry, error) {
 }
 
 // Definitions returns detached copies so callers cannot mutate the registry.
-func (r *Registry) Definitions() []ToolDefinition {
+func (r *Registry) Definitions() ToolDefinitions {
 	if r == nil {
 		return nil
 	}
-	out := make([]ToolDefinition, 0, len(r.tools))
+	out := make(ToolDefinitions, 0, len(r.tools))
 	for _, tool := range r.tools {
 		definition := tool.Definition
 		definition.Function.Parameters = bytes.Clone(definition.Function.Parameters)

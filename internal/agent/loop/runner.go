@@ -97,7 +97,7 @@ func (r *Runner) Run(parent context.Context, input Input) (Result, error) {
 	defer cancel()
 
 	definitions := r.registry.Definitions()
-	if err := ToolDefinitions(definitions).validate(); err != nil {
+	if err := definitions.validate(); err != nil {
 		return Result{}, ErrToolRegistryInvalid
 	}
 	messages := []Message{
@@ -202,7 +202,7 @@ func (r *Runner) Run(parent context.Context, input Input) (Result, error) {
 	return Result{}, ErrBudgetExceeded
 }
 
-func (r *Runner) canFitFinalTurnAfterTools(input Input, iteration int, definitions []ToolDefinition, messages []Message, calls []ToolCall, result Result) bool {
+func (r *Runner) canFitFinalTurnAfterTools(input Input, iteration int, definitions ToolDefinitions, messages []Message, calls []ToolCall, result Result) bool {
 	remainingTokens := input.Budget.MaxTotalTokens - result.AccountedTokens
 	if remainingTokens <= 0 || len(messages) < 2 {
 		return false
@@ -256,7 +256,7 @@ type retryable interface {
 	Retryable() bool
 }
 
-func (r *Runner) completeTurn(ctx context.Context, input Input, iteration int, definitions []ToolDefinition, messages []Message, result *Result) (ModelResponse, int64, error) {
+func (r *Runner) completeTurn(ctx context.Context, input Input, iteration int, definitions ToolDefinitions, messages []Message, result *Result) (ModelResponse, int64, error) {
 	for attempt := 0; ; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return ModelResponse{}, 0, err
@@ -399,10 +399,10 @@ func (response ModelResponse) validate(maxBytes, maxBatch int) error {
 	return nil
 }
 
-func promptTokenEstimate(messages []Message, tools []ToolDefinition) (int64, error) {
+func promptTokenEstimate(messages []Message, tools ToolDefinitions) (int64, error) {
 	wire := struct {
-		Messages []Message        `json:"messages"`
-		Tools    []ToolDefinition `json:"tools,omitempty"`
+		Messages []Message       `json:"messages"`
+		Tools    ToolDefinitions `json:"tools,omitempty"`
 	}{messages, tools}
 	data, err := json.Marshal(wire)
 	if err != nil {
@@ -466,8 +466,8 @@ func cloneMessages(in []Message) []Message {
 	return out
 }
 
-func cloneDefinitions(in []ToolDefinition) []ToolDefinition {
-	out := make([]ToolDefinition, len(in))
+func cloneDefinitions(in ToolDefinitions) ToolDefinitions {
+	out := make(ToolDefinitions, len(in))
 	copy(out, in)
 	for i := range out {
 		out[i].Function.Parameters = append([]byte(nil), in[i].Function.Parameters...)

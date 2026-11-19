@@ -454,10 +454,10 @@ func TestAccountedUsageConservativelyUsesReportedOrEstimatedCounts(t *testing.T)
 }
 
 type registryStub struct {
-	definitions []ToolDefinition
+	definitions ToolDefinitions
 }
 
-func (r registryStub) Definitions() []ToolDefinition { return r.definitions }
+func (r registryStub) Definitions() ToolDefinitions { return r.definitions }
 
 func (r registryStub) Lookup(name string) (Tool, bool) {
 	for _, definition := range r.definitions {
@@ -469,7 +469,7 @@ func (r registryStub) Lookup(name string) (Tool, bool) {
 }
 
 func TestNewRunnerRejectsInvalidDependenciesConfigurationAndRegistrySize(t *testing.T) {
-	validRegistry := registryStub{definitions: []ToolDefinition{testTool(func(context.Context, json.RawMessage) (json.RawMessage, error) {
+	validRegistry := registryStub{definitions: ToolDefinitions{testTool(func(context.Context, json.RawMessage) (json.RawMessage, error) {
 		return json.RawMessage(`null`), nil
 	}).Definition}}
 	validModel := &fakeModel{}
@@ -506,7 +506,7 @@ func TestNewRunnerRejectsInvalidDependenciesConfigurationAndRegistrySize(t *test
 	}
 
 	config := DefaultConfig()
-	tooMany := make([]ToolDefinition, config.MaxToolBatchSize*16+1)
+	tooMany := make(ToolDefinitions, config.MaxToolBatchSize*16+1)
 	for i := range tooMany {
 		tooMany[i] = validRegistry.definitions[0]
 	}
@@ -552,37 +552,37 @@ func TestValidateDefinitionsRejectsMalformedAndUnsafeTools(t *testing.T) {
 	base := testTool(func(context.Context, json.RawMessage) (json.RawMessage, error) { return json.RawMessage(`null`), nil }).Definition
 	tests := []struct {
 		name        string
-		definitions []ToolDefinition
+		definitions ToolDefinitions
 	}{
-		{name: "wrong type", definitions: []ToolDefinition{func() ToolDefinition { d := base; d.Type = "other"; return d }()}},
-		{name: "invalid name", definitions: []ToolDefinition{func() ToolDefinition { d := base; d.Function.Name = "bad name"; return d }()}},
-		{name: "missing schema", definitions: []ToolDefinition{func() ToolDefinition { d := base; d.Function.Parameters = nil; return d }()}},
-		{name: "malformed schema", definitions: []ToolDefinition{func() ToolDefinition { d := base; d.Function.Parameters = json.RawMessage(`{`); return d }()}},
-		{name: "non-object schema", definitions: []ToolDefinition{func() ToolDefinition {
+		{name: "wrong type", definitions: ToolDefinitions{func() ToolDefinition { d := base; d.Type = "other"; return d }()}},
+		{name: "invalid name", definitions: ToolDefinitions{func() ToolDefinition { d := base; d.Function.Name = "bad name"; return d }()}},
+		{name: "missing schema", definitions: ToolDefinitions{func() ToolDefinition { d := base; d.Function.Parameters = nil; return d }()}},
+		{name: "malformed schema", definitions: ToolDefinitions{func() ToolDefinition { d := base; d.Function.Parameters = json.RawMessage(`{`); return d }()}},
+		{name: "non-object schema", definitions: ToolDefinitions{func() ToolDefinition {
 			d := base
 			d.Function.Parameters = json.RawMessage(`{"type":"string"}`)
 			return d
 		}()}},
-		{name: "invalid schema keyword", definitions: []ToolDefinition{func() ToolDefinition {
+		{name: "invalid schema keyword", definitions: ToolDefinitions{func() ToolDefinition {
 			d := base
 			d.Function.Parameters = json.RawMessage(`{"type":"object","properties":{"v":{"type":"not-a-json-type"}}}`)
 			return d
 		}()}},
-		{name: "external schema ref", definitions: []ToolDefinition{func() ToolDefinition {
+		{name: "external schema ref", definitions: ToolDefinitions{func() ToolDefinition {
 			d := base
 			d.Function.Parameters = json.RawMessage(`{"type":"object","properties":{"v":{"$ref":"https://example.invalid/schema"}}}`)
 			return d
 		}()}},
-		{name: "external schema ref reached through local reference", definitions: []ToolDefinition{func() ToolDefinition {
+		{name: "external schema ref reached through local reference", definitions: ToolDefinitions{func() ToolDefinition {
 			d := base
 			d.Function.Parameters = json.RawMessage(`{"type":"object","x":{"$ref":"https://example.invalid/schema"},"properties":{"v":{"$ref":"#/x"}}}`)
 			return d
 		}()}},
-		{name: "duplicate names", definitions: []ToolDefinition{base, base}},
+		{name: "duplicate names", definitions: ToolDefinitions{base, base}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := ToolDefinitions(tc.definitions).validate(); !errors.Is(err, ErrToolRegistryInvalid) {
+			if err := tc.definitions.validate(); !errors.Is(err, ErrToolRegistryInvalid) {
 				t.Fatalf("ToolDefinitions.validate() error = %v", err)
 			}
 		})
@@ -596,7 +596,7 @@ func TestRunnerRejectsInvalidRegistryBeforeCallingModel(t *testing.T) {
 	model := &fakeModel{}
 	definitions := testTool(func(context.Context, json.RawMessage) (json.RawMessage, error) { return nil, nil }).Definition
 	definitions.Function.Parameters = json.RawMessage(`{"type":"object","properties":{"v":{"$ref":"https://example.invalid/schema"}}}`)
-	runner := newTestRunner(t, model, registryStub{definitions: []ToolDefinition{definitions}}, DefaultConfig())
+	runner := newTestRunner(t, model, registryStub{definitions: ToolDefinitions{definitions}}, DefaultConfig())
 	if _, err := runner.Run(context.Background(), testInput()); !errors.Is(err, ErrToolRegistryInvalid) {
 		t.Fatalf("Run() error = %v, want invalid registry", err)
 	}
@@ -755,7 +755,7 @@ func TestRunnerBoundsProgressSummary(t *testing.T) {
 }
 
 func TestTokenAccountingAndWaitHelpersRejectInvalidValues(t *testing.T) {
-	if _, err := promptTokenEstimate(nil, []ToolDefinition{{Function: FunctionMetadata{Parameters: json.RawMessage("{")}}}); err == nil {
+	if _, err := promptTokenEstimate(nil, ToolDefinitions{{Function: FunctionMetadata{Parameters: json.RawMessage("{")}}}); err == nil {
 		t.Fatal("promptTokenEstimate() accepted invalid raw JSON")
 	}
 	if _, err := accountedUsage(-1, 1, nil); !errors.Is(err, ErrInvalidModelResponse) {
