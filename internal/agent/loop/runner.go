@@ -358,7 +358,7 @@ func validateDefinitions(definitions []ToolDefinition) error {
 		if hasExternalSchemaReference(d.Function.Parameters) {
 			return ErrToolRegistryInvalid
 		}
-		if _, err := gojsonschema.NewSchema(gojsonschema.NewBytesLoader(d.Function.Parameters)); err != nil {
+		if _, err := gojsonschema.NewSchema(newLocalOnlySchemaLoader(d.Function.Parameters)); err != nil {
 			return ErrToolRegistryInvalid
 		}
 		if _, ok := seen[name]; ok {
