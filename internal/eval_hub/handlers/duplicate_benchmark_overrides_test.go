@@ -234,6 +234,7 @@ func TestHandleCreateEvaluation_RepeatedBenchmarkOverridesReachRuntime(t *testin
 			if storage.createdJob == nil {
 				t.Fatal("expected a persisted job")
 			}
+			assertInitialBenchmarkStatuses(t, storage.createdJob, want)
 			assertBenchmarkJSON(t, "persisted overrides", storage.createdJob.Collection.Benchmarks, overridesBefore)
 			if runtime.runCalls != 1 {
 				t.Fatalf("runtime calls = %d, want 1", runtime.runCalls)

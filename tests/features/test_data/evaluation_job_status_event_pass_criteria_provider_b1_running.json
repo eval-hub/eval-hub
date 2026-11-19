@@ -1,0 +1,9 @@
+{
+  "benchmark_status_event": {
+    "id": "pc_b1",
+    "provider_id": "{{value:provider_id}}",
+    "benchmark_index": 0,
+    "status": "running",
+    "started_at": "2026-01-12T10:45:00Z"
+  }
+}
