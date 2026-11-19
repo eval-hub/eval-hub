@@ -56,7 +56,7 @@ assisted-by-trailer: ## Print the Assisted-by trailer for the current AI session
 # Development skills (evalhub-bug-review, fix-fvt-test, golang-toolchain-update,
 # release-notes) are maintained in https://github.com/eval-hub/eval-hub-skills so
 # they can be shared by every eval-hub repository. This clones that repository
-# into a cache directory and symlinks the skills into ~/.claude/skills, where
+# into a cache directory and symlinks the skills into ~/.agents/skills, where
 # agent harnesses load them by name. See AGENTS.md -> Development Skills.
 #
 # Overrides:
@@ -64,16 +64,22 @@ assisted-by-trailer: ## Print the Assisted-by trailer for the current AI session
 #   DEV_SKILLS_CLONE_DIR  shallow clone location (default: ~/.cache/eval-hub-skills);
 #                         uninstall-dev-skills only removes links pointing into it
 #   DEV_SKILLS_TARGET_DIR harness skills directory to link into (default:
-#                         ~/.claude/skills). Codex CLI loads user skills from
-#                         ~/.agents/skills, so install for it with:
-#                           make install-dev-skills DEV_SKILLS_TARGET_DIR=~/.agents/skills
+#                         ~/.agents/skills, the cross-harness user skills
+#                         directory read by Cursor and Codex CLI). Claude Code
+#                         reads ~/.claude/skills instead, so install for it with:
+#                           make install-dev-skills DEV_SKILLS_TARGET_DIR=~/.claude/skills
+#   DEV_SKILLS_FORCE      set to true to pass --force, replacing pre-existing
+#                         skill entries and discarding uncommitted changes in the
+#                         cached clone (the script refuses to throw local work
+#                         away otherwise)
 DEV_SKILLS_REF ?=
 DEV_SKILLS_CLONE_DIR ?=
 DEV_SKILLS_TARGET_DIR ?= ~/.agents/skills
+DEV_SKILLS_FORCE ?=
 
 .PHONY: install-dev-skills uninstall-dev-skills
-install-dev-skills: ## Install dev skills from eval-hub/eval-hub-skills (into ~/.claude/skills; Codex CLI: DEV_SKILLS_TARGET_DIR=~/.agents/skills)
-	@bash scripts/install-dev-skills.sh $(if $(DEV_SKILLS_REF),--ref "$(DEV_SKILLS_REF)",) $(if $(DEV_SKILLS_CLONE_DIR),--dir "$(DEV_SKILLS_CLONE_DIR)",) $(if $(DEV_SKILLS_TARGET_DIR),--target "$(DEV_SKILLS_TARGET_DIR)",)
+install-dev-skills: ## Install dev skills from eval-hub/eval-hub-skills (into ~/.agents/skills; Claude Code: DEV_SKILLS_TARGET_DIR=~/.claude/skills)
+	@bash scripts/install-dev-skills.sh $(if $(filter true,$(DEV_SKILLS_FORCE)),--force,) $(if $(DEV_SKILLS_REF),--ref "$(DEV_SKILLS_REF)",) $(if $(DEV_SKILLS_CLONE_DIR),--dir "$(DEV_SKILLS_CLONE_DIR)",) $(if $(DEV_SKILLS_TARGET_DIR),--target "$(DEV_SKILLS_TARGET_DIR)",)
 
 uninstall-dev-skills: ## Remove the dev skill symlinks installed by install-dev-skills (honours DEV_SKILLS_TARGET_DIR and DEV_SKILLS_CLONE_DIR)
 	@bash scripts/install-dev-skills.sh --uninstall $(if $(DEV_SKILLS_CLONE_DIR),--dir "$(DEV_SKILLS_CLONE_DIR)",) $(if $(DEV_SKILLS_TARGET_DIR),--target "$(DEV_SKILLS_TARGET_DIR)",)
@@ -83,9 +89,9 @@ KIND_CLUSTER_NAME ?= evalhub-dev
 IMAGE_TAG ?= kind-$(KIND_CLUSTER_NAME)
 SKIP_BUILD ?= false
 AIRGAP ?= false
-# Keep the default comparable to the existing small local workflow. Use
-# ADAPTERS=all when you explicitly want the full curated-adapter image set.
-ADAPTERS ?= inspect,lm-evaluation-harness,followbench
+# Keep the default lightweight for local deployments. Use ADAPTERS=all when
+# you explicitly want the full curated-adapter image set.
+ADAPTERS ?= followbench
 EVALHUB_HOST_PORT ?= 18443
 EVALHUB_NODE_PORT ?= 30443
 EVALHUB_HOST_BIND_ADDRESS ?= 127.0.0.1
@@ -103,9 +109,9 @@ EVALHUB_KUBECONFIG_FILE ?=
 #                              inspect, followbench, lighteval, ruler, or ifbench
 #   lm-evaluation-harness      requires Dockerfile.lmes-job                ADAPTERS includes lm-evaluation-harness
 #
-# ADAPTERS=all builds all six curated adapter images. The default builds the
-# existing Inspect, LMES, and FollowBench set. Narrow ADAPTERS (comma-separated)
-# to build only what you need. Nothing is cloned automatically; the
+# ADAPTERS=all builds all six curated adapter images. The default builds only
+# FollowBench. Narrow ADAPTERS (comma-separated) to build the adapters you need.
+# Nothing is cloned automatically; the
 # lm-evaluation-harness checkout is the fork at
 # https://github.com/opendatahub-io/lm-evaluation-harness.git, checked out on
 # its incubation (or stable) branch — the default main branch does not contain
@@ -538,7 +544,7 @@ KIND_BENCHMARK_TIMEOUT ?= $(if $(filter command line environment,$(origin BENCHM
 # allowance instead of only matching the deadline.
 KIND_BENCHMARK_SETUP_MARGIN ?= 15m
 KIND_BENCHMARK_REQUIRED_TOKEN_DURATION ?= $(shell bash scripts/go-duration.sh add $(KIND_BENCHMARK_TIMEOUT) $(KIND_BENCHMARK_SETUP_MARGIN))
-# dev-deploy's own ADAPTERS default is the small set used for manual work; a
+# dev-deploy's own ADAPTERS default is the lightweight FollowBench image; a
 # benchmark run needs every curated adapter, so default the deployment to
 # ADAPTERS=all and keep an explicit ADAPTERS (command line or environment).
 KIND_BENCHMARK_ADAPTERS ?= $(if $(filter command line environment,$(origin ADAPTERS)),$(ADAPTERS),all)
