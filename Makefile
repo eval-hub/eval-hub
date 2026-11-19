@@ -171,10 +171,13 @@ dev-deploy-help: ## Show dev-deploy inputs and usage
 #   make dev-deploy ADAPTERS=all ADAPTER_IMAGES="$(make adapter-images)"
 #   make test-benchmarks-kind ADAPTER_IMAGES="$(make adapter-images)"
 #
-# The tags are copied as declared, so `latest` stays floating: a deploy pulls
-# whatever it points at when it runs. No network access, container runtime, or
-# cluster is needed. ADAPTERS behaves as it does for dev-deploy, but this target
-# defaults to the whole curated set: naming one adapter is the exception here.
+# The tags are copied as declared, so `latest` stays a floating tag in the
+# output. dev-deploy pulls a supplied image only when the container runtime does
+# not already have that reference, so a cached tag — `latest` included — is
+# reused as-is instead of being refreshed from the registry. No network access,
+# container runtime, or cluster is needed. ADAPTERS behaves as it does for
+# dev-deploy, but this target defaults to the whole curated set: naming one
+# adapter is the exception here.
 ADAPTER_IMAGES_SELECTION ?= $(if $(filter command line environment,$(origin ADAPTERS)),$(ADAPTERS),all)
 
 .PHONY: adapter-images adapter-images-help

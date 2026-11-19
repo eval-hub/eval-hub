@@ -40,7 +40,8 @@ is useful when the adapter images already exist in a registry:
 
 `ADAPTER_IMAGES` takes comma-separated `adapter=image` pairs, and each adapter
 must also be selected by `ADAPTERS`. dev-deploy pulls the image into the
-container runtime, re-tags it into the kind-local registry, and records
+container runtime when it is not already present locally, re-tags it into the
+kind-local registry, and records
 `source.<adapter>.prebuilt=true` plus `source.<adapter>.image` in the manifest
 instead of a build revision. The image checks above still apply, because the
 registry reference, the provider ConfigMap, and the manifest entry are

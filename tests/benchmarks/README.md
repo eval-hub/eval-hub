@@ -108,8 +108,8 @@ images from this checkout rather than operator-packaged ones; pass
 `SKIP_BUILD=true` to reuse images that are already built. A selected adapter
 can also be supplied prebuilt with `ADAPTER_IMAGES`, a comma-separated list of
 `adapter=image` pairs (every adapter must also be selected by `ADAPTERS`), which
-pulls that reference once and re-tags it into the kind-local registry instead of
-building it:
+pulls that reference when it is not already present locally and re-tags it into
+the kind-local registry instead of building it:
 `make test-benchmarks-kind ADAPTERS=all ADAPTER_IMAGES='lighteval=quay.io/…@sha256:…'`.
 `make adapter-images` prints that value for the selected adapters from the
 references in `config/providers`, so a run can use the whole set without typing

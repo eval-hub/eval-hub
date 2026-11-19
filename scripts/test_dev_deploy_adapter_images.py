@@ -184,9 +184,12 @@ printf 'DONE=yes\\n'
 
 # tag_and_push publishes one local reference into the kind-local registry. The
 # caller's image must survive a publish whose source already equals the
-# destination, or a later SKIP_BUILD=true deployment fails its local-image check.
+# destination, or a later SKIP_BUILD=true deployment fails its local-image check,
+# and a destination another adapter still needs as its source must be refused
+# instead of re-tagged or removed.
 TAG_AND_PUSH_FUNCTIONS = [
     "fail",
+    "image_ref_protected",
     "remove_temporary_registry_tag",
     "tag_and_push",
 ]
@@ -197,7 +200,11 @@ log() {{ printf '[%s] %s\\n' "$1" "$2" >&2; }}
 {functions}
 
 TEMP_REGISTRY_TAGS=()
+PROTECTED_IMAGE_REFS=()
 CONTAINER_RUNTIME="$1"
+if [[ -n "${{4:-}}" ]]; then
+  IFS=, read -r -a PROTECTED_IMAGE_REFS <<<"$4"
+fi
 tag_and_push "$2" "$3"
 printf 'PENDING_TAGS=%s\\n' "${{TEMP_REGISTRY_TAGS[*]}}"
 printf 'DONE=yes\\n'
@@ -490,7 +497,7 @@ class PrebuiltImageResolutionTests(unittest.TestCase):
         calls = [line for line in call_log.read_text().splitlines() if line]
         return proc.returncode, sources, calls, proc.stdout + proc.stderr
 
-    def run_publish(self, source, destination, present=()):
+    def run_publish(self, source, destination, present=(), protected=()):
         """Publish one reference pair; returns (returncode, runtime calls, output)."""
         present_file = self.work_dir / "publish-present.txt"
         present_file.write_text("".join(f"{ref}\n" for ref in present))
@@ -502,7 +509,14 @@ class PrebuiltImageResolutionTests(unittest.TestCase):
             "FAKE_RUNTIME_LOG": str(call_log),
         }
         proc = subprocess.run(
-            ["bash", str(self.publish_harness), str(self.runtime), source, destination],
+            [
+                "bash",
+                str(self.publish_harness),
+                str(self.runtime),
+                source,
+                destination,
+                ",".join(protected),
+            ],
             capture_output=True,
             text=True,
             env=env,
@@ -513,7 +527,9 @@ class PrebuiltImageResolutionTests(unittest.TestCase):
     def test_a_same_reference_publish_keeps_the_caller_tag(self):
         """An override already equal to the registry path must not be removed."""
         reference = "localhost:5000/evalhub/community-inspect:kind-dev"
-        code, calls, output = self.run_publish(reference, reference, present=(reference,))
+        code, calls, output = self.run_publish(
+            reference, reference, present=(reference,), protected=(reference,)
+        )
         self.assertEqual(code, 0, output)
         self.assertIn(f"image push {reference}", calls, calls)
         self.assertFalse(
@@ -528,6 +544,20 @@ class PrebuiltImageResolutionTests(unittest.TestCase):
         self.assertEqual(code, 0, output)
         self.assertIn(f"image tag {source} {destination}", calls, calls)
         self.assertIn(f"image rm {destination}", calls, calls)
+
+    def test_a_destination_still_needed_as_a_source_is_refused(self):
+        """Another adapter's override can name a path this deploy publishes to."""
+        source = "quay.io/evalhub/community-inspect:latest"
+        destination = "localhost:5000/evalhub/community-ruler:kind-dev"
+        code, calls, output = self.run_publish(
+            source, destination, present=(source,), protected=(destination,)
+        )
+        self.assertNotEqual(code, 0, f"expected a protected-destination failure, got: {output}")
+        self.assertIn("still needed as the source image of another adapter", output)
+        self.assertFalse(
+            [call for call in calls if call.startswith(("image tag", "image rm", "image push"))],
+            f"a protected reference was re-tagged, removed, or pushed: {calls}",
+        )
 
     def test_an_override_is_the_published_source(self):
         override = "quay.io/evalhub/community-inspect@sha256:abc123"

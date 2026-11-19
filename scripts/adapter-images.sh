@@ -9,9 +9,10 @@
 #
 # Nothing is pulled, built, or looked up against a registry: the pairs carry the
 # tags the providers run (quay.io/evalhub/community-<adapter>:latest, and
-# quay.io/opendatahub/ta-lmes-job:<tag> for lm-evaluation-harness), so a deploy
-# pulls whatever those tags point at when it runs. A provider that pins a digest
-# is reproduced as pinned.
+# quay.io/opendatahub/ta-lmes-job:<tag> for lm-evaluation-harness), and a deploy
+# pulls a pair only when the container runtime does not already have that
+# reference, so a locally cached tag -- `latest` included -- is reused as-is. A
+# provider that pins a digest is reproduced as pinned.
 set -Eeuo pipefail
 umask 077
 
@@ -62,8 +63,10 @@ The provider YAML is the source of truth for the image, so the pairs are the
 references the providers run: quay.io/evalhub/community-<adapter>:latest for the
 community adapters, and quay.io/opendatahub/ta-lmes-job:<tag> for
 lm-evaluation-harness. The tags are copied as declared, so `latest` stays a
-floating tag and dev-deploy pulls whatever it points at when the deploy runs;
-pin a digest in the provider YAML to make a pair immutable.
+floating tag in the output; dev-deploy pulls a pair only when the container
+runtime does not already have that reference, so a locally cached `latest` is
+reused as-is instead of being refreshed from the registry. Pin a digest in the
+provider YAML to make a pair immutable.
 
 No network access, container runtime, or cluster is needed: nothing is pulled,
 built, or resolved.

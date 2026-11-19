@@ -39,6 +39,11 @@ REGISTRY_ALIAS=""
 REGISTRY_PORT=""
 PROXY_SOURCE=""
 TEMP_REGISTRY_TAGS=()
+# Image references a publish still reads from, resolved before the first tag. A
+# registry destination that collides with one of them must not be tagged over
+# (which would repoint it) or removed as a temporary tag (which would leave the
+# later publish with a missing source).
+PROTECTED_IMAGE_REFS=()
 PORT_FORWARD_PID=""
 KIND_CLUSTER_CREATED=false
 API_HOST_ACCESS_PORT="${EVALHUB_HOST_PORT}"
@@ -166,6 +171,17 @@ The private kubeconfig is written under XDG_CONFIG_HOME (default ~/.config),
 at evalhub/kubeconfigs/<cluster>.yaml.
 Use it explicitly: KUBECONFIG=<printed-path> kubectl get pods -n system
 USAGE
+}
+
+# image_ref_protected reports whether a reference is still needed as the source
+# of an image this run publishes, so a destination tag that collides with it
+# cannot be created or cleaned up without breaking that publish.
+image_ref_protected() {
+  local protected
+  for protected in "${PROTECTED_IMAGE_REFS[@]}"; do
+    [[ "$protected" == "$1" ]] && return 0
+  done
+  return 1
 }
 
 remove_temporary_registry_tag() {
@@ -821,6 +837,11 @@ tag_and_push() {
     # redundant, and removing it would delete the local image a later
     # SKIP_BUILD=true deployment verifies.
     log INFO "Publishing $destination from the same local reference; keeping the tag."
+  elif image_ref_protected "$destination"; then
+    # Tagging here would repoint the reference and the post-push cleanup would
+    # remove it, either of which breaks the adapter that still needs it, so
+    # refuse instead of publishing a wrong or missing image.
+    fail "Cannot publish $destination from $source: $destination is still needed as the source image of another adapter. ADAPTER_IMAGES must not reference a registry destination this deployment publishes to (localhost:<port>/evalhub/<image>:<IMAGE_TAG>); change or drop that override."
   else
     "$CONTAINER_RUNTIME" image tag "$source" "$destination"
     TEMP_REGISTRY_TAGS+=("$destination")
@@ -898,8 +919,24 @@ build_kube_rbac_proxy_arm64() {
 }
 
 publish_images() {
-  local name source destination proxy_source adapter
+  local name source destination proxy_source adapter index
   local -a core_images=(eval-hub trustyai-service-operator)
+  local -a adapter_sources=()
+
+  # Resolve every source before the first tag. A registry destination that
+  # collides with a reference another image is still published from is then
+  # refused by tag_and_push, instead of being tagged over or removed as a
+  # temporary tag after the adapter that needs it was resolved.
+  PROTECTED_IMAGE_REFS=()
+  for name in "${core_images[@]}"; do
+    PROTECTED_IMAGE_REFS+=("$(image_ref "$name")")
+  done
+  for adapter in "${SELECTED_ADAPTERS[@]}"; do
+    source="$(adapter_source_image "$adapter")"
+    adapter_sources+=("$source")
+    PROTECTED_IMAGE_REFS+=("$source")
+  done
+
   for name in "${core_images[@]}"; do
     source="$(image_ref "$name")"
     destination="$(registry_image "$name")"
@@ -909,10 +946,11 @@ publish_images() {
   # A prebuilt adapter is published under the same registry path as a built one,
   # so the provider ConfigMaps and the recorded manifest never learn whether the
   # image came from source or from ADAPTER_IMAGES.
-  for adapter in "${SELECTED_ADAPTERS[@]}"; do
+  for index in "${!SELECTED_ADAPTERS[@]}"; do
+    adapter="${SELECTED_ADAPTERS[$index]}"
     name="$(adapter_image_name "$adapter")"
     log INFO "Publishing the $adapter image to the cluster-local registry."
-    tag_and_push "$(adapter_source_image "$adapter")" "$(registry_image "$name")"
+    tag_and_push "${adapter_sources[$index]}" "$(registry_image "$name")"
   done
   local mock_source=docker.io/library/python:3.12-slim
   case "$(uname -m)" in
