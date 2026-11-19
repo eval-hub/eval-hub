@@ -683,6 +683,9 @@ test-benchmarks-kind: test-benchmarks-kind-deploy ## Run benchmark smoke tests o
 	BENCHMARK_RUN="$(KIND_BENCHMARK_RUN)" \
 	$(MAKE) test-benchmarks
 
+test-benchmarks-kind-latest:
+	$(MAKE) test-benchmarks-kind ADAPTERS=all ADAPTER_IMAGES="$(make adapter-images-latest)" ADAPTER_IMAGES_PLATFORM=linux/amd64
+
 generate-benchmark-configs: ## Create missing per-benchmark smoke fixtures from config/providers
 	go run ./tests/benchmarks/generate
 
