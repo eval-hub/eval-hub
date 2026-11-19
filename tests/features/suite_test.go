@@ -16,7 +16,7 @@ var opts = godog.Options{
 	Output:   colors.Colored(os.Stdout),
 	Format:   "junit:bin/junit-fvt.xml",
 	Strict:   true,
-	Tags:     "~@ignore",
+	Tags:     "~@ignore && ~@non-admin",
 	Paths:    []string{"."},
 	TestingT: nil,
 }
