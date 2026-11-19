@@ -133,10 +133,12 @@ make adapter-images-push ADAPTER_IMAGE_REGISTRY=quay.io/<your-user>
 ```
 
 The target prints the `ADAPTER_IMAGES` value for the images it pushed, so pass
-that value to a run — with `SKIP_BUILD=true`, because the images already exist:
+that value to a run. `SKIP_BUILD=true` also reuses the EvalHub and operator
+images, so it only applies once a previous deploy has built them; a first run
+needs to build those core images:
 
 ```bash
-make test-benchmarks-kind SKIP_BUILD=true ADAPTERS=all \
+make test-benchmarks-kind ADAPTERS=all \
   ADAPTER_IMAGES='inspect=quay.io/<your-user>/community-inspect:<tag>,…'
 ```
 

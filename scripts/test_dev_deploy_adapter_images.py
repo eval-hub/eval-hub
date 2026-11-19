@@ -22,7 +22,13 @@ harness, so they pin the contract the deploy relies on:
      checkout, which is what lets a prebuilt deploy run without those clones;
   4. each adapter keeps one image name (lm-evaluation-harness -> community-lmes,
      the rest -> community-<adapter>), so a prebuilt image is published into the
-     same registry path and the recorded manifest stays identical in shape.
+     same registry path and the recorded manifest stays identical in shape;
+  5. an override that names a local tag this run builds from source is rejected
+     with the rest of the input validation, before the first build, because that
+     build would replace the prebuilt image and the adapter would be deployed
+     with the image built for another adapter. An override that names its own
+     adapter's tag stays valid, and SKIP_BUILD=true builds nothing, so its reuse
+     still works.
 
 Pulling the image, publishing it to the kind-local registry, and recording the
 manifest run against a real container runtime and cluster. `adapter_source_image`
@@ -73,6 +79,8 @@ DEPLOY_FUNCTIONS = [
     "validate_image_reference",
     "parse_adapters",
     "parse_adapter_images",
+    "image_ref",
+    "validate_adapter_image_tag_collisions",
 ]
 
 HARNESS = """#!/usr/bin/env bash
@@ -82,11 +90,14 @@ log() {{ printf '[%s] %s\\n' "$1" "$2" >&2; }}
 
 ADAPTERS="$1"
 ADAPTER_IMAGES="$2"
+IMAGE_TAG="${{IMAGE_TAG:-kind-dev}}"
+SKIP_BUILD="${{SKIP_BUILD:-false}}"
 SELECTED_ADAPTERS=()
 SELECTED_ADAPTER_IMAGES=()
 ADAPTER_IMAGE_OVERRIDES=()
 parse_adapters
 parse_adapter_images
+validate_adapter_image_tag_collisions
 printf 'SELECTED=%s\\n' "${{SELECTED_ADAPTERS[*]}}"
 printf 'IMAGE_NAMES=%s\\n' "${{SELECTED_ADAPTER_IMAGES[*]}}"
 if ((${{#ADAPTER_IMAGE_OVERRIDES[@]}})); then
@@ -271,12 +282,19 @@ class AdapterImagesTestCase(unittest.TestCase):
     def tearDownClass(cls):
         cls.work.cleanup()
 
-    def parse(self, adapters, adapter_images=""):
+    def parse(self, adapters, adapter_images="", environment=None):
         """Return (returncode, parsed fields, output) for one selection."""
+        env = dict(os.environ)
+        # Pin the inputs the harness reads beyond its arguments, so a developer's
+        # exported SKIP_BUILD or IMAGE_TAG cannot change what a case asserts.
+        env["SKIP_BUILD"] = "false"
+        env["IMAGE_TAG"] = "kind-dev"
+        env.update(environment or {})
         proc = subprocess.run(
             ["bash", str(self.harness), adapters, adapter_images],
             capture_output=True,
             text=True,
+            env=env,
         )
         fields = {}
         for line in proc.stdout.splitlines():
@@ -284,15 +302,15 @@ class AdapterImagesTestCase(unittest.TestCase):
             fields[key] = value
         return proc.returncode, fields, proc.stdout + proc.stderr
 
-    def assert_parses(self, adapters, adapter_images, **expected):
-        code, fields, output = self.parse(adapters, adapter_images)
+    def assert_parses(self, adapters, adapter_images, environment=None, **expected):
+        code, fields, output = self.parse(adapters, adapter_images, environment)
         self.assertEqual(code, 0, output)
         for key, value in expected.items():
             self.assertEqual(fields[key.upper()], value, f"{key}: {output}")
         return fields
 
-    def assert_rejected(self, adapters, adapter_images, message):
-        code, _, output = self.parse(adapters, adapter_images)
+    def assert_rejected(self, adapters, adapter_images, message, environment=None):
+        code, _, output = self.parse(adapters, adapter_images, environment)
         self.assertNotEqual(code, 0, f"expected a failure, got: {output}")
         self.assertIn(message, output)
         return output
@@ -466,6 +484,55 @@ class RejectionTests(AdapterImagesTestCase):
             "inspect,ruler",
             "inspect=quay.io/x/inspect:v1,\nruler=quay.io/x/ruler:v1",
             "ADAPTER_IMAGES must be a single line",
+        )
+
+
+class TagCollisionTests(AdapterImagesTestCase):
+    """An override must not name a local tag this run's own build replaces.
+
+    build_images runs before publish_images, so a source build that writes the
+    same tag would leave the override publishing the image built for another
+    adapter. The conflict fails with input validation, before the first build.
+    """
+
+    def test_override_of_a_built_adapter_tag_is_rejected(self):
+        output = self.assert_rejected(
+            "inspect,followbench",
+            "inspect=localhost/evalhub/community-followbench:kind-dev",
+            "the local tag this deployment builds",
+        )
+        self.assertIn("community-followbench", output)
+        self.assertIn("drop 'followbench' from ADAPTERS", output)
+
+    def test_override_of_a_core_image_tag_is_rejected(self):
+        for image in (
+            "localhost/evalhub/eval-hub:kind-dev",
+            "localhost/evalhub/trustyai-service-operator:kind-dev",
+        ):
+            with self.subTest(image=image):
+                self.assert_rejected(
+                    "inspect",
+                    f"inspect={image}",
+                    "the local tag this deployment builds",
+                )
+
+    def test_override_of_its_own_source_tag_stays_valid(self):
+        """That adapter is not built, so the tag it names is never replaced."""
+        reference = "localhost/evalhub/community-inspect:kind-dev"
+        self.assert_parses(
+            "inspect",
+            f"inspect={reference}",
+            overrides=f"inspect={reference}",
+            build="",
+        )
+
+    def test_skip_build_reuse_allows_a_core_image_tag(self):
+        """SKIP_BUILD=true builds nothing, so no local tag is replaced."""
+        self.assert_parses(
+            "inspect",
+            "inspect=localhost/evalhub/eval-hub:kind-dev",
+            environment={"SKIP_BUILD": "true"},
+            build="",
         )
 
 

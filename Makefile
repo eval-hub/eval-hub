@@ -202,8 +202,11 @@ adapter-images-help: ## Show the adapter-images inputs and usage
 # (not the printed references of a published registry) to a deployment or a
 # benchmark sweep:
 #
-#   make test-benchmarks-kind SKIP_BUILD=true ADAPTERS=all \
+#   make test-benchmarks-kind ADAPTERS=all \
 #     ADAPTER_IMAGES='inspect=quay.io/<your-user>/community-inspect:latest,...'
+#
+# SKIP_BUILD=true also reuses the EvalHub and operator images, so add it only to
+# a run whose core images a previous dev-deploy already built.
 #
 # ADAPTER_IMAGE_REGISTRY defaults to quay.io/<the account the container runtime
 # is logged in to>, and ADAPTER_IMAGE_TAG to latest; pin the tag for a run you

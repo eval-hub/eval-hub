@@ -93,15 +93,20 @@ Inputs (also accepted as environment variables):
                            localhost:<port> references. An overridden adapter
                            needs no source checkout. AIRGAP=true still works
                            because the pull happens on the host before the
-                           registry push. SKIP_BUILD=true limits the offline
-                           behaviour to that adapter image resolution: it does
-                           not make the deployment offline, because a new
-                           AIRGAP=true cluster downloads the pinned Calico
-                           manifest, and dev-deploy still pulls the images it
-                           needs when they are absent (the kind node image,
-                           docker.io/library/registry:2, python:3.12-slim for
-                           the mock target, and odh-kube-rbac-proxy, which
-                           arm64 clones and builds from source).
+                           registry push. A reference that names a local tag
+                           this run builds from source
+                           (localhost/evalhub/<image>:<IMAGE_TAG>) is rejected
+                           with the other input checks, before the first build,
+                           because that build would replace the prebuilt image.
+                           SKIP_BUILD=true limits the offline behaviour to that
+                           adapter image resolution: it does not make the
+                           deployment offline, because a new AIRGAP=true cluster
+                           downloads the pinned Calico manifest, and dev-deploy
+                           still pulls the images it needs when they are absent
+                           (the kind node image, docker.io/library/registry:2,
+                           python:3.12-slim for the mock target, and
+                           odh-kube-rbac-proxy, which arm64 clones and builds
+                           from source).
   ADAPTER_IMAGES_PLATFORM=<platform>
                            platform to pull prebuilt adapter images for, for
                            example linux/amd64. It applies only to adapters in
@@ -463,11 +468,49 @@ parse_adapter_images() {
   done
 }
 
+# validate_adapter_image_tag_collisions rejects an ADAPTER_IMAGES override that
+# names a local tag this run's own source build writes. build_images runs before
+# publish_images, so such a build would replace the prebuilt image first and the
+# override's adapter would be published, and recorded in the manifest, with the
+# image built for another adapter. Running this with the other input validation
+# means the conflict is reported before the first build starts. An override that
+# names its own adapter's tag is not a conflict: that adapter is not built from
+# source, and tag_and_push keeps the tag rather than re-tagging or removing it.
+validate_adapter_image_tag_collisions() {
+  local adapter name entry image owner index
+  local -a built_refs=()
+  local -a built_owners=()
+
+  ((${#ADAPTER_IMAGE_OVERRIDES[@]})) || return 0
+  # SKIP_BUILD=true builds nothing, so no local tag is replaced; the images it
+  # reuses are verified instead of built.
+  [[ "$SKIP_BUILD" != true ]] || return 0
+
+  built_refs=("$(image_ref eval-hub)" "$(image_ref trustyai-service-operator)")
+  built_owners=(eval-hub trustyai-service-operator)
+  for adapter in "${SELECTED_ADAPTERS[@]}"; do
+    adapter_build_required "$adapter" || continue
+    name="$(adapter_image_name "$adapter")"
+    built_refs+=("$(image_ref "$name")")
+    built_owners+=("$adapter")
+  done
+
+  for entry in "${ADAPTER_IMAGE_OVERRIDES[@]}"; do
+    image="${entry#*=}"
+    for index in "${!built_refs[@]}"; do
+      [[ "$image" == "${built_refs[$index]}" ]] || continue
+      owner="${built_owners[$index]}"
+      fail "ADAPTER_IMAGES entry '${entry%%=*}' uses $image, the local tag this deployment builds ($owner) from source. That build would replace the prebuilt image before it is published, so the adapter would be deployed with the built image. Use a distinct tag for the override, or drop '$owner' from ADAPTERS."
+    done
+  done
+}
+
 validate_inputs() {
   case "$SKIP_BUILD" in true|false) ;; *) fail "SKIP_BUILD must be true or false." ;; esac
   case "$AIRGAP" in true|false) ;; *) fail "AIRGAP must be true or false." ;; esac
   parse_adapters
   parse_adapter_images
+  validate_adapter_image_tag_collisions
   ADAPTER_IMAGES_PLATFORM="$(trim_whitespace "$ADAPTER_IMAGES_PLATFORM")"
   if [[ -n "$ADAPTER_IMAGES_PLATFORM" ]]; then
     [[ "$ADAPTER_IMAGES_PLATFORM" =~ ^linux/[a-z0-9_]+$ ]] ||

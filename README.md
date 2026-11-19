@@ -305,10 +305,13 @@ make dev-deploy ADAPTERS=inspect \
 adapter it names must also be selected by `ADAPTERS`. The image is pulled into
 the container runtime when it is not present locally, then re-tagged into the
 kind-local registry under the same `localhost:<port>/evalhub/...` path a built
-adapter would use, so the rendered provider ConfigMaps, the recorded
+adapter image would use, so the rendered provider ConfigMaps, the recorded
 `system/evalhub-dev-deploy-manifest` (which gains
 `source.<adapter>.prebuilt=true` and `source.<adapter>.image`), and the e2e image
-checks are unchanged. The pull happens on the host before the registry push, so
+checks are unchanged. A reference that names a local tag this deployment builds
+from source (for example `localhost/evalhub/community-followbench:<IMAGE_TAG>`)
+is rejected before the first build, because that build would replace the prebuilt
+image. The pull happens on the host before the registry push, so
 `AIRGAP=true` still deploys. `SKIP_BUILD=true` skips that pull and requires the
 adapter images to be present locally instead; it does not make the whole
 deployment offline, because dev-deploy still pulls `python:3.12-slim` for the
@@ -345,8 +348,12 @@ container runtime reports and pushes them to a registry you own, printing the
 ```bash
 podman login quay.io
 make adapter-images-push ADAPTER_IMAGE_REGISTRY=quay.io/<your-user>
-make dev-deploy ADAPTERS=all SKIP_BUILD=true ADAPTER_IMAGES='<the printed value>'
+make dev-deploy ADAPTERS=all ADAPTER_IMAGES='<the printed value>'
 ```
+
+`SKIP_BUILD=true` also reuses the EvalHub and operator images, which a first
+deployment still has to build, so leave it off that run and add it to later
+deployments that reuse those images.
 
 `ADAPTER_IMAGE_REGISTRY` defaults to `quay.io/<the account the container runtime
 is logged in to>` and `ADAPTER_IMAGE_TAG` to `latest`; push a new tag per run

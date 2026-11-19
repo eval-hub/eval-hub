@@ -63,8 +63,11 @@ published from them is identical to one built locally.
   make adapter-images-push ADAPTER_IMAGE_REGISTRY=quay.io/<your-user>
 
   # then, with the printed value:
-  make test-benchmarks-kind SKIP_BUILD=true ADAPTERS=all \
+  make test-benchmarks-kind ADAPTERS=all \
     ADAPTER_IMAGES='inspect=quay.io/<your-user>/community-inspect:latest,...'
+
+  # SKIP_BUILD=true also reuses the EvalHub and operator images, so add it only
+  # once dev-deploy has built them; a first deployment has to build them.
 
 Inputs (also accepted as environment variables):
   ADAPTERS                 adapters to build (default: followbench; the make
@@ -79,7 +82,8 @@ Inputs (also accepted as environment variables):
                            The adapter image name becomes the repository, so
                            inspect is pushed as .../community-inspect:<tag>.
                            Defaults to quay.io/<the account the container
-                           runtime is logged in to>.
+                           runtime is logged in to>; docker has no --get-login,
+                           so its account comes from its client configuration.
   ADAPTER_IMAGE_TAG        tag for the pushed images (default: latest). Use a
                            fixed tag, for example the git revision, for a run you
                            need to reproduce.
@@ -249,29 +253,103 @@ runtime_arch() {
 }
 
 # validate_registry_prefix accepts <registry>[:port]/<namespace> with a single
-# lowercase namespace component and no tag or digest. The adapter image name is
-# the whole repository, which is the shape Quay, GitHub Container Registry and
-# Harbor use for an account; a nested path there is a different namespace whose
-# pushes are rejected, so it fails during validation instead of after the images
-# are built.
+# lowercase namespace component and no tag or digest. Both parts are required:
+# a namespace alone names no registry to push to, and a registry alone names no
+# namespace, so either one fails during validation instead of after the images
+# are built. The adapter image name is the whole repository, which is the shape
+# Quay, GitHub Container Registry and Harbor use for an account; a nested path
+# there is a different namespace whose pushes are rejected.
 validate_registry_prefix() {
   local prefix="$1"
   local domain='[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:[0-9]+)?'
   local component='[a-z0-9]+(([._]|__|-+)[a-z0-9]+)*'
-  [[ "$prefix" =~ ^(${domain}/)?${component}$ ]]
+  [[ "$prefix" =~ ^${domain}/${component}$ ]]
+}
+
+# docker_config_file prints the Docker client configuration the Docker CLI would
+# read, honouring DOCKER_CONFIG the way the CLI does.
+docker_config_file() {
+  printf '%s/config.json' "${DOCKER_CONFIG:-${HOME}/.docker}"
+}
+
+# docker_registry_account prints the account the Docker CLI recorded for a
+# registry, or nothing when its client configuration does not record one.
+#
+# Docker's `login` has no --get-login option (that is a podman extension, which
+# docker rejects as an unknown flag), so the account is read from where
+# `docker login` stores it: the registry's `auths` entry, whose `auth` field is
+# base64("<account>:<password>"), or, when the configuration delegates password
+# storage to a credential helper, the account in that helper's `list` output.
+docker_registry_account() {
+  local registry="$1" config flattened key auth helper account
+  config="$(docker_config_file)"
+  [[ -f "$config" ]] || return 0
+  # Both lookups match the registry as a JSON key. Removing the line breaks makes
+  # a key and its fields one string, which is enough for the two shapes Docker
+  # writes: a flat object per registry in `auths`, and a flat map of accounts in
+  # the `list` output of a credential helper.
+  flattened="$(tr -d '\r\n' <"$config")"
+
+  for key in "$registry" "https://$registry"; do
+    # Escape the pattern for a sed `s/` command: dots are literal in a registry
+    # name, and the https:// form contains the delimiter.
+    key="${key//./\\.}"
+    key="${key//\//\\/}"
+    auth="$(sed -n "s/.*\"${key}\"[[:space:]]*:[[:space:]]*{[^}]*\"auth\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" \
+      <<<"$flattened" | sed -n '1p')"
+    [[ -n "$auth" ]] || continue
+    # GNU base64 takes --decode; the BSD one on macOS takes -D.
+    account="$(printf '%s' "$auth" | base64 --decode 2>/dev/null ||
+      printf '%s' "$auth" | base64 -D 2>/dev/null || true)"
+    account="${account%%:*}"
+    if [[ -n "$account" && "$account" != *[[:space:]]* ]]; then
+      printf '%s\n' "$account"
+      return 0
+    fi
+  done
+
+  # credHelpers names one helper per registry; credsStore names one for all.
+  helper="$(sed -n "s/.*\"credHelpers\"[[:space:]]*:[[:space:]]*{[^}]*\"${registry//./\\.}\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" \
+    <<<"$flattened" | sed -n '1p')"
+  if [[ -z "$helper" ]]; then
+    helper="$(sed -n "s/.*\"credsStore\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" \
+      <<<"$flattened" | sed -n '1p')"
+  fi
+  [[ -n "$helper" ]] || return 0
+  command -v "docker-credential-${helper}" >/dev/null 2>&1 || return 0
+  account="$("docker-credential-${helper}" list 2>/dev/null |
+    sed -n "s/.*\"${registry//./\\.}\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | sed -n '1p')"
+  [[ -z "$account" ]] || printf '%s\n' "$account"
+}
+
+# registry_login_account prints the account the container runtime is logged in to
+# for a registry, or nothing when it cannot report one. podman answers directly;
+# docker has no equivalent option, so its answer comes from its client
+# configuration (see docker_registry_account).
+registry_login_account() {
+  local registry="$1" account=""
+  case "$CONTAINER_RUNTIME" in
+    podman) account="$("$CONTAINER_RUNTIME" login --get-login "$registry" 2>/dev/null || true)" ;;
+    docker) account="$(docker_registry_account "$registry")" ;;
+  esac
+  trim_whitespace "$account"
 }
 
 # registry_prefix resolves and validates the destination namespace. Without an
 # explicit value the account the runtime is logged in to is used, so a personal
 # Quay registry needs no hard-coded user name.
 registry_prefix() {
-  local prefix login
+  local prefix login hint
   prefix="$(trim_whitespace "$ADAPTER_IMAGE_REGISTRY")"
   if [[ -z "$prefix" ]]; then
-    login="$("$CONTAINER_RUNTIME" login --get-login quay.io 2>/dev/null || true)"
-    login="$(trim_whitespace "$login")"
-    [[ -n "$login" ]] ||
-      fail "ADAPTER_IMAGE_REGISTRY is not set and $CONTAINER_RUNTIME is not logged in to quay.io. Run '$CONTAINER_RUNTIME login quay.io', or pass ADAPTER_IMAGE_REGISTRY=<registry>/<namespace> (for example quay.io/<your-user>)."
+    login="$(registry_login_account quay.io)"
+    if [[ -z "$login" ]]; then
+      hint=""
+      if [[ "$CONTAINER_RUNTIME" == docker ]]; then
+        hint=" Docker cannot report the account it is logged in with (its CLI has no --get-login option), so this script reads $(docker_config_file) and the credential helper that configuration names."
+      fi
+      fail "ADAPTER_IMAGE_REGISTRY is not set and $CONTAINER_RUNTIME has no quay.io login to take the namespace from. Run '$CONTAINER_RUNTIME login quay.io', or pass ADAPTER_IMAGE_REGISTRY=<registry>/<namespace> (for example quay.io/<your-user>).${hint}"
+    fi
     prefix="quay.io/${login}"
     log INFO "Using quay.io/$login, from $CONTAINER_RUNTIME's quay.io login, as the destination namespace."
   fi
@@ -314,8 +392,11 @@ main() {
 
   for adapter in "${SELECTED_ADAPTERS[@]}"; do
     destination="$(destination_image "$adapter")"
-    build_adapter_image "$adapter" "$arch" "$destination"
-    push_image "$destination"
+    # stdout carries only the ADAPTER_IMAGES value below, so the build and push
+    # progress the container runtime prints is sent to stderr with the log lines.
+    # A caller substituting this script's output must never receive it.
+    build_adapter_image "$adapter" "$arch" "$destination" >&2
+    push_image "$destination" >&2
     pairs+=("$adapter=$destination")
   done
 

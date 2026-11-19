@@ -21,9 +21,15 @@ pin the behaviour that keeps a push usable without building anything:
      half-built push leaves a registry holding images a deploy cannot use;
   5. stdout carries exactly one line - the ADAPTER_IMAGES value - with every
      diagnostic on stderr, so `ADAPTER_IMAGES="$(make -s adapter-images-push)"`
-     cannot pick up log output.
+     cannot pick up log output. The runtime's own build and push progress is
+     written to stdout by the engine, so it is redirected to stderr too;
+  6. a destination always names both a registry and a namespace, and the default
+     namespace comes from the runtime's login: podman's `login --get-login`, or,
+     for docker, which has no such option, its client configuration and the
+     credential helper it names.
 """
 
+import base64
 import os
 import pathlib
 import shutil
@@ -82,10 +88,19 @@ case "${1:-}" in
     printf 'Error: not logged into quay.io\\n' >&2
     exit 1
     ;;
-  build) exit "${FAKE_BUILD_EXIT:-0}" ;;
+  build)
+    # The engine writes its progress to stdout, which the script must keep out of
+    # the captured ADAPTER_IMAGES value.
+    printf 'STEP 1/2: FROM scratch\\n'
+    exit "${FAKE_BUILD_EXIT:-0}"
+    ;;
   image)
     case "${2:-}" in
-      push) exit "${FAKE_PUSH_EXIT:-0}" ;;
+      push)
+        printf 'Getting image source signatures\\n'
+        printf 'Copying blob sha256:0123456789ab done\\n'
+        exit "${FAKE_PUSH_EXIT:-0}"
+        ;;
       *) exit 0 ;;
     esac
     ;;
@@ -133,6 +148,19 @@ class PushWorld:
         if adapter == "lm-evaluation-harness":
             return self.lmes
         return self.contrib / "adapters" / adapter
+
+    def write_docker_config(self, content):
+        """Write a Docker client configuration and return its DOCKER_CONFIG dir."""
+        directory = self.root / "docker"
+        directory.mkdir(exist_ok=True)
+        (directory / "config.json").write_text(content)
+        return str(directory)
+
+    def add_credential_helper(self, name, output):
+        """Put a stub docker-credential-<name> helper on the stub PATH."""
+        path = self.bin / f"docker-credential-{name}"
+        path.write_text(f"#!/usr/bin/env bash\nprintf '%s\\n' '{output}'\n")
+        path.chmod(0o755)
 
     def calls(self):
         """Return the recorded runtime calls as a list of argument lists."""
@@ -252,6 +280,20 @@ class DestinationTests(BuildAdapterImagesTestCase):
         self.assertEqual(0, code, stderr)
         self.assertEqual("followbench=quay.io/someone/community-followbench:latest\n", stdout)
         self.assertIn("quay.io/someone", stderr)
+        self.assertIn(
+            ["login", "--get-login", "quay.io"],
+            [call[1:] for call in self.world.calls()],
+            "podman's account lookup must still use --get-login",
+        )
+
+    def test_a_registry_and_namespace_are_both_accepted(self):
+        for registry in ("quay.io/tester", "localhost:5000/tester"):
+            with self.subTest(registry=registry):
+                code, stdout, stderr = self.run_script(registry=registry)
+                self.assertEqual(0, code, stderr)
+                self.assertEqual(
+                    f"followbench={registry}/community-followbench:latest\n", stdout
+                )
 
     def test_explicit_runtime_is_used(self):
         code, _, stderr = self.run_script(
@@ -263,6 +305,78 @@ class DestinationTests(BuildAdapterImagesTestCase):
             self.world.calls(), "followbench", "arm64",
             "quay.io/tester/community-followbench:latest",
         )
+
+
+class DockerAccountTests(BuildAdapterImagesTestCase):
+    """Docker has no `login --get-login`, so its account comes from its config."""
+
+    def test_auths_entry_supplies_the_default_namespace(self):
+        encoded = base64.b64encode(b"tester:secret").decode()
+        docker_config = self.world.write_docker_config(
+            '{"auths": {"quay.io": {"auth": "%s"}}}' % encoded
+        )
+        code, stdout, stderr = self.run_script(
+            registry=None, CONTAINER_RUNTIME="docker", DOCKER_CONFIG=docker_config
+        )
+        self.assertEqual(0, code, stderr)
+        self.assertEqual("followbench=quay.io/tester/community-followbench:latest\n", stdout)
+        self.assertNotIn(
+            "login",
+            [argument for call in self.world.calls() for argument in call[1:]],
+            "docker must not be asked for --get-login, which it does not support",
+        )
+
+    def test_an_https_prefixed_auths_entry_is_accepted(self):
+        encoded = base64.b64encode(b"httpsuser:secret").decode()
+        docker_config = self.world.write_docker_config(
+            '{"auths": {"https://quay.io": {"auth": "%s"}}}' % encoded
+        )
+        code, stdout, stderr = self.run_script(
+            registry=None, CONTAINER_RUNTIME="docker", DOCKER_CONFIG=docker_config
+        )
+        self.assertEqual(0, code, stderr)
+        self.assertEqual(
+            "followbench=quay.io/httpsuser/community-followbench:latest\n", stdout
+        )
+
+    def test_a_credential_helper_supplies_the_default_namespace(self):
+        self.world.add_credential_helper("stub", '{"quay.io":"helperuser"}')
+        docker_config = self.world.write_docker_config(
+            '{"auths": {"quay.io": {}}, "credsStore": "stub"}'
+        )
+        code, stdout, stderr = self.run_script(
+            registry=None, CONTAINER_RUNTIME="docker", DOCKER_CONFIG=docker_config
+        )
+        self.assertEqual(0, code, stderr)
+        self.assertEqual(
+            "followbench=quay.io/helperuser/community-followbench:latest\n", stdout
+        )
+
+    def test_a_per_registry_credential_helper_is_used(self):
+        self.world.add_credential_helper("stub", '{"quay.io":"helperuser"}')
+        docker_config = self.world.write_docker_config(
+            '{"auths": {}, "credHelpers": {"quay.io": "stub"}}'
+        )
+        code, stdout, stderr = self.run_script(
+            registry=None, CONTAINER_RUNTIME="docker", DOCKER_CONFIG=docker_config
+        )
+        self.assertEqual(0, code, stderr)
+        self.assertEqual(
+            "followbench=quay.io/helperuser/community-followbench:latest\n", stdout
+        )
+
+    def test_no_recorded_login_fails_with_a_docker_specific_diagnostic(self):
+        docker_config = self.world.write_docker_config("{}")
+        code, stdout, stderr = self.run_script(
+            registry=None, CONTAINER_RUNTIME="docker", DOCKER_CONFIG=docker_config
+        )
+        self.assertNotEqual(0, code)
+        self.assertEqual("", stdout)
+        self.assertIn("ADAPTER_IMAGE_REGISTRY is not set", stderr)
+        self.assertIn("docker login quay.io", stderr)
+        self.assertIn("no --get-login option", stderr)
+        self.assertIn("config.json", stderr)
+        self.assert_no_build(self.world.calls())
 
 
 class PlatformTests(BuildAdapterImagesTestCase):
@@ -303,6 +417,12 @@ class RejectionTests(BuildAdapterImagesTestCase):
             "quay.io/org/team",
             "quay.io/",
             "quay.io/tester@sha256:abc",
+            # A registry alone and a namespace alone are both incomplete: the
+            # destination must name the registry to push to and the namespace
+            # under it.
+            "quay.io",
+            "localhost:5000",
+            "tester",
         ):
             with self.subTest(registry=registry):
                 code, stdout, stderr = self.run_script(registry=registry)
@@ -353,6 +473,16 @@ class OutputTests(BuildAdapterImagesTestCase):
         self.assertEqual(1, len(stdout.splitlines()))
         self.assertNotIn("[INFO]", stdout)
         self.assertIn("[INFO]", stderr)
+
+    def test_runtime_progress_stays_out_of_the_captured_value(self):
+        """The engine writes build and push progress to stdout of its own."""
+        code, stdout, stderr = self.run_script(adapters="inspect")
+        self.assertEqual(0, code, stderr)
+        self.assertEqual("inspect=quay.io/tester/community-inspect:latest\n", stdout)
+        self.assertIn("STEP 1/2: FROM scratch", stderr)
+        self.assertIn("Getting image source signatures", stderr)
+        self.assertNotIn("STEP 1/2", stdout)
+        self.assertNotIn("Copying blob", stdout)
 
     def test_nothing_is_pulled(self):
         code, _, stderr = self.run_script(adapters="all")
