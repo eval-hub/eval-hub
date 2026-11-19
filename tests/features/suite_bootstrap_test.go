@@ -451,6 +451,10 @@ func checkModelEndpoint() {
 				return
 			}
 			logDebug("WARNING: Model endpoint %s is not reachable: %v\n", modelURL, err)
+			if os.Getenv("MODEL_ENDPOINT_PREFLIGHT_WARN_ONLY") == "true" {
+				logDebug("WARNING: MODEL_ENDPOINT_PREFLIGHT_WARN_ONLY=true; proceeding with evaluation scenarios\n")
+				return
+			}
 			logDebug("Evaluation job scenarios will be skipped.\n")
 			modelEndpointConnectivity = modelEndpointUnreachable
 			return
