@@ -1,7 +1,7 @@
-# promptfoo — provider definition for eval-hub (Tech Preview).
+# promptfoo — provider definition for eval-hub.
 #
 # promptfoo (github.com/promptfoo/promptfoo, MIT license) is an open-source
-# LLM testing tool. This Tech Preview exposes:
+# LLM testing tool. This provider exposes:
 #   1. Assertion-based prompt/model regression testing (promptfoo-eval)
 #   2. RAG quality asserts with a built-in smoke fixture (promptfoo-rag-quality)
 #   3. Named red-team suites (quick / owasp / rag) plus a customizable
@@ -30,13 +30,14 @@
 
 id: promptfoo
 name: promptfoo
+title: promptfoo
 description: >
-  promptfoo (MIT license) is an open-source LLM testing tool. Tech Preview
-  benchmarks cover assertion-based regression (promptfoo-eval), RAG quality
-  smoke/asserts (promptfoo-rag-quality), and named red-team suites
-  (promptfoo-redteam-quick / -owasp / -rag) plus a customizable escape hatch
-  (promptfoo-redteam). Every job persists promptfoo's native eval.json as a
-  retained artifact so results can be reopened via `promptfoo import`.
+  promptfoo (MIT license) is an open-source LLM testing tool. This adapter wraps
+  assertion-based regression (promptfoo-eval), RAG quality smoke/asserts
+  (promptfoo-rag-quality), and named red-team suites (promptfoo-redteam-quick /
+  -owasp / -rag) plus a customizable escape hatch (promptfoo-redteam). Every job
+  persists promptfoo's native eval.json as a retained artifact so results can be
+  reopened via `promptfoo import`.
   Reference: https://github.com/promptfoo/promptfoo
 type: community
 
@@ -68,7 +69,7 @@ agent:
     - ragas
   hints:
     - "The model endpoint must support OpenAI-compatible chat completions (POST /v1/chat/completions)"
-    - "Red-team benchmarks require a generation_provider capable of producing adversarial test content AND grading responses; if unset, both fall back to promptfoo's own default model and OPENAI_API_KEY must be available"
+    - "Red-team benchmarks require a generation_provider capable of producing adversarial test content AND grading responses; if unset, both fall back to promptfoo's own default model and OPENAI_API_KEY must be available via model.auth.secret_ref (or the adapter environment) — do not put API keys in job parameters"
     - "Red-team benchmarks never call promptfoo's hosted cloud service — PROMPTFOO_DISABLE_REDTEAM_REMOTE_GENERATION=1 is always set by this adapter"
     - "promptfoo-redteam-quick is the CI-friendly smoke (~minutes); use -owasp / -rag for fuller coverage"
     - "promptfoo-rag-quality ships a tiny built-in fixture; pass prompts/tests or config_yaml for real RAG datasets"
@@ -82,7 +83,7 @@ agent:
 runtime:
   k8s:
     image: quay.io/evalhub/community-promptfoo:latest
-    image_pull_policy: Always
+    image_pull_policy: always
     entrypoint:
       - python
       - main.py
@@ -101,6 +102,10 @@ benchmarks:
       parameters, or a full promptfoo config can be passed through verbatim via
       config_yaml. Reports pass rate and per-assertion-type breakdown.
     category: capability
+    domains: [instruction_and_output_reliability]
+    tasks: [instruction_following]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - pass_rate
       - n_evaluated
@@ -112,7 +117,6 @@ benchmarks:
       - prompt-testing
       - promptfoo
       - ci
-      - tech-preview
     agent:
       result_interpretation: >-
         pass_rate is successes / total test cases. HIGHER is better.
@@ -129,12 +133,16 @@ benchmarks:
   - id: promptfoo-rag-quality
     name: promptfoo RAG Quality
     description: >
-      Tech Preview RAG quality suite using promptfoo asserts for grounding and
-      answer relevance. Ships a tiny built-in context/query fixture for smoke;
+      RAG quality suite using promptfoo asserts for grounding and answer
+      relevance. Ships a tiny built-in context/query fixture for smoke;
       supply prompts+tests or config_yaml (with context vars and asserts such as
       llm-rubric, factuality, context-faithfulness, answer-relevance) for real
       RAG evaluation. Complements promptfoo-redteam-rag (adversarial) and RAGAS.
     category: capability
+    domains: [grounded_document_understanding]
+    tasks: [rag, grounding_discipline]
+    modalities: [text]
+    evaluation_targets: [rag_system]
     metrics:
       - pass_rate
       - n_evaluated
@@ -146,7 +154,6 @@ benchmarks:
       - grounding
       - faithfulness
       - promptfoo
-      - tech-preview
     agent:
       result_interpretation: >-
         pass_rate is successes / total RAG test cases. HIGHER is better.
@@ -163,10 +170,14 @@ benchmarks:
   - id: promptfoo-redteam-quick
     name: promptfoo Red-Team Quick Smoke
     description: >
-      Tech Preview CI-friendly red-team smoke. Runs a tiny plugin set
+      CI-friendly red-team smoke. Runs a tiny plugin set
       (prompt-extraction, harmful:privacy) with 1 test per plugin and no
       attack strategies. Use before fuller OWASP/RAG suites.
     category: safety
+    domains: [trustworthiness]
+    tasks: [adversarial_prompt_injection_resistance]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - pass_rate
       - n_evaluated
@@ -179,7 +190,6 @@ benchmarks:
       - quick
       - ci
       - promptfoo
-      - tech-preview
     primary_score:
       metric: pass_rate
       lower_is_better: false
@@ -200,12 +210,16 @@ benchmarks:
   - id: promptfoo-redteam-owasp
     name: promptfoo Red-Team OWASP LLM Top 10
     description: >
-      Tech Preview named OWASP LLM Top 10 red-team suite (prompt injection,
+      Named OWASP LLM Top 10 red-team suite (prompt injection,
       insecure output / injection, sensitive disclosure / PII, excessive agency,
       SSRF, system-prompt override, cross-session leak, and related plugins).
       Same default plugin set as promptfoo-redteam; prefer this ID for clear
       policy/release checkboxes. Complements Garak rather than replacing it.
     category: safety
+    domains: [trustworthiness]
+    tasks: [adversarial_prompt_injection_resistance]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - pass_rate
       - n_evaluated
@@ -218,7 +232,6 @@ benchmarks:
       - owasp-llm-top-10
       - jailbreak
       - promptfoo
-      - tech-preview
     primary_score:
       metric: pass_rate
       lower_is_better: false
@@ -240,12 +253,16 @@ benchmarks:
   - id: promptfoo-redteam-rag
     name: promptfoo Red-Team RAG
     description: >
-      Tech Preview RAG-focused adversarial suite: rag-poisoning,
+      RAG-focused adversarial suite: rag-poisoning,
       rag-document-exfiltration, rag-source-attribution,
       indirect-prompt-injection, and cross-session-leak. Targets retrieval-
       augmented applications that Garak covers less directly. Pair with
       promptfoo-rag-quality for non-adversarial grounding checks.
     category: safety
+    domains: [trustworthiness]
+    tasks: [adversarial_prompt_injection_resistance]
+    modalities: [text]
+    evaluation_targets: [rag_system]
     metrics:
       - pass_rate
       - n_evaluated
@@ -258,7 +275,6 @@ benchmarks:
       - rag
       - prompt-injection
       - promptfoo
-      - tech-preview
     primary_score:
       metric: pass_rate
       lower_is_better: false
@@ -284,8 +300,12 @@ benchmarks:
       (170+ plugins as of promptfoo 0.123.1, including industry-vertical packs).
       Defaults match promptfoo-redteam-owasp; override plugins/strategies/
       num_tests_per_plugin for bespoke scans. Prefer named suites (-quick /
-      -owasp / -rag) for standard Tech Preview gates.
+      -owasp / -rag) for standard release gates.
     category: safety
+    domains: [trustworthiness]
+    tasks: [adversarial_prompt_injection_resistance]
+    modalities: [text]
+    evaluation_targets: [model]
     metrics:
       - pass_rate
       - n_evaluated
@@ -298,7 +318,6 @@ benchmarks:
       - owasp-llm-top-10
       - jailbreak
       - promptfoo
-      - tech-preview
     primary_score:
       metric: pass_rate
       lower_is_better: false
@@ -361,7 +380,7 @@ parameters:
     default: null
     description: >
       Optional override of promptfoo red-team plugin IDs. When unset, each
-      named suite uses its Tech Preview preset (quick / owasp / rag) or the
+      named suite uses its preset (quick / owasp / rag) or the
       OWASP default set for promptfoo-redteam. Run `promptfoo redteam plugins`
       for the full catalog (170+ as of 0.123.1), including industry packs
       (financial:*, medical:*, insurance:*, telecom:*, ecommerce:*).
@@ -372,7 +391,7 @@ parameters:
     description: >
       Optional override of promptfoo red-team attack strategies (e.g.
       jailbreak, base64, rot13). When unset, presets use no strategies to
-      keep Tech Preview runs fast and deterministic — each strategy multiplies
+      keep runs fast and deterministic — each strategy multiplies
       test count. Set to ["default"] to include promptfoo's default jailbreak
       strategies.
 
@@ -395,9 +414,10 @@ parameters:
       unrelated to --provider, and every graded test reports as failed
       (pass=false) if that model isn't reachable. Leaving this unset makes
       BOTH generation and grading fall back to promptfoo's own default model,
-      which requires OPENAI_API_KEY. For regulated/air-gapped deployments,
-      set this to an internally-hosted model so no external call is made for
-      either step.
+      which requires OPENAI_API_KEY via model.auth.secret_ref (or the adapter
+      environment). Do not put API keys in JobSpec parameters — they are
+      persisted with the job. For regulated/air-gapped deployments, set this
+      to an internally-hosted model so no external call is made for either step.
 
   - name: generation_provider_url
     type: string
@@ -408,18 +428,9 @@ parameters:
       OPENAI_BASE_URL so promptfoo can reach cluster-internal models that
       are not the evaluation target. If unset, defaults to the target
       model's URL — suitable when both models share the same endpoint.
-      Only used when generation_provider is set.
-
-  - name: generation_provider_api_key
-    type: string
-    default: null
-    description: >
-      API key for the generation_provider endpoint. Injected as
-      OPENAI_API_KEY so promptfoo can authenticate with external model
-      services (e.g. LiteLLM, OpenAI) used for red-team test generation
-      and grading. Resolution order: this parameter, then the
-      GENERATION_PROVIDER_API_KEY environment variable, then the target
-      model's own API key. Only used when generation_provider is set.
+      Only used when generation_provider is set. Authenticate the generator
+      with model.auth.secret_ref (or OPENAI_API_KEY in the adapter
+      environment), not a plaintext job parameter.
 
   # --- common parameters ---
   - name: max_concurrency
