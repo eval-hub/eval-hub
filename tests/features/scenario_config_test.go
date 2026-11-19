@@ -3,6 +3,7 @@ package features
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/server"
 	"github.com/eval-hub/eval-hub/internal/otel/oteltest"
+	"github.com/eval-hub/eval-hub/internal/safefile"
 	"github.com/eval-hub/eval-hub/pkg/mlflowclient"
 
 	"github.com/cucumber/godog"
@@ -38,6 +40,7 @@ const (
 
 	envMetricsURL        = "METRICS_URL"
 	envMlflowTrackingURI = "MLFLOW_TRACKING_URI"
+	envMLflowCACertPath  = "MLFLOW_CA_CERT_PATH"
 )
 
 // modelEndpointStatus captures preflight outcome from checkModelEndpoint for steps that gate on connectivity.
@@ -216,6 +219,33 @@ func getMLflowHTTPClient() *http.Client {
 			TLSClientConfig: getMLflowTLSConfig(),
 		},
 	}
+}
+
+// getVerifiedMLflowHTTPClient returns an MLflow client with certificate
+// verification enabled and the optional MLflow CA added to system trust.
+func getVerifiedMLflowHTTPClient() (*http.Client, error) {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+	caCertPath := strings.TrimSpace(os.Getenv(envMLflowCACertPath))
+	if caCertPath != "" {
+		caCert, err := safefile.ReadFile(filepath.Dir(caCertPath), filepath.Base(caCertPath))
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", envMLflowCACertPath, err)
+		}
+		roots, err := x509.SystemCertPool()
+		if err != nil {
+			return nil, fmt.Errorf("load system CA certificates: %w", err)
+		}
+		if roots == nil {
+			roots = x509.NewCertPool()
+		}
+		if !roots.AppendCertsFromPEM(caCert) {
+			return nil, fmt.Errorf("%s %q contains no PEM certificates", envMLflowCACertPath, caCertPath)
+		}
+		tlsConfig.RootCAs = roots
+	}
+	transport.TLSClientConfig = tlsConfig
+	return &http.Client{Timeout: 60 * time.Second, Transport: transport}, nil
 }
 
 // mlflowBaseURL returns the MLflow base URL from the MLFLOW_TRACKING_URI env var.
