@@ -29,7 +29,7 @@ func TestDefaultPresetsValidateAndResolve(t *testing.T) {
 
 	// A resolved value is a snapshot and does not change when its source map is
 	// updated for later jobs.
-	presets[EffortStandard] = Budget{MaxIterations: 1, MaxModelCalls: 1, MaxToolCalls: 1, MaxTotalTokens: 1, MaxOutputTokens: 1, Deadline: time.Second}
+	presets[EffortStandard] = Budget{Limits: Limits{MaxIterations: 1, MaxModelCalls: 1, MaxToolCalls: 1, MaxTotalTokens: 1, MaxOutputTokens: 1, MaxDuration: time.Second}}
 	if standard.MaxIterations == presets[EffortStandard].MaxIterations {
 		t.Fatal("resolved budget changed after preset update")
 	}
@@ -53,7 +53,7 @@ func TestPresetsRejectMissingInvalidAndOverCapValues(t *testing.T) {
 		{name: "output exceeds total", mutate: func(p Presets) { b := p[EffortLow]; b.MaxOutputTokens = int(b.MaxTotalTokens) + 1; p[EffortLow] = b }, wantErr: true},
 		{name: "effort not monotonic", mutate: func(p Presets) {
 			b := p[EffortHigh]
-			b.Deadline = p[EffortStandard].Deadline - time.Second
+			b.MaxDuration = p[EffortStandard].MaxDuration - time.Second
 			p[EffortHigh] = b
 		}, wantErr: true},
 	}
@@ -79,14 +79,14 @@ func TestPresetValidationRejectsInvalidServiceCapsAndBudgetDeadline(t *testing.T
 		t.Fatal("Validate() accepted zero service ceilings")
 	}
 	caps := DefaultHardLimits()
-	caps.MaxDeadline += time.Second
+	caps.MaxDuration += time.Second
 	if err := DefaultPresets().Validate(caps); err == nil {
 		t.Fatal("Validate() accepted service ceilings above shipped limits")
 	}
 
 	presets := DefaultPresets()
 	budget := presets[EffortLow]
-	budget.Deadline = DefaultHardLimits().MaxDeadline + time.Second
+	budget.MaxDuration = DefaultHardLimits().MaxDuration + time.Second
 	presets[EffortLow] = budget
 	if err := presets.Validate(DefaultHardLimits()); err == nil {
 		t.Fatal("Validate() accepted a preset deadline beyond the hard cap")

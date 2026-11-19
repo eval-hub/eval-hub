@@ -93,7 +93,7 @@ func (r *Runner) Run(parent context.Context, input Input) (Result, error) {
 	if err := validateBudget(input.Budget, r.config.HardLimits); err != nil {
 		return Result{}, ErrBudgetExceeded
 	}
-	ctx, cancel := context.WithTimeout(parent, input.Budget.Deadline)
+	ctx, cancel := context.WithTimeout(parent, input.Budget.MaxDuration)
 	defer cancel()
 
 	definitions := r.registry.Definitions()

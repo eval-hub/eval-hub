@@ -15,41 +15,51 @@ const (
 	EffortHigh     Effort = "high"
 )
 
+// Limits describes the resource limits for one generation run.
+type Limits struct {
+	// MaxIterations is the maximum number of model-and-tool loop iterations.
+	MaxIterations int
+	// MaxModelCalls is the maximum number of requests sent to the model.
+	MaxModelCalls int
+	// MaxToolCalls is the maximum number of individual tool invocations.
+	MaxToolCalls int
+	// MaxTotalTokens is the maximum number of input and output tokens accounted for across the run.
+	MaxTotalTokens int64
+	// MaxOutputTokens is the maximum number of tokens allowed in one model response.
+	MaxOutputTokens int
+	// MaxDuration is the maximum wall-clock time allowed for the run.
+	MaxDuration time.Duration
+}
+
 // Budget is an immutable per-run snapshot. API callers select a preset; they do
 // not construct or override these limits.
 type Budget struct {
-	MaxIterations   int
-	MaxModelCalls   int
-	MaxToolCalls    int
-	MaxTotalTokens  int64
-	MaxOutputTokens int
-	Deadline        time.Duration
+	Limits
 }
 
 // HardLimits cap server-configured presets so a bad configuration cannot
 // remove resource bounds.
 type HardLimits struct {
-	MaxIterations   int
-	MaxModelCalls   int
-	MaxToolCalls    int
-	MaxTotalTokens  int64
-	MaxOutputTokens int
-	MaxDeadline     time.Duration
+	Limits
 }
 
 // Presets maps the three public effort values to server-owned budgets.
 type Presets map[Effort]Budget
 
+var orderedEfforts = [...]Effort{EffortLow, EffortStandard, EffortHigh}
+
 // DefaultHardLimits returns conservative service-wide ceilings. Deployments
 // may choose lower ceilings, but should not raise these without review.
 func DefaultHardLimits() HardLimits {
 	return HardLimits{
-		MaxIterations:   100,
-		MaxModelCalls:   100,
-		MaxToolCalls:    500,
-		MaxTotalTokens:  1_000_000,
-		MaxOutputTokens: 16_384,
-		MaxDeadline:     30 * time.Minute,
+		Limits: Limits{
+			MaxIterations:   100,
+			MaxModelCalls:   100,
+			MaxToolCalls:    500,
+			MaxTotalTokens:  1_000_000,
+			MaxOutputTokens: 16_384,
+			MaxDuration:     30 * time.Minute,
+		},
 	}
 }
 
@@ -58,16 +68,22 @@ func DefaultHardLimits() HardLimits {
 func DefaultPresets() Presets {
 	return Presets{
 		EffortLow: {
-			MaxIterations: 8, MaxModelCalls: 8, MaxToolCalls: 24,
-			MaxTotalTokens: 32_768, MaxOutputTokens: 2_048, Deadline: 2 * time.Minute,
+			Limits: Limits{
+				MaxIterations: 8, MaxModelCalls: 8, MaxToolCalls: 24,
+				MaxTotalTokens: 32_768, MaxOutputTokens: 2_048, MaxDuration: 2 * time.Minute,
+			},
 		},
 		EffortStandard: {
-			MaxIterations: 20, MaxModelCalls: 20, MaxToolCalls: 60,
-			MaxTotalTokens: 131_072, MaxOutputTokens: 4_096, Deadline: 2 * time.Minute,
+			Limits: Limits{
+				MaxIterations: 20, MaxModelCalls: 20, MaxToolCalls: 60,
+				MaxTotalTokens: 131_072, MaxOutputTokens: 4_096, MaxDuration: 2 * time.Minute,
+			},
 		},
 		EffortHigh: {
-			MaxIterations: 40, MaxModelCalls: 40, MaxToolCalls: 120,
-			MaxTotalTokens: 524_288, MaxOutputTokens: 8_192, Deadline: 10 * time.Minute,
+			Limits: Limits{
+				MaxIterations: 40, MaxModelCalls: 40, MaxToolCalls: 120,
+				MaxTotalTokens: 524_288, MaxOutputTokens: 8_192, MaxDuration: 10 * time.Minute,
+			},
 		},
 	}
 }
@@ -81,8 +97,7 @@ func (p Presets) Validate(caps HardLimits) error {
 	if exceedsHardLimits(caps, DefaultHardLimits()) {
 		return errors.New("configured hard limits exceed the shipped service ceilings")
 	}
-	ordered := []Effort{EffortLow, EffortStandard, EffortHigh}
-	for _, effort := range ordered {
+	for _, effort := range orderedEfforts {
 		budget, ok := p[effort]
 		if !ok {
 			return fmt.Errorf("missing %q generation effort preset", effort)
@@ -91,10 +106,10 @@ func (p Presets) Validate(caps HardLimits) error {
 			return fmt.Errorf("invalid %q generation effort preset: %w", effort, err)
 		}
 	}
-	for i := 1; i < len(ordered); i++ {
-		previous, current := p[ordered[i-1]], p[ordered[i]]
-		if current.MaxIterations < previous.MaxIterations || current.MaxModelCalls < previous.MaxModelCalls || current.MaxToolCalls < previous.MaxToolCalls || current.MaxTotalTokens < previous.MaxTotalTokens || current.MaxOutputTokens < previous.MaxOutputTokens || current.Deadline < previous.Deadline {
-			return fmt.Errorf("%q budget must be at least the preceding effort preset", ordered[i])
+	for i := 1; i < len(orderedEfforts); i++ {
+		previous, current := p[orderedEfforts[i-1]], p[orderedEfforts[i]]
+		if current.MaxIterations < previous.MaxIterations || current.MaxModelCalls < previous.MaxModelCalls || current.MaxToolCalls < previous.MaxToolCalls || current.MaxTotalTokens < previous.MaxTotalTokens || current.MaxOutputTokens < previous.MaxOutputTokens || current.MaxDuration < previous.MaxDuration {
+			return fmt.Errorf("%q budget must be at least the preceding effort preset", orderedEfforts[i])
 		}
 	}
 	return nil
@@ -117,18 +132,18 @@ func (p Presets) Resolve(effort Effort, caps HardLimits) (Budget, error) {
 }
 
 func validateHardLimits(c HardLimits) error {
-	if c.MaxIterations <= 0 || c.MaxModelCalls <= 0 || c.MaxToolCalls <= 0 || c.MaxTotalTokens <= 0 || c.MaxOutputTokens <= 0 || c.MaxDeadline <= 0 {
+	if c.MaxIterations <= 0 || c.MaxModelCalls <= 0 || c.MaxToolCalls <= 0 || c.MaxTotalTokens <= 0 || c.MaxOutputTokens <= 0 || c.MaxDuration <= 0 {
 		return errors.New("all hard limits must be positive")
 	}
 	return nil
 }
 
 func exceedsHardLimits(value, ceiling HardLimits) bool {
-	return value.MaxIterations > ceiling.MaxIterations || value.MaxModelCalls > ceiling.MaxModelCalls || value.MaxToolCalls > ceiling.MaxToolCalls || value.MaxTotalTokens > ceiling.MaxTotalTokens || value.MaxOutputTokens > ceiling.MaxOutputTokens || value.MaxDeadline > ceiling.MaxDeadline
+	return value.MaxIterations > ceiling.MaxIterations || value.MaxModelCalls > ceiling.MaxModelCalls || value.MaxToolCalls > ceiling.MaxToolCalls || value.MaxTotalTokens > ceiling.MaxTotalTokens || value.MaxOutputTokens > ceiling.MaxOutputTokens || value.MaxDuration > ceiling.MaxDuration
 }
 
 func validateBudget(b Budget, c HardLimits) error {
-	if b.MaxIterations <= 0 || b.MaxModelCalls <= 0 || b.MaxToolCalls <= 0 || b.MaxTotalTokens <= 0 || b.MaxOutputTokens <= 0 || b.Deadline <= 0 {
+	if b.MaxIterations <= 0 || b.MaxModelCalls <= 0 || b.MaxToolCalls <= 0 || b.MaxTotalTokens <= 0 || b.MaxOutputTokens <= 0 || b.MaxDuration <= 0 {
 		return errors.New("all budget values must be positive")
 	}
 	if b.MaxModelCalls < b.MaxIterations {
@@ -137,7 +152,7 @@ func validateBudget(b Budget, c HardLimits) error {
 	if int64(b.MaxOutputTokens) > b.MaxTotalTokens {
 		return errors.New("max_output_tokens cannot exceed max_total_tokens")
 	}
-	if b.MaxIterations > c.MaxIterations || b.MaxModelCalls > c.MaxModelCalls || b.MaxToolCalls > c.MaxToolCalls || b.MaxTotalTokens > c.MaxTotalTokens || b.MaxOutputTokens > c.MaxOutputTokens || b.Deadline > c.MaxDeadline {
+	if b.MaxIterations > c.MaxIterations || b.MaxModelCalls > c.MaxModelCalls || b.MaxToolCalls > c.MaxToolCalls || b.MaxTotalTokens > c.MaxTotalTokens || b.MaxOutputTokens > c.MaxOutputTokens || b.MaxDuration > c.MaxDuration {
 		return errors.New("budget exceeds a service hard limit")
 	}
 	return nil

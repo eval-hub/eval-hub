@@ -39,13 +39,15 @@ func (retryError) Retryable() bool { return true }
 
 func testBudget() Budget {
 	return Budget{
-		MaxIterations: 4,
-		MaxModelCalls: 5,
-		MaxToolCalls:  8,
-		// Match the default standard-effort preset used for normal tool-call tests.
-		MaxTotalTokens:  131_072,
-		MaxOutputTokens: 2_048,
-		Deadline:        time.Minute,
+		Limits: Limits{
+			MaxIterations: 4,
+			MaxModelCalls: 5,
+			MaxToolCalls:  8,
+			// Match the default standard-effort preset used for normal tool-call tests.
+			MaxTotalTokens:  131_072,
+			MaxOutputTokens: 2_048,
+			MaxDuration:     time.Minute,
+		},
 	}
 }
 
@@ -430,7 +432,7 @@ func TestRunnerPropagatesCancellationAndBudgetDeadline(t *testing.T) {
 	})
 	t.Run("budget deadline", func(t *testing.T) {
 		input := testInput()
-		input.Budget.Deadline = 10 * time.Millisecond
+		input.Budget.MaxDuration = 10 * time.Millisecond
 		runner := newTestRunner(t, model, registry, DefaultConfig())
 		if _, err := runner.Run(context.Background(), input); !errors.Is(err, ErrBudgetExceeded) {
 			t.Fatalf("Run() error = %v", err)
