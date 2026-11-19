@@ -100,6 +100,12 @@ ADAPTERS ?= followbench
 # requires it locally) and re-tagged into the kind-local registry, so provider
 # ConfigMaps, the recorded manifest, and the e2e image checks are unchanged. An
 # adapter supplied this way needs no source checkout.
+#
+# ADAPTERS alone decides what dev-deploy builds and publishes. An adapter is
+# built natively from source only while it stays in ADAPTERS and is left out of
+# ADAPTER_IMAGES, so keep it selected and omit it from ADAPTER_IMAGES rather than
+# dropping it from ADAPTERS: an adapter that is not selected is neither built nor
+# published, and its provider keeps the operator-packaged image.
 ADAPTER_IMAGES ?=
 # Platform to pull ADAPTER_IMAGES for, for example linux/amd64. The curated
 # community images are published for linux/amd64 only, so an arm64 machine needs
@@ -130,7 +136,10 @@ EVALHUB_KUBECONFIG_FILE ?=
 # FollowBench. Narrow ADAPTERS (comma-separated) to build the adapters you need.
 # ADAPTER_IMAGES supplies a prebuilt image for a selected adapter, which then
 # needs no source checkout; an adapter that is selected but not overridden keeps
-# the requirement listed above.
+# the requirement listed above, because keeping it in ADAPTERS and out of
+# ADAPTER_IMAGES is the native source build. An adapter absent from ADAPTERS is
+# neither built nor published by dev-deploy, and its provider keeps the
+# operator-packaged image.
 # Nothing is cloned automatically; the
 # lm-evaluation-harness checkout is the fork at
 # https://github.com/opendatahub-io/lm-evaluation-harness.git, checked out on
@@ -508,7 +517,7 @@ FVT_OUTPUT ?= --godog.format=junit:${PWD}/$(BIN_DIR)/junit-fvt-report.xml,pretty
 FVT_TAGS ?= --godog.tags=~@ignore && ~@mlflow && ~@cluster && ~@local_runtime && ~@benchmark_providers
 FVT_CONCURRENCY ?= 1
 
-.PHONY: test-benchmarks test-benchmarks-kind test-benchmarks-kind-deploy test-benchmarks-kind-token-check generate-benchmark-configs
+.PHONY: test-benchmarks test-benchmarks-kind test-benchmarks-kind-latest test-benchmarks-kind-deploy test-benchmarks-kind-token-check generate-benchmark-configs
 BENCHMARK_PARALLEL ?= 2
 BENCHMARK_TIMEOUT ?= 30m
 BENCHMARK_RUN ?= TestBenchmarkSmoke
@@ -571,9 +580,12 @@ test-benchmarks: $(GOTESTSUM) ## Run live benchmark smoke tests (requires SERVER
 #   make test-benchmarks-kind ADAPTERS=all \
 #     ADAPTER_IMAGES='lighteval=quay.io/evalhub/community-lighteval@sha256:...,ruler=quay.io/evalhub/community-ruler@sha256:...'
 #
-# With ADAPTER_IMAGES empty every selected adapter is built from source. The
-# pairs cover the whole curated list, so any of inspect, lm-evaluation-harness,
-# lighteval, ruler, ifbench, or followbench can be supplied prebuilt.
+# With ADAPTER_IMAGES empty every selected adapter is built from source. An
+# adapter builds from source only while it stays in ADAPTERS and is omitted from
+# ADAPTER_IMAGES; removing it from ADAPTERS instead builds and publishes nothing
+# for it, so its provider keeps the operator-packaged image. The pairs cover the
+# whole curated list, so any of inspect, lm-evaluation-harness, lighteval, ruler,
+# ifbench, or followbench can be supplied prebuilt.
 #
 # A full run is large, so KIND_BENCHMARK_PARALLEL bounds how many evaluation
 # jobs run at once and KIND_BENCHMARK_TIMEOUT bounds total wall time; lower the
@@ -683,8 +695,19 @@ test-benchmarks-kind: test-benchmarks-kind-deploy ## Run benchmark smoke tests o
 	BENCHMARK_RUN="$(KIND_BENCHMARK_RUN)" \
 	$(MAKE) test-benchmarks
 
-test-benchmarks-kind-latest:
-	$(MAKE) test-benchmarks-kind ADAPTERS=all ADAPTER_IMAGES="$(make adapter-images-latest)" ADAPTER_IMAGES_PLATFORM=linux/amd64
+# The pairs have to be produced by the recipe shell: `$(make adapter-images)`
+# is a make variable reference (make has no `make` function), so it expands to
+# nothing and the run would silently build every adapter from source and require
+# their checkouts. The escaped substitution captures the value `make
+# adapter-images` prints, and `set -e` aborts the recipe when it fails (for
+# example an unreadable provider config), so the benchmark target never starts
+# with a missing or truncated ADAPTER_IMAGES. `ADAPTERS=all` is pinned on the
+# substitution as well: an inherited ADAPTERS would otherwise resolve a subset of
+# the pairs this run passes with ADAPTERS=all.
+test-benchmarks-kind-latest: ## Run benchmark smoke tests on kind with all curated adapters supplied as the prebuilt images their provider configs declare
+	@set -eu; \
+	adapter_images="$$($(MAKE) --no-print-directory adapter-images ADAPTERS=all)"; \
+	$(MAKE) test-benchmarks-kind ADAPTERS=all ADAPTER_IMAGES="$$adapter_images" ADAPTER_IMAGES_PLATFORM=linux/amd64
 
 generate-benchmark-configs: ## Create missing per-benchmark smoke fixtures from config/providers
 	go run ./tests/benchmarks/generate

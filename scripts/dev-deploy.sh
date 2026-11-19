@@ -78,14 +78,17 @@ Inputs (also accepted as environment variables):
                            ADAPTER_IMAGES='inspect=quay.io/evalhub/community-inspect@sha256:...'
                            Every adapter named here must also be selected by
                            ADAPTERS. The image is pulled into the container
-                           runtime when it is not present locally (SKIP_BUILD=true
-                           requires it to be present instead) and is re-tagged
-                           into the cluster-local registry, so Pods keep pulling
+                           runtime when it is not present locally
+                           (SKIP_BUILD=true skips the pull and requires it to be
+                           present instead) and is re-tagged into the
+                           cluster-local registry, so Pods keep pulling
                            localhost:<port> references. An overridden adapter
                            needs no source checkout. AIRGAP=true still works
                            because the pull happens on the host before the
-                           registry push; SKIP_BUILD=true with a present image
-                           needs no network at all.
+                           registry push. SKIP_BUILD=true does not make the
+                           deployment offline: the mock target still pulls
+                           python:3.12-slim when it is absent, and arm64 still
+                           clones and builds kube-rbac-proxy.
   ADAPTER_IMAGES_PLATFORM=<platform>
                            platform to pull prebuilt adapter images for, for
                            example linux/amd64. It applies only to adapters in
@@ -673,7 +676,7 @@ build_image() {
 }
 
 # require_local_image fails unless the host engine already has an image, so
-# SKIP_BUILD=true never reaches the network.
+# SKIP_BUILD=true never pulls the image it guards.
 require_local_image() {
   local image="$1"
   "$CONTAINER_RUNTIME" image inspect "$image" >/dev/null 2>&1 || fail "Required local image is missing: $image"
@@ -698,8 +701,8 @@ adapter_source_image() {
 # load_adapter_image makes a prebuilt adapter image available without building
 # it. The pull runs on the host engine, before publish_images pushes into the
 # cluster-local registry, so AIRGAP=true (which denies egress from evaluation
-# pods only) still deploys. SKIP_BUILD=true never reaches the network and fails
-# for a missing image instead.
+# pods only) still deploys. SKIP_BUILD=true skips the pull and fails for a
+# missing image instead.
 #
 # PLATFORM pulls that platform instead of the host's. The curated community
 # images are published for linux/amd64 only, so an arm64 machine needs

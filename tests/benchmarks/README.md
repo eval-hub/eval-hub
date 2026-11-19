@@ -118,6 +118,14 @@ Those images are `linux/amd64` only, so add
 `ADAPTER_IMAGES_PLATFORM=linux/amd64` on an arm64 machine to run them under the
 podman machine's qemu-user-static emulation, or leave them out of
 `ADAPTER_IMAGES` and build them for the host instead.
+
+`make test-benchmarks-kind-latest` is the shortcut for that whole-set prebuilt
+run: it resolves the pairs with `make adapter-images`, passes them with
+`ADAPTERS=all`, and adds `ADAPTER_IMAGES_PLATFORM=linux/amd64`. The recipe
+captures the pairs in the shell rather than through a make variable reference,
+so a resolution failure stops the run before the deployment starts instead of
+falling back to building every adapter from source.
+
 garak and garak-kfp
 are not curated adapters, so they keep their operator-packaged image. It also
 mints a short-lived service-account token, creates or refreshes the

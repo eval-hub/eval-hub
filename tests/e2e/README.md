@@ -45,8 +45,10 @@ container runtime, re-tags it into the kind-local registry, and records
 instead of a build revision. The image checks above still apply, because the
 registry reference, the provider ConfigMap, and the manifest entry are
 identical to a built adapter. The pull runs on the host before the registry
-push, so `AIRGAP=true` still works; add `SKIP_BUILD=true` to deploy from a
-locally present image with no network access at all.
+push, so `AIRGAP=true` still works. Add `SKIP_BUILD=true` to skip the pull and
+require the adapter images to be present locally; it does not make the whole
+deployment offline, because dev-deploy still pulls `python:3.12-slim` for the
+mock target and, on arm64, clones and builds `kube-rbac-proxy`.
 
 `make adapter-images` prints that value for the selected adapters from the
 references the provider configs declare, so a deploy can use the whole set

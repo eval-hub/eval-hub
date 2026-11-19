@@ -309,10 +309,12 @@ adapter would use, so the rendered provider ConfigMaps, the recorded
 `system/evalhub-dev-deploy-manifest` (which gains
 `source.<adapter>.prebuilt=true` and `source.<adapter>.image`), and the e2e image
 checks are unchanged. The pull happens on the host before the registry push, so
-`AIRGAP=true` still deploys; `SKIP_BUILD=true` never reaches the network and
-requires the image to be present locally instead. `make adapter-images` prints
-the value for the selected adapters from the references the provider configs
-declare, ready to substitute:
+`AIRGAP=true` still deploys. `SKIP_BUILD=true` skips that pull and requires the
+adapter images to be present locally instead; it does not make the whole
+deployment offline, because dev-deploy still pulls `python:3.12-slim` for the
+mock target and, on arm64, clones and builds `kube-rbac-proxy`. `make
+adapter-images` prints the value for the selected adapters from the references
+the provider configs declare, ready to substitute:
 
 ```bash
 make dev-deploy ADAPTERS=all ADAPTER_IMAGES="$(make adapter-images)"
@@ -329,9 +331,11 @@ make dev-deploy ADAPTERS=all ADAPTER_IMAGES="$(make adapter-images)" \
 ```
 
 The adapter Pods then run under emulation and are much slower, and dev-deploy
-warns which images are foreign to the nodes. Leaving an adapter out of both
-`ADAPTERS` and `ADAPTER_IMAGES` builds it natively for the host instead, which
-is the faster option when you only need a few adapters.
+warns which images are foreign to the nodes. To build an adapter natively for the
+host instead, keep it in `ADAPTERS` and leave it out of `ADAPTER_IMAGES`: that
+selection reaches the source-build branch, which is the faster option when you
+only need a few adapters. Dropping an adapter from `ADAPTERS` neither builds nor
+publishes it, so its provider keeps the operator-packaged image.
 
 Each repository is searched as
 a sibling of
