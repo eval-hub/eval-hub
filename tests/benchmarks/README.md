@@ -117,7 +117,37 @@ each pair: `make test-benchmarks-kind ADAPTER_IMAGES="$(make adapter-images)"`.
 Those images are `linux/amd64` only, so add
 `ADAPTER_IMAGES_PLATFORM=linux/amd64` on an arm64 machine to run them under the
 podman machine's qemu-user-static emulation, or leave them out of
-`ADAPTER_IMAGES` and build them for the host instead.
+`ADAPTER_IMAGES` and build them for the host instead (see **Building and pushing
+native images** below).
+
+### Building and pushing native images
+
+Building for the host instead of pulling the published images avoids that
+emulation. `make adapter-images-push` builds the selected adapters from the same
+checkouts `dev-deploy` uses, for the architecture the container runtime reports,
+and pushes them to a registry you own:
+
+```bash
+podman login quay.io
+make adapter-images-push ADAPTER_IMAGE_REGISTRY=quay.io/<your-user>
+```
+
+The target prints the `ADAPTER_IMAGES` value for the images it pushed, so pass
+that value to a run — with `SKIP_BUILD=true`, because the images already exist:
+
+```bash
+make test-benchmarks-kind SKIP_BUILD=true ADAPTERS=all \
+  ADAPTER_IMAGES='inspect=quay.io/<your-user>/community-inspect:<tag>,…'
+```
+
+`ADAPTER_IMAGE_REGISTRY` defaults to `quay.io/<the account the container runtime
+is logged in to>` and `ADAPTER_IMAGE_TAG` to `latest`; push a new tag for each
+run rather than re-pushing `latest`, because neither the container runtime nor
+the kind nodes refresh a cached tag. On an arm64 machine the pushed images match
+the kind nodes, so the adapter Pods run natively instead of under
+qemu-user-static — which is how the emulated `inspect` and
+`lm-evaluation-harness` Pods fail (`qemu: uncaught target signal 11 (Segmentation
+fault)`).
 
 `make test-benchmarks-kind-latest` is the shortcut for that whole-set prebuilt
 run: it resolves the pairs with `make adapter-images`, passes them with

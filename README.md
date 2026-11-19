@@ -337,6 +337,24 @@ selection reaches the source-build branch, which is the faster option when you
 only need a few adapters. Dropping an adapter from `ADAPTERS` neither builds nor
 publishes it, so its provider keeps the operator-packaged image.
 
+To build every adapter natively once and reuse the images, `make
+adapter-images-push` builds the selected adapters for the architecture the
+container runtime reports and pushes them to a registry you own, printing the
+`ADAPTER_IMAGES` value for the pushed images:
+
+```bash
+podman login quay.io
+make adapter-images-push ADAPTER_IMAGE_REGISTRY=quay.io/<your-user>
+make dev-deploy ADAPTERS=all SKIP_BUILD=true ADAPTER_IMAGES='<the printed value>'
+```
+
+`ADAPTER_IMAGE_REGISTRY` defaults to `quay.io/<the account the container runtime
+is logged in to>` and `ADAPTER_IMAGE_TAG` to `latest`; push a new tag per run
+rather than re-pushing `latest`, because a cached tag is reused as-is. The build
+uses the same source checkout, Containerfile, and image name as a source build,
+so a deployment or a benchmark sweep published from the pushed images is
+identical to one built locally.
+
 Each repository is searched as
 a sibling of
 the EvalHub checkout first and then as `<parent>/<repo>` under each

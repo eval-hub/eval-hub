@@ -187,6 +187,45 @@ adapter-images: ## Echo ADAPTER_IMAGES from the image references the provider co
 adapter-images-help: ## Show the adapter-images inputs and usage
 	@bash scripts/adapter-images.sh --help
 
+# Build the curated adapter images for this machine's own architecture and push
+# them to a registry the caller owns. The published community images are
+# linux/amd64 only, so on an Apple silicon machine dev-deploy can only run them
+# under qemu-user-static: slow, and fatal for the Inspect and LM Evaluation
+# Harness images, which abort their Python subprocesses with
+# "qemu: uncaught target signal 11 (Segmentation fault)". Pushing arm64 builds
+# instead lets the kind nodes run the adapters natively:
+#
+#   podman login quay.io
+#   make adapter-images-push ADAPTER_IMAGE_REGISTRY=quay.io/<your-user>
+#
+# The target prints the ADAPTER_IMAGES value for the images it pushed; pass that
+# (not the printed references of a published registry) to a deployment or a
+# benchmark sweep:
+#
+#   make test-benchmarks-kind SKIP_BUILD=true ADAPTERS=all \
+#     ADAPTER_IMAGES='inspect=quay.io/<your-user>/community-inspect:latest,...'
+#
+# ADAPTER_IMAGE_REGISTRY defaults to quay.io/<the account the container runtime
+# is logged in to>, and ADAPTER_IMAGE_TAG to latest; pin the tag for a run you
+# need to reproduce. The build uses the architecture the runtime reports, so a
+# `podman machine --arch amd64` VM still builds amd64. Reusing a tag leaves the
+# kind nodes and the runtime with the image they cached, which dev-deploy does
+# not refresh — push a new tag rather than re-push latest.
+ADAPTER_IMAGE_REGISTRY ?=
+ADAPTER_IMAGE_TAG ?= latest
+
+.PHONY: adapter-images-push adapter-images-push-help
+adapter-images-push: ## Build the adapter images for this machine's architecture and push them to ADAPTER_IMAGE_REGISTRY
+	@ADAPTERS="$(ADAPTER_IMAGES_SELECTION)" \
+		ADAPTER_IMAGE_REGISTRY="$(ADAPTER_IMAGE_REGISTRY)" \
+		ADAPTER_IMAGE_TAG="$(ADAPTER_IMAGE_TAG)" \
+		CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" \
+		DEV_REPO_PARENT_PATHS="$(DEV_REPO_PARENT_PATHS)" \
+		bash scripts/build-adapter-images.sh
+
+adapter-images-push-help: ## Show the adapter-images-push inputs and usage
+	@bash scripts/build-adapter-images.sh --help
+
 
 DELETE_CLUSTER ?= false
 

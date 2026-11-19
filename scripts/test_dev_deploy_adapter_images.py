@@ -40,6 +40,21 @@ import unittest
 
 SCRIPTS_DIR = pathlib.Path(__file__).resolve().parent
 DEPLOY_PATH = SCRIPTS_DIR / "dev-deploy.sh"
+# The curated adapter list, the image names, and the per-adapter build recipe
+# live in the library shared with build-adapter-images, so a harness that drives
+# dev-deploy's selection has to read both files.
+LIB_PATH = SCRIPTS_DIR / "lib" / "adapter-build.sh"
+# Functions the library defines, so a harness reads each one from its own file.
+LIB_FUNCTIONS = [
+    "curated_adapters",
+    "curated_adapter_list",
+    "curated_adapter_supported",
+    "adapter_image_name",
+    "adapter_build_context",
+    "adapter_containerfile",
+    "build_adapter_image",
+]
+
 
 # fail() is extracted too, so the harness reports the script's own diagnostics
 # instead of a harness-level failure; log() is stubbed because the tests do not
@@ -47,6 +62,9 @@ DEPLOY_PATH = SCRIPTS_DIR / "dev-deploy.sh"
 DEPLOY_FUNCTIONS = [
     "fail",
     "trim_whitespace",
+    "curated_adapters",
+    "curated_adapter_list",
+    "curated_adapter_supported",
     "adapter_selected",
     "adapter_image_name",
     "adapter_override_image",
@@ -107,9 +125,31 @@ def extract_functions(path, names):
         blocks.extend(lines[start:end + 1])
         blocks.append("")
     return "\n".join(blocks)
+
+
+def deploy_functions(names):
+    """Return the source of `names`, reading the shared library for what moved there.
+
+    A name that lives in scripts/lib/adapter-build.sh is read from that file, and
+    every other name from dev-deploy.sh, so the harnesses follow the functions to
+    their new home instead of restating them.
+    """
+    lib_names = [name for name in names if name in LIB_FUNCTIONS]
+    deploy_names = [name for name in names if name not in LIB_FUNCTIONS]
+    blocks = []
+    if lib_names:
+        blocks.append(extract_functions(LIB_PATH, lib_names))
+    if deploy_names:
+        blocks.append(extract_functions(DEPLOY_PATH, deploy_names))
+    return "\n".join(blocks)
+
+
 PUBLISH_FUNCTIONS = [
     "fail",
     "trim_whitespace",
+    "curated_adapters",
+    "curated_adapter_list",
+    "curated_adapter_supported",
     "adapter_selected",
     "adapter_image_name",
     "adapter_override_image",
@@ -224,7 +264,7 @@ class AdapterImagesTestCase(unittest.TestCase):
         cls.work_dir = pathlib.Path(cls.work.name)
         cls.harness = cls.work_dir / "case.sh"
         cls.harness.write_text(
-            HARNESS.format(functions=extract_functions(DEPLOY_PATH, DEPLOY_FUNCTIONS))
+            HARNESS.format(functions=deploy_functions(DEPLOY_FUNCTIONS))
         )
 
     @classmethod
@@ -459,7 +499,7 @@ class PrebuiltImageResolutionTests(unittest.TestCase):
         cls.runtime.chmod(0o755)
         cls.harness = cls.work_dir / "resolve.sh"
         cls.harness.write_text(
-            RESOLVE_HARNESS.format(functions=extract_functions(DEPLOY_PATH, PUBLISH_FUNCTIONS))
+            RESOLVE_HARNESS.format(functions=deploy_functions(PUBLISH_FUNCTIONS))
         )
         cls.publish_harness = cls.work_dir / "publish.sh"
         cls.publish_harness.write_text(

@@ -50,6 +50,9 @@ API_HOST_ACCESS_PORT="${EVALHUB_HOST_PORT}"
 
 # Runtime selection helpers, shared with the other dev scripts.
 . "${SCRIPT_DIR}/lib/dev-runtime.sh"
+# Adapter build recipes, shared with build-adapter-images so a pushed image and a
+# deployed one come from the same source, Containerfile, and image name.
+. "${SCRIPT_DIR}/lib/adapter-build.sh"
 
 log() {
   printf '[%s] [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S%z')" "$1" "$2"
@@ -344,17 +347,6 @@ adapter_selected() {
   return 1
 }
 
-# adapter_image_name prints the local image name dev-deploy builds and publishes
-# for an adapter. It is the single mapping used by every stage, so an
-# ADAPTER_IMAGES override is published under the same registry path as a built
-# image and the rendered provider ConfigMaps stay unchanged.
-adapter_image_name() {
-  case "$1" in
-    lm-evaluation-harness) printf 'community-lmes' ;;
-    *) printf 'community-%s' "$1" ;;
-  esac
-}
-
 # adapter_override_image prints the prebuilt image ADAPTER_IMAGES supplies for an
 # adapter, or nothing when dev-deploy has to build it from source.
 adapter_override_image() {
@@ -412,7 +404,11 @@ parse_adapters() {
 
   ADAPTERS="$(trim_whitespace "$ADAPTERS")"
   if [[ "$ADAPTERS" == all ]]; then
-    requested_adapters=(inspect lm-evaluation-harness lighteval ruler ifbench followbench)
+    # The curated list and its order live in lib/adapter-build.sh, so a deploy
+    # and a push never disagree about which adapters the whole set is.
+    while IFS= read -r adapter; do
+      requested_adapters+=("$adapter")
+    done < <(curated_adapters)
   else
     [[ -n "$ADAPTERS" ]] || fail "ADAPTERS must be 'all' or a comma-separated list of supported adapters."
     IFS=, read -r -a requested_adapters <<<"$ADAPTERS"
@@ -423,9 +419,9 @@ parse_adapters() {
   for requested in "${requested_adapters[@]}"; do
     adapter="$(trim_whitespace "$requested")"
     case "$adapter" in
-      inspect|followbench|lm-evaluation-harness|lighteval|ruler|ifbench) ;;
       "") fail "ADAPTERS contains an empty entry. Use one or more supported adapter names." ;;
-      *) fail "Unsupported adapter '$adapter' in ADAPTERS. Supported values: inspect, lm-evaluation-harness, lighteval, ruler, ifbench, followbench." ;;
+      *) curated_adapter_supported "$adapter" ||
+        fail "Unsupported adapter '$adapter' in ADAPTERS. Supported values: $(curated_adapter_list)." ;;
     esac
     adapter_selected "$adapter" && fail "ADAPTERS contains duplicate entry '$adapter'."
     SELECTED_ADAPTERS+=("$adapter")
@@ -701,11 +697,6 @@ build_image() {
         --build-arg CI_CONTAINER_VERSION=kind-local \
         --tag "$image" --file "$dockerfile" "$context"
       ;;
-    community-lmes)
-      "$CONTAINER_RUNTIME" build --platform "linux/${target_arch}" \
-        --build-arg TARGETOS=linux --build-arg "TARGETARCH=${target_arch}" \
-        --tag "$image" --file "$dockerfile" "$context"
-      ;;
     *)
       "$CONTAINER_RUNTIME" build --platform "linux/${target_arch}" --tag "$image" --file "$dockerfile" "$context"
       ;;
@@ -796,32 +787,10 @@ build_images() {
         "$ADAPTER_IMAGES_PLATFORM" "$target_arch"
       continue
     fi
-    case "$adapter" in
-      inspect)
-        build_image community-inspect "$CONTRIB_REPO/adapters/inspect" \
-          "$CONTRIB_REPO/adapters/inspect/Containerfile" "$target_arch"
-        ;;
-      followbench)
-        build_image community-followbench "$CONTRIB_REPO/adapters/followbench" \
-          "$CONTRIB_REPO/adapters/followbench/Containerfile" "$target_arch"
-        ;;
-      lm-evaluation-harness)
-        build_image community-lmes "$LMES_REPO" \
-          "$LMES_REPO/Dockerfile.lmes-job" "$target_arch"
-        ;;
-      lighteval)
-        build_image community-lighteval "$CONTRIB_REPO/adapters/lighteval" \
-          "$CONTRIB_REPO/adapters/lighteval/Containerfile" "$target_arch"
-        ;;
-      ruler)
-        build_image community-ruler "$CONTRIB_REPO/adapters/ruler" \
-          "$CONTRIB_REPO/adapters/ruler/Containerfile" "$target_arch"
-        ;;
-      ifbench)
-        build_image community-ifbench "$CONTRIB_REPO/adapters/ifbench" \
-          "$CONTRIB_REPO/adapters/ifbench/Containerfile" "$target_arch"
-        ;;
-    esac
+    # The source path, Containerfile, and image name of each adapter come from
+    # lib/adapter-build.sh, which build-adapter-images also uses, so a pushed
+    # image is the image this deploy would have built.
+    build_adapter_image "$adapter" "$target_arch" "$(image_ref "$(adapter_image_name "$adapter")")"
   done
 }
 
@@ -1186,34 +1155,31 @@ render_operator_overlay() {
   replace_env_value "$params" trustyaiOperatorImage "$(registry_image trustyai-service-operator)"
   replace_env_value "$params" evalHubImage "$(registry_image eval-hub)"
   for adapter in "${SELECTED_ADAPTERS[@]}"; do
+    # The image name is the one the build used, from lib/adapter-build.sh, so the
+    # rendered overlay always points at the image this deploy published.
+    image_name="$(adapter_image_name "$adapter")"
     case "$adapter" in
       inspect)
-        image_name=community-inspect
         image_parameter=evalhub-provider-inspect-image
         provider_config=provider-inspect.yaml
         ;;
       lm-evaluation-harness)
-        image_name=community-lmes
         image_parameter=lmes-pod-image
         provider_config=provider-lm-evaluation-harness.yaml
         ;;
       lighteval)
-        image_name=community-lighteval
         image_parameter=evalhub-provider-lighteval-image
         provider_config=provider-lighteval.yaml
         ;;
       ruler)
-        image_name=community-ruler
         image_parameter=evalhub-provider-ruler-image
         provider_config=provider-ruler.yaml
         ;;
       ifbench)
-        image_name=community-ifbench
         image_parameter=evalhub-provider-ifbench-image
         provider_config=provider-ifbench.yaml
         ;;
       followbench)
-        image_name=community-followbench
         image_parameter=evalhub-provider-followbench-image
         provider_config=provider-followbench.yaml
         ;;
