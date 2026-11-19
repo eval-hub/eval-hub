@@ -118,10 +118,10 @@ func (r *Runner) Run(parent context.Context, input Input) (Result, error) {
 			return Result{}, budgetOrContextError(parent, err)
 		}
 		response, promptEstimate, err := r.completeTurn(ctx, input, iteration, definitions, messages, &result)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return Result{}, budgetOrContextError(parent, ctxErr)
+		}
 		if err != nil {
-			if ctx.Err() != nil {
-				return Result{}, budgetOrContextError(parent, ctx.Err())
-			}
 			return Result{}, err
 		}
 		outputEstimate, err := responseTokenEstimate(response)
@@ -177,6 +177,9 @@ func (r *Runner) Run(parent context.Context, input Input) (Result, error) {
 				label = "Registered read-only tool"
 			}
 			r.emit(EventToolCallStarted, result.ModelCalls, tool.Definition.Function.Name, "started", label+" started")
+			if err := ctx.Err(); err != nil {
+				return Result{}, budgetOrContextError(parent, err)
+			}
 			toolResult, succeeded, executeErr := executeTool(ctx, tool, call.Function.Arguments, r.config.MaxToolArgumentBytes, r.config.MaxToolResultBytes)
 			if executeErr != nil {
 				r.emit(EventToolCallCompleted, result.ModelCalls, tool.Definition.Function.Name, "failed", "Registered tool result was rejected")
@@ -216,19 +219,89 @@ func (r *Runner) canFitFinalTurnAfterTools(input Input, iteration int, definitio
 		input.Budget.MaxToolCalls-result.ToolCalls-len(calls),
 		remainingTokens,
 	)
-	maxResult := worstCaseToolResult(r.config.MaxToolResultBytes)
-	for _, call := range calls {
-		projectedMessages = append(projectedMessages, Message{
-			Role: RoleTool, Name: call.Function.Name, ToolCallID: call.ID, Content: maxResult,
-		})
-	}
-	promptEstimate, err := promptTokenEstimate(projectedMessages, definitions)
-	if err != nil {
+	minimumFinalTokens, err := minimumFinalResponseTokens()
+	if err != nil || remainingTokens <= minimumFinalTokens {
 		return false
 	}
-	// completeTurn requires a non-zero output allowance after the prompt fits.
-	const minimumOutputAllowance = int64(1)
-	return promptEstimate <= remainingTokens-minimumOutputAllowance
+	_, fits := promptTokenEstimateAfterToolResults(
+		projectedMessages,
+		definitions,
+		calls,
+		r.config.MaxToolResultBytes,
+		remainingTokens-minimumFinalTokens,
+	)
+	return fits
+}
+
+// promptTokenEstimateAfterToolResults estimates the serialized prompt after
+// appending one worst-case result for each tool call. It adds each message's
+// encoded size instead of allocating all synthetic result bodies at once.
+func promptTokenEstimateAfterToolResults(messages []Message, tools ToolDefinitions, calls []ToolCall, maxResultBytes int, maxPromptTokens int64) (int64, bool) {
+	estimate, err := promptTokenEstimate(messages, tools)
+	if err != nil || maxPromptTokens < 0 || estimate > maxPromptTokens {
+		return estimate, false
+	}
+
+	contentSize := worstCaseToolResultEncodedSize(maxResultBytes)
+	messageCount := len(messages)
+	for _, call := range calls {
+		messageSize, err := projectedToolMessageSize(call, contentSize)
+		if err != nil || messageSize > math.MaxInt64-33 {
+			return 0, false
+		}
+		added := messageSize + 32 // promptTokenEstimate's per-message framing allowance
+		if messageCount > 0 {
+			added++ // comma in the messages JSON array
+		}
+		if added > maxPromptTokens-estimate {
+			return estimate, false
+		}
+		estimate += added
+		messageCount++
+	}
+	return estimate, true
+}
+
+func projectedToolMessageSize(call ToolCall, encodedContentSize int64) (int64, error) {
+	message := Message{
+		Role: RoleTool, Name: call.Function.Name, ToolCallID: call.ID, Content: "x",
+	}
+	encoded, err := json.Marshal(message)
+	if err != nil {
+		return 0, err
+	}
+	// The marker content "x" serializes to three bytes including its quotes.
+	const markerSize = int64(3)
+	baseSize := int64(len(encoded)) - markerSize
+	if encodedContentSize > math.MaxInt64-baseSize {
+		return math.MaxInt64, nil
+	}
+	return baseSize + encodedContentSize, nil
+}
+
+// worstCaseToolResultEncodedSize returns the size of the larger JSON-encoded
+// content string: a valid JSON result within maxBytes or the fixed safe handler
+// failure result. encoding/json escapes each '<' to six bytes when embedding
+// the result in a chat message.
+func worstCaseToolResultEncodedSize(maxBytes int) int64 {
+	failureSize := int64(jsonStringSize(toolExecutionFailedResult))
+	var validResultSize int64
+	switch {
+	case maxBytes == 1:
+		// A one-byte JSON scalar such as 0, embedded as a JSON string.
+		validResultSize = 3
+	case maxBytes >= 2:
+		if int64(maxBytes) > math.MaxInt64/6 {
+			validResultSize = math.MaxInt64
+		} else {
+			validResultSize = int64(maxBytes)*6 - 6
+		}
+	}
+	return max(failureSize, validResultSize)
+}
+
+func minimumFinalResponseTokens() (int64, error) {
+	return responseTokenEstimate(ModelResponse{Message: Message{Role: RoleAssistant, Content: "x"}})
 }
 
 // worstCaseToolResult returns the larger serialized form of a valid JSON result

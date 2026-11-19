@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -151,6 +153,107 @@ func TestWorstCaseToolResultIncludesSmallLimitHandlerFailure(t *testing.T) {
 	result := worstCaseToolResult(7)
 	if result != toolExecutionFailedResult {
 		t.Fatalf("worstCaseToolResult(7) = %q, want fixed handler failure result %q", result, toolExecutionFailedResult)
+	}
+}
+
+func TestPromptTokenEstimateAfterToolResultsMatchesSerializedMessages(t *testing.T) {
+	registry := newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) {
+		return json.RawMessage(`null`), nil
+	})
+	calls := []ToolCall{validCall("call-1", "list_catalog"), validCall("call-2", "list_catalog")}
+	messages := []Message{
+		{Role: RoleSystem, Content: "catalog assistant"},
+		{Role: RoleUser, Content: "find benchmarks"},
+		callResponse(calls...).Message,
+	}
+
+	for _, maxResultBytes := range []int{1, 2, 7, 100} {
+		t.Run(strconv.Itoa(maxResultBytes)+"_bytes", func(t *testing.T) {
+			projected := cloneMessages(messages)
+			for _, call := range calls {
+				projected = append(projected, Message{
+					Role: RoleTool, Name: call.Function.Name, ToolCallID: call.ID,
+					Content: worstCaseToolResult(maxResultBytes),
+				})
+			}
+			want, err := promptTokenEstimate(projected, registry.Definitions())
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, fits := promptTokenEstimateAfterToolResults(messages, registry.Definitions(), calls, maxResultBytes, math.MaxInt64)
+			if !fits || got != want {
+				t.Fatalf("projected estimate = %d, fits=%v; want exact serialized estimate %d", got, fits, want)
+			}
+		})
+	}
+}
+
+func TestPromptTokenEstimateAfterToolResultsRejectsLargeBatchWithoutMaterializingResults(t *testing.T) {
+	registry := newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) {
+		return json.RawMessage(`null`), nil
+	})
+	calls := make([]ToolCall, 8)
+	for i := range calls {
+		calls[i] = validCall("call-"+strconv.Itoa(i), "list_catalog")
+	}
+	messages := []Message{{Role: RoleSystem, Content: "catalog assistant"}, {Role: RoleUser, Content: "find benchmarks"}}
+	if _, fits := promptTokenEstimateAfterToolResults(messages, registry.Definitions(), calls, 32<<20, 1_000_000); fits {
+		t.Fatal("large projected tool results unexpectedly fit the token budget")
+	}
+}
+
+func TestRunnerReservesMinimumFinalResponseBeforeDispatch(t *testing.T) {
+	var executions int
+	config := DefaultConfig()
+	config.MaxToolResultBytes = 1
+	input := testInput()
+	model := modelFunc(func(_ context.Context, request ModelRequest) (ModelResponse, error) {
+		response := callResponse(validCall("call-1", "list_catalog"))
+		messages := append(cloneMessages(request.Messages), response.Message)
+		minimumFinal, err := minimumFinalResponseTokens()
+		if err != nil {
+			return ModelResponse{}, err
+		}
+
+		// Find the stable remaining budget because its decimal representation is
+		// included in the next-turn budget notice and therefore in the estimate.
+		remainingTokens := int64(0)
+		stable := false
+		for range 20 {
+			projectedMessages := cloneMessages(messages)
+			projectedMessages[1].Content = budgetNotice(
+				input.Budget.MaxModelCalls-1,
+				input.Budget.MaxIterations-1,
+				input.Budget.MaxToolCalls-1,
+				remainingTokens,
+			)
+			projectedPrompt, fits := promptTokenEstimateAfterToolResults(
+				projectedMessages, request.Tools, response.Message.ToolCalls, config.MaxToolResultBytes, math.MaxInt64,
+			)
+			if !fits {
+				return ModelResponse{}, errors.New("could not estimate projected prompt")
+			}
+			nextRemaining := projectedPrompt + minimumFinal - 1
+			if nextRemaining == remainingTokens {
+				stable = true
+				break
+			}
+			remainingTokens = nextRemaining
+		}
+		if !stable {
+			return ModelResponse{}, errors.New("projected prompt budget did not stabilize")
+		}
+		usage := input.Budget.MaxTotalTokens - remainingTokens
+		response.Usage = &TokenUsage{TotalTokens: int(usage), TotalTokensPresent: true}
+		return response, nil
+	})
+	runner := newTestRunner(t, model, newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) {
+		executions++
+		return json.RawMessage(`null`), nil
+	}), config)
+	_, err := runner.Run(context.Background(), input)
+	if !errors.Is(err, ErrBudgetExceeded) || executions != 0 {
+		t.Fatalf("Run() error=%v executions=%d; want budget rejection before dispatch", err, executions)
 	}
 }
 
@@ -438,6 +541,50 @@ func TestRunnerPropagatesCancellationAndBudgetDeadline(t *testing.T) {
 			t.Fatalf("Run() error = %v", err)
 		}
 	})
+}
+
+func TestRunnerStopsWhenProgressCallbackCancelsAfterModelResponse(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	config := DefaultConfig()
+	config.Progress = func(event ProgressEvent) {
+		if event.Kind == EventModelCallCompleted {
+			cancel()
+		}
+	}
+	model := &fakeModel{responses: []ModelResponse{finalResponse("complete")}}
+	runner := newTestRunner(t, model, newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) {
+		return json.RawMessage(`null`), nil
+	}), config)
+	if _, err := runner.Run(ctx, testInput()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run() error = %v, want caller cancellation", err)
+	}
+}
+
+func TestRunnerStopsWhenProgressCallbackCancelsBeforeToolExecution(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var executions int
+	config := DefaultConfig()
+	config.Progress = func(event ProgressEvent) {
+		if event.Kind == EventToolCallStarted {
+			cancel()
+		}
+	}
+	model := &fakeModel{responses: []ModelResponse{
+		callResponse(validCall("call-1", "list_catalog")),
+		finalResponse("complete"),
+	}}
+	runner := newTestRunner(t, model, newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) {
+		executions++
+		return json.RawMessage(`null`), nil
+	}), config)
+	if _, err := runner.Run(ctx, testInput()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run() error = %v, want caller cancellation", err)
+	}
+	if executions != 0 {
+		t.Fatalf("executed %d tools after cancellation", executions)
+	}
 }
 
 func TestAccountedUsageConservativelyUsesReportedOrEstimatedCounts(t *testing.T) {

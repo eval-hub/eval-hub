@@ -21,8 +21,12 @@ The configured model URL is the API base URL. The client appends
 as `http://localhost:8082/model/<job-id>/v1` retain the `/model/<job-id>` path.
 
 The endpoint must accept a non-streaming `POST` with JSON containing `model`,
-`messages`, `max_tokens`, and, when tools are registered, `tools` with
-`tool_choice: "auto"`. It must return a JSON chat-completions response with
+`messages`, `max_tokens`, and `stream: false`; when tools are registered, the
+request also contains `tools` with `tool_choice: "auto"`. The client includes
+`reasoning_effort` only when the trusted runner sets it. The sidecar and selected
+provider must accept this optional field; the client does not negotiate provider
+capabilities, so set it only for deployments known to support it. The endpoint
+must return a JSON chat-completions response with
 exactly one choice and an assistant message. The assistant message may contain
 a string `content`, function `tool_calls` with string JSON arguments, or both.
 Tool-call responses use `finish_reason: "tool_calls"`; final messages use a
@@ -48,6 +52,17 @@ checks every configured preset against service hard caps, and `Presets.Resolve`
 returns a value snapshot for one admitted job. An empty effort selects standard.
 The request cannot override raw limits, and `strictness` is independent of the
 loop budget.
+
+The shipped defaults are:
+
+| Effort | Iterations | Model calls | Tool calls | Total accounted tokens | Output tokens per response | Duration |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| low | 8 | 8 | 24 | 32,768 | 2,048 | 2 minutes |
+| standard | 20 | 20 | 60 | 131,072 | 4,096 | 2 minutes |
+| high | 40 | 40 | 120 | 524,288 | 8,192 | 10 minutes |
+
+These are library defaults; the service can replace them with validated,
+trusted deployment configuration, subject to the shipped hard ceilings.
 
 The loop tells the model its remaining call, turn, tool, and token budget. This
 is guidance only: the loop enforces the immutable snapshot, caps each response,
