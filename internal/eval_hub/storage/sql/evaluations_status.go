@@ -260,6 +260,10 @@ func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runSt
 			if api.IsBenchmarkTerminalState(benchmark.Status) && !api.IsBenchmarkTerminalState(benchmarkStatus.Status) {
 				return
 			}
+			// Ignore late pending events once the benchmark is already running.
+			if benchmark.Status == api.StateRunning && benchmarkStatus.Status == api.StatePending {
+				return
+			}
 			// Only a transition out of pending may establish a start. Preserve
 			// even an absent start on later running or terminal status updates.
 			if benchmark.StartedAt != "" || benchmark.Status != api.StatePending {

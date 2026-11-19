@@ -206,6 +206,34 @@ func TestBenchmarkStartRequiresPendingTransition(t *testing.T) {
 	}
 }
 
+func TestBenchmarkIgnoresPendingAfterRunning(t *testing.T) {
+	for _, supplied := range []api.DateTime{"", "2026-01-02T05:00:00+02:00"} {
+		t.Run(string(supplied), func(t *testing.T) {
+			store, job := newBenchmarkTimestampJob(t, api.StateRunning)
+			before := readBenchmarkTimestampStatus(t, store, job.Resource.ID, 0)
+			if err := store.UpdateEvaluationJob(job.Resource.ID, &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+				ID: "repeated", ProviderID: "provider", Status: api.StatePending,
+				Phase: "initializing", StartedAt: "2000-01-01T00:00:00Z",
+			}}); err != nil {
+				t.Fatal(err)
+			}
+			if got := readBenchmarkTimestampStatus(t, store, job.Resource.ID, 0); got != before {
+				t.Fatalf("late pending event changed running benchmark: before=%+v after=%+v", before, got)
+			}
+			for _, state := range []api.State{api.StateRunning, api.StateCompleted} {
+				if err := store.UpdateEvaluationJob(job.Resource.ID, &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+					ID: "repeated", ProviderID: "provider", Status: state, StartedAt: supplied,
+				}}); err != nil {
+					t.Fatal(err)
+				}
+				if got := readBenchmarkTimestampStatus(t, store, job.Resource.ID, 0); got.StartedAt != "" {
+					t.Fatalf("%s event backfilled the original running benchmark's start: %+v", state, got)
+				}
+			}
+		})
+	}
+}
+
 func TestBenchmarkStartUsesOnlyFirstRunningEvent(t *testing.T) {
 	for _, supplied := range []api.DateTime{"", "2026-01-02T05:00:00+02:00"} {
 		t.Run(string(supplied), func(t *testing.T) {
@@ -235,8 +263,12 @@ func TestBenchmarkStartUsesOnlyFirstRunningEvent(t *testing.T) {
 				}}); err != nil {
 					t.Fatal(err)
 				}
-				if got := readBenchmarkTimestampStatus(t, store, job.Resource.ID, 0); got.StartedAt != want {
+				got := readBenchmarkTimestampStatus(t, store, job.Resource.ID, 0)
+				if got.StartedAt != want {
 					t.Fatalf("%s event changed first start: got %q, want %q", state, got.StartedAt, want)
+				}
+				if state == api.StatePending && got.Status != api.StateRunning {
+					t.Fatalf("late pending event regressed a running benchmark: %+v", got)
 				}
 			}
 		})
