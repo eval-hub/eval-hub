@@ -45,16 +45,25 @@ container runtime, re-tags it into the kind-local registry, and records
 instead of a build revision. The image checks above still apply, because the
 registry reference, the provider ConfigMap, and the manifest entry are
 identical to a built adapter. The pull runs on the host before the registry
-push, so `AIRGAP=true` still works. Add `SKIP_BUILD=true` to skip the pull and
-require the adapter images to be present locally; it does not make the whole
-deployment offline, because dev-deploy still pulls `python:3.12-slim` for the
-mock target and, on arm64, clones and builds `kube-rbac-proxy`.
+push, so the adapter pull itself still works with `AIRGAP=true`, which restricts
+egress from evaluation-job pods only. Add `SKIP_BUILD=true` to skip the pull and
+require the adapter images to be present locally. That limits the offline
+behaviour to adapter image resolution; it does not make the whole deployment
+offline. A new `AIRGAP=true` cluster still downloads the pinned Calico manifest,
+and dev-deploy still pulls the images it needs when they are absent: the kind
+node image, `docker.io/library/registry:2`, `python:3.12-slim` for the mock
+target, and `odh-kube-rbac-proxy`, which it clones and builds from source on
+arm64.
 
 `make adapter-images` prints that value for the selected adapters from the
 references the provider configs declare, so a deploy can use the whole set
-without typing each pair:
+without typing each pair. Resolve the list first, so a failure to generate it
+stops the deployment instead of continuing with an empty `ADAPTER_IMAGES`, and
+pin `ADAPTERS=all` on the inner command so an exported narrower selection cannot
+produce a subset of the pairs the deployment builds:
 
-    make dev-deploy AIRGAP=true ADAPTERS=all ADAPTER_IMAGES="$(make adapter-images)"
+    adapter_images="$(make adapter-images ADAPTERS=all)" &&
+      make dev-deploy AIRGAP=true ADAPTERS=all ADAPTER_IMAGES="$adapter_images"
 
 Those images are published for `linux/amd64` only. On an arm64 machine, add
 `ADAPTER_IMAGES_PLATFORM=linux/amd64` to pull them for emulation through the

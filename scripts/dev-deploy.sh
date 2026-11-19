@@ -85,10 +85,15 @@ Inputs (also accepted as environment variables):
                            localhost:<port> references. An overridden adapter
                            needs no source checkout. AIRGAP=true still works
                            because the pull happens on the host before the
-                           registry push. SKIP_BUILD=true does not make the
-                           deployment offline: the mock target still pulls
-                           python:3.12-slim when it is absent, and arm64 still
-                           clones and builds kube-rbac-proxy.
+                           registry push. SKIP_BUILD=true limits the offline
+                           behaviour to that adapter image resolution: it does
+                           not make the deployment offline, because a new
+                           AIRGAP=true cluster downloads the pinned Calico
+                           manifest, and dev-deploy still pulls the images it
+                           needs when they are absent (the kind node image,
+                           docker.io/library/registry:2, python:3.12-slim for
+                           the mock target, and odh-kube-rbac-proxy, which
+                           arm64 clones and builds from source).
   ADAPTER_IMAGES_PLATFORM=<platform>
                            platform to pull prebuilt adapter images for, for
                            example linux/amd64. It applies only to adapters in
@@ -366,11 +371,23 @@ contrib_adapter_build_required() {
   return 1
 }
 
-# validate_image_reference accepts the characters a registry reference may
-# contain: it must not be empty, must not start with a dash (which the container
-# runtime would read as an option), and may not carry shell metacharacters.
+# validate_image_reference accepts a reference in the grammar the container
+# runtime parses, [registry[:port]/]repository[:tag][@digest], so a structurally
+# invalid form (a trailing colon with no tag, an empty path element, an empty
+# digest) is rejected during input validation instead of surfacing after the core
+# builds have started. It keeps the character restrictions the rest of the script
+# relies on: the value must not be empty, must not start with a dash (which the
+# runtime would read as an option), and may not carry shell metacharacters. Valid
+# registry ports, tags, and digests are preserved.
 validate_image_reference() {
-  [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$ ]]
+  local reference="$1"
+  local domain='[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*(:[0-9]+)?'
+  local component='[a-z0-9]+(([._]|__|-+)[a-z0-9]+)*'
+  local repository="${component}(/${component})*"
+  local tag='[A-Za-z0-9_][A-Za-z0-9._-]{0,127}'
+  local digest='[A-Za-z][A-Za-z0-9]*(:[A-Za-z0-9=_-]+)+'
+  [[ "$reference" =~ ^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$ ]] || return 1
+  [[ "$reference" =~ ^(${domain}/)?${repository}(:${tag})?(@${digest})?$ ]]
 }
 
 parse_adapters() {
@@ -410,6 +427,11 @@ parse_adapter_images() {
   ADAPTER_IMAGE_OVERRIDES=()
   ADAPTER_IMAGES="$(trim_whitespace "$ADAPTER_IMAGES")"
   [[ -n "$ADAPTER_IMAGES" ]] || return 0
+  # `read` consumes a single line, so an embedded newline would silently drop
+  # every pair after it and the adapters it names would be built from source
+  # instead of using the supplied image. Reject the value before any build.
+  [[ "$ADAPTER_IMAGES" != *$'\n'* ]] ||
+    fail "ADAPTER_IMAGES must be a single line of adapter=image pairs: embedded newlines are not accepted, because only the first line is read. Join the pairs with commas."
 
   IFS=, read -r -a requested <<<"$ADAPTER_IMAGES"
   for entry in "${requested[@]}"; do
@@ -422,7 +444,7 @@ parse_adapter_images() {
       fail "ADAPTER_IMAGES names '$adapter', which ADAPTERS does not select (${SELECTED_ADAPTERS[*]}). Add it to ADAPTERS or drop the override."
     [[ -n "$image" ]] || fail "ADAPTER_IMAGES entry '$adapter' has an empty image reference."
     validate_image_reference "$image" ||
-      fail "ADAPTER_IMAGES entry '$adapter' has an invalid image reference: $image"
+      fail "ADAPTER_IMAGES entry '$adapter' has an invalid image reference: $image. Use [registry[:port]/]repository[:tag][@digest], with a tag after a colon."
     [[ -z "$(adapter_override_image "$adapter")" ]] ||
       fail "ADAPTER_IMAGES contains duplicate entry '$adapter'."
     ADAPTER_IMAGE_OVERRIDES+=("$adapter=$image")
@@ -794,8 +816,15 @@ registry_image() {
 tag_and_push() {
   local source="$1" destination="$2"
   "$CONTAINER_RUNTIME" image inspect "$source" >/dev/null 2>&1 || fail "Image missing before registry push: $source"
-  "$CONTAINER_RUNTIME" image tag "$source" "$destination"
-  TEMP_REGISTRY_TAGS+=("$destination")
+  if [[ "$source" == "$destination" ]]; then
+    # A same-reference publish keeps the caller's tag: tagging it again is
+    # redundant, and removing it would delete the local image a later
+    # SKIP_BUILD=true deployment verifies.
+    log INFO "Publishing $destination from the same local reference; keeping the tag."
+  else
+    "$CONTAINER_RUNTIME" image tag "$source" "$destination"
+    TEMP_REGISTRY_TAGS+=("$destination")
+  fi
   # The local registry serves plain HTTP. Docker's daemon implicitly trusts
   # localhost registries; podman requires an explicit TLS opt-out for them.
   if [[ "$CONTAINER_RUNTIME" == "podman" ]]; then
@@ -803,7 +832,7 @@ tag_and_push() {
   else
     "$CONTAINER_RUNTIME" image push "$destination"
   fi
-  remove_temporary_registry_tag "$destination"
+  [[ "$source" == "$destination" ]] || remove_temporary_registry_tag "$destination"
 }
 
 ensure_registry() {

@@ -11,7 +11,9 @@ no container runtime and no network and pin:
   3. that the reference is copied exactly as the provider declares it - a
      `latest` tag stays `latest`, a version tag stays that tag, and a digest is
      reproduced as pinned - because the target must not silently rewrite what a
-     deploy runs;
+     deploy runs; a YAML comment after the scalar is dropped instead of becoming
+     part of the reference, and the pair it produces is accepted by dev-deploy's
+     image-reference validation;
   4. the rejections that keep a wrong pair out of a deploy: an unsupported or
      duplicate adapter, a missing provider file, and a provider without a
      runtime image.
@@ -26,8 +28,33 @@ import subprocess
 import tempfile
 import unittest
 
+from test_dev_deploy_adapter_images import DEPLOY_PATH, extract_functions
+
 SCRIPTS_DIR = pathlib.Path(__file__).resolve().parent
 SCRIPT_PATH = SCRIPTS_DIR / "adapter-images.sh"
+
+# The emitted pair is only useful if the deploy accepts it, so the acceptance
+# check runs dev-deploy's own validator instead of restating its grammar here.
+VALIDATE_HARNESS = """#!/usr/bin/env bash
+set -Eeuo pipefail
+{functions}
+validate_image_reference "$1"
+"""
+
+
+def image_reference_is_accepted(reference):
+    """Return True when dev-deploy's validate_image_reference accepts `reference`."""
+    with tempfile.TemporaryDirectory() as tmp:
+        harness = pathlib.Path(tmp) / "validate.sh"
+        harness.write_text(
+            VALIDATE_HARNESS.format(
+                functions=extract_functions(DEPLOY_PATH, ["validate_image_reference"])
+            )
+        )
+        proc = subprocess.run(
+            ["bash", str(harness), reference], capture_output=True, text=True
+        )
+        return proc.returncode == 0
 
 PROVIDER_FILES = {
     "inspect": "inspect.yaml",
@@ -145,6 +172,44 @@ class AdapterImagesScriptTests(unittest.TestCase):
             "inspect", ["inspect"], providers_dir=self.provider_dir({"inspect": pinned})
         )
         self.assertEqual(out, f"inspect={pinned}\n")
+
+    def test_a_quoted_image_with_a_trailing_comment_is_accepted_as_a_pair(self):
+        """YAML allows a comment after a quoted scalar; it is not part of the value."""
+        providers = self.provider_dir(
+            {"inspect": '"quay.io/evalhub/community-inspect:latest" # default'}
+        )
+        code, out, err = self.run_script("inspect", providers)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(out, "inspect=quay.io/evalhub/community-inspect:latest\n")
+        reference = out.strip().split("=", 1)[1]
+        self.assertTrue(
+            image_reference_is_accepted(reference),
+            f"dev-deploy rejects the generated reference: {reference}",
+        )
+
+    def test_a_plain_image_with_a_trailing_comment_drops_the_comment(self):
+        providers = self.provider_dir(
+            {"ruler": "quay.io/evalhub/community-ruler:latest # curated"}
+        )
+        code, out, err = self.run_script("ruler", providers)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(out, "ruler=quay.io/evalhub/community-ruler:latest\n")
+
+    def test_a_single_quoted_image_with_a_trailing_comment_drops_the_comment(self):
+        providers = self.provider_dir(
+            {"ifbench": "'quay.io/evalhub/community-ifbench:latest' # curated"}
+        )
+        code, out, err = self.run_script("ifbench", providers)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(out, "ifbench=quay.io/evalhub/community-ifbench:latest\n")
+
+    def test_a_quoted_digest_with_a_comment_stays_pinned(self):
+        pinned = "quay.io/evalhub/community-inspect@sha256:" + "1" * 64
+        providers = self.provider_dir({"inspect": f'"{pinned}"  # pinned for this release'})
+        code, out, err = self.run_script("inspect", providers)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(out, f"inspect={pinned}\n")
+        self.assertTrue(image_reference_is_accepted(pinned))
 
     def test_the_value_is_unquoted_so_it_can_be_substituted(self):
         out = self.assert_pairs("inspect,ruler", ["inspect", "ruler"])

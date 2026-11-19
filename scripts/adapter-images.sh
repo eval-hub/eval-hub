@@ -118,22 +118,40 @@ parse_adapters() {
 }
 
 # provider_image prints the image reference the provider YAML declares for an
-# adapter: the first `image:` line, without the surrounding quotes YAML allows.
+# adapter: the first `image:` value, without the surrounding quotes YAML allows
+# and without a trailing YAML comment. A comment is not part of the scalar, and
+# keeping it would emit a pair dev-deploy rejects; a '#' inside the quotes is
+# data, so only an unquoted value loses its comment.
 provider_image() {
-  local adapter="$1" file image
+  local adapter="$1" file scalar
   file="${PROVIDERS_DIR}/$(provider_config_file "$adapter")"
   [[ -f "$file" ]] || fail "Provider configuration not found for adapter '$adapter': $file"
-  image="$(awk '
+  scalar="$(awk '
     /^[[:space:]]*image:[[:space:]]/ {
       sub(/^[[:space:]]*image:[[:space:]]*/, "")
       sub(/[[:space:]]+$/, "")
       print
       exit
     }' "$file")"
-  [[ -n "$image" ]] || fail "Provider configuration has no runtime image for adapter '$adapter': $file"
-  image="${image#\"}"; image="${image%\"}"
-  image="${image#\'}"; image="${image%\'}"
-  printf '%s' "$image"
+  [[ -n "$scalar" ]] || fail "Provider configuration has no runtime image for adapter '$adapter': $file"
+  case "$scalar" in
+    \"*)
+      # Double-quoted scalar: the value ends at the closing quote, so anything
+      # after it, including a comment, is not part of the reference.
+      scalar="${scalar#\"}"
+      scalar="${scalar%%\"*}"
+      ;;
+    \'*)
+      # Single-quoted scalar: the value likewise ends at the closing quote.
+      scalar="${scalar#\'}"
+      scalar="${scalar%%\'*}"
+      ;;
+    *)
+      # Plain scalar: YAML starts a comment only at whitespace followed by '#'.
+      scalar="${scalar%%[[:space:]]#*}"
+      ;;
+  esac
+  trim_whitespace "$scalar"
 }
 
 main() {

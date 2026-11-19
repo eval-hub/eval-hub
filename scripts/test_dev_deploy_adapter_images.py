@@ -8,7 +8,12 @@ harness, so they pin the contract the deploy relies on:
   1. ADAPTER_IMAGES is a comma-separated list of adapter=image pairs; whitespace
      around entries, names, and references is tolerated, digests and
      registry:port references are accepted, and references may not start with a
-     dash or carry shell metacharacters (the value reaches `image pull`);
+     dash or carry shell metacharacters (the value reaches `image pull`). A
+     structurally invalid reference (a trailing colon with no tag, an empty path
+     element, an empty digest) is rejected during input validation, before either
+     core build starts, and so is a value with an embedded newline: `read`
+     consumes one line, so the pairs after it would be dropped and their adapters
+     built from source instead of using the supplied image;
   2. an override must name an adapter ADAPTERS selects: ignoring it silently
      would deploy the image dev-deploy built while the caller expected the
      prebuilt one, so that case fails instead of building;
@@ -137,6 +142,9 @@ case "${args[0]} ${args[1]}" in
     exit 0
     ;;
   "image pull") exit "${FAKE_PULL_EXIT:-0}" ;;
+  "image tag") exit 0 ;;
+  "image push") exit 0 ;;
+  "image rm") exit 0 ;;
   *) exit 1 ;;
 esac
 """
@@ -171,6 +179,27 @@ case "$4" in
     done
     ;;
 esac
+printf 'DONE=yes\\n'
+"""
+
+# tag_and_push publishes one local reference into the kind-local registry. The
+# caller's image must survive a publish whose source already equals the
+# destination, or a later SKIP_BUILD=true deployment fails its local-image check.
+TAG_AND_PUSH_FUNCTIONS = [
+    "fail",
+    "remove_temporary_registry_tag",
+    "tag_and_push",
+]
+
+PUBLISH_HARNESS = """#!/usr/bin/env bash
+set -Eeuo pipefail
+log() {{ printf '[%s] %s\\n' "$1" "$2" >&2; }}
+{functions}
+
+TEMP_REGISTRY_TAGS=()
+CONTAINER_RUNTIME="$1"
+tag_and_push "$2" "$3"
+printf 'PENDING_TAGS=%s\\n' "${{TEMP_REGISTRY_TAGS[*]}}"
 printf 'DONE=yes\\n'
 """
 
@@ -368,6 +397,48 @@ class RejectionTests(AdapterImagesTestCase):
             with self.subTest(image=image):
                 self.assert_rejected("inspect", f"inspect={image}", "invalid image reference")
 
+    def test_a_trailing_colon_without_a_tag_is_rejected(self):
+        self.assert_rejected("inspect", "inspect=quay.io/x/inspect:", "invalid image reference")
+
+    def test_an_empty_path_element_is_rejected(self):
+        self.assert_rejected(
+            "inspect", "inspect=quay.io//community-inspect:latest", "invalid image reference"
+        )
+
+    def test_a_trailing_slash_is_rejected(self):
+        self.assert_rejected("inspect", "inspect=quay.io/x/", "invalid image reference")
+
+    def test_an_empty_digest_is_rejected(self):
+        self.assert_rejected(
+            "inspect", "inspect=quay.io/x/community-inspect@", "invalid image reference"
+        )
+
+    def test_an_embedded_newline_is_rejected_before_any_build(self):
+        """`read` takes one line, so later pairs would silently build from source."""
+        self.assert_rejected(
+            "inspect,ruler",
+            "inspect=quay.io/x/inspect:v1,\nruler=quay.io/x/ruler:v1",
+            "ADAPTER_IMAGES must be a single line",
+        )
+
+
+class ReferenceFormTests(AdapterImagesTestCase):
+    """References the container runtime accepts keep working."""
+
+    def test_valid_reference_forms_are_accepted(self):
+        digest = "sha256:" + "1" * 64
+        for image in (
+            "python",
+            "python:3.12-slim",
+            "quay.io/evalhub/community-inspect:latest",
+            "registry.example.com:5000/evalhub/community-ruler:v1",
+            "localhost:18443/evalhub/community-inspect:kind-dev",
+            "quay.io/evalhub/community-inspect@" + digest,
+            "quay.io/evalhub/community-inspect:v1@" + digest,
+        ):
+            with self.subTest(image=image):
+                self.assert_parses("inspect", f"inspect={image}", overrides=f"inspect={image}")
+
 
 class PrebuiltImageResolutionTests(unittest.TestCase):
     """adapter_source_image and load_adapter_image decide what is pulled."""
@@ -382,6 +453,10 @@ class PrebuiltImageResolutionTests(unittest.TestCase):
         cls.harness = cls.work_dir / "resolve.sh"
         cls.harness.write_text(
             RESOLVE_HARNESS.format(functions=extract_functions(DEPLOY_PATH, PUBLISH_FUNCTIONS))
+        )
+        cls.publish_harness = cls.work_dir / "publish.sh"
+        cls.publish_harness.write_text(
+            PUBLISH_HARNESS.format(functions=extract_functions(DEPLOY_PATH, TAG_AND_PUSH_FUNCTIONS))
         )
 
     @classmethod
@@ -414,6 +489,45 @@ class PrebuiltImageResolutionTests(unittest.TestCase):
                 sources[key[len("SOURCE."):]] = value
         calls = [line for line in call_log.read_text().splitlines() if line]
         return proc.returncode, sources, calls, proc.stdout + proc.stderr
+
+    def run_publish(self, source, destination, present=()):
+        """Publish one reference pair; returns (returncode, runtime calls, output)."""
+        present_file = self.work_dir / "publish-present.txt"
+        present_file.write_text("".join(f"{ref}\n" for ref in present))
+        call_log = self.work_dir / "publish-calls.txt"
+        call_log.write_text("")
+        env = {
+            "PATH": str(self.work_dir) + ":" + os.environ["PATH"],
+            "FAKE_RUNTIME_PRESENT": str(present_file),
+            "FAKE_RUNTIME_LOG": str(call_log),
+        }
+        proc = subprocess.run(
+            ["bash", str(self.publish_harness), str(self.runtime), source, destination],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        calls = [line for line in call_log.read_text().splitlines() if line]
+        return proc.returncode, calls, proc.stdout + proc.stderr
+
+    def test_a_same_reference_publish_keeps_the_caller_tag(self):
+        """An override already equal to the registry path must not be removed."""
+        reference = "localhost:5000/evalhub/community-inspect:kind-dev"
+        code, calls, output = self.run_publish(reference, reference, present=(reference,))
+        self.assertEqual(code, 0, output)
+        self.assertIn(f"image push {reference}", calls, calls)
+        self.assertFalse(
+            [call for call in calls if call.startswith(("image tag", "image rm"))],
+            f"an identical reference was re-tagged or removed: {calls}",
+        )
+
+    def test_a_distinct_destination_is_still_tagged_and_cleaned_up(self):
+        source = "quay.io/evalhub/community-inspect:latest"
+        destination = "localhost:5000/evalhub/community-inspect:kind-dev"
+        code, calls, output = self.run_publish(source, destination, present=(source,))
+        self.assertEqual(code, 0, output)
+        self.assertIn(f"image tag {source} {destination}", calls, calls)
+        self.assertIn(f"image rm {destination}", calls, calls)
 
     def test_an_override_is_the_published_source(self):
         override = "quay.io/evalhub/community-inspect@sha256:abc123"
