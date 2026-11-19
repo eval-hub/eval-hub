@@ -156,12 +156,16 @@ func CalibrateProposal(ctx context.Context, source CatalogSource, options Option
 		}
 
 		references := matchingReferenceBenchmarks(collections, key)
+		weightReferences := comparableWeightReferences(references, *benchmark)
+		thresholdReferences := comparableThresholdReferences(references, *benchmark)
 		if benchmark.Weight == 0 {
-			value, ids := consensusReferenceWeight(references)
+			value, ids := consensusReferenceWeight(weightReferences)
 			if value == nil {
 				reason := "matching system references do not provide a consensus positive weight"
 				if len(references) == 0 {
 					reason = "no matching system references were found"
+				} else if len(weightReferences) == 0 {
+					reason = "no comparable system references match the candidate parameters and test-data source"
 				}
 				decisions = append(decisions, noDecision(*benchmark, pathPrefix+".weight", reason))
 			} else {
@@ -188,10 +192,9 @@ func CalibrateProposal(ctx context.Context, source CatalogSource, options Option
 				Reason: "preserved the explicit threshold",
 			})
 		} else {
-			thresholdReferences := comparableThresholdReferences(references, *benchmark)
 			threshold, ids := calibratedThreshold(thresholdReferences, providerBenchmark, benchmark.PrimaryScore, normalized.Strictness)
 			if threshold == nil {
-				decisions = append(decisions, noDecision(*benchmark, pathPrefix+".pass_criteria.threshold", thresholdUnavailableReason(references, thresholdReferences, providerBenchmark, benchmark.PrimaryScore)))
+				decisions = append(decisions, noDecision(*benchmark, pathPrefix+".pass_criteria.threshold", thresholdUnavailableReason(references, thresholdReferences, *benchmark, providerBenchmark, benchmark.PrimaryScore)))
 			} else {
 				if benchmark.PassCriteria == nil {
 					benchmark.PassCriteria = &api.PassCriteria{}
@@ -422,7 +425,7 @@ func validateProposalAgainstCatalog(candidate api.CollectionConfig, options Opti
 }
 
 func advertisedDefaultScore(benchmark api.BenchmarkResource) *api.PrimaryScore {
-	if benchmark.PrimaryScore == nil || (len(benchmark.Metrics) > 0 && !contains(benchmark.Metrics, benchmark.PrimaryScore.Metric)) {
+	if benchmark.PrimaryScore == nil || !contains(benchmark.Metrics, benchmark.PrimaryScore.Metric) {
 		return nil
 	}
 	return benchmark.PrimaryScore
@@ -456,6 +459,25 @@ func matchingReferenceBenchmarks(collections []api.CollectionResource, key bench
 	return references
 }
 
+// comparableWeightReferences limits weight evidence to system benchmarks with
+// the same configured parameters and test-data source as the candidate. A
+// benchmark weight describes collection composition, so a mutable Git/Hugging
+// Face ref can contribute when its configured source matches even though its
+// resolved content identity is not yet available during proposal generation.
+func comparableWeightReferences(references []referenceBenchmark, candidate api.CollectionBenchmarkConfig) []referenceBenchmark {
+	comparable := make([]referenceBenchmark, 0, len(references))
+	for _, reference := range references {
+		if !sameConfiguredParameters(candidate.Parameters, reference.benchmark.Parameters) {
+			continue
+		}
+		if !sameTestDataSourceDescriptor(candidate.TestDataRef, reference.benchmark.TestDataRef) {
+			continue
+		}
+		comparable = append(comparable, reference)
+	}
+	return comparable
+}
+
 // comparableThresholdReferences limits threshold evidence to system benchmarks
 // with the same configured parameters and test-data identity as the candidate.
 // Provider metadata does not expose parameter defaults. S3 and PVC sources are
@@ -480,7 +502,18 @@ func sameConfiguredParameters(left, right map[string]any) bool {
 	if len(left) == 0 && len(right) == 0 {
 		return true
 	}
-	return reflect.DeepEqual(left, right)
+	// Candidate configs are copied through JSON before calibration, while
+	// catalog sources may return concrete numeric Go types. Compare both sides
+	// in the API's JSON representation so int(5) and float64(5) are equivalent.
+	normalizedLeft, err := cloneJSONMap(left)
+	if err != nil {
+		return false
+	}
+	normalizedRight, err := cloneJSONMap(right)
+	if err != nil {
+		return false
+	}
+	return reflect.DeepEqual(normalizedLeft, normalizedRight)
 }
 
 func sameBenchmarkSelection(left, right api.CollectionBenchmarkConfig) bool {
@@ -608,18 +641,13 @@ func consensusReferenceWeight(references []referenceBenchmark) (*float32, []stri
 
 func calibratedThreshold(references []referenceBenchmark, providerBenchmark api.BenchmarkResource, candidateScore *api.PrimaryScore, strictness string) (*float32, []string) {
 	defaultScore := advertisedDefaultScore(providerBenchmark)
-	if candidateScore == nil {
+	if candidateScore == nil || defaultScore == nil {
 		return nil, nil
 	}
-	calibrationScore := candidateScore
-	if defaultScore != nil {
-		if candidateScore.Metric != defaultScore.Metric || candidateScore.LowerIsBetter != defaultScore.LowerIsBetter {
-			return nil, nil
-		}
-		calibrationScore = defaultScore
-	} else if len(providerBenchmark.Metrics) > 0 && !contains(providerBenchmark.Metrics, candidateScore.Metric) {
+	if candidateScore.Metric != defaultScore.Metric || candidateScore.LowerIsBetter != defaultScore.LowerIsBetter {
 		return nil, nil
 	}
+	calibrationScore := defaultScore
 	values := make([]float64, 0)
 	ids := make([]string, 0)
 	for _, reference := range references {
@@ -673,11 +701,14 @@ func calibratedThreshold(references []referenceBenchmark, providerBenchmark api.
 	return &result, uniqueSorted(ids)
 }
 
-func thresholdUnavailableReason(references, comparable []referenceBenchmark, providerBenchmark api.BenchmarkResource, candidateScore *api.PrimaryScore) string {
+func thresholdUnavailableReason(references, comparable []referenceBenchmark, candidate api.CollectionBenchmarkConfig, providerBenchmark api.BenchmarkResource, candidateScore *api.PrimaryScore) string {
 	if len(references) == 0 {
 		return "no matching system references were found"
 	}
 	if len(comparable) == 0 {
+		if len(comparableWeightReferences(references, candidate)) > 0 && requiresResolvedTestDataIdentity(candidate.TestDataRef) {
+			return "matching mutable Git/Hugging Face sources need the same server-resolved content identity for threshold calibration"
+		}
 		return "no system references match the candidate parameters and test-data identity"
 	}
 	defaultScore := advertisedDefaultScore(providerBenchmark)
@@ -687,21 +718,26 @@ func thresholdUnavailableReason(references, comparable []referenceBenchmark, pro
 		}
 		return "candidate has no primary score with a trusted provider-advertised direction"
 	}
-	if defaultScore != nil && (candidateScore.Metric != defaultScore.Metric || candidateScore.LowerIsBetter != defaultScore.LowerIsBetter) {
-		return "candidate primary score does not match the provider-advertised metric and direction"
-	} else if len(providerBenchmark.Metrics) > 0 && !contains(providerBenchmark.Metrics, candidateScore.Metric) {
+	if !contains(providerBenchmark.Metrics, candidateScore.Metric) {
 		return fmt.Sprintf("candidate metric %q is not advertised by the provider", candidateScore.Metric)
 	}
+	if defaultScore == nil {
+		return defaultScoreUnavailableReason(providerBenchmark)
+	}
+	if candidateScore.Metric != defaultScore.Metric || candidateScore.LowerIsBetter != defaultScore.LowerIsBetter {
+		return "candidate primary score does not match the provider-advertised metric and direction"
+	}
+	hasMatchingReferenceScore := false
 	for _, reference := range comparable {
 		refScore := reference.benchmark.PrimaryScore
 		if refScore == nil {
 			refScore = defaultScore
 		}
 		if refScore != nil && refScore.Metric == candidateScore.Metric && refScore.LowerIsBetter == candidateScore.LowerIsBetter {
-			return "comparable system references have no finite thresholds for the selected primary score"
+			hasMatchingReferenceScore = true
 		}
 	}
-	if defaultScore == nil {
+	if !hasMatchingReferenceScore {
 		return "comparable system references do not declare the selected primary-score metric and direction"
 	}
 	return "comparable system references have no finite thresholds for the selected primary score"

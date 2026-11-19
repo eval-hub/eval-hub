@@ -12,7 +12,7 @@ KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-evalhub-dev}"
 IMAGE_TAG="${IMAGE_TAG:-kind-${KIND_CLUSTER_NAME}}"
 SKIP_BUILD="${SKIP_BUILD:-false}"
 AIRGAP="${AIRGAP:-false}"
-ADAPTERS="${ADAPTERS:-inspect,lm-evaluation-harness,followbench}"
+ADAPTERS="${ADAPTERS:-followbench}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-}"
 EVALHUB_HOST_PORT="${EVALHUB_HOST_PORT:-18443}"
 EVALHUB_NODE_PORT="${EVALHUB_NODE_PORT:-30443}"
@@ -66,7 +66,7 @@ Inputs (also accepted as environment variables):
   SKIP_BUILD=true         reuse locally built images with IMAGE_TAG for EvalHub,
                           the operator, and selected adapters
   ADAPTERS=all             build all six curated adapter images
-  ADAPTERS=<list>          comma-separated selection (default: inspect,lm-evaluation-harness,followbench):
+  ADAPTERS=<list>          comma-separated selection (default: followbench):
                           inspect, lm-evaluation-harness, lighteval, ruler, ifbench, followbench
   AIRGAP=true              create/use a Calico kind cluster and deny external
                           egress from system-namespace evaluation jobs (default: false)

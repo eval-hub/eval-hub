@@ -254,7 +254,7 @@ mlflow.log
 # https://github.com/eval-hub/eval-hub-skills, are published as opt-in plugins,
 # and are enabled for everyone by the committed .claude/settings.json (see
 # AGENTS.md -> Development Skills). `make install-dev-skills` links them into
-# ~/.claude/skills for harnesses that do not read Claude Code plugins.
+# ~/.agents/skills for harnesses that do not read Claude Code plugins.
 # Ignore contents (not the directory itself) so negation can re-include paths.
 .claude/*
 !.claude/rules/

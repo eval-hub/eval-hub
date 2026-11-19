@@ -162,10 +162,10 @@ github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 h1:f+oWsMOmNPc8J
 github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8/go.mod h1:wcDNUvekVysuuOpQKo3191zZyTpiI6se1N1ULghS0sw=
 github.com/golang/protobuf v1.5.4 h1:i7eJL8qZTpSEXOPTxNKhASYpMn+8e5Q6AdndVa1dWek=
 github.com/golang/protobuf v1.5.4/go.mod h1:lnTiLA8Wa4RWRcIUkrtSVa5nRhsEGBg48fD6rSs7xps=
-github.com/gomlx/compute v0.1.28 h1:3o0pCmmg3QzZMMS5PR6nUnyRzEMPXI0uGrzcIP+qpPU=
-github.com/gomlx/compute v0.1.28/go.mod h1:+IyIusGBr70LPqKcULueB2VTTXmJ3HqOdPmRM8O1Sug=
-github.com/gomlx/go-huggingface v0.4.32 h1:bw/nY5FAgVWTVX7ZOxsK6FhGn/hz2CdwKax00heFpBw=
-github.com/gomlx/go-huggingface v0.4.32/go.mod h1:H+VXf59NxO35kKu2sUQnmcQgx0J3HkpejALhkGG2wbo=
+github.com/gomlx/compute v0.1.30 h1:nRnBUFz1037wnz6jjc0iki5IKyL8JeHGZjv8B2vcyZQ=
+github.com/gomlx/compute v0.1.30/go.mod h1:fzjvKz/KXBeY6mrgnDovo5wNKG/hs77A32MGLXyMp08=
+github.com/gomlx/go-huggingface v0.4.36 h1:A1ruMvqLvfDAIphcN2wVlpqSdQRyPAeNmzm9h4lGf4I=
+github.com/gomlx/go-huggingface v0.4.36/go.mod h1:m78H2coA22PECyCsJSDPbVJwHofrYbCfud3vpKDx1ss=
 github.com/google/gnostic-models v0.7.1 h1:SisTfuFKJSKM5CPZkffwi6coztzzeYUhc3v4yxLWH8c=
 github.com/google/gnostic-models v0.7.1/go.mod h1:whL5G0m6dmc5cPxKc5bdKdEN3UjI7OUGxBlw57miDrQ=
 github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
