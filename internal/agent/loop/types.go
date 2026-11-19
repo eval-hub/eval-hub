@@ -104,6 +104,8 @@ type Tool struct {
 }
 
 // ToolRegistry exposes definitions and trusted handlers to the loop.
+// Implementations must expose a consistent, immutable tool set through both
+// methods for the lifetime of any Runner constructed with them.
 type ToolRegistry interface {
 	Definitions() ToolDefinitions
 	Lookup(string) (Tool, bool)

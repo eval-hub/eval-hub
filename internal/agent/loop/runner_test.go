@@ -454,10 +454,16 @@ func TestAccountedUsageConservativelyUsesReportedOrEstimatedCounts(t *testing.T)
 }
 
 type registryStub struct {
-	definitions ToolDefinitions
+	definitions      ToolDefinitions
+	definitionsCalls *int
 }
 
-func (r registryStub) Definitions() ToolDefinitions { return r.definitions }
+func (r registryStub) Definitions() ToolDefinitions {
+	if r.definitionsCalls != nil {
+		(*r.definitionsCalls)++
+	}
+	return r.definitions
+}
 
 func (r registryStub) Lookup(name string) (Tool, bool) {
 	for _, definition := range r.definitions {
@@ -516,6 +522,34 @@ func TestNewRunnerRejectsInvalidDependenciesConfigurationAndRegistrySize(t *test
 	config.MaxHistoryBytes = 1
 	if _, err := NewRunner(validModel, registryStub{}, config); err == nil {
 		t.Fatal("NewRunner() accepted definitions over the history byte limit")
+	}
+}
+
+func TestRunnerSnapshotsDefinitionsAtConstruction(t *testing.T) {
+	definitionsCalls := 0
+	registry := registryStub{
+		definitions:      ToolDefinitions{testTool(func(context.Context, json.RawMessage) (json.RawMessage, error) { return json.RawMessage(`null`), nil }).Definition},
+		definitionsCalls: &definitionsCalls,
+	}
+	expectedParameters := string(registry.definitions[0].Function.Parameters)
+	model := &fakeModel{responses: []ModelResponse{finalResponse("done"), finalResponse("done")}}
+	runner := newTestRunner(t, model, registry, DefaultConfig())
+	if definitionsCalls != 1 {
+		t.Fatalf("Definitions() calls after NewRunner() = %d, want 1", definitionsCalls)
+	}
+	registry.definitions[0].Function.Parameters[0] = '!'
+	for range 2 {
+		if _, err := runner.Run(context.Background(), testInput()); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+	}
+	if definitionsCalls != 1 {
+		t.Fatalf("Definitions() calls after runs = %d, want 1", definitionsCalls)
+	}
+	for i, request := range model.requests {
+		if len(request.Tools) != 1 || request.Tools[0].Function.Name != "list_catalog" || string(request.Tools[0].Function.Parameters) != expectedParameters {
+			t.Fatalf("request %d tools = %+v, want cached list_catalog definition", i, request.Tools)
+		}
 	}
 }
 
@@ -592,13 +626,12 @@ func TestValidateDefinitionsRejectsMalformedAndUnsafeTools(t *testing.T) {
 	}
 }
 
-func TestRunnerRejectsInvalidRegistryBeforeCallingModel(t *testing.T) {
+func TestNewRunnerRejectsInvalidRegistry(t *testing.T) {
 	model := &fakeModel{}
 	definitions := testTool(func(context.Context, json.RawMessage) (json.RawMessage, error) { return nil, nil }).Definition
 	definitions.Function.Parameters = json.RawMessage(`{"type":"object","properties":{"v":{"$ref":"https://example.invalid/schema"}}}`)
-	runner := newTestRunner(t, model, registryStub{definitions: ToolDefinitions{definitions}}, DefaultConfig())
-	if _, err := runner.Run(context.Background(), testInput()); !errors.Is(err, ErrToolRegistryInvalid) {
-		t.Fatalf("Run() error = %v, want invalid registry", err)
+	if _, err := NewRunner(model, registryStub{definitions: ToolDefinitions{definitions}}, DefaultConfig()); !errors.Is(err, ErrToolRegistryInvalid) {
+		t.Fatalf("NewRunner() error = %v, want invalid registry", err)
 	}
 	if model.index != 0 {
 		t.Fatalf("invalid registry made %d model calls", model.index)

@@ -54,12 +54,13 @@ func DefaultConfig() Config {
 // Runner executes model turns and trusted registered tools. It contains no
 // collection-specific behavior and does not log prompts or tool data.
 type Runner struct {
-	model    ModelClient
-	registry ToolRegistry
-	config   Config
+	model       ModelClient
+	registry    ToolRegistry
+	definitions ToolDefinitions
+	config      Config
 }
 
-// NewRunner validates dependencies and bounds.
+// NewRunner validates dependencies and bounds, and snapshots the tool definitions.
 func NewRunner(model ModelClient, registry ToolRegistry, config Config) (*Runner, error) {
 	if model == nil || registry == nil {
 		return nil, errors.New("model client and tool registry are required")
@@ -77,11 +78,15 @@ func NewRunner(model ModelClient, registry ToolRegistry, config Config) (*Runner
 	if len(definitions) > config.MaxToolBatchSize*16 {
 		return nil, errors.New("tool registry exceeds the configured limit")
 	}
+	definitions = cloneDefinitions(definitions)
 	definitionBytes, err := json.Marshal(definitions)
 	if err != nil || len(definitionBytes) > config.MaxHistoryBytes {
 		return nil, errors.New("tool definitions exceed the configured history limit")
 	}
-	return &Runner{model: model, registry: registry, config: config}, nil
+	if err := definitions.validate(); err != nil {
+		return nil, ErrToolRegistryInvalid
+	}
+	return &Runner{model: model, registry: registry, definitions: definitions, config: config}, nil
 }
 
 // Run executes one bounded agent session. Budget values should be resolved and
@@ -96,10 +101,7 @@ func (r *Runner) Run(parent context.Context, input Input) (Result, error) {
 	ctx, cancel := context.WithTimeout(parent, input.Budget.MaxDuration)
 	defer cancel()
 
-	definitions := r.registry.Definitions()
-	if err := definitions.validate(); err != nil {
-		return Result{}, ErrToolRegistryInvalid
-	}
+	definitions := r.definitions
 	messages := []Message{
 		{Role: RoleSystem, Content: input.SystemPrompt},
 		{Role: RoleSystem, Content: budgetNotice(input.Budget.MaxModelCalls, input.Budget.MaxIterations, input.Budget.MaxToolCalls, input.Budget.MaxTotalTokens)},
