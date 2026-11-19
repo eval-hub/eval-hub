@@ -48,6 +48,12 @@ unset the path to use the temporary bypass. Prefer configuring a readable
 `FVT_CA_CERT_PATH` so the preflight verifies TLS like the other clients; remove
 the bypass once the runner CA is in place.
 
+When the test runner cannot reach a model endpoint because of its network path,
+set `MODEL_ENDPOINT_PREFLIGHT_WARN_ONLY=true` to continue with the evaluation
+scenarios. The in-cluster evaluation jobs remain responsible for validating
+model access; HTTP responses such as authentication failures are still treated
+as unreachable.
+
 ### Model Overrides (Required)
 
 Set the model fields in the test payloads using environment variables:

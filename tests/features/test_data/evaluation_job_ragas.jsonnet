@@ -21,7 +21,7 @@ test.mergeOptional(
         test.benchmark('ragas_rag_default', 'ragas', parameters) + {
           test_data_ref: {
             s3: {
-              bucket: 'ai-eng-canada',
+              bucket: test.env('TEST_DATA_S3_BUCKET', 'mlpipeline'),
               key: 'datasets/ragas/dataset.jsonl',
               secret_ref: 's3-ragas-credentials',
             },
@@ -30,7 +30,7 @@ test.mergeOptional(
         test.benchmark('ragas_rag_full', 'ragas', parameters) + {
           test_data_ref: {
             s3: {
-              bucket: 'ai-eng-canada',
+              bucket: test.env('TEST_DATA_S3_BUCKET', 'mlpipeline'),
               key: 'datasets/ragas/dataset.jsonl',
               secret_ref: 's3-ragas-credentials',
             },
