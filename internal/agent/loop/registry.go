@@ -17,6 +17,39 @@ import (
 
 var toolNamePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
+var errExternalSchemaDocument = errors.New("external schema documents are not supported")
+
+const toolExecutionFailedResult = `{"error":"tool_execution_failed"}`
+
+// localOnlyJSONLoader keeps schema compilation from using gojsonschema's
+// default file and HTTP loaders when a local reference points outside the
+// root document.
+type localOnlyJSONLoader struct {
+	gojsonschema.JSONLoader
+}
+
+func (l localOnlyJSONLoader) LoaderFactory() gojsonschema.JSONLoaderFactory {
+	return localOnlyJSONLoaderFactory{}
+}
+
+type localOnlyJSONLoaderFactory struct{}
+
+func (localOnlyJSONLoaderFactory) New(source string) gojsonschema.JSONLoader {
+	return rejectingExternalJSONLoader{localOnlyJSONLoader{gojsonschema.NewReferenceLoader(source)}}
+}
+
+type rejectingExternalJSONLoader struct {
+	localOnlyJSONLoader
+}
+
+func (rejectingExternalJSONLoader) LoadJSON() (interface{}, error) {
+	return nil, errExternalSchemaDocument
+}
+
+func newLocalOnlySchemaLoader(raw []byte) gojsonschema.JSONLoader {
+	return localOnlyJSONLoader{gojsonschema.NewBytesLoader(raw)}
+}
+
 // Registry is an immutable set of trusted tools.
 type Registry struct {
 	tools map[string]Tool
@@ -48,7 +81,7 @@ func NewRegistry(tools ...Tool) (*Registry, error) {
 		if hasExternalSchemaReference(tool.Definition.Function.Parameters) {
 			return nil, fmt.Errorf("tool parameters schema cannot reference external resources")
 		}
-		if _, err := gojsonschema.NewSchema(gojsonschema.NewBytesLoader(tool.Definition.Function.Parameters)); err != nil {
+		if _, err := gojsonschema.NewSchema(newLocalOnlySchemaLoader(tool.Definition.Function.Parameters)); err != nil {
 			return nil, fmt.Errorf("invalid tool parameters schema")
 		}
 		if len(tool.ProgressLabel) > 80 || strings.ContainsAny(tool.ProgressLabel, "\r\n") {
@@ -102,7 +135,7 @@ func validateArguments(schema json.RawMessage, raw string, maxBytes int) error {
 	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		return errors.New("tool arguments contain trailing data")
 	}
-	result, err := gojsonschema.Validate(gojsonschema.NewBytesLoader(schema), gojsonschema.NewStringLoader(raw))
+	result, err := gojsonschema.Validate(newLocalOnlySchemaLoader(schema), gojsonschema.NewStringLoader(raw))
 	if err != nil || result == nil || !result.Valid() {
 		return errors.New("tool arguments do not match the registered schema")
 	}
@@ -188,7 +221,7 @@ func executeTool(ctx context.Context, tool Tool, arguments string, maxArgumentBy
 	}
 	result, err := tool.Handler(ctx, json.RawMessage(arguments))
 	if err != nil {
-		return json.RawMessage(`{"error":"tool_execution_failed"}`), false, nil
+		return json.RawMessage(toolExecutionFailedResult), false, nil
 	}
 	if len(result) == 0 {
 		result = json.RawMessage("null")

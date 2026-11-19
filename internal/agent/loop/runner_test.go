@@ -42,9 +42,8 @@ func testBudget() Budget {
 		MaxIterations: 4,
 		MaxModelCalls: 5,
 		MaxToolCalls:  8,
-		// Match the default high-effort preset so tests that exercise registered
-		// tools can reserve their full worst-case escaped result size.
-		MaxTotalTokens:  524_288,
+		// Match the default standard-effort preset used for normal tool-call tests.
+		MaxTotalTokens:  131_072,
 		MaxOutputTokens: 2_048,
 		Deadline:        time.Minute,
 	}
@@ -125,6 +124,31 @@ func TestRunnerExecutesToolCallsAndCorrelatesReplies(t *testing.T) {
 	second := model.requests[1].Messages
 	if len(second) < 5 || second[len(second)-1].Role != RoleTool || second[len(second)-1].ToolCallID != "call-1" || second[len(second)-1].Name != "list_catalog" {
 		t.Fatalf("tool reply did not correlate to its call: %+v", second)
+	}
+}
+
+func TestRunnerCanExecuteToolWithLowEffortBudget(t *testing.T) {
+	executions := 0
+	model := &fakeModel{responses: []ModelResponse{
+		callResponse(validCall("call-1", "list_catalog")),
+		finalResponse("ready"),
+	}}
+	runner := newTestRunner(t, model, newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) {
+		executions++
+		return json.RawMessage(`null`), nil
+	}), DefaultConfig())
+	input := testInput()
+	input.Budget = DefaultPresets()[EffortLow]
+	result, err := runner.Run(context.Background(), input)
+	if err != nil || result.Final != "ready" || executions != 1 {
+		t.Fatalf("Run() = %+v, %v; handler executions=%d, want a successful low-effort tool call", result, err, executions)
+	}
+}
+
+func TestWorstCaseToolResultIncludesSmallLimitHandlerFailure(t *testing.T) {
+	result := worstCaseToolResult(7)
+	if result != toolExecutionFailedResult {
+		t.Fatalf("worstCaseToolResult(7) = %q, want fixed handler failure result %q", result, toolExecutionFailedResult)
 	}
 }
 
@@ -545,6 +569,11 @@ func TestValidateDefinitionsRejectsMalformedAndUnsafeTools(t *testing.T) {
 		{name: "external schema ref", definitions: []ToolDefinition{func() ToolDefinition {
 			d := base
 			d.Function.Parameters = json.RawMessage(`{"type":"object","properties":{"v":{"$ref":"https://example.invalid/schema"}}}`)
+			return d
+		}()}},
+		{name: "external schema ref reached through local reference", definitions: []ToolDefinition{func() ToolDefinition {
+			d := base
+			d.Function.Parameters = json.RawMessage(`{"type":"object","x":{"$ref":"https://example.invalid/schema"},"properties":{"v":{"$ref":"#/x"}}}`)
 			return d
 		}()}},
 		{name: "duplicate names", definitions: []ToolDefinition{base, base}},

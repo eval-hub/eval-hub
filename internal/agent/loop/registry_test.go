@@ -50,6 +50,11 @@ func TestNewRegistryValidatesDefinitions(t *testing.T) {
 			v.Definition.Function.Parameters = json.RawMessage(`{"type":"object","dependencies":{"value":{"$ref":"https://example.invalid/schema.json"}}}`)
 			return v
 		}()}},
+		{name: "external schema reference reached through local reference", tools: []Tool{func() Tool {
+			v := testTool(handler)
+			v.Definition.Function.Parameters = json.RawMessage(`{"type":"object","x":{"$ref":"https://example.invalid/schema.json"},"properties":{"value":{"$ref":"#/x"}}}`)
+			return v
+		}()}},
 		{name: "absolute identifier with local reference", tools: []Tool{func() Tool {
 			v := testTool(handler)
 			v.Definition.Function.Parameters = json.RawMessage(`{"type":"object","id":"https://example.invalid/tool.json#scope","definitions":{"value":{"type":"string"}},"properties":{"value":{"$ref":"#/definitions/value"}}}`)
@@ -155,6 +160,14 @@ func TestNewRegistryRejectsInvalidTypeSchemaAndProgressLabel(t *testing.T) {
 				t.Fatal("NewRegistry() accepted an invalid tool")
 			}
 		})
+	}
+}
+
+func TestLocalOnlySchemaLoaderRejectsExternalDocuments(t *testing.T) {
+	loader := newLocalOnlySchemaLoader([]byte(`{"type":"object"}`))
+	externalLoader := loader.LoaderFactory().New("https://example.invalid/schema.json")
+	if _, err := externalLoader.LoadJSON(); !errors.Is(err, errExternalSchemaDocument) {
+		t.Fatalf("external schema load error = %v, want %v", err, errExternalSchemaDocument)
 	}
 }
 

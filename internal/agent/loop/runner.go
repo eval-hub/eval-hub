@@ -44,7 +44,7 @@ func DefaultConfig() Config {
 		RetryBackoff:          100 * time.Millisecond,
 		MaxToolBatchSize:      8,
 		MaxToolArgumentBytes:  32 * 1024,
-		MaxToolResultBytes:    16 * 1024,
+		MaxToolResultBytes:    4 * 1024,
 		MaxHistoryBytes:       1024 * 1024,
 		MaxModelResponseBytes: 1024 * 1024,
 		MaxActionSummaryBytes: 160,
@@ -229,15 +229,27 @@ func (r *Runner) canFitFinalTurnAfterTools(input Input, iteration int, definitio
 	return promptEstimate <= remainingTokens-minimumOutputAllowance
 }
 
-// worstCaseToolResult returns valid JSON at the configured byte limit whose
-// contents expand maximally when embedded as a JSON string. encoding/json
-// HTML-escapes each '<' to six bytes, so budgeting this payload prevents a
-// handler result from consuming more prompt budget than the preflight reserved.
+// worstCaseToolResult returns the larger serialized form of a valid JSON result
+// at the configured byte limit and the fixed handler-failure result. The
+// ordinary result uses '<' characters because encoding/json HTML-escapes each
+// to six bytes when embedded as a JSON string.
 func worstCaseToolResult(maxBytes int) string {
 	if maxBytes < 2 {
-		return "0"
+		return toolExecutionFailedResult
 	}
-	return `"` + strings.Repeat("<", maxBytes-2) + `"`
+	result := `"` + strings.Repeat("<", maxBytes-2) + `"`
+	if jsonStringSize(toolExecutionFailedResult) > jsonStringSize(result) {
+		return toolExecutionFailedResult
+	}
+	return result
+}
+
+func jsonStringSize(value string) int {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return math.MaxInt
+	}
+	return len(encoded)
 }
 
 type retryable interface {
