@@ -81,6 +81,9 @@ type ToolDefinition struct {
 	Function FunctionMetadata `json:"function"`
 }
 
+// ToolDefinitions is a collection of model-facing tool definitions.
+type ToolDefinitions []ToolDefinition
+
 // FunctionMetadata is a trusted tool's public model-facing definition.
 type FunctionMetadata struct {
 	Name        string          `json:"name"`

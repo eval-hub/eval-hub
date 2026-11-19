@@ -582,13 +582,13 @@ func TestValidateDefinitionsRejectsMalformedAndUnsafeTools(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := validateDefinitions(tc.definitions); !errors.Is(err, ErrToolRegistryInvalid) {
-				t.Fatalf("validateDefinitions() error = %v", err)
+			if err := ToolDefinitions(tc.definitions).validate(); !errors.Is(err, ErrToolRegistryInvalid) {
+				t.Fatalf("ToolDefinitions.validate() error = %v", err)
 			}
 		})
 	}
-	if err := validateDefinitions(nil); err != nil {
-		t.Fatalf("validateDefinitions(empty) error = %v", err)
+	if err := ToolDefinitions(nil).validate(); err != nil {
+		t.Fatalf("ToolDefinitions.validate(empty) error = %v", err)
 	}
 }
 
@@ -634,8 +634,8 @@ func TestValidateAssistantResponseRejectsUnsupportedTurns(t *testing.T) {
 			if tc.maxBatch == 0 {
 				tc.maxBatch = 8
 			}
-			if err := validateAssistantResponse(tc.response, tc.maxBytes, tc.maxBatch); !errors.Is(err, ErrInvalidModelResponse) {
-				t.Fatalf("validateAssistantResponse() error = %v", err)
+			if err := tc.response.validate(tc.maxBytes, tc.maxBatch); !errors.Is(err, ErrInvalidModelResponse) {
+				t.Fatalf("ModelResponse.validate() error = %v", err)
 			}
 		})
 	}

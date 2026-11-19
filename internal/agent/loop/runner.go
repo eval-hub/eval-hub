@@ -97,7 +97,7 @@ func (r *Runner) Run(parent context.Context, input Input) (Result, error) {
 	defer cancel()
 
 	definitions := r.registry.Definitions()
-	if err := validateDefinitions(definitions); err != nil {
+	if err := ToolDefinitions(definitions).validate(); err != nil {
 		return Result{}, ErrToolRegistryInvalid
 	}
 	messages := []Message{
@@ -132,7 +132,7 @@ func (r *Runner) Run(parent context.Context, input Input) (Result, error) {
 		}
 		result.AccountedTokens += charge
 
-		if err := validateAssistantResponse(response, r.config.MaxModelResponseBytes, r.config.MaxToolBatchSize); err != nil {
+		if err := response.validate(r.config.MaxModelResponseBytes, r.config.MaxToolBatchSize); err != nil {
 			return Result{}, ErrInvalidModelResponse
 		}
 		assistant := response.Message
@@ -324,7 +324,7 @@ func (r *Runner) validateToolBatch(calls []ToolCall, seen map[string]struct{}) (
 		if !ok {
 			return nil, ErrInvalidModelResponse
 		}
-		if err := validateArguments(tool.Definition.Function.Parameters, call.Function.Arguments, r.config.MaxToolArgumentBytes); err != nil {
+		if err := tool.Definition.Function.validateArguments(call.Function.Arguments, r.config.MaxToolArgumentBytes); err != nil {
 			return nil, ErrInvalidModelResponse
 		}
 		tools[i] = tool
@@ -342,25 +342,33 @@ func (r *Runner) emit(kind EventKind, call int, toolName, outcome, summary strin
 	r.config.Progress(ProgressEvent{At: time.Now().UTC(), Kind: kind, Call: call, ToolName: toolName, Outcome: outcome, Summary: summary})
 }
 
-func validateDefinitions(definitions []ToolDefinition) error {
+func (d ToolDefinition) validate() error {
+	name := d.Function.Name
+	if d.Type != "function" || !toolNamePattern.MatchString(name) || len(d.Function.Parameters) == 0 || !json.Valid(d.Function.Parameters) {
+		return ErrToolRegistryInvalid
+	}
+	var schema struct {
+		Type string `json:"type"`
+	}
+	if json.Unmarshal(d.Function.Parameters, &schema) != nil || schema.Type != "object" {
+		return ErrToolRegistryInvalid
+	}
+	if hasExternalSchemaReference(d.Function.Parameters) {
+		return ErrToolRegistryInvalid
+	}
+	if _, err := gojsonschema.NewSchema(newLocalOnlySchemaLoader(d.Function.Parameters)); err != nil {
+		return ErrToolRegistryInvalid
+	}
+	return nil
+}
+
+func (definitions ToolDefinitions) validate() error {
 	seen := make(map[string]struct{}, len(definitions))
-	for _, d := range definitions {
-		name := d.Function.Name
-		if d.Type != "function" || !toolNamePattern.MatchString(name) || len(d.Function.Parameters) == 0 || !json.Valid(d.Function.Parameters) {
-			return ErrToolRegistryInvalid
+	for _, definition := range definitions {
+		if err := definition.validate(); err != nil {
+			return err
 		}
-		var schema struct {
-			Type string `json:"type"`
-		}
-		if json.Unmarshal(d.Function.Parameters, &schema) != nil || schema.Type != "object" {
-			return ErrToolRegistryInvalid
-		}
-		if hasExternalSchemaReference(d.Function.Parameters) {
-			return ErrToolRegistryInvalid
-		}
-		if _, err := gojsonschema.NewSchema(newLocalOnlySchemaLoader(d.Function.Parameters)); err != nil {
-			return ErrToolRegistryInvalid
-		}
+		name := definition.Function.Name
 		if _, ok := seen[name]; ok {
 			return ErrToolRegistryInvalid
 		}
@@ -369,7 +377,7 @@ func validateDefinitions(definitions []ToolDefinition) error {
 	return nil
 }
 
-func validateAssistantResponse(response ModelResponse, maxBytes, maxBatch int) error {
+func (response ModelResponse) validate(maxBytes, maxBatch int) error {
 	if response.Message.Role != "" && response.Message.Role != RoleAssistant {
 		return ErrInvalidModelResponse
 	}

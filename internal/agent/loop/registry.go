@@ -118,7 +118,7 @@ func (r *Registry) Lookup(name string) (Tool, bool) {
 	return tool, ok
 }
 
-func validateArguments(schema json.RawMessage, raw string, maxBytes int) error {
+func (f FunctionMetadata) validateArguments(raw string, maxBytes int) error {
 	if maxBytes <= 0 || len(raw) == 0 || len(raw) > maxBytes {
 		return errors.New("tool arguments are empty or exceed the configured limit")
 	}
@@ -135,7 +135,7 @@ func validateArguments(schema json.RawMessage, raw string, maxBytes int) error {
 	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		return errors.New("tool arguments contain trailing data")
 	}
-	result, err := gojsonschema.Validate(newLocalOnlySchemaLoader(schema), gojsonschema.NewStringLoader(raw))
+	result, err := gojsonschema.Validate(newLocalOnlySchemaLoader(f.Parameters), gojsonschema.NewStringLoader(raw))
 	if err != nil || result == nil || !result.Valid() {
 		return errors.New("tool arguments do not match the registered schema")
 	}
@@ -216,7 +216,7 @@ func identifierCanLoadExternalDocument(value any) bool {
 // Execute runs a trusted handler and returns only valid bounded JSON to the
 // model. Handler error details are deliberately not returned to the model.
 func executeTool(ctx context.Context, tool Tool, arguments string, maxArgumentBytes, maxResultBytes int) (json.RawMessage, bool, error) {
-	if err := validateArguments(tool.Definition.Function.Parameters, arguments, maxArgumentBytes); err != nil {
+	if err := tool.Definition.Function.validateArguments(arguments, maxArgumentBytes); err != nil {
 		return nil, false, err
 	}
 	result, err := tool.Handler(ctx, json.RawMessage(arguments))

@@ -89,9 +89,9 @@ func TestValidateArgumentsRequiresObjectAndSchema(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateArguments(schema, tc.arg, tc.max)
+			err := (FunctionMetadata{Parameters: schema}).validateArguments(tc.arg, tc.max)
 			if (err == nil) != tc.ok {
-				t.Fatalf("validateArguments() error = %v, want success %v", err, tc.ok)
+				t.Fatalf("FunctionMetadata.validateArguments() error = %v, want success %v", err, tc.ok)
 			}
 		})
 	}
