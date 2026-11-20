@@ -22,6 +22,28 @@ env_mappings:
   TLS_CERT_FILE: service.tls_cert_file
   TLS_KEY_FILE: service.tls_key_file
   EVALHUB_TEST_DATA_INIT_TIMEOUT: service.init.test_data_timeout
+  EVALHUB_COLLECTION_GENERATION_RUNNER_IMAGE: service.generation.runner_image
+  EVALHUB_COLLECTION_GENERATION_RETENTION: service.generation.retention
+  EVALHUB_COLLECTION_GENERATION_CLEANUP_INTERVAL: service.generation.cleanup_interval
+  EVALHUB_COLLECTION_GENERATION_CLEANUP_BATCH_SIZE: service.generation.cleanup_batch_size
+  EVALHUB_GENERATION_LOW_MAX_ITERATIONS: service.generation.effort_budget.low.max_iterations
+  EVALHUB_GENERATION_LOW_MAX_MODEL_CALLS: service.generation.effort_budget.low.max_model_calls
+  EVALHUB_GENERATION_LOW_MAX_TOOL_CALLS: service.generation.effort_budget.low.max_tool_calls
+  EVALHUB_GENERATION_LOW_MAX_TOTAL_TOKENS: service.generation.effort_budget.low.max_total_tokens
+  EVALHUB_GENERATION_LOW_MAX_OUTPUT_TOKENS: service.generation.effort_budget.low.max_output_tokens
+  EVALHUB_GENERATION_LOW_MAX_DURATION: service.generation.effort_budget.low.max_duration
+  EVALHUB_GENERATION_STANDARD_MAX_ITERATIONS: service.generation.effort_budget.standard.max_iterations
+  EVALHUB_GENERATION_STANDARD_MAX_MODEL_CALLS: service.generation.effort_budget.standard.max_model_calls
+  EVALHUB_GENERATION_STANDARD_MAX_TOOL_CALLS: service.generation.effort_budget.standard.max_tool_calls
+  EVALHUB_GENERATION_STANDARD_MAX_TOTAL_TOKENS: service.generation.effort_budget.standard.max_total_tokens
+  EVALHUB_GENERATION_STANDARD_MAX_OUTPUT_TOKENS: service.generation.effort_budget.standard.max_output_tokens
+  EVALHUB_GENERATION_STANDARD_MAX_DURATION: service.generation.effort_budget.standard.max_duration
+  EVALHUB_GENERATION_HIGH_MAX_ITERATIONS: service.generation.effort_budget.high.max_iterations
+  EVALHUB_GENERATION_HIGH_MAX_MODEL_CALLS: service.generation.effort_budget.high.max_model_calls
+  EVALHUB_GENERATION_HIGH_MAX_TOOL_CALLS: service.generation.effort_budget.high.max_tool_calls
+  EVALHUB_GENERATION_HIGH_MAX_TOTAL_TOKENS: service.generation.effort_budget.high.max_total_tokens
+  EVALHUB_GENERATION_HIGH_MAX_OUTPUT_TOKENS: service.generation.effort_budget.high.max_output_tokens
+  EVALHUB_GENERATION_HIGH_MAX_DURATION: service.generation.effort_budget.high.max_duration
   DB_DRIVER: database.driver
   DB_URL: database.url
   MLFLOW_TRACKING_URI: mlflow.tracking_uri

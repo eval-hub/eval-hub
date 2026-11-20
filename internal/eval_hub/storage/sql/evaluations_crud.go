@@ -3,6 +3,8 @@ package sql
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
@@ -155,6 +157,25 @@ func (s *sqlStorage) DeleteEvaluationJob(id string) error {
 		}
 		return s.evaluationJobDeleteResultError(id, result)
 	})
+}
+
+// DeleteExpiredCollectionGenerationJobs removes a bounded batch of terminal generation
+// records whose server-assigned retention deadline has passed. The operation is global
+// across tenants by design and is safe for concurrent service replicas.
+func (s *sqlStorage) DeleteExpiredCollectionGenerationJobs(now time.Time, limit int) (int, error) {
+	if limit < 1 {
+		return 0, fmt.Errorf("cleanup batch limit must be positive")
+	}
+	query, args := s.statementsFactory.CreateDeleteExpiredGenerationJobsStatement(now.UTC(), limit)
+	result, err := s.pool.ExecContext(s.ctx, query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("delete expired collection-generation jobs: %w", err)
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("count deleted collection-generation jobs: %w", err)
+	}
+	return int(count), nil
 }
 
 func (s *sqlStorage) evaluationJobDeleteResultError(id string, result sql.Result) error {

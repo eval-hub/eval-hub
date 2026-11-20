@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint validate-configs test test-e2e test-fuzz test-fvt-server test-fvt-server-local test-fvt-server-local-mlflow test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build clean-container-storage clean-container-storage-help
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-generation-worker build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint validate-configs test test-e2e test-fuzz test-fvt-server test-fvt-server-local test-fvt-server-local-mlflow test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build clean-container-storage clean-container-storage-help
 .PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint govulncheck validate-configs test test-fuzz test-fvt-server test-fvt-server-local test-fvt-server-local-mlflow test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build clean-container-storage clean-container-storage-help
 
 GOPATH := $(shell go env GOPATH)
@@ -28,6 +28,8 @@ SIDECAR_BINARY_NAME = eval-runtime-sidecar
 SIDECAR_CMD_PATH = ./cmd/eval_runtime_sidecar
 MCP_BINARY_NAME = evalhub-mcp
 MCP_CMD_PATH = ./cmd/evalhub_mcp
+GENERATION_WORKER_BINARY_NAME = eval-generation-worker
+GENERATION_WORKER_CMD_PATH = ./cmd/eval_generation_worker
 BIN_DIR = bin
 PORT ?= 8080
 
@@ -210,7 +212,12 @@ build-init: $(BIN_DIR) ## Build the eval-runtime-init binary only
 	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(INIT_BINARY_NAME) $(INIT_CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(INIT_BINARY_NAME)"
 
-build: build-service build-init build-sidecar build-mcp ## Build the binaries
+build-generation-worker: $(BIN_DIR) ## Build the collection-generation worker binary
+	@echo "Building $(GENERATION_WORKER_BINARY_NAME) with ${LDFLAGS}"
+	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(GENERATION_WORKER_BINARY_NAME) $(GENERATION_WORKER_CMD_PATH)
+	@echo "Build complete: $(BIN_DIR)/$(GENERATION_WORKER_BINARY_NAME)"
+
+build: build-service build-init build-sidecar build-mcp build-generation-worker ## Build the binaries
 
 build-coverage: $(BIN_DIR) ## Build the binaries with coverage
 	@echo "Building $(BINARY_NAME)-cov with -cover -covermode=atomic -ldflags ${LDFLAGS} "

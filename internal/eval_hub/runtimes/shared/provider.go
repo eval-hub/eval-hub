@@ -3,6 +3,7 @@ package shared
 import (
 	"fmt"
 
+	_ "github.com/eval-hub/eval-hub/internal/eval_hub/generation"     // Register collection-generation workload.
 	_ "github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing" // Register the post-processing workload.
 	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -48,7 +49,15 @@ func ProviderForBenchmark(
 		if workload == nil {
 			return nil, fmt.Errorf("workload %q is not registered", workloadType)
 		}
-		provider := workload.RuntimeProvider()
+		var provider *api.ProviderResource
+		if workload.RuntimeProviderForJob != nil {
+			if evaluation == nil {
+				return nil, fmt.Errorf("workload %q requires its stored job configuration", workload.Type)
+			}
+			provider = workload.RuntimeProviderForJob(&evaluation.EvaluationJobConfig)
+		} else {
+			provider = workload.RuntimeProvider()
+		}
 		if provider == nil {
 			return nil, fmt.Errorf("workload %q did not provide a runtime provider", workloadType)
 		}

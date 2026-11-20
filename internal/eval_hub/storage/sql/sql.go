@@ -19,6 +19,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	_ "github.com/eval-hub/eval-hub/internal/eval_hub/generation" // Register the collection-generation workload for SQL persistence.
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	se "github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/postgres"
@@ -322,7 +323,10 @@ func (s *sqlStorage) ensureSchema() error {
 	if s.sqlConfig.Driver == SQLiteDriver {
 		// CREATE TABLE IF NOT EXISTS does not add columns to an existing table,
 		// and SQLite has no ADD COLUMN IF NOT EXISTS syntax.
-		return sqlite.EnsureEvaluationWorkloadTypeColumn(s.pool)
+		if err := sqlite.EnsureEvaluationWorkloadTypeColumn(s.pool); err != nil {
+			return err
+		}
+		return sqlite.EnsureEvaluationExpiryColumn(s.pool)
 	}
 
 	return nil

@@ -102,6 +102,21 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 	}
 }
 
+// ValidateModelSecret verifies that a generation request's credential reference
+// exists in the tenant namespace without exposing or logging Secret contents.
+func (r *K8sRuntime) ValidateModelSecret(ctx context.Context, namespace, name string) error {
+	if r == nil || r.helper == nil {
+		return errors.New("Kubernetes Secret lookup is unavailable")
+	}
+	if strings.TrimSpace(namespace) == "" || strings.TrimSpace(name) == "" {
+		return errors.New("Secret namespace and name are required")
+	}
+	if _, err := r.helper.GetSecret(ctx, namespace, name); err != nil {
+		return fmt.Errorf("Secret reference is unavailable in namespace %q", namespace)
+	}
+	return nil
+}
+
 // Close cancels in-flight abort waits and stops the Kubernetes EventBroadcaster
 // background goroutines started by NewKubernetesHelper.
 // WithLogger/WithContext copies share the same helper and shutdown cancel, so

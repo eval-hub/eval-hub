@@ -142,6 +142,15 @@ func (l HardLimits) exceeds(ceiling HardLimits) bool {
 	return l.MaxIterations > ceiling.MaxIterations || l.MaxModelCalls > ceiling.MaxModelCalls || l.MaxToolCalls > ceiling.MaxToolCalls || l.MaxTotalTokens > ceiling.MaxTotalTokens || l.MaxOutputTokens > ceiling.MaxOutputTokens || l.MaxDuration > ceiling.MaxDuration
 }
 
+// ValidateAgainst checks a persisted per-run budget against the service's
+// hard limits. It is used when loading immutable job snapshots from storage.
+func (b Budget) ValidateAgainst(limits HardLimits) error {
+	if err := limits.validate(); err != nil {
+		return fmt.Errorf("invalid hard limits: %w", err)
+	}
+	return b.validateAgainst(limits)
+}
+
 func (b Budget) validateAgainst(l HardLimits) error {
 	if b.MaxIterations <= 0 || b.MaxModelCalls <= 0 || b.MaxToolCalls <= 0 || b.MaxTotalTokens <= 0 || b.MaxOutputTokens <= 0 || b.MaxDuration <= 0 {
 		return errors.New("all budget values must be positive")

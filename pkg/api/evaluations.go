@@ -353,6 +353,9 @@ type BenchmarkStatusEvent struct {
 	MLFlowRunID    string         `json:"mlflow_run_id,omitempty"`
 	LogsPath       string         `json:"logs_path,omitempty"`
 	JobMeta        *JobMeta       `json:"job_meta,omitempty"`
+	// CollectionGenerationProgress carries bounded runner progress for the internal generation workload.
+	// Storage replaces timestamps with service time and accepts only increasing sequence numbers.
+	CollectionGenerationProgress *CollectionGenerationProgressEvent `json:"collection_generation_progress,omitempty"`
 }
 
 type EvaluationJobState struct {
@@ -484,7 +487,8 @@ type EvaluationResource struct {
 
 type EvaluationJobStatus struct {
 	EvaluationJobState
-	Benchmarks []BenchmarkStatus `json:"benchmarks,omitempty"`
+	Benchmarks                   []BenchmarkStatus             `json:"benchmarks,omitempty"`
+	CollectionGenerationProgress *CollectionGenerationProgress `json:"collection_generation_progress,omitempty"`
 }
 
 // EvaluationJobResource represents evaluation job resource response
