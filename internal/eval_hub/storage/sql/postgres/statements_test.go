@@ -13,6 +13,29 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+func TestSetCollectionGenerationCleanupProtectionIsTenantScopedAndPreservesExpiry(t *testing.T) {
+	factory := NewStatementsFactory(slog.Default())
+	protectedUntil := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+	statement, args := factory.CreateSetCollectionGenerationCleanupProtectionStatement("tenant-a", "job-1", protectedUntil)
+	if !strings.Contains(statement, "cleanup_protected_until = $1") || !strings.Contains(statement, "tenant_id = $3") || strings.Contains(statement, "owner =") || strings.Contains(statement, "expires_at =") {
+		t.Fatalf("unexpected cleanup protection statement: %s", statement)
+	}
+	if !slices.Equal(args, []any{protectedUntil, "job-1", "tenant-a", "collection-generation"}) {
+		t.Fatalf("cleanup protection args = %#v", args)
+	}
+}
+
+func TestDeleteExpiredGenerationStatementSkipsActiveCleanupLeases(t *testing.T) {
+	factory := NewStatementsFactory(slog.Default())
+	statement, args := factory.CreateDeleteExpiredGenerationJobsStatement(time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC), 25)
+	if !strings.Contains(statement, "cleanup_protected_until IS NULL OR cleanup_protected_until <= $5") {
+		t.Fatalf("expiry statement does not honor cleanup lease: %s", statement)
+	}
+	if len(args) != 6 || args[5] != 25 {
+		t.Fatalf("expiry statement args = %#v", args)
+	}
+}
+
 func TestCreateDeleteSystemEntitiesStatement(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
 	stmt, args := f.CreateDeleteSystemEntitiesStatement(shared.TableProviders)

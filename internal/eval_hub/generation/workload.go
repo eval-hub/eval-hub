@@ -209,19 +209,12 @@ func ValidateResult(request api.CollectionGenerationRequest, result api.Collecti
 		}
 		selected[key] = struct{}{}
 	}
-	selectedAll := make(map[string]struct{}, len(selected))
-	for key := range selected {
-		selectedAll[key] = struct{}{}
-	}
-	for _, reason := range result.Explanation.SelectedBenchmarks {
+	for i, reason := range result.Explanation.SelectedBenchmarks {
+		benchmark := result.Collection.Benchmarks[i]
 		key := reason.ProviderID + "\x00" + reason.ID
-		if _, exists := selected[key]; !exists || strings.TrimSpace(reason.Reason) == "" || len(reason.Reason) > 300 {
+		if key != benchmark.ProviderID+"\x00"+benchmark.ID || strings.TrimSpace(reason.Reason) == "" || len(reason.Reason) > 300 {
 			return errors.New("selected benchmark explanation does not match the proposal")
 		}
-		delete(selected, key)
-	}
-	if len(selected) != 0 {
-		return errors.New("proposal is missing a selected benchmark explanation")
 	}
 	rejected := make(map[string]struct{}, len(result.Explanation.RejectedBenchmarks))
 	for _, reason := range result.Explanation.RejectedBenchmarks {
@@ -235,7 +228,7 @@ func ValidateResult(request api.CollectionGenerationRequest, result api.Collecti
 		if _, exists := rejected[key]; exists {
 			return errors.New("proposal contains a duplicate rejected benchmark explanation")
 		}
-		if _, exists := selectedAll[key]; exists {
+		if _, exists := selected[key]; exists {
 			return errors.New("a benchmark cannot be both selected and rejected")
 		}
 		rejected[key] = struct{}{}

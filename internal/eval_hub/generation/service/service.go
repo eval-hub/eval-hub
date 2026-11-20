@@ -137,9 +137,10 @@ func (s *Service) Get(ctx context.Context, tenant api.Tenant, owner api.User, id
 	return resource, nil
 }
 
-// Delete atomically cancels an active job and removes its retention deadline before
-// deleting runtime resources. If cleanup fails, the unexpired record remains
-// available for a later DELETE to retry cleanup.
+// Delete atomically cancels an active job and installs a bounded cleanup lease
+// before deleting runtime resources. The original retention deadline remains
+// unchanged, so a failed cleanup can be retried only during the record's retention
+// window and cannot keep the row alive indefinitely.
 func (s *Service) Delete(ctx context.Context, tenant api.Tenant, owner api.User, id string) error {
 	if s == nil || s.storage == nil || s.runtime == nil {
 		return errors.New("collection generation is not configured")
@@ -172,7 +173,9 @@ func (s *Service) Delete(ctx context.Context, tenant api.Tenant, owner api.User,
 	if err != nil {
 		return fmt.Errorf("read protected collection-generation job: %w", err)
 	}
-	if err := s.runtime.WithLogger(s.logger).WithContext(jobCtx).DeleteEvaluationJobResources(job); err != nil {
+	cleanupCtx, cancelCleanup := context.WithTimeout(jobCtx, generation.RuntimeResourceCleanupTimeout)
+	defer cancelCleanup()
+	if err := s.runtime.WithLogger(s.logger).WithContext(cleanupCtx).DeleteEvaluationJobResources(job); err != nil {
 		return fmt.Errorf("clean up collection-generation runtime resources: %w", err)
 	}
 	if err := store.DeleteEvaluationJob(id); err != nil {

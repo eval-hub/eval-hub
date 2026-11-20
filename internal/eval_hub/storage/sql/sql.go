@@ -326,7 +326,10 @@ func (s *sqlStorage) ensureSchema() error {
 		if err := sqlite.EnsureEvaluationWorkloadTypeColumn(s.pool); err != nil {
 			return err
 		}
-		return sqlite.EnsureEvaluationExpiryColumn(s.pool)
+		if err := sqlite.EnsureEvaluationExpiryColumn(s.pool); err != nil {
+			return err
+		}
+		return sqlite.EnsureEvaluationCleanupProtectionColumn(s.pool)
 	}
 
 	return nil

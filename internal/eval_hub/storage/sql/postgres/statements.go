@@ -31,12 +31,14 @@ CREATE TABLE IF NOT EXISTS evaluations (
     experiment_id VARCHAR(255) NOT NULL,
     workload_type TEXT NOT NULL DEFAULT 'evaluation',
     expires_at TIMESTAMPTZ NULL,
+    cleanup_protected_until TIMESTAMPTZ NULL,
     entity JSONB NOT NULL,
     PRIMARY KEY (id)
 );
 
 ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS workload_type TEXT NOT NULL DEFAULT 'evaluation';
 ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NULL;
+ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS cleanup_protected_until TIMESTAMPTZ NULL;
 
 CREATE INDEX IF NOT EXISTS idx_evaluations_generation_expiry
 ON evaluations (expires_at)
@@ -264,16 +266,17 @@ func (s *postgresStatementsFactory) CreateUpdateEvaluationEntityStatement(tenant
 	return query + `;`, args
 }
 
-func (s *postgresStatementsFactory) CreateClearCollectionGenerationExpiryStatement(tenant api.Tenant, owner api.User, id string) (string, []any) {
-	return `UPDATE evaluations SET expires_at = NULL, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $1 AND tenant_id = $2 AND owner = $3 AND workload_type = $4;`,
-		[]any{id, tenant.String(), owner.String(), string(workloads.CollectionGeneration)}
+func (s *postgresStatementsFactory) CreateSetCollectionGenerationCleanupProtectionStatement(tenant api.Tenant, id string, protectedUntil time.Time) (string, []any) {
+	return `UPDATE evaluations SET cleanup_protected_until = $1, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2 AND tenant_id = $3 AND workload_type = $4;`,
+		[]any{protectedUntil, id, tenant.String(), string(workloads.CollectionGeneration)}
 }
 
 func (s *postgresStatementsFactory) CreateDeleteExpiredGenerationJobsStatement(now time.Time, limit int) (string, []any) {
 	return `DELETE FROM evaluations WHERE id IN (
 		SELECT id FROM evaluations
 		WHERE workload_type = $1 AND status IN ($2, $3, $4) AND expires_at <= $5
+		  AND (cleanup_protected_until IS NULL OR cleanup_protected_until <= $5)
 		ORDER BY expires_at LIMIT $6 FOR UPDATE SKIP LOCKED
 	);`, []any{string(workloads.CollectionGeneration), api.OverallStateCompleted, api.OverallStateFailed, api.OverallStateCancelled, now, limit}
 }

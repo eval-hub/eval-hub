@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/generation"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	se "github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/shared"
@@ -160,10 +161,9 @@ func (s *sqlStorage) DeleteEvaluationJob(id string) error {
 }
 
 // ProtectCollectionGenerationJobForCleanup cancels an active generation job, if
-// necessary, and clears its retention deadline in one transaction. The retention
-// sweep therefore either deletes an already-expired row before this operation or
-// observes the protected row after this operation; it cannot delete the row while
-// runtime cleanup is in progress.
+// necessary, and installs a bounded cleanup lease in one transaction. The lease
+// protects an in-flight runtime cleanup from the retention sweep without changing
+// the job's first-terminal expires_at deadline.
 func (s *sqlStorage) ProtectCollectionGenerationJobForCleanup(id string, message *api.MessageInfo) error {
 	api.WithMessageOrigin(message, api.MessageOriginServer)
 	return s.withTransaction("protect collection-generation job for cleanup", id, func(txn *sql.Tx) error {
@@ -201,7 +201,8 @@ func (s *sqlStorage) ProtectCollectionGenerationJobForCleanup(id string, message
 			}
 		}
 
-		query, args := s.statementsFactory.CreateClearCollectionGenerationExpiryStatement(s.tenant, s.owner, id)
+		protectedUntil := time.Now().UTC().Add(generation.CleanupProtectionLease)
+		query, args := s.statementsFactory.CreateSetCollectionGenerationCleanupProtectionStatement(s.tenant, id, protectedUntil)
 		result, err := s.exec(txn, query, args...)
 		if err != nil {
 			return err

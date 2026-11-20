@@ -74,3 +74,23 @@ func EnsureEvaluationExpiryColumn(pool *sql.DB) error {
 	}
 	return nil
 }
+
+// EnsureEvaluationCleanupProtectionColumn upgrades databases created before
+// generation DELETE gained a bounded retention-protection lease.
+func EnsureEvaluationCleanupProtectionColumn(pool *sql.DB) error {
+	var columns int
+	const columnQuery = `SELECT COUNT(*) FROM pragma_table_info('evaluations') WHERE name = 'cleanup_protected_until'`
+	if err := pool.QueryRow(columnQuery).Scan(&columns); err != nil {
+		return fmt.Errorf("check evaluations cleanup_protected_until column: %w", err)
+	}
+	if columns == 0 {
+		const migration = `ALTER TABLE evaluations ADD COLUMN cleanup_protected_until TIMESTAMP NULL`
+		if _, err := pool.Exec(migration); err != nil {
+			// Another service replica may have completed the migration after the check.
+			if checkErr := pool.QueryRow(columnQuery).Scan(&columns); checkErr != nil || columns == 0 {
+				return fmt.Errorf("add evaluations cleanup_protected_until column: %w", err)
+			}
+		}
+	}
+	return nil
+}

@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
     experiment_id VARCHAR(255) NOT NULL,
     workload_type TEXT NOT NULL DEFAULT 'evaluation',
 	expires_at TIMESTAMP NULL,
+	cleanup_protected_until TIMESTAMP NULL,
     entity TEXT NOT NULL,
     PRIMARY KEY (id)
 );
@@ -260,18 +261,19 @@ func (s *sqliteStatementsFactory) CreateUpdateEvaluationEntityStatement(tenant a
 	return query + `;`, args
 }
 
-func (s *sqliteStatementsFactory) CreateClearCollectionGenerationExpiryStatement(tenant api.Tenant, owner api.User, id string) (string, []any) {
-	return `UPDATE evaluations SET expires_at = NULL, updated_at = CURRENT_TIMESTAMP
-		WHERE id = ? AND tenant_id = ? AND owner = ? AND workload_type = ?;`,
-		[]any{id, tenant.String(), owner.String(), string(workloads.CollectionGeneration)}
+func (s *sqliteStatementsFactory) CreateSetCollectionGenerationCleanupProtectionStatement(tenant api.Tenant, id string, protectedUntil time.Time) (string, []any) {
+	return `UPDATE evaluations SET cleanup_protected_until = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ? AND tenant_id = ? AND workload_type = 'collection-generation';`,
+		[]any{protectedUntil.UTC().Format(sqliteExpiryTimestampFormat), id, tenant.String()}
 }
 
 func (s *sqliteStatementsFactory) CreateDeleteExpiredGenerationJobsStatement(now time.Time, limit int) (string, []any) {
 	return `DELETE FROM evaluations WHERE id IN (
 		SELECT id FROM evaluations
 		WHERE workload_type = 'collection-generation' AND status IN (?, ?, ?) AND expires_at <= ?
+		  AND (cleanup_protected_until IS NULL OR cleanup_protected_until <= ?)
 		ORDER BY expires_at LIMIT ?
-	);`, []any{api.OverallStateCompleted, api.OverallStateFailed, api.OverallStateCancelled, now.UTC().Format(sqliteExpiryTimestampFormat), limit}
+	);`, []any{api.OverallStateCompleted, api.OverallStateFailed, api.OverallStateCancelled, now.UTC().Format(sqliteExpiryTimestampFormat), now.UTC().Format(sqliteExpiryTimestampFormat), limit}
 }
 
 func (s *sqliteStatementsFactory) CreateProviderAddEntityStatement(provider *api.ProviderResource, entity string) (string, []any) {

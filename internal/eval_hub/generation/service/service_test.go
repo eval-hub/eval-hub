@@ -319,6 +319,9 @@ func TestGenerationServiceDeleteCancelsCleansAndDeletes(t *testing.T) {
 	if !generation.IsJob(&runtime.deleteJob.EvaluationJobConfig) {
 		t.Fatal("runtime cleanup received the wrong workload")
 	}
+	if _, ok := runtime.ctx.Deadline(); !ok {
+		t.Fatal("runtime cleanup did not receive a bounded context")
+	}
 
 	// If a terminal worker callback wins the cancellation race, preserve it and
 	// continue runtime cleanup and record deletion.

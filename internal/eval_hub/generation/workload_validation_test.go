@@ -69,6 +69,20 @@ func TestValidateResultRejectsInvalidProposalFields(t *testing.T) {
 		{name: "explanation count", mutate: func(_ *api.CollectionGenerationRequest, p *api.CollectionGenerationResult) {
 			p.Explanation.SelectedBenchmarks = nil
 		}},
+		{name: "selected explanations out of collection order", mutate: func(_ *api.CollectionGenerationRequest, p *api.CollectionGenerationResult) {
+			p.Collection.Benchmarks = append(p.Collection.Benchmarks, api.CollectionBenchmarkConfig{
+				Ref: api.Ref{ID: "bench-b"}, ProviderID: "provider-b",
+			})
+			p.Explanation.SelectedBenchmarks = append(p.Explanation.SelectedBenchmarks, api.CollectionGenerationBenchmarkReason{
+				ProviderID: "provider-b", ID: "bench-b", Reason: "It measures the second requested behavior.",
+			})
+			p.Explanation.SelectedBenchmarks[0], p.Explanation.SelectedBenchmarks[1] = p.Explanation.SelectedBenchmarks[1], p.Explanation.SelectedBenchmarks[0]
+			serialized, err := yaml.Marshal(p.Collection)
+			if err != nil {
+				t.Fatalf("marshal reversed-order collection YAML: %v", err)
+			}
+			p.YAML = string(serialized)
+		}},
 		{name: "too many rejected", mutate: func(_ *api.CollectionGenerationRequest, p *api.CollectionGenerationResult) {
 			p.Explanation.RejectedBenchmarks = make([]api.CollectionGenerationBenchmarkReason, 6)
 		}},
@@ -158,6 +172,9 @@ func TestValidateResultRejectsInvalidProposalFields(t *testing.T) {
 			}
 			if tc.name == "duplicate benchmark" && err.Error() != "proposal contains a duplicate benchmark" {
 				t.Fatalf("duplicate benchmark error = %q", err)
+			}
+			if tc.name == "selected explanations out of collection order" && err.Error() != "selected benchmark explanation does not match the proposal" {
+				t.Fatalf("selected explanation order error = %q", err)
 			}
 		})
 	}

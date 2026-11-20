@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -48,6 +49,9 @@ func TestExpiredGenerationCleanupUsesExpiryIndex(t *testing.T) {
 	if err := EnsureEvaluationExpiryColumn(db); err != nil {
 		t.Fatal(err)
 	}
+	if err := EnsureEvaluationCleanupProtectionColumn(db); err != nil {
+		t.Fatal(err)
+	}
 	tx, err := db.Begin()
 	if err != nil {
 		t.Fatal(err)
@@ -74,8 +78,8 @@ func TestExpiredGenerationCleanupUsesExpiryIndex(t *testing.T) {
 	if _, err := db.Exec("ANALYZE"); err != nil {
 		t.Fatal(err)
 	}
-	query := `EXPLAIN QUERY PLAN SELECT id FROM evaluations WHERE workload_type = 'collection-generation' AND status IN (?, ?, ?) AND expires_at <= ? ORDER BY expires_at LIMIT ?`
-	rows, err := db.Query(query, api.OverallStateCompleted, api.OverallStateFailed, api.OverallStateCancelled, "2026-02-01T00:00:00.000000000Z", 100)
+	deleteQuery, args := factory.CreateDeleteExpiredGenerationJobsStatement(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), 100)
+	rows, err := db.Query("EXPLAIN QUERY PLAN "+deleteQuery, args...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,6 +103,82 @@ func TestExpiredGenerationCleanupUsesExpiryIndex(t *testing.T) {
 	joined := strings.Join(plan, " | ")
 	if !strings.Contains(joined, "idx_evaluations_generation_expiry") || strings.Contains(joined, "USE TEMP B-TREE") {
 		t.Fatalf("expiry cleanup query plan does not use the ordered partial index: %s", joined)
+	}
+}
+
+func TestEnsureEvaluationCleanupProtectionColumnMigratesExistingDatabase(t *testing.T) {
+	db, err := sql.Open("sqlite", "file:generation-cleanup-migration?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.Exec("CREATE TABLE evaluations (id TEXT PRIMARY KEY)"); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureEvaluationCleanupProtectionColumn(db); err != nil {
+		t.Fatalf("EnsureEvaluationCleanupProtectionColumn(): %v", err)
+	}
+	if err := EnsureEvaluationCleanupProtectionColumn(db); err != nil {
+		t.Fatalf("EnsureEvaluationCleanupProtectionColumn() on an already migrated database: %v", err)
+	}
+	var columns int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('evaluations') WHERE name = 'cleanup_protected_until'`).Scan(&columns); err != nil {
+		t.Fatal(err)
+	}
+	if columns != 1 {
+		t.Fatalf("cleanup protection columns = %d, want 1", columns)
+	}
+}
+
+func TestEnsureEvaluationCleanupProtectionColumnReturnsSchemaError(t *testing.T) {
+	db, err := sql.Open("sqlite", "file:generation-cleanup-missing-table?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureEvaluationCleanupProtectionColumn(db); err == nil {
+		t.Fatal("EnsureEvaluationCleanupProtectionColumn() on a closed database returned nil")
+	}
+}
+
+func TestEnsureEvaluationCleanupProtectionColumnReportsMigrationFailure(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "generation-cleanup-readonly.db")
+	setup, err := sql.Open("sqlite", databasePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := setup.Exec("CREATE TABLE evaluations (id TEXT PRIMARY KEY)"); err != nil {
+		_ = setup.Close()
+		t.Fatal(err)
+	}
+	if err := setup.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	readOnly, err := sql.Open("sqlite", "file:"+databasePath+"?mode=ro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = readOnly.Close() })
+	if err := EnsureEvaluationCleanupProtectionColumn(readOnly); err == nil {
+		t.Fatal("EnsureEvaluationCleanupProtectionColumn() on a read-only database returned nil")
+	}
+}
+
+func TestSetCollectionGenerationCleanupProtectionIsTenantScopedAndPreservesExpiry(t *testing.T) {
+	factory := NewStatementsFactory(slog.Default())
+	protectedUntil := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+	statement, args := factory.CreateSetCollectionGenerationCleanupProtectionStatement("tenant-a", "job-1", protectedUntil)
+	if !strings.Contains(statement, "cleanup_protected_until = ?") || !strings.Contains(statement, "tenant_id = ?") || strings.Contains(statement, "owner =") || strings.Contains(statement, "expires_at =") {
+		t.Fatalf("unexpected cleanup protection statement: %s", statement)
+	}
+	if got := args[0]; got != protectedUntil.Format(sqliteExpiryTimestampFormat) {
+		t.Fatalf("protected-until argument = %#v", got)
+	}
+	if !slices.Equal(args[1:], []any{"job-1", "tenant-a"}) {
+		t.Fatalf("cleanup protection args = %#v", args)
 	}
 }
 
