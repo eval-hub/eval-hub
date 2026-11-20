@@ -488,7 +488,7 @@ func TestCredentialResolutionUsesOCIHTTPTimeout(t *testing.T) {
 		{name: "expiry", timeout: time.Millisecond, expire: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			client, err := NewOCIHTTPClient(&config.Config{Sidecar: &config.SidecarConfig{OCI: &config.SidecarOCIConfig{HTTPTimeout: tc.timeout}}}, false, nil)
+			client, err := oci.NewHTTPClient(&config.Config{Sidecar: &config.SidecarConfig{OCI: &config.SidecarOCIConfig{HTTPTimeout: tc.timeout}}}, false, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
