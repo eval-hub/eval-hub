@@ -1963,14 +1963,14 @@ Feature: Evaluation Jobs
     And I wait for the OCI export status to be "completed"
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
-    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "evaluation-card-{{value:job_id}}"
+    When I fetch the evaluation card OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "evaluation-card-{{value:job_id}}"
     Then the OCI artifact should exist
     And the OCI artifact should be valid JSON
-    And the OCI artifact should contain "benchmark_id"
-    And the OCI artifact should contain "model_name"
-    And the OCI artifact should contain "results"
-    And the OCI artifact should contain "arc_easy"
-    And the OCI artifact should contain the value "{{value:job_id}}" at path "$.id"
+    And the OCI artifact should contain "card_version"
+    And the OCI artifact should contain the value "{{env:MODEL_NAME|test}}" at path "$.context.model.name"
+    And the OCI artifact should contain the value "arc_easy" at path "$.results.benchmarks[0].id"
+    And the OCI artifact should contain the value "completed" at path "$.results.status.state"
+    And the OCI artifact should contain the value "{{value:job_id}}" at path "$.metadata.evaluation_job_id"
 
   @oci
   Scenario: No EvalCard exported to OCI when evaluation job fails
@@ -1983,7 +1983,7 @@ Feature: Evaluation Jobs
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response should contain the value "failed" at path "$.status.state"
     # Verify the job-specific card tag does not exist when the job fails
-    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "evaluation-card-{{value:job_id}}"
+    When I fetch the evaluation card OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "evaluation-card-{{value:job_id}}"
     Then the OCI manifest should not exist
 
   @oci
@@ -2011,7 +2011,7 @@ Feature: Evaluation Jobs
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     # Verify results artifact exists with custom annotations in OCI metadata
-    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "evaluation-card-{{value:job_id}}"
+    When I fetch the evaluation card OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "evaluation-card-{{value:job_id}}"
     # Verify custom annotations in manifest
     Then the OCI manifest should contain annotation "team" with value "ml-platform"
     And the OCI manifest should contain annotation "environment" with value "test"
@@ -2019,10 +2019,10 @@ Feature: Evaluation Jobs
     # Verify artifact content
     And the OCI artifact should exist
     And the OCI artifact should be valid JSON
-    And the OCI artifact should contain "benchmark_id"
-    And the OCI artifact should contain "model_name"
-    And the OCI artifact should contain "results"
-    And the OCI artifact should contain the value "{{value:job_id}}" at path "$.id"
+    And the OCI artifact should contain "card_version"
+    And the OCI artifact should contain the value "{{env:MODEL_NAME|test}}" at path "$.context.model.name"
+    And the OCI artifact should contain the value "arc_easy" at path "$.results.benchmarks[0].id"
+    And the OCI artifact should contain the value "{{value:job_id}}" at path "$.metadata.evaluation_job_id"
 
   @oci
   Scenario: OCI export validation errors for missing required fields
@@ -2044,13 +2044,13 @@ Feature: Evaluation Jobs
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     # Verify first job's results exist
-    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "evaluation-card-{{value:job_id_1}}"
+    When I fetch the evaluation card OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "evaluation-card-{{value:job_id_1}}"
     Then the OCI artifact should exist
     And the OCI artifact should be valid JSON
-    And the OCI artifact should contain "benchmark_id"
-    And the OCI artifact should contain "model_name"
-    And the OCI artifact should contain "results"
-    And the OCI artifact should contain the value "{{value:job_id_1}}" at path "$.id"
+    And the OCI artifact should contain "card_version"
+    And the OCI artifact should contain the value "{{env:MODEL_NAME|test}}" at path "$.context.model.name"
+    And the OCI artifact should contain the value "arc_easy" at path "$.results.benchmarks[0].id"
+    And the OCI artifact should contain the value "{{value:job_id_1}}" at path "$.metadata.evaluation_job_id"
     When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oci_shared_repo_2.json"
     Then the response code should be 202
     And the "resource.id" field in the response should be saved as "value:job_id_2"
@@ -2059,17 +2059,17 @@ Feature: Evaluation Jobs
     When I send a GET request to "/api/v1/evaluations/jobs/{id}"
     Then the response code should be 200
     # Verify second job's results exist (different tag, same repo)
-    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "evaluation-card-{{value:job_id_2}}"
+    When I fetch the evaluation card OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "evaluation-card-{{value:job_id_2}}"
     Then the OCI artifact should exist
     And the OCI artifact should be valid JSON
-    And the OCI artifact should contain "benchmark_id"
-    And the OCI artifact should contain "model_name"
-    And the OCI artifact should contain "results"
-    And the OCI artifact should contain the value "{{value:job_id_2}}" at path "$.id"
+    And the OCI artifact should contain "card_version"
+    And the OCI artifact should contain the value "{{env:MODEL_NAME|test}}" at path "$.context.model.name"
+    And the OCI artifact should contain the value "arc_easy" at path "$.results.benchmarks[0].id"
+    And the OCI artifact should contain the value "{{value:job_id_2}}" at path "$.metadata.evaluation_job_id"
     # Re-verify first job's artifact is still intact after second job completed
-    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "evaluation-card-{{value:job_id_1}}"
+    When I fetch the evaluation card OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "evaluation-card-{{value:job_id_1}}"
     Then the OCI artifact should exist
-    And the OCI artifact should contain the value "{{value:job_id_1}}" at path "$.id"
+    And the OCI artifact should contain the value "{{value:job_id_1}}" at path "$.metadata.evaluation_job_id"
 
   # NOTE: This scenario has both @oci and @mlflow tags. Since @mlflow is excluded by default
   # in FVT_TAGS, this scenario only runs when MLflow tests are explicitly enabled.
@@ -2089,13 +2089,13 @@ Feature: Evaluation Jobs
     Then the response code should be 200
     And the response should contain the value "completed" at path "$.status.state"
     # Verify OCI results artifact exists
-    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "evaluation-card-{{value:job_id}}"
+    When I fetch the evaluation card OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "evaluation-card-{{value:job_id}}"
     Then the OCI artifact should exist
     And the OCI artifact should be valid JSON
-    And the OCI artifact should contain "benchmark_id"
-    And the OCI artifact should contain "model_name"
-    And the OCI artifact should contain "results"
-    And the OCI artifact should contain the value "{{value:job_id}}" at path "$.id"
+    And the OCI artifact should contain "card_version"
+    And the OCI artifact should contain the value "{{env:MODEL_NAME|test}}" at path "$.context.model.name"
+    And the OCI artifact should contain the value "arc_easy" at path "$.results.benchmarks[0].id"
+    And the OCI artifact should contain the value "{{value:job_id}}" at path "$.metadata.evaluation_job_id"
     # Verify MLflow has the EvalCard
     When I wait for the MLflow artifact "evaluation-card.json" for experiment "{{value:mlflow_experiment_id}}" and job "{{value:job_id}}"
     Then the MLflow artifact should exist
