@@ -85,7 +85,7 @@ func TestCreateEvaluationOCITag(t *testing.T) {
 				if tt.invalid {
 					activeRuntime = runtime
 				}
-				h := handlers.New(storage, testhelpers.NewValidator(t), activeRuntime, nil, nil, nil, nil)
+				h := handlers.New(storage, testhelpers.NewValidator(t), activeRuntime, nil, nil, nil, nil, nil)
 				recorder := httptest.NewRecorder()
 				req := &bodyRequest{MockRequest: createMockRequest(http.MethodPost, "/api/v1/evaluations/jobs"), body: encoded}
 				ctx := executioncontext.NewExecutionContext(context.Background(), "req-oci-tag", slog.New(slog.NewTextHandler(io.Discard, nil)), "test-user", "test-tenant")
@@ -166,7 +166,7 @@ func TestCreatePostProcessingPreservesOCITag(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, nil)
+				h := handlers.New(storage, testhelpers.NewValidator(t), nil, nil, nil, nil, nil, nil)
 				recorder := httptest.NewRecorder()
 				req := &bodyRequest{MockRequest: createMockRequest(http.MethodPost, "/api/v1/evaluations/post-processing"), body: body}
 				ctx := executioncontext.NewExecutionContext(context.Background(), "req-oci-input-tag", slog.New(slog.NewTextHandler(io.Discard, nil)), "test-user", "test-tenant")

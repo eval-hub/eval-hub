@@ -37,7 +37,7 @@ func (r generationMockRequest) PathValue(name string) string { return r.pathValu
 func (r generationMockRequest) SetHeader(key, value string)  { r.headers[key] = value }
 
 func newGenerationMockHandler() *handlers.Handlers {
-	return handlers.New(nil, nil, nil, nil, nil, nil, nil)
+	return handlers.New(nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func newGenerationMockContext() *executioncontext.ExecutionContext {
