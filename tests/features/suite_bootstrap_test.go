@@ -692,6 +692,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	// OCI artifact steps
 	ctx.Step(`^I wait for the OCI export status to be "([^"]*)"$`, tc.iWaitForOCIExportStatus)
 	ctx.Step(`^I fetch the OCI manifest for repository "([^"]*)" and tag "([^"]*)"$`, tc.iFetchOCIManifestByRepoAndTag)
+	ctx.Step(`^I fetch the evaluation card OCI manifest for repository "([^"]*)" and tag "([^"]*)"$`, tc.iFetchOCIEvaluationCardManifestByRepoAndTag)
 	ctx.Step(`^the OCI manifest should not exist$`, tc.theOCIManifestShouldNotExist)
 	ctx.Step(`^the OCI manifest should contain annotation "([^"]*)" with value "([^"]*)"$`, tc.theOCIManifestShouldContainAnnotation)
 	ctx.Step(`^the OCI artifact should exist$`, tc.theOCIArtifactShouldExist)
