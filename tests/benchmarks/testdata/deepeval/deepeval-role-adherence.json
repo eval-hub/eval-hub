@@ -1,0 +1,11 @@
+{
+  "notes": "Stage one JSONL conversation record with turns (user/assistant role and content). Include chatbot_role for role-adherence. Use a dataset specific to this conversational metric; requires a structured-output judge.",
+  "parameters": {
+    "dataset_format": "jsonl",
+    "eval_model_name": "${JUDGE_MODEL_NAME}",
+    "max_concurrent": 1,
+    "retry_max_attempts": 1
+  },
+  "test_data_ref_env": "DEEPEVAL_CONVERSATIONAL_TEST_DATA_REF",
+  "timeout": "5m"
+}
