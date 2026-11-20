@@ -48,8 +48,9 @@ type ServiceConfig struct {
 	// LogStreamTimeout is the maximum duration for streaming log responses.
 	// Zero or unset uses DefaultLogStreamTimeout (5 minutes). This is independent of the
 	// server WriteTimeout and allows log streams to run longer than normal responses.
-	LogStreamTimeout time.Duration     `mapstructure:"log_stream_timeout,omitempty"`
-	Init             ServiceInitConfig `mapstructure:"init,omitempty"`
+	LogStreamTimeout time.Duration           `mapstructure:"log_stream_timeout,omitempty"`
+	Init             ServiceInitConfig       `mapstructure:"init,omitempty"`
+	Generation       ServiceGenerationConfig `mapstructure:"generation,omitempty"`
 }
 
 type ServiceInitConfig struct {

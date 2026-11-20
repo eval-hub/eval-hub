@@ -14,6 +14,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/generation"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
@@ -102,6 +103,21 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 	}
 }
 
+// ValidateModelSecret verifies that a generation request's credential reference
+// exists in the tenant namespace without exposing or logging Secret contents.
+func (r *K8sRuntime) ValidateModelSecret(ctx context.Context, namespace, name string) error {
+	if r == nil || r.helper == nil {
+		return errors.New("Kubernetes Secret lookup is unavailable")
+	}
+	if strings.TrimSpace(namespace) == "" || strings.TrimSpace(name) == "" {
+		return errors.New("Secret namespace and name are required")
+	}
+	if _, err := r.helper.GetSecret(ctx, namespace, name); err != nil {
+		return fmt.Errorf("Secret reference is unavailable in namespace %q", namespace)
+	}
+	return nil
+}
+
 // Close cancels in-flight abort waits and stops the Kubernetes EventBroadcaster
 // background goroutines started by NewKubernetesHelper.
 // WithLogger/WithContext copies share the same helper and shutdown cancel, so
@@ -160,7 +176,7 @@ func (r *K8sRuntime) RunEvaluationJob(
 					"benchmark_id", bench.ID,
 				)
 				if storage != nil {
-					runStatus := buildBenchmarkFailureStatus(&bench, idx, err)
+					runStatus := buildBenchmarkFailureStatus(evaluation, &bench, idx, err)
 					if updateErr := storage.UpdateEvaluationJob(jobID, runStatus); updateErr != nil {
 						r.logger.Error(
 							"failed to update benchmark status",
@@ -734,7 +750,18 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 	return nil
 }
 
-func buildBenchmarkFailureStatus(benchmark *api.EvaluationBenchmarkConfig, benchmarkIndex int, runErr error) *api.StatusEvent {
+func buildBenchmarkFailureStatus(evaluation *api.EvaluationJobResource, benchmark *api.EvaluationBenchmarkConfig, benchmarkIndex int, runErr error) *api.StatusEvent {
+	if evaluation != nil && generation.IsJob(&evaluation.EvaluationJobConfig) {
+		failure, _ := generation.SafeFailure("launch_failed", "")
+		return &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ProviderID: generation.ProviderID, ID: generation.BenchmarkID, BenchmarkIndex: 0,
+			Status: api.StateFailed,
+			ErrorMessage: api.WithMessageOrigin(&api.MessageInfo{
+				Message: failure.Message, MessageCode: "collection_generation_" + failure.Code,
+			}, api.MessageOriginServer),
+			AdditionalInfo: map[string]any{"collection_generation_error": failure},
+		}}
+	}
 	return &api.StatusEvent{
 		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 			ProviderID:     benchmark.ProviderID,
@@ -906,7 +933,7 @@ func rewriteModelURLForSidecar(sidecarBaseURL, modelURL string) (string, error) 
 	}
 	model, err := url.Parse(strings.TrimSuffix(modelURL, "/"))
 	if err != nil {
-		return "", fmt.Errorf("invalid model URL %q: %w", modelURL, err)
+		return "", errors.New("invalid model URL")
 	}
 	out := &url.URL{
 		Scheme:   sidecar.Scheme,

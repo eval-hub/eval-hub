@@ -51,6 +51,13 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -o evalhub-mcp \
     ./cmd/evalhub_mcp
 
+# Build the isolated collection-generation workload runner.
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
+    -ldflags="${LD_FLAGS}" \
+    -a -installsuffix cgo \
+    -o eval-generation-worker \
+    ./cmd/eval_generation_worker
+
 # Runtime stage
 FROM registry.access.redhat.com/ubi10/ubi-minimal:latest
 
@@ -70,6 +77,7 @@ COPY --from=builder --chown=evalhub:evalhub /build/eval-hub /app/eval-hub
 COPY --from=builder --chown=evalhub:evalhub /build/eval-runtime-sidecar /app/eval-runtime-sidecar
 COPY --from=builder --chown=evalhub:evalhub /build/eval-runtime-init /app/eval-runtime-init
 COPY --from=builder --chown=evalhub:evalhub /build/evalhub-mcp /app/evalhub-mcp
+COPY --from=builder --chown=evalhub:evalhub /build/eval-generation-worker /app/eval-generation-worker
 
 # The swagger source files required for the openapi.yaml and docs
 COPY --chown=evalhub:evalhub docs/openapi.* /app/docs/

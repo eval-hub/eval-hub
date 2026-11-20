@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/executioncontext"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
@@ -44,6 +46,7 @@ type fakeStorage struct {
 	lastStatusID        string
 	lastStatus          api.OverallState
 	job                 *api.EvaluationJobResource
+	getJobErr           error
 	deleteID            string
 	providerConfigs     map[string]api.ProviderResource
 	collectionConfigs   map[string]api.CollectionResource
@@ -57,6 +60,7 @@ func (f *fakeStorage) clone() *fakeStorage {
 		lastStatusID:        f.lastStatusID,
 		lastStatus:          f.lastStatus,
 		job:                 f.job,
+		getJobErr:           f.getJobErr,
 		deleteID:            f.deleteID,
 		providerConfigs:     f.providerConfigs,
 		collectionConfigs:   f.collectionConfigs,
@@ -85,6 +89,9 @@ func (f *fakeStorage) UpdateEvaluationJobStatus(id string, state api.OverallStat
 }
 
 func (f *fakeStorage) GetEvaluationJob(id string) (*api.EvaluationJobResource, error) {
+	if f.getJobErr != nil {
+		return nil, f.getJobErr
+	}
 	if f.workloadType != "" && (f.job == nil || workloads.TypeForJob(&f.job.EvaluationJobConfig) != f.workloadType) {
 		return nil, serviceerrors.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
 	}
@@ -986,7 +993,12 @@ func TestHandleUpdateEvaluationStartTime(t *testing.T) {
 		{"failed with start", api.StateFailed, "2026-01-02T05:00:00+02:00", "2026-01-02T05:00:00+02:00", false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{}}
+			storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{job: &api.EvaluationJobResource{
+				EvaluationJobConfig: api.EvaluationJobConfig{Benchmarks: []api.EvaluationBenchmarkConfig{{
+					ProviderID: "p1", Ref: api.Ref{ID: "b1"},
+				}}},
+				Status: &api.EvaluationJobStatus{EvaluationJobState: api.EvaluationJobState{State: api.OverallStateRunning}},
+			}}}
 			validate := testhelpers.NewValidator(t)
 			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 			h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil, nil)
@@ -1031,6 +1043,30 @@ func TestHandleUpdateEvaluationStartTime(t *testing.T) {
 				t.Fatalf("unexpected start time passed to storage: got %q, want %q", got, test.want)
 			}
 		})
+	}
+}
+
+func TestHandleUpdateEvaluationDoesNotStampStartAfterLookupFailure(t *testing.T) {
+	t.Parallel()
+	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{getJobErr: errors.New("temporary lookup failure")}}
+	validate := testhelpers.NewValidator(t)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil, nil)
+	body := []byte(`{"benchmark_status_event":{"provider_id":"collection-generation","id":"generate_collection","status":"running"}}`)
+	bodyReq := &bodyRequest{
+		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs/job-generation/events"),
+		body:        body,
+	}
+	req := &updateEvaluationRequest{bodyRequest: bodyReq, pathValues: map[string]string{constants.PathParameterJobID: "job-generation"}}
+	ctx := executioncontext.NewExecutionContext(context.Background(), "req-generation", logger, "test-user", "test-tenant")
+	ctx.StartedAt = time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+	recorder := httptest.NewRecorder()
+	h.HandleUpdateEvaluation(ctx, req, MockResponseWrapper{recorder: recorder})
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("expected status 204, got %d body %s", recorder.Code, recorder.Body.String())
+	}
+	if got := storage.lastStatusEvent.BenchmarkStatusEvent.StartedAt; got != "" {
+		t.Fatalf("handler stamped a generation event after failed classification: %q", got)
 	}
 }
 
