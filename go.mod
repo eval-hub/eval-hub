@@ -6,9 +6,9 @@ require (
 	github.com/Jeffail/gabs/v2 v2.7.0
 	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/aws/aws-sdk-go-v2 v1.48.0
-	github.com/aws/aws-sdk-go-v2/config v1.33.18
-	github.com/aws/aws-sdk-go-v2/credentials v1.21.0
-	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.5.7
+	github.com/aws/aws-sdk-go-v2/config v1.33.19
+	github.com/aws/aws-sdk-go-v2/credentials v1.21.1
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.5.8
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.10
 	github.com/cucumber/godog v0.16.0
 	github.com/fsnotify/fsnotify v1.10.1
@@ -16,7 +16,7 @@ require (
 	github.com/go-logr/logr v1.4.4
 	github.com/go-playground/validator/v10 v10.30.6
 	github.com/go-viper/mapstructure/v2 v2.5.0
-	github.com/gomlx/go-huggingface v0.4.36
+	github.com/gomlx/go-huggingface v0.4.37
 	github.com/google/go-jsonnet v0.22.0
 	github.com/google/jsonschema-go v0.4.3
 	github.com/google/uuid v1.6.0
