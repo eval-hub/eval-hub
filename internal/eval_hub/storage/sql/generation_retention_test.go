@@ -334,6 +334,61 @@ func TestGenerationRetentionCannotDeleteRecordDuringRuntimeCleanup(t *testing.T)
 	testGenerationRetentionCannotDeleteRecordDuringRuntimeCleanup(t, drivers[0], getDBName())
 }
 
+func TestFailedDeleteKeepsExpiryAndEventuallySweepsRecord(t *testing.T) {
+	store, err := getTestStorage(t, drivers[0], getDBName())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	tenant := api.Tenant(common.GUID())
+	owner := api.User("cleanup-expiry")
+	job := generationJobForRetention(t, common.GUID(), tenant, owner, 20*time.Millisecond)
+	if err := store.WithTenant(tenant).WithOwner(owner).CreateEvaluationJob(job); err != nil {
+		t.Fatal(err)
+	}
+	generationStore := store.WithTenant(tenant).WithOwner(owner).WithWorkloadType(workloads.CollectionGeneration)
+	runtime := &blockingGenerationCleanupRuntime{started: make(chan struct{}), release: make(chan struct{})}
+	service := generationservice.NewService(store, runtime, &config.ServiceGenerationConfig{}, nil)
+	deleteDone := make(chan error, 1)
+	go func() { deleteDone <- service.Delete(context.Background(), tenant, owner, job.Resource.ID) }()
+	select {
+	case <-runtime.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Delete() did not start runtime cleanup")
+	}
+	var releaseOnce sync.Once
+	releaseRuntime := func() { releaseOnce.Do(func() { close(runtime.release) }) }
+	t.Cleanup(releaseRuntime)
+
+	// Let the terminal retention deadline pass while runtime cleanup is still
+	// blocked. GET must hide the resource at expires_at even though the separate
+	// cleanup lease keeps the row available to the janitor for a bounded time.
+	time.Sleep(40 * time.Millisecond)
+	if _, err := generationStore.GetEvaluationJob(job.Resource.ID); err == nil {
+		t.Fatal("expired generation job remained visible while cleanup was pending")
+	}
+	cleaner, ok := store.(generationRetentionCleaner)
+	if !ok {
+		t.Fatal("SQL storage does not expose generation retention cleanup")
+	}
+	deleted, err := cleaner.DeleteExpiredCollectionGenerationJobs(time.Now().UTC(), 10)
+	if err != nil || deleted != 0 {
+		t.Fatalf("retention sweep during cleanup lease = (%d, %v), want (0, nil)", deleted, err)
+	}
+
+	releaseRuntime()
+	if err := <-deleteDone; err == nil {
+		t.Fatal("Delete() ignored the injected runtime cleanup failure")
+	}
+	if _, err := generationStore.GetEvaluationJob(job.Resource.ID); err == nil {
+		t.Fatal("expired generation job became visible after cleanup failed")
+	}
+	deleted, err = cleaner.DeleteExpiredCollectionGenerationJobs(time.Now().UTC().Add(generation.CleanupProtectionLease+time.Minute), 10)
+	if err != nil || deleted != 1 {
+		t.Fatalf("retention sweep after cleanup lease = (%d, %v), want (1, nil)", deleted, err)
+	}
+}
+
 func testGenerationRetentionCannotDeleteRecordDuringRuntimeCleanup(t *testing.T, driver, databaseName string) {
 	t.Helper()
 	store, err := getTestStorage(t, driver, databaseName)
