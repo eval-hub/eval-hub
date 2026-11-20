@@ -2,47 +2,23 @@
   "garak": {
     "quick": {
       "additional_info": {}
+    },
+    "avid_ethics": {
+      "additional_info": {}
+    },
+    "avid_performance": {
+      "additional_info": {}
     }
   },
   "ragas": {
     "ragas_rag_default": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_ragas: https://redhat.atlassian.net/browse/RHOAIENG-97740"
+      "additional_info": {}
     },
     "ragas_rag_full": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_ragas: https://redhat.atlassian.net/browse/RHOAIENG-97740"
+      "additional_info": {}
     }
   },
   "lm_evaluation_harness": {
-    "aclue_ancient_chinese_culture": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
-    },
-    "african_flores": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_2"
-    },
-    "afrixnli-irokobench": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_2"
-    },
-    "afrixnli_amh_prompt_2": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_2"
-    },
-    "afrixnli_amh_prompt_5": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_2"
-    },
-    "cmmlu_college_mathematics": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
-    },
-    "cmmlu_high_school_mathematics": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
-    },
     "AraDiCE_openbookqa_eng": {
       "additional_info": {
         "batch_size": {},
@@ -2829,42 +2805,6 @@
         "zero_shot": {}
       }
     },
-    "cmmlu_professional_medicine": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
-    },
-    "cmmlu_traditional_chinese_medicine": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
-    },
-    "pile_arxiv": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
-    },
-    "pile_freelaw": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
-    },
-    "pile_hackernews": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
-    },
-    "pile_openwebtext2": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
-    },
-    "pile_ubuntu-irc": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
-    },
-    "pile_youtubesubtitles": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
-    },
-    "careqa_open_perplexity": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85393"
-    },
     "bigbench_code_line_description_multiple_choice": {
       "additional_info": {
         "batch_size": {},
@@ -3246,106 +3186,6 @@
         "tokenizer": {},
         "zero_shot": {}
       }
-    },
-    "nortruthfulqa_gen_nob_p1": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
-    },
-    "nortruthfulqa_gen_nob_p4": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
-    },
-    "nortruthfulqa_mc_nno_p2": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
-    },
-    "nortruthfulqa_mc_nob_p0": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
-    },
-    "nortruthfulqa_mc_nob_p3": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
-    },
-    "tinyTruthfulQA": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85393"
-    },
-    "truthfulqa-multi_gen_ca": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
-    },
-    "truthfulqa-multi_gen_eu": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
-    },
-    "truthfulqa-multi_mc1_en": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
-    },
-    "truthfulqa-multi_mc1_gl": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
-    },
-    "truthfulqa-multi_mc2_es": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
-    },
-    "humaneval": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85410"
-    },
-    "humaneval_instruct": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_6: Evaluation failed: 'humaneval_instruct' https://redhat.atlassian.net/browse/RHOAIENG-97651"
-    },
-    "mbpp": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85410"
-    },
-    "gsm8k_platinum_cot_llama": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
-    },
-    "mmlu_cot_llama": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
-    },
-    "mrcr": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
-    },
-    "mrcr_2needle": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
-    },
-    "mrcr_4needle": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
-    },
-    "mrcr_8needle": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_6: https://redhat.atlassian.net/browse/RHOAIENG-85386"
-    },
-    "darijahellaswag": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_3"
-    },
-    "egyhellaswag": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_3:https://redhat.atlassian.net/browse/RHOAIENG-97629"
-    },
-    "longbench_qasper": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_3:https://redhat.atlassian.net/browse/RHOAIENG-97629"
-    },
-    "ruler_qa_squad": {
-      "additional_info": {},
-      "note": "run failed with evaluation_job_lm_evaluation_harness_3:https://redhat.atlassian.net/browse/RHOAIENG-97629"
-    },
-    "scrolls_qasper": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-85389"
     }
   },
   "lighteval": {
@@ -3377,27 +3217,6 @@
         "zero_shot": {}
       }
     },
-    "aime24": {
-      "additional_info": {
-        "dataset": {},
-        "generation_parameters": {},
-        "zero_shot": {}
-      }
-    },
-    "aime25": {
-      "additional_info": {
-        "dataset": {},
-        "generation_parameters": {},
-        "zero_shot": {}
-      }
-    },
-    "mmlu": {
-      "additional_info": {
-        "dataset": {},
-        "generation_parameters": {},
-        "zero_shot": {}
-      }
-    },
     "triviaqa": {
       "additional_info": {
         "dataset": {},
@@ -3406,13 +3225,6 @@
       }
     },
     "math_500": {
-      "additional_info": {
-        "dataset": {},
-        "generation_parameters": {},
-        "zero_shot": {}
-      }
-    },
-    "lcb:codegeneration_v6": {
       "additional_info": {
         "dataset": {},
         "generation_parameters": {},
@@ -3440,90 +3252,26 @@
         "zero_shot": {}
       }
     },
-    "gpqa:diamond": {
+    "physical_commonsense": {
       "additional_info": {
         "dataset": {},
         "generation_parameters": {},
         "zero_shot": {}
       }
     },
-    "commonsense_reasoning": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
-    },
-    "scientific_reasoning": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
-    },
-    "language_understanding": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
-    },
-    "winogrande": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
-    },
-    "arc:easy": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
-    },
-    "arc:challenge": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
-    },
-    "truthfulqa:mc": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
-    },
-    "glue:cola": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
-    },
-    "glue:sst2": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
-    },
-    "glue:mrpc": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99504"
-    },
-    "physical_commonsense": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99488"
-    },
     "piqa": {
-      "additional_info": {},
-      "note": "blocked by https://redhat.atlassian.net/browse/RHOAIENG-99488"
-    },
-    "truthfulness": {
-      "additional_info": {},
-      "note": "blocked by https://github.com/huggingface/lighteval/issues/1130"
-    },
-    "truthfulqa:gen": {
-      "additional_info": {},
-      "note": "blocked by https://github.com/huggingface/lighteval/issues/1130"
+      "additional_info": {
+        "dataset": {},
+        "generation_parameters": {},
+        "zero_shot": {}
+      }
     }
   },
   "guidellm": {
-    "sweep": {
-      "additional_info": {}
-    },
     "throughput": {
       "additional_info": {}
     },
-    "constant": {
-      "additional_info": {}
-    },
-    "concurrent": {
-      "additional_info": {}
-    },
-    "poisson": {
-      "additional_info": {}
-    },
     "quick_perf_test": {
-      "additional_info": {}
-    },
-    "comprehensive_perf_test": {
       "additional_info": {}
     }
   }

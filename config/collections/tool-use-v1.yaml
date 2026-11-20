@@ -191,9 +191,8 @@ documentation:
     The two screening caps may leave categories untested and can hide always-call or never-call behavior
     in subpopulations.
   - >-
-    Both BFCL rows select bfcl_scorer/accuracy. The review reports a repeated-ID threshold lookup
-    issue. Identical row scoring settings avoid the reported threshold difference,
-    but row/category identity still matters.
+    Both BFCL rows select bfcl_scorer/accuracy. A shared scorer metric does not establish
+    per-category coverage; inspect each row's selected categories and results.
   - >-
     Native API tool calling versus prompted call generation is not established by these category settings
     alone.
