@@ -460,7 +460,7 @@ func (response ModelResponse) validate(maxBytes, maxBatch int) error {
 	if err != nil || len(messageBytes) > maxBytes || len(response.Message.ToolCalls) > maxBatch {
 		return ErrInvalidModelResponse
 	}
-	if response.FinishReason == "length" || (len(response.Message.ToolCalls) > 0 && response.FinishReason != "" && response.FinishReason != "tool_calls") || (len(response.Message.ToolCalls) == 0 && response.FinishReason == "tool_calls") {
+	if response.FinishReason == "length" || response.FinishReason == "content_filter" || (len(response.Message.ToolCalls) > 0 && response.FinishReason != "" && response.FinishReason != "tool_calls") || (len(response.Message.ToolCalls) == 0 && response.FinishReason == "tool_calls") {
 		return ErrInvalidModelResponse
 	}
 	for _, call := range response.Message.ToolCalls {

@@ -104,6 +104,24 @@ func TestRunnerCompletesWithoutToolsAndAccountsMissingUsage(t *testing.T) {
 	}
 }
 
+func TestRunnerRejectsContentFilteredFinalResponse(t *testing.T) {
+	model := &fakeModel{responses: []ModelResponse{{
+		Message:      Message{Role: RoleAssistant, Content: "partially filtered response"},
+		FinishReason: "content_filter",
+	}}}
+	runner := newTestRunner(t, model, newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) {
+		return json.RawMessage(`[]`), nil
+	}), DefaultConfig())
+
+	result, err := runner.Run(context.Background(), testInput())
+	if !errors.Is(err, ErrInvalidModelResponse) {
+		t.Fatalf("Run() error = %v, want %v", err, ErrInvalidModelResponse)
+	}
+	if result.Final != "" {
+		t.Fatalf("Run() returned filtered content as a successful final result: %+v", result)
+	}
+}
+
 func TestRunnerExecutesToolCallsAndCorrelatesReplies(t *testing.T) {
 	var executions int
 	registry := newTestRegistry(t, func(_ context.Context, args json.RawMessage) (json.RawMessage, error) {
