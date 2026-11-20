@@ -9,8 +9,8 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/evalcards"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/oci"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/otel"
@@ -139,7 +139,7 @@ func (h *Handlers) exportEvaluationResults(ctx context.Context, storage abstract
 	}
 	if result.OCIError != nil {
 		// The OCI publisher returns no artifact when publication fails.
-		var exportErr *evalcards.OCIExportError
+		var exportErr *oci.OperationError
 		if errors.As(result.OCIError, &exportErr) {
 			failOCI(constants.MessageCodeOCIProcessingFailed, exportErr.Error(), nil)
 		} else {
