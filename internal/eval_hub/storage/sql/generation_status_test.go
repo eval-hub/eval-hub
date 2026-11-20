@@ -155,5 +155,6 @@ func TestCollectionGenerationSQLPostgres(t *testing.T) {
 		testCollectionGenerationRetentionIsBoundedAndWorkloadScoped(t, drivers[1], databaseName)
 		testExpiredGenerationIsHiddenBeforeCleanup(t, drivers[1], databaseName)
 		testGenerationRuntimeCleanupFailureCanBeRetried(t, drivers[1], databaseName)
+		testGenerationRetentionCannotDeleteRecordDuringRuntimeCleanup(t, drivers[1], databaseName)
 	})
 }

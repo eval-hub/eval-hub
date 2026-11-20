@@ -182,8 +182,16 @@ func TestRunSpecReportsTerminalFailureAfterCallerCancellation(t *testing.T) {
 	var calls int
 	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		calls++
-		if calls == 1 {
+		switch calls {
+		case 1:
 			cancel()
+		case 2:
+			if err := request.Context().Err(); err != nil {
+				t.Errorf("terminal failure event context is cancelled: %v", err)
+			}
+			if _, ok := request.Context().Deadline(); !ok {
+				t.Error("terminal failure event context has no bounded deadline")
+			}
 		}
 		return response(http.StatusNoContent), nil
 	})}

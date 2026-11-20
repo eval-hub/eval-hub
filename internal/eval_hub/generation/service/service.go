@@ -32,14 +32,14 @@ type ModelSecretValidator interface {
 type JobStorage interface {
 	abstractions.RuntimeStorage
 	CreateEvaluationJob(*api.EvaluationJobResource) error
-	UpdateEvaluationJobStatus(string, api.OverallState, *api.MessageInfo) error
 	DeleteEvaluationJob(string) error
 }
 
-// GenerationExpiryResetter clears a terminal generation job's expiry when its
-// runtime resources could not be removed, so callers can retry DELETE.
-type GenerationExpiryResetter interface {
-	ClearCollectionGenerationExpiry(string) error
+// GenerationCleanupProtector atomically cancels an active generation job when needed
+// and clears its retention deadline before runtime cleanup starts. This prevents the
+// retention janitor from deleting the record while cleanup is in progress.
+type GenerationCleanupProtector interface {
+	ProtectCollectionGenerationJobForCleanup(string, *api.MessageInfo) error
 }
 
 // Service admits and owns the lifecycle of internal collection-generation workloads.
@@ -137,9 +137,9 @@ func (s *Service) Get(ctx context.Context, tenant api.Tenant, owner api.User, id
 	return resource, nil
 }
 
-// Delete cancels an active job, removes its runtime resources, and then deletes
-// the record. If runtime cleanup fails, it clears the retention deadline so the
-// record remains pollable and a later DELETE can retry cleanup.
+// Delete atomically cancels an active job and removes its retention deadline before
+// deleting runtime resources. If cleanup fails, the unexpired record remains
+// available for a later DELETE to retry cleanup.
 func (s *Service) Delete(ctx context.Context, tenant api.Tenant, owner api.User, id string) error {
 	if s == nil || s.storage == nil || s.runtime == nil {
 		return errors.New("collection generation is not configured")
@@ -156,26 +156,23 @@ func (s *Service) Delete(ctx context.Context, tenant api.Tenant, owner api.User,
 	if job.Status == nil {
 		return errors.New("collection-generation job has no status")
 	}
-	if !job.Status.State.IsTerminalState() {
-		message := api.WithMessageOrigin(&api.MessageInfo{
-			Message: "Collection-generation job cancelled by the caller.", MessageCode: "collection_generation_cancelled",
-		}, api.MessageOriginServer)
-		if updateErr := store.UpdateEvaluationJobStatus(id, api.OverallStateCancelled, message); updateErr != nil {
-			// A terminal worker callback may win the race. Continue only if that state
-			// is now visible; the SQL terminal-state guard rejects late callbacks.
-			current, readErr := store.GetEvaluationJob(id)
-			if readErr != nil || current.Status == nil || !current.Status.State.IsTerminalState() {
-				return fmt.Errorf("cancel collection-generation job: %w", updateErr)
-			}
-			job = current
-		}
+	protector, ok := store.(GenerationCleanupProtector)
+	if !ok {
+		return errors.New("storage cannot protect collection-generation job during cleanup")
+	}
+	message := api.WithMessageOrigin(&api.MessageInfo{
+		Message: "Collection-generation job cancelled by the caller.", MessageCode: "collection_generation_cancelled",
+	}, api.MessageOriginServer)
+	if err := protector.ProtectCollectionGenerationJobForCleanup(id, message); err != nil {
+		return fmt.Errorf("protect collection-generation job before runtime cleanup: %w", err)
+	}
+	// The atomic protection step may have cancelled the job or observed a terminal
+	// callback racing with DELETE. Reload the status before passing the job to runtime.
+	job, err = store.GetEvaluationJob(id)
+	if err != nil {
+		return fmt.Errorf("read protected collection-generation job: %w", err)
 	}
 	if err := s.runtime.WithLogger(s.logger).WithContext(jobCtx).DeleteEvaluationJobResources(job); err != nil {
-		if resetter, ok := store.(GenerationExpiryResetter); ok {
-			if resetErr := resetter.ClearCollectionGenerationExpiry(id); resetErr != nil {
-				return errors.Join(fmt.Errorf("clean up collection-generation runtime resources: %w", err), fmt.Errorf("preserve generation record for cleanup retry: %w", resetErr))
-			}
-		}
 		return fmt.Errorf("clean up collection-generation runtime resources: %w", err)
 	}
 	if err := store.DeleteEvaluationJob(id); err != nil {
