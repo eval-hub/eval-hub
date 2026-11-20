@@ -159,18 +159,6 @@ without a server or cluster:
 go test ./tests/features -run '^TestBenchmarkProviderFixtureCounts$'
 ```
 
-## Helper unit tests
-
-From the repository root, run all Go unit tests for the feature helpers, fixtures,
-schemas, and configuration:
-
-```bash
-go test ./tests/features -run '^Test'
-```
-
-The explicit `-run` selector makes this package's `TestMain` run Go unit tests
-instead of the Godog feature suite. No cluster scenarios are executed.
-
 ## Test Structure
 
 - **Feature files** (`.feature`): Gherkin syntax test scenarios

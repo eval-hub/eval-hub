@@ -404,6 +404,8 @@ FUZZ_PACKAGES ?= ./internal/eval_hub/runtimes/k8s ./pkg/ociclient ./pkg/mlflowcl
 test: ## Run unit tests (including fuzz seed corpora and a short fuzzing pass)
 	@echo "Running unit tests..."
 	@bash -c 'set -o pipefail; go test -timeout=$(GO_TEST_TIMEOUT) -v ./internal/... ./cmd/... ./pkg/... | ${PWD}/scripts/grcat ${PWD}/.conf.go-test'
+	# An explicit test filter runs feature helper unit tests instead of the Godog suite.
+	@bash -c 'set -o pipefail; go test -timeout=$(GO_TEST_TIMEOUT) -v ./tests/features/... -run "^Test" | ${PWD}/scripts/grcat ${PWD}/.conf.go-test'
 	@$(MAKE) test-fuzz
 	@echo "Unit tests complete"
 
