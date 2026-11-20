@@ -424,7 +424,10 @@ func (s *sqlStorage) updateCollectionGenerationJob(txn *sql.Tx, job *api.Evaluat
 
 	if event.Status == api.StateCompleted || event.Status == api.StateFailed {
 		if err := s.validateCollectionGenerationCatalog(txn, job, event); err != nil {
-			return se.NewServiceError(messages.RequestValidationFailed, "Error", err.Error())
+			if event.Status != api.StateCompleted {
+				return se.NewServiceError(messages.RequestValidationFailed, "Error", err.Error())
+			}
+			setGenerationValidationFailure(event)
 		}
 	}
 
@@ -467,6 +470,10 @@ func (s *sqlStorage) updateCollectionGenerationJob(txn *sql.Tx, job *api.Evaluat
 func (s *sqlStorage) validateCollectionGenerationCatalog(txn *sql.Tx, job *api.EvaluationJobResource, event *api.BenchmarkStatusEvent) error {
 	config, err := generation.ConfigFromJob(&job.EvaluationJobConfig)
 	if err != nil {
+		if event.Status == api.StateCompleted {
+			setGenerationValidationFailure(event)
+			return nil
+		}
 		return fmt.Errorf("invalid collection-generation job snapshot")
 	}
 	if event.Status == api.StateFailed {
@@ -553,7 +560,8 @@ func normalizeCollectionGenerationEvent(job *api.EvaluationJobResource, event *a
 		}
 		result, err := generation.ResultFromAdditionalInfo(config.Request, event.AdditionalInfo)
 		if err != nil {
-			return fmt.Errorf("invalid generation result: %w", err)
+			setGenerationValidationFailure(event)
+			return nil
 		}
 		event.AdditionalInfo = map[string]any{"collection_generation_result": result}
 		return nil
@@ -567,6 +575,15 @@ func normalizeCollectionGenerationEvent(job *api.EvaluationJobResource, event *a
 		Message: failure.Message, MessageCode: "collection_generation_" + failure.Code,
 	}, api.MessageOriginServer)
 	return nil
+}
+
+func setGenerationValidationFailure(event *api.BenchmarkStatusEvent) {
+	failure, _ := generation.SafeFailure("validation_failed", "")
+	event.Status = api.StateFailed
+	event.AdditionalInfo = map[string]any{"collection_generation_error": failure}
+	event.ErrorMessage = api.WithMessageOrigin(&api.MessageInfo{
+		Message: failure.Message, MessageCode: "collection_generation_" + failure.Code,
+	}, api.MessageOriginServer)
 }
 
 func ptr[T any](value T) *T { return &value }

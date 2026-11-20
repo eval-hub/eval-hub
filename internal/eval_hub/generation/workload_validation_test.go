@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eval-hub/eval-hub/internal/agent/loop"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"sigs.k8s.io/yaml"
 )
@@ -75,7 +76,12 @@ func TestValidateResultRejectsInvalidProposalFields(t *testing.T) {
 			p.Actions = make([]api.CollectionGenerationAction, 51)
 		}},
 		{name: "schema validation", mutate: func(_ *api.CollectionGenerationRequest, p *api.CollectionGenerationResult) {
-			p.Collection.Benchmarks = nil
+			p.Collection.Description = strings.Repeat("x", 1025)
+			serialized, err := yaml.Marshal(p.Collection)
+			if err != nil {
+				t.Fatalf("marshal schema-invalid collection YAML: %v", err)
+			}
+			p.YAML = string(serialized)
 		}},
 		{name: "invalid YAML", mutate: func(_ *api.CollectionGenerationRequest, p *api.CollectionGenerationResult) { p.YAML = "name: [" }},
 		{name: "unknown YAML field", mutate: func(_ *api.CollectionGenerationRequest, p *api.CollectionGenerationResult) {
@@ -98,6 +104,12 @@ func TestValidateResultRejectsInvalidProposalFields(t *testing.T) {
 		}},
 		{name: "duplicate benchmark", mutate: func(_ *api.CollectionGenerationRequest, p *api.CollectionGenerationResult) {
 			p.Collection.Benchmarks = append(p.Collection.Benchmarks, p.Collection.Benchmarks[0])
+			p.Explanation.SelectedBenchmarks = append(p.Explanation.SelectedBenchmarks, p.Explanation.SelectedBenchmarks[0])
+			serialized, err := yaml.Marshal(p.Collection)
+			if err != nil {
+				t.Fatalf("marshal duplicate benchmark YAML: %v", err)
+			}
+			p.YAML = string(serialized)
 		}},
 		{name: "bad selected explanation", mutate: func(_ *api.CollectionGenerationRequest, p *api.CollectionGenerationResult) {
 			p.Explanation.SelectedBenchmarks[0].Reason = " "
@@ -137,10 +149,25 @@ func TestValidateResultRejectsInvalidProposalFields(t *testing.T) {
 			request := api.CollectionGenerationRequest{MaxBenchmarks: 12}
 			proposal := validResult(t)
 			tc.mutate(&request, &proposal)
-			if err := ValidateResult(request, proposal); err == nil {
+			err := ValidateResult(request, proposal)
+			if err == nil {
 				t.Fatal("ValidateResult() succeeded for an invalid proposal")
 			}
+			if tc.name == "schema validation" && err.Error() != "proposal collection does not satisfy the collection schema" {
+				t.Fatalf("schema validation error = %q", err)
+			}
+			if tc.name == "duplicate benchmark" && err.Error() != "proposal contains a duplicate benchmark" {
+				t.Fatalf("duplicate benchmark error = %q", err)
+			}
 		})
+	}
+}
+
+func TestValidateYAMLMatchesCollectionRejectsDuplicateKeys(t *testing.T) {
+	proposal := validResult(t)
+	proposal.YAML = strings.Replace(proposal.YAML, "name: Generated collection", "name: Generated collection\nname: Replaced collection", 1)
+	if err := validateYAMLMatchesCollection(proposal.YAML, proposal.Collection); err == nil {
+		t.Fatal("duplicate YAML key was accepted")
 	}
 }
 
@@ -166,6 +193,108 @@ func TestResultFromAdditionalInfoValidatesAndRedactsActionText(t *testing.T) {
 	}
 	if _, err := ResultFromAdditionalInfo(api.CollectionGenerationRequest{}, map[string]any{"collection_generation_result": json.RawMessage("{")}); err == nil {
 		t.Fatal("malformed result was accepted")
+	}
+}
+
+func TestResultFromAdditionalInfoEncodesRequiredArrays(t *testing.T) {
+	proposal := validResult(t)
+	proposal.Actions = nil
+	proposal.Explanation.RejectedBenchmarks = nil
+	result, err := ResultFromAdditionalInfo(api.CollectionGenerationRequest{MaxBenchmarks: 1}, map[string]any{"collection_generation_result": proposal})
+	if err != nil {
+		t.Fatalf("ResultFromAdditionalInfo(): %v", err)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shape map[string]any
+	if err := json.Unmarshal(encoded, &shape); err != nil {
+		t.Fatal(err)
+	}
+	if actions, ok := shape["actions"].([]any); !ok || actions == nil {
+		t.Fatalf("actions must encode as an array: %s", encoded)
+	}
+	explanation, ok := shape["explanation"].(map[string]any)
+	if !ok {
+		t.Fatalf("explanation missing: %s", encoded)
+	}
+	if rejected, ok := explanation["rejected_benchmarks"].([]any); !ok || rejected == nil {
+		t.Fatalf("rejected_benchmarks must encode as an array: %s", encoded)
+	}
+}
+
+func TestResourceFromJobMapsOnlyPublicGenerationFields(t *testing.T) {
+	request, err := NormalizeRequest(api.CollectionGenerationRequest{
+		EvaluationGoal: "safe tool use", Model: api.ModelRef{URL: "https://model.example/v1", Name: "generator"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	limits, err := loop.DefaultPresets().Resolve(loop.EffortStandard, loop.DefaultHardLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := NewJob("generation-id", "tenant-a", "owner-a", request, "runner:v1", limits, "", 24*time.Hour, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	job.Status.State = api.OverallStateRunning
+	job.Status.CollectionGenerationProgress = &api.CollectionGenerationProgress{
+		Sequence: 7, Phase: "validation", UpdatedAt: time.Now().UTC(),
+	}
+	resource, err := ResourceFromJob(job)
+	if err != nil {
+		t.Fatalf("ResourceFromJob(): %v", err)
+	}
+	encoded, err := json.Marshal(resource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shape map[string]any
+	if err := json.Unmarshal(encoded, &shape); err != nil {
+		t.Fatal(err)
+	}
+	status := shape["status"].(map[string]any)
+	progress := status["progress"].(map[string]any)
+	if _, exists := progress["sequence"]; exists {
+		t.Fatalf("internal sequence counter leaked in public response: %s", encoded)
+	}
+	if shape["request"] == nil || status["state"] != string(api.OverallStateRunning) {
+		t.Fatalf("incomplete public generation resource: %s", encoded)
+	}
+	job.Status.State = api.OverallStateCompleted
+	proposal := validResult(t)
+	job.Results = &api.EvaluationJobResults{Benchmarks: []api.BenchmarkResult{{
+		ProviderID: ProviderID, ID: BenchmarkID, BenchmarkIndex: 0,
+		AdditionalInfo: map[string]any{"collection_generation_result": proposal},
+	}}}
+	resource, err = ResourceFromJob(job)
+	if err != nil || resource.Result == nil || resource.Status.Progress != nil {
+		t.Fatalf("completed resource mapping = (%+v, %v)", resource, err)
+	}
+	for _, state := range []api.OverallState{api.OverallStatePending, api.OverallStateCancelled} {
+		job.Status.State = state
+		job.Status.CollectionGenerationProgress = nil
+		job.Results = nil
+		resource, err = ResourceFromJob(job)
+		if err != nil || resource.Status.State != state || resource.Result != nil || resource.Status.Error != nil {
+			t.Fatalf("%s resource mapping = (%+v, %v)", state, resource, err)
+		}
+	}
+	job.Status.State = api.OverallStateFailed
+	job.Results = &api.EvaluationJobResults{Benchmarks: []api.BenchmarkResult{{
+		ProviderID: ProviderID, ID: BenchmarkID, BenchmarkIndex: 0,
+		AdditionalInfo: map[string]any{"collection_generation_error": api.CollectionGenerationError{Code: "model_failed", Message: "The generation model failed."}},
+	}}}
+	resource, err = ResourceFromJob(job)
+	if err != nil || resource.Status.State != api.OverallStateFailed || resource.Status.Error == nil || resource.Status.Error.Code != "model_failed" {
+		t.Fatalf("failed resource mapping = (%+v, %v)", resource, err)
+	}
+	job.Status.State = api.OverallStateCompleted
+	job.Results.Benchmarks[0].AdditionalInfo = map[string]any{}
+	if _, err := ResourceFromJob(job); err == nil {
+		t.Fatal("ResourceFromJob() accepted an invalid stored completed result")
 	}
 }
 
@@ -226,6 +355,14 @@ func TestProgressValidationAndServerTimestamps(t *testing.T) {
 	valid := api.CollectionGenerationProgressEvent{Sequence: 3, Phase: "validation", LastCompletedAction: "validate_proposal"}
 	if err := ValidateProgressEvent(valid, previous); err != nil {
 		t.Fatalf("valid progress rejected: %v", err)
+	}
+	correction := api.CollectionGenerationProgress{Sequence: 3, Phase: "validation"}
+	if err := ValidateProgressEvent(api.CollectionGenerationProgressEvent{Sequence: 4, Phase: "model_generation"}, &correction); err != nil {
+		t.Fatalf("validation-to-model correction phase rejected: %v", err)
+	}
+	secondValidation := api.CollectionGenerationProgress{Sequence: 4, Phase: "model_generation"}
+	if err := ValidateProgressEvent(api.CollectionGenerationProgressEvent{Sequence: 5, Phase: "validation"}, &secondValidation); err != nil {
+		t.Fatalf("repeated validation phase rejected: %v", err)
 	}
 	now := time.Date(2026, 11, 20, 12, 0, 0, 123, time.FixedZone("EST", -5*60*60))
 	progress := ProgressFromEvent(api.CollectionGenerationProgressEvent{Sequence: 4, Phase: "finalization"}, previous, now)

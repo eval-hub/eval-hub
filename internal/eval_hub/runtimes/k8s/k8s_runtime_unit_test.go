@@ -11,8 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eval-hub/eval-hub/internal/agent/loop"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/generation"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
@@ -398,6 +400,19 @@ func TestBuildInternalModelRefSecretInvalidURL(t *testing.T) {
 	_, err := buildInternalModelRefSecret(context.Background(), "default", "bad-url-ref", data, "http://localhost:8080", nil, helper)
 	if err == nil {
 		t.Fatal("expected error for invalid *_url value")
+	}
+}
+
+func TestBuildInternalModelRefSecretInvalidURLDoesNotLeakSecret(t *testing.T) {
+	secretURL := "https://user:secret-value@host%GG/v1"
+	data := map[string][]byte{
+		"judge_api-key": []byte("token"),
+		"judge_url":     []byte(secretURL),
+	}
+	helper := &KubernetesHelper{clientset: fake.NewClientset()}
+	_, err := buildInternalModelRefSecret(context.Background(), "default", "bad-url-ref", data, "http://localhost:8080", nil, helper)
+	if err == nil || strings.Contains(err.Error(), "secret-value") || strings.Contains(err.Error(), secretURL) {
+		t.Fatalf("malformed Secret URL leaked through error: %v", err)
 	}
 }
 
@@ -1349,6 +1364,55 @@ func TestRunEvaluationJobMarksBenchmarkFailedOnCreateError(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("expected UpdateEvaluationJob to be called")
+	}
+}
+
+func TestRunGenerationJobReportsStructuredFailureOnCreateError(t *testing.T) {
+	budget, err := loop.DefaultPresets().Resolve(loop.EffortStandard, loop.DefaultHardLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := generation.NewJob("generation-job", "tenant-a", "user-a", api.CollectionGenerationRequest{
+		EvaluationGoal: "Assess safe tool use",
+		Model:          api.ModelRef{URL: "http://model.example/v1", Name: "generator"},
+	}, "runner:v1", budget, "", 24*time.Hour, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientset := fake.NewSimpleClientset()
+	clientset.PrependReactor("create", "configmaps", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		return true, nil, fmt.Errorf("configmap create failed")
+	})
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	runtime := &K8sRuntime{
+		logger: logger,
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+		},
+	}
+	statusCh := make(chan *api.StatusEvent, 1)
+	storage := &fakeStorage{logger: logger, ctx: context.Background(), runStatusChan: statusCh, evaluationJob: job}
+	benchmarks, err := handlers.GetJobBenchmarks(job, nil)
+	if err != nil {
+		t.Fatalf("GetJobBenchmarks(): %v", err)
+	}
+	if err := runtime.RunEvaluationJob(job, benchmarks, storage); err != nil {
+		t.Fatalf("RunEvaluationJob(): %v", err)
+	}
+	select {
+	case event := <-statusCh:
+		status := event.BenchmarkStatusEvent
+		if status == nil || status.Status != api.StateFailed || status.ProviderID != generation.ProviderID || status.ID != generation.BenchmarkID {
+			t.Fatalf("generation create failure event = %+v", event)
+		}
+		failure, err := generation.FailureFromAdditionalInfo(status.AdditionalInfo)
+		if err != nil || failure.Code != "launch_failed" || status.ErrorMessage == nil || status.ErrorMessage.MessageOrigin != api.MessageOriginServer {
+			t.Fatalf("generation launch failure is not structured and safe: status=%+v failure=%+v err=%v", status, failure, err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for generation launch-failure event")
 	}
 }
 

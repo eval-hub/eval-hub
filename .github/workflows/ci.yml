@@ -151,6 +151,9 @@ jobs:
       # insecure_skip_verify for a local/dev endpoint with a self-signed
       # certificate; it refuses to do so in FIPS mode (platform.IsFIPS /
       # fips140.Enabled) and the MLflow and OCI callers always pass false.
+      # G118 is excluded only for retention.go because the janitor owns and calls
+      # its stored cancel function in Stop; G404 is scheduling-only jitter and
+      # does not protect or generate security-sensitive values.
       env:
         # make sure that we use the golang version required by the project
         GOSECGOVERSION: go1.27.3
@@ -168,7 +171,7 @@ jobs:
         args: >-
           -fmt sarif -out gosec-results.sarif -stdout -verbose=text
           -exclude-dir=tests
-          --exclude-rules=internal/eval_hub/runtimes/local/local_runtime\.go:G204;internal/eval_runtime_sidecar/proxy/http_client\.go:G402;internal/eval_hub/runtimes/shared/data_sources\.go:G101
+          --exclude-rules=internal/eval_hub/runtimes/local/local_runtime\.go:G204;internal/eval_runtime_sidecar/proxy/http_client\.go:G402;internal/eval_hub/runtimes/shared/data_sources\.go:G101;internal/eval_hub/generation/service/retention\.go:G118,G404
           ./...
 
     - name: Upload SARIF file to GitHub Security tab

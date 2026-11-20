@@ -27,6 +27,7 @@ const (
 	maxJobSpecBytes    = 1 << 20
 	maxEventBytes      = 4096
 	workerTimeout      = 15 * time.Second
+	podNamespacePath   = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 )
 
 type jobSpec struct {
@@ -86,6 +87,10 @@ func RunSpec(ctx context.Context, data []byte, client *http.Client) error {
 		return err
 	}
 	_ = snapshot // The stub validates the immutable snapshot; orchestration consumes it in the next implementation.
+	tenant, err := readPodNamespace()
+	if err != nil {
+		return errors.New("read generation pod namespace")
+	}
 	if client == nil {
 		client = &http.Client{
 			Timeout:       workerTimeout,
@@ -93,7 +98,7 @@ func RunSpec(ctx context.Context, data []byte, client *http.Client) error {
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		}
 	}
-	if err := postEvent(ctx, client, endpoint, api.BenchmarkStatusEvent{
+	if err := postEvent(ctx, client, endpoint, tenant, api.BenchmarkStatusEvent{
 		ProviderID: generation.ProviderID, ID: generation.BenchmarkID, BenchmarkIndex: 0, Status: api.StateRunning,
 	}); err != nil {
 		return fmt.Errorf("report generation start: %w", err)
@@ -108,7 +113,9 @@ func RunSpec(ctx context.Context, data []byte, client *http.Client) error {
 	if err := json.Unmarshal(info, &additionalInfo); err != nil {
 		return errors.New("encode generation failure event")
 	}
-	return postEvent(ctx, client, endpoint, api.BenchmarkStatusEvent{
+	terminalCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), workerTimeout)
+	defer cancel()
+	return postEvent(terminalCtx, client, endpoint, tenant, api.BenchmarkStatusEvent{
 		ProviderID: generation.ProviderID, ID: generation.BenchmarkID, BenchmarkIndex: 0,
 		Status: api.StateFailed, AdditionalInfo: additionalInfo,
 	})
@@ -176,7 +183,7 @@ func isLoopbackHost(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-func postEvent(ctx context.Context, client *http.Client, endpoint *url.URL, event api.BenchmarkStatusEvent) error {
+func postEvent(ctx context.Context, client *http.Client, endpoint *url.URL, tenant string, event api.BenchmarkStatusEvent) error {
 	data, err := json.Marshal(api.StatusEvent{BenchmarkStatusEvent: &event})
 	if err != nil || len(data) > maxEventBytes {
 		return errors.New("generation event is invalid")
@@ -186,6 +193,7 @@ func postEvent(ctx context.Context, client *http.Client, endpoint *url.URL, even
 		return errors.New("create generation event request")
 	}
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Tenant", tenant)
 	response, err := client.Do(request)
 	if err != nil {
 		return errors.New("send generation event through the local sidecar")
@@ -201,5 +209,23 @@ func postEvent(ctx context.Context, client *http.Client, endpoint *url.URL, even
 	return nil
 }
 
-// openSpec is a variable for tests to exercise file-open failure without relying on host paths.
-var openSpec = func(path string) (io.ReadCloser, error) { return os.Open(path) }
+// openSpec is replaceable in tests. Production reads only the fixed mounted file
+// beneath /meta, using a rooted open to prevent path traversal through configuration.
+var openSpec = func(path string) (io.ReadCloser, error) {
+	if path != DefaultJobSpecPath {
+		return nil, errors.New("generation job specification path is not allowed")
+	}
+	return os.OpenInRoot("/meta", "job.json")
+}
+
+var readPodNamespace = func() (string, error) {
+	data, err := os.ReadFile(podNamespacePath)
+	if err != nil {
+		return "", err
+	}
+	namespace := strings.TrimSpace(string(data))
+	if namespace == "" || strings.ContainsAny(namespace, "\r\n") {
+		return "", errors.New("pod namespace is empty or invalid")
+	}
+	return namespace, nil
+}

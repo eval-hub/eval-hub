@@ -36,6 +36,12 @@ type JobStorage interface {
 	DeleteEvaluationJob(string) error
 }
 
+// GenerationExpiryResetter clears a terminal generation job's expiry when its
+// runtime resources could not be removed, so callers can retry DELETE.
+type GenerationExpiryResetter interface {
+	ClearCollectionGenerationExpiry(string) error
+}
+
 // Service admits and owns the lifecycle of internal collection-generation workloads.
 // Public HTTP routing and proposal orchestration are provided by separate work items.
 type Service struct {
@@ -113,15 +119,27 @@ func (s *Service) Admit(ctx context.Context, tenant api.Tenant, owner api.User, 
 }
 
 // Get returns a generation job scoped to its tenant, owner, workload type, and retention.
-func (s *Service) Get(ctx context.Context, tenant api.Tenant, owner api.User, id string) (*api.EvaluationJobResource, error) {
+func (s *Service) Get(ctx context.Context, tenant api.Tenant, owner api.User, id string) (*api.CollectionGenerationResource, error) {
 	if s == nil || s.storage == nil {
 		return nil, errors.New("collection generation is not configured")
 	}
-	return s.scopedStorage(s.operationContext(ctx), tenant, owner).GetEvaluationJob(id)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	job, err := s.scopedStorage(ctx, tenant, owner).GetEvaluationJob(id)
+	if err != nil {
+		return nil, err
+	}
+	resource, err := generation.ResourceFromJob(job)
+	if err != nil {
+		return nil, fmt.Errorf("read collection-generation job: %w", err)
+	}
+	return resource, nil
 }
 
 // Delete cancels an active job, removes its runtime resources, and then deletes
-// the record. If cleanup fails, the terminal cancellation record remains pollable.
+// the record. If runtime cleanup fails, it clears the retention deadline so the
+// record remains pollable and a later DELETE can retry cleanup.
 func (s *Service) Delete(ctx context.Context, tenant api.Tenant, owner api.User, id string) error {
 	if s == nil || s.storage == nil || s.runtime == nil {
 		return errors.New("collection generation is not configured")
@@ -153,6 +171,11 @@ func (s *Service) Delete(ctx context.Context, tenant api.Tenant, owner api.User,
 		}
 	}
 	if err := s.runtime.WithLogger(s.logger).WithContext(jobCtx).DeleteEvaluationJobResources(job); err != nil {
+		if resetter, ok := store.(GenerationExpiryResetter); ok {
+			if resetErr := resetter.ClearCollectionGenerationExpiry(id); resetErr != nil {
+				return errors.Join(fmt.Errorf("clean up collection-generation runtime resources: %w", err), fmt.Errorf("preserve generation record for cleanup retry: %w", resetErr))
+			}
+		}
 		return fmt.Errorf("clean up collection-generation runtime resources: %w", err)
 	}
 	if err := store.DeleteEvaluationJob(id); err != nil {

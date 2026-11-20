@@ -107,3 +107,30 @@ type CollectionGenerationError struct {
 	Message  string `json:"message" validate:"required,min=1"`
 	Category string `json:"category,omitempty" validate:"omitempty,oneof=prompt_injection exfiltration topic_relevance unsupported_capability"`
 }
+
+// CollectionGenerationResource is the public pollable view of a generation job.
+// The backing evaluation-job implementation details are intentionally omitted.
+type CollectionGenerationResource struct {
+	Resource Resource                    `json:"resource"`
+	Request  CollectionGenerationRequest `json:"request"`
+	Status   CollectionGenerationStatus  `json:"status"`
+	Result   *CollectionGenerationResult `json:"result,omitempty"`
+}
+
+// CollectionGenerationStatus exposes only generation lifecycle fields permitted
+// by the public collection-generation schema.
+type CollectionGenerationStatus struct {
+	State       OverallState                        `json:"state"`
+	StartedAt   DateTime                            `json:"started_at,omitempty"`
+	CompletedAt DateTime                            `json:"completed_at,omitempty"`
+	Progress    *CollectionGenerationStatusProgress `json:"progress,omitempty"`
+	Error       *CollectionGenerationError          `json:"error,omitempty"`
+}
+
+// CollectionGenerationStatusProgress excludes the internal sequence counter,
+// which is used to reject stale worker events but is not part of the API contract.
+type CollectionGenerationStatusProgress struct {
+	Phase               string                              `json:"phase"`
+	UpdatedAt           time.Time                           `json:"updated_at"`
+	LastCompletedAction *CollectionGenerationProgressAction `json:"last_completed_action,omitempty"`
+}

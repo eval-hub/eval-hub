@@ -109,6 +109,9 @@ func TestNewJobPersistsOnlyNormalizedRequestAndImmutableSnapshot(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &snapshot); err != nil {
 		t.Fatalf("decode snapshot: %v", err)
 	}
+	if snapshot.Request.Model.CardURL != "" {
+		t.Fatalf("caller-controlled model card URL leaked into snapshot: %q", snapshot.Request.Model.CardURL)
+	}
 	if snapshot.Limits != budget.Limits || snapshot.RunnerImage != "registry.example/evalhub:v1" || snapshot.ReasoningEffort != "high" || snapshot.Retention != retention {
 		t.Fatalf("snapshot did not freeze controls: %+v", snapshot)
 	}

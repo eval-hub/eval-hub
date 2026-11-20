@@ -57,10 +57,14 @@ func validWorkerSpec(t *testing.T, callback, sidecarModelURL string) ([]byte, st
 }
 
 func TestRunSpecReportsOnlySafeLifecycleEventsThroughLoopback(t *testing.T) {
+	useTestNamespace(t)
 	var events []api.StatusEvent
 	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		if request.Method != http.MethodPost || request.URL.Scheme != "http" || !strings.HasPrefix(request.URL.Host, "127.0.0.1:") || request.URL.Path != "/api/v1/evaluations/jobs/56ffacc2-deb2-4e10-bf9a-0b69ed6da7c0/events" {
 			t.Errorf("request target = %s %s", request.Method, request.URL)
+		}
+		if got := request.Header.Get("X-Tenant"); got != "tenant-test" {
+			t.Errorf("X-Tenant = %q, want tenant-test", got)
 		}
 		var event api.StatusEvent
 		if err := json.NewDecoder(request.Body).Decode(&event); err != nil {
@@ -145,12 +149,16 @@ func TestRunSpecRejectsMalformedAndUntrustedJobSpecs(t *testing.T) {
 }
 
 func TestRunReadsMountedSpecAndHandlesOpenFailure(t *testing.T) {
+	useTestNamespace(t)
 	data, _ := validWorkerSpec(t, "http://127.0.0.1:8080", "http://127.0.0.1:8080/model/56ffacc2-de2b-4e10-bf9a-0b69ed6da7c0/v1")
 	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) { return response(http.StatusNoContent), nil })}
 	path := filepath.Join(t.TempDir(), "job.json")
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
 	}
+	oldOpenSpec := openSpec
+	openSpec = func(specPath string) (io.ReadCloser, error) { return os.Open(specPath) }
+	t.Cleanup(func() { openSpec = oldOpenSpec })
 	if err := Run(context.Background(), path, client); err != nil {
 		t.Fatalf("Run(): %v", err)
 	}
@@ -160,11 +168,39 @@ func TestRunReadsMountedSpecAndHandlesOpenFailure(t *testing.T) {
 }
 
 func TestRunSpecRejectsEventEndpointFailure(t *testing.T) {
+	useTestNamespace(t)
 	data, _ := validWorkerSpec(t, "http://127.0.0.1:8080", "http://127.0.0.1:8080/model/56ffacc2-de2b-4e10-bf9a-0b69ed6da7c0/v1")
 	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) { return response(http.StatusForbidden), nil })}
 	if err := RunSpec(context.Background(), data, client); err == nil || !strings.Contains(err.Error(), "HTTP 403") {
 		t.Fatalf("RunSpec() error = %v, want HTTP 403", err)
 	}
+}
+
+func TestRunSpecReportsTerminalFailureAfterCallerCancellation(t *testing.T) {
+	useTestNamespace(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	var calls int
+	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		calls++
+		if calls == 1 {
+			cancel()
+		}
+		return response(http.StatusNoContent), nil
+	})}
+	data, _ := validWorkerSpec(t, "http://127.0.0.1:8080", "http://127.0.0.1:8080/model/job/v1")
+	if err := RunSpec(ctx, data, client); err != nil {
+		t.Fatalf("RunSpec() after cancellation: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("event calls = %d, want running and terminal failure", calls)
+	}
+}
+
+func useTestNamespace(t *testing.T) {
+	t.Helper()
+	old := readPodNamespace
+	readPodNamespace = func() (string, error) { return "tenant-test", nil }
+	t.Cleanup(func() { readPodNamespace = old })
 }
 
 func TestRunSpecValidatesCallbackAndLoopbackURL(t *testing.T) {

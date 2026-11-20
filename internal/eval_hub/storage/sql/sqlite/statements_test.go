@@ -1,6 +1,8 @@
 package sqlite
 
 import (
+	"database/sql"
+	"fmt"
 	"log/slog"
 	"slices"
 	"strings"
@@ -11,6 +13,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	_ "modernc.org/sqlite"
 )
 
 func TestCreateDeleteSystemEntitiesStatement(t *testing.T) {
@@ -24,6 +27,78 @@ func TestCreateDeleteSystemEntitiesStatement(t *testing.T) {
 	}
 	if len(args) != 1 || args[0] != abstractions.OwnerSystem {
 		t.Fatalf("unexpected args: %#v", args)
+	}
+}
+
+func TestExpiredGenerationCleanupUsesExpiryIndex(t *testing.T) {
+	db, err := sql.Open("sqlite", "file:generation-expiry-plan?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close test database: %v", err)
+		}
+	})
+	db.SetMaxOpenConns(1)
+	factory := NewStatementsFactory(slog.Default())
+	if _, err := db.Exec(factory.GetTablesSchema()); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureEvaluationExpiryColumn(db); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	insert, err := tx.Prepare(`INSERT INTO evaluations (id, tenant_id, owner, status, experiment_id, workload_type, expires_at, entity) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range 20_000 {
+		workloadType := string(workloads.Evaluation)
+		if i%2 == 0 {
+			workloadType = string(workloads.CollectionGeneration)
+		}
+		if _, err := insert.Exec(fmt.Sprintf("job-%05d", i), "tenant", "owner", string(api.OverallStateCompleted), "", workloadType, "2026-01-01T00:00:00.000000000Z", "{}"); err != nil {
+			t.Fatalf("insert fixture row %d: %v", i, err)
+		}
+	}
+	if err := insert.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("ANALYZE"); err != nil {
+		t.Fatal(err)
+	}
+	query := `EXPLAIN QUERY PLAN SELECT id FROM evaluations WHERE workload_type = 'collection-generation' AND status IN (?, ?, ?) AND expires_at <= ? ORDER BY expires_at LIMIT ?`
+	rows, err := db.Query(query, api.OverallStateCompleted, api.OverallStateFailed, api.OverallStateCancelled, "2026-02-01T00:00:00.000000000Z", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := rows.Close(); err != nil {
+			t.Errorf("close query plan rows: %v", err)
+		}
+	})
+	var plan []string
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+			t.Fatal(err)
+		}
+		plan = append(plan, detail)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(plan, " | ")
+	if !strings.Contains(joined, "idx_evaluations_generation_expiry") || strings.Contains(joined, "USE TEMP B-TREE") {
+		t.Fatalf("expiry cleanup query plan does not use the ordered partial index: %s", joined)
 	}
 }
 

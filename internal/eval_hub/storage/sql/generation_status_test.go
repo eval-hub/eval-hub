@@ -73,11 +73,22 @@ func createRunningGenerationJob(t *testing.T, store abstractions.Storage, tenant
 	}}); err != nil {
 		t.Fatalf("mark generation job running: %v", err)
 	}
+	if err := store.UpdateEvaluationJob(id, &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+		ProviderID: generation.ProviderID, ID: generation.BenchmarkID, BenchmarkIndex: 0,
+		Status: api.StateRunning, CollectionGenerationProgress: &api.CollectionGenerationProgressEvent{Sequence: 1, Phase: "catalog_discovery"},
+	}}); err != nil {
+		t.Fatalf("persist generation progress: %v", err)
+	}
 	return id
 }
 
 func TestCollectionGenerationCompletionRequiresCallerVisibleCatalog(t *testing.T) {
-	store, err := getTestStorage(t, drivers[0], getDBName())
+	testCollectionGenerationCompletionRequiresCallerVisibleCatalog(t, drivers[0], getDBName())
+}
+
+func testCollectionGenerationCompletionRequiresCallerVisibleCatalog(t *testing.T, driver, databaseName string) {
+	t.Helper()
+	store, err := getTestStorage(t, driver, databaseName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +103,8 @@ func TestCollectionGenerationCompletionRequiresCallerVisibleCatalog(t *testing.T
 		t.Fatalf("complete proposal using visible catalog benchmark: %v", err)
 	}
 	completed, err := scoped.WithWorkloadType(workloads.CollectionGeneration).GetEvaluationJob(validID)
-	if err != nil || completed.Status.State != api.OverallStateCompleted || len(completed.Results.Benchmarks) != 1 {
+	if err != nil || completed.Status.State != api.OverallStateCompleted || len(completed.Results.Benchmarks) != 1 ||
+		completed.Status.CollectionGenerationProgress == nil || completed.Status.CollectionGenerationProgress.Phase != "catalog_discovery" {
 		t.Fatalf("completed proposal = (%+v, %v)", completed, err)
 	}
 
@@ -110,13 +122,38 @@ func TestCollectionGenerationCompletionRequiresCallerVisibleCatalog(t *testing.T
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			id := createRunningGenerationJob(t, scoped, tenant, owner)
-			if err := scoped.UpdateEvaluationJob(id, proposalEvent(t, tc.provider, tc.id, tc.rejected)); err == nil {
-				t.Fatal("proposal referencing a non-visible catalog item was accepted")
+			if err := scoped.UpdateEvaluationJob(id, proposalEvent(t, tc.provider, tc.id, tc.rejected)); err != nil {
+				t.Fatalf("invalid completed proposal was not durably converted to a failure: %v", err)
 			}
-			stillRunning, err := scoped.WithWorkloadType(workloads.CollectionGeneration).GetEvaluationJob(id)
-			if err != nil || stillRunning.Status.State != api.OverallStateRunning {
-				t.Fatalf("rejected result changed job state: job=%+v err=%v", stillRunning, err)
+			failed, err := scoped.WithWorkloadType(workloads.CollectionGeneration).GetEvaluationJob(id)
+			if err != nil || failed.Status.State != api.OverallStateFailed || len(failed.Results.Benchmarks) != 1 {
+				t.Fatalf("invalid proposal did not persist a terminal failure: job=%+v err=%v", failed, err)
+			}
+			failure, err := generation.FailureFromAdditionalInfo(failed.Results.Benchmarks[0].AdditionalInfo)
+			if err != nil || failure.Code != "validation_failed" {
+				t.Fatalf("persisted failure = %+v, %v", failure, err)
 			}
 		})
 	}
+}
+
+func TestCollectionGenerationSQLPostgres(t *testing.T) {
+	image := usePostgresImage()
+	databaseName := getDBName()
+	user, err := getPostgresUser()
+	if err != nil {
+		t.Skipf("Failed to get Postgres user: %v", err)
+	}
+	if err := startPostgres(t, databaseName, user, image); err != nil {
+		t.Skipf("Skipping postgres tests: %v", err)
+	}
+	t.Cleanup(func() { stopPostgres(t, databaseName, user, image) })
+	t.Run("status-results-catalog", func(t *testing.T) {
+		testCollectionGenerationCompletionRequiresCallerVisibleCatalog(t, drivers[1], databaseName)
+	})
+	t.Run("retention-expiry-and-concurrency", func(t *testing.T) {
+		testCollectionGenerationRetentionIsBoundedAndWorkloadScoped(t, drivers[1], databaseName)
+		testExpiredGenerationIsHiddenBeforeCleanup(t, drivers[1], databaseName)
+		testGenerationRuntimeCleanupFailureCanBeRetried(t, drivers[1], databaseName)
+	})
 }

@@ -743,7 +743,7 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 				previousState = job.Status.State
 			}
 			if event := status.BenchmarkStatusEvent; event != nil && event.Status == api.StateRunning && event.StartedAt == "" &&
-				(jobErr != nil || job == nil || workloads.TypeForJob(&job.EvaluationJobConfig) != workloads.CollectionGeneration) {
+				jobErr == nil && job != nil && workloads.TypeForJob(&job.EvaluationJobConfig) != workloads.CollectionGeneration {
 				// Generation progress timestamps are managed by storage and must not be
 				// confused with the conventional evaluation benchmark start timestamp.
 				receivedAt := ctx.StartedAt

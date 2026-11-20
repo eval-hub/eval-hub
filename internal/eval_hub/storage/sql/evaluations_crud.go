@@ -178,6 +178,24 @@ func (s *sqlStorage) DeleteExpiredCollectionGenerationJobs(now time.Time, limit 
 	return int(count), nil
 }
 
+// ClearCollectionGenerationExpiry keeps a generation record available for a caller
+// to retry runtime cleanup after DeleteEvaluationJobResources fails.
+func (s *sqlStorage) ClearCollectionGenerationExpiry(id string) error {
+	query, args := s.statementsFactory.CreateClearCollectionGenerationExpiryStatement(s.tenant, s.owner, id)
+	result, err := s.pool.ExecContext(s.ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("clear collection-generation job expiry: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("count updated collection-generation job rows: %w", err)
+	}
+	if rows == 0 {
+		return se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id)
+	}
+	return nil
+}
+
 func (s *sqlStorage) evaluationJobDeleteResultError(id string, result sql.Result) error {
 	rows, rowsErr := result.RowsAffected()
 	if rowsErr != nil {

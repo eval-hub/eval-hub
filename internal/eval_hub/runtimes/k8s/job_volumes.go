@@ -138,7 +138,7 @@ func buildRuntimeContainerVolumesAndMounts(configMap string, cfg *jobConfig) ([]
 	// optional) from the real secret. When credential injection is also active
 	// (modelInternalRefSecretName set), the internalRef secret is prepended so the adapter
 	// receives the synthetic ref tokens alongside the passthrough keys.
-	if cfg.modelAuthSecretRef != "" {
+	if cfg.modelAuthSecretRef != "" && !cfg.generationWorkload {
 		optionalTrue := true
 		projectedSources := []corev1.VolumeProjection{
 			{

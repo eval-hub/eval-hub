@@ -264,6 +264,12 @@ func (s *postgresStatementsFactory) CreateUpdateEvaluationEntityStatement(tenant
 	return query + `;`, args
 }
 
+func (s *postgresStatementsFactory) CreateClearCollectionGenerationExpiryStatement(tenant api.Tenant, owner api.User, id string) (string, []any) {
+	return `UPDATE evaluations SET expires_at = NULL, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1 AND tenant_id = $2 AND owner = $3 AND workload_type = $4;`,
+		[]any{id, tenant.String(), owner.String(), string(workloads.CollectionGeneration)}
+}
+
 func (s *postgresStatementsFactory) CreateDeleteExpiredGenerationJobsStatement(now time.Time, limit int) (string, []any) {
 	return `DELETE FROM evaluations WHERE id IN (
 		SELECT id FROM evaluations

@@ -40,5 +40,6 @@ type SQLStatementsFactory interface {
 	CreateDeleteSystemEntitiesStatement(tableName string) (string, []any)
 	CreateUpdateEntityStatement(tenant api.Tenant, tableName, id string, entityJSON string, status *api.OverallState) (string, []any)
 	CreateUpdateEvaluationEntityStatement(tenant api.Tenant, id, entityJSON string, status api.OverallState, expiresAt *time.Time) (string, []any)
+	CreateClearCollectionGenerationExpiryStatement(tenant api.Tenant, owner api.User, id string) (string, []any)
 	CreateDeleteExpiredGenerationJobsStatement(now time.Time, limit int) (string, []any)
 }

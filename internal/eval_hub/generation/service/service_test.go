@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eval-hub/eval-hub/internal/agent/loop"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/generation"
@@ -24,6 +25,8 @@ type generationTestStorage struct {
 	terminalOnStatusError bool
 	getErr                error
 	deleteErr             error
+	expiryClearErr        error
+	expiryClearCalls      int
 	created               bool
 	deleted               bool
 	stateUpdates          int
@@ -76,7 +79,16 @@ func (s *generationTestStorage) GetEvaluationJob(id string) (*api.EvaluationJobR
 	if s.job == nil || s.job.Resource.ID != id || s.deleted {
 		return nil, errors.New("job not found")
 	}
-	return s.job, nil
+	job := *s.job
+	if s.job.Status != nil {
+		status := *s.job.Status
+		job.Status = &status
+	}
+	if s.job.Results != nil {
+		results := *s.job.Results
+		job.Results = &results
+	}
+	return &job, nil
 }
 func (s *generationTestStorage) UpdateEvaluationJob(id string, event *api.StatusEvent) error {
 	if s.updateErr != nil {
@@ -121,6 +133,10 @@ func (s *generationTestStorage) DeleteEvaluationJob(id string) error {
 	}
 	s.deleted = true
 	return nil
+}
+func (s *generationTestStorage) ClearCollectionGenerationExpiry(string) error {
+	s.expiryClearCalls++
+	return s.expiryClearErr
 }
 
 type generationTestRuntime struct {
@@ -167,13 +183,14 @@ func newGenerationTestService(storage *generationTestStorage, runtime abstractio
 }
 
 func generationTestJob(state api.OverallState) *api.EvaluationJobResource {
-	return &api.EvaluationJobResource{
-		Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
-		EvaluationJobConfig: api.EvaluationJobConfig{Benchmarks: []api.EvaluationBenchmarkConfig{{
-			ProviderID: generation.ProviderID, Ref: api.Ref{ID: generation.BenchmarkID},
-		}}},
-		Status: &api.EvaluationJobStatus{EvaluationJobState: api.EvaluationJobState{State: state}},
+	request, _ := generation.NormalizeRequest(validRequest())
+	budget, _ := loop.DefaultPresets().Resolve(loop.EffortStandard, loop.DefaultHardLimits())
+	job, err := generation.NewJob("job-1", "tenant-a", "user-a", request, "registry.example/runner:v1", budget, "", 24*time.Hour, time.Now().UTC())
+	if err != nil {
+		panic(err)
 	}
+	job.Status.State = state
+	return job
 }
 
 func TestGenerationServiceAdmitPersistsAndStartsWorker(t *testing.T) {
@@ -264,9 +281,14 @@ func TestGenerationServiceAdmitRejectsMissingOrInvalidDependencies(t *testing.T)
 func TestGenerationServiceGetScopesAndPropagatesStorageResult(t *testing.T) {
 	storage := &generationTestStorage{job: generationTestJob(api.OverallStateRunning)}
 	service := newGenerationTestService(storage, &generationTestRuntime{})
-	got, err := service.Get(context.Background(), "tenant-a", "user-a", "job-1")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	got, err := service.Get(ctx, "tenant-a", "user-a", "job-1")
 	if err != nil || got.Resource.ID != "job-1" {
 		t.Fatalf("Get() = (%+v, %v)", got, err)
+	}
+	if storage.requestContext.Err() == nil {
+		t.Fatal("Get() detached the caller's cancellation context")
 	}
 	if storage.tenant != "tenant-a" || storage.owner != "user-a" || storage.workload != workloads.CollectionGeneration {
 		t.Fatalf("Get() scope = %q %q %q", storage.tenant, storage.owner, storage.workload)
@@ -300,14 +322,19 @@ func TestGenerationServiceDeleteCancelsCleansAndDeletes(t *testing.T) {
 	if err := newGenerationTestService(storage, runtime).Delete(context.Background(), "tenant-a", "user-a", "job-1"); err != nil {
 		t.Fatalf("Delete() after terminal callback race: %v", err)
 	}
-	if storage.job.Status.State != api.OverallStateCompleted || !storage.deleted {
-		t.Fatalf("terminal race did not retain worker state and delete: state=%s deleted=%v", storage.job.Status.State, storage.deleted)
+	if storage.job.Status.State != api.OverallStateCompleted || runtime.deleteJob == nil || runtime.deleteJob.Status.State != api.OverallStateCompleted || !storage.deleted {
+		t.Fatalf("terminal race did not use reread worker state for cleanup: stored=%s cleaned=%v deleted=%v", storage.job.Status.State, runtime.deleteJob, storage.deleted)
 	}
 
 	storage = &generationTestStorage{job: generationTestJob(api.OverallStateCompleted)}
 	runtime = &generationTestRuntime{deleteErr: errors.New("cleanup failed")}
-	if err := newGenerationTestService(storage, runtime).Delete(context.Background(), "tenant-a", "user-a", "job-1"); err == nil || storage.deleted {
+	if err := newGenerationTestService(storage, runtime).Delete(context.Background(), "tenant-a", "user-a", "job-1"); err == nil || storage.deleted || storage.expiryClearCalls != 1 {
 		t.Fatal("runtime cleanup failure did not preserve the terminal record")
+	}
+	storage = &generationTestStorage{job: generationTestJob(api.OverallStateCompleted), expiryClearErr: errors.New("could not clear expiry")}
+	runtime = &generationTestRuntime{deleteErr: errors.New("cleanup failed")}
+	if err := newGenerationTestService(storage, runtime).Delete(context.Background(), "tenant-a", "user-a", "job-1"); err == nil || !strings.Contains(err.Error(), "could not clear expiry") || storage.deleted {
+		t.Fatalf("failure to preserve cleanup retry was not reported: err=%v deleted=%v", err, storage.deleted)
 	}
 	storage = &generationTestStorage{job: generationTestJob(api.OverallStateCompleted), deleteErr: errors.New("delete failed")}
 	if err := newGenerationTestService(storage, &generationTestRuntime{}).Delete(context.Background(), "tenant-a", "user-a", "job-1"); err == nil {

@@ -13,6 +13,8 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+const sqliteExpiryTimestampFormat = "2006-01-02T15:04:05.000000000Z"
+
 const (
 	insertEvaluationStatement = `INSERT INTO evaluations (id, tenant_id, owner, status, experiment_id, workload_type, entity) VALUES (?, ?, ?, ?, ?, ?, ?);`
 
@@ -104,10 +106,11 @@ func (s *sqliteStatementsFactory) CreateEvaluationAddEntityStatement(evaluation 
 func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
 	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, query.Resource.ID)
 	if query.WorkloadType != "" {
-		where += " AND workload_type = ?"
-		whereArgs = append(whereArgs, string(query.WorkloadType))
 		if query.WorkloadType == workloads.CollectionGeneration {
-			where += " AND (expires_at IS NULL OR julianday(expires_at) > julianday('now'))"
+			where += " AND workload_type = 'collection-generation' AND (expires_at IS NULL OR expires_at > strftime('%Y-%m-%dT%H:%M:%f000000Z', 'now'))"
+		} else {
+			where += " AND workload_type = ?"
+			whereArgs = append(whereArgs, string(query.WorkloadType))
 		}
 	}
 	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
@@ -244,10 +247,9 @@ func (s *sqliteStatementsFactory) CreateUpdateEvaluationEntityStatement(tenant a
 	args := []any{status, entityJSON}
 	if expiresAt != nil {
 		query += `, expires_at = COALESCE(expires_at, ?)`
-		// modernc.org/sqlite serializes time.Time with a Go-specific suffix that
-		// SQLite's julianday() cannot parse. Store a standard timestamp so expiry
-		// filtering and cleanup can compare it reliably.
-		args = append(args, expiresAt.UTC().Format(time.RFC3339Nano))
+		// Fixed-width UTC text is lexically sortable, allowing expiry predicates to
+		// use the partial index without wrapping expires_at in a SQL function.
+		args = append(args, expiresAt.UTC().Format(sqliteExpiryTimestampFormat))
 	}
 	query += ` WHERE id = ?`
 	args = append(args, id)
@@ -258,12 +260,18 @@ func (s *sqliteStatementsFactory) CreateUpdateEvaluationEntityStatement(tenant a
 	return query + `;`, args
 }
 
+func (s *sqliteStatementsFactory) CreateClearCollectionGenerationExpiryStatement(tenant api.Tenant, owner api.User, id string) (string, []any) {
+	return `UPDATE evaluations SET expires_at = NULL, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ? AND tenant_id = ? AND owner = ? AND workload_type = ?;`,
+		[]any{id, tenant.String(), owner.String(), string(workloads.CollectionGeneration)}
+}
+
 func (s *sqliteStatementsFactory) CreateDeleteExpiredGenerationJobsStatement(now time.Time, limit int) (string, []any) {
 	return `DELETE FROM evaluations WHERE id IN (
 		SELECT id FROM evaluations
-		WHERE workload_type = ? AND status IN (?, ?, ?) AND julianday(expires_at) <= julianday(?)
+		WHERE workload_type = 'collection-generation' AND status IN (?, ?, ?) AND expires_at <= ?
 		ORDER BY expires_at LIMIT ?
-	);`, []any{string(workloads.CollectionGeneration), api.OverallStateCompleted, api.OverallStateFailed, api.OverallStateCancelled, now.UTC().Format(time.RFC3339Nano), limit}
+	);`, []any{api.OverallStateCompleted, api.OverallStateFailed, api.OverallStateCancelled, now.UTC().Format(sqliteExpiryTimestampFormat), limit}
 }
 
 func (s *sqliteStatementsFactory) CreateProviderAddEntityStatement(provider *api.ProviderResource, entity string) (string, []any) {

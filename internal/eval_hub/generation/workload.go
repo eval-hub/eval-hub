@@ -270,7 +270,7 @@ func validateYAMLMatchesCollection(content string, collection api.CollectionConf
 	if err := documents.Decode(&extraDocument); err != io.EOF {
 		return errors.New("proposal YAML must contain exactly one collection configuration")
 	}
-	yamlJSON, err := yaml.YAMLToJSON([]byte(content))
+	yamlJSON, err := yaml.YAMLToJSONStrict([]byte(content))
 	if err != nil {
 		return errors.New("proposal YAML is invalid")
 	}
@@ -335,6 +335,14 @@ func ResultFromAdditionalInfo(request api.CollectionGenerationRequest, info map[
 	var result api.CollectionGenerationResult
 	if err := json.Unmarshal(raw, &result); err != nil {
 		return api.CollectionGenerationResult{}, errors.New("generation proposal is malformed")
+	}
+	// These fields are required arrays in the public result schema. Normalize absent
+	// optional collections so JSON encodes [] rather than null.
+	if result.Explanation.RejectedBenchmarks == nil {
+		result.Explanation.RejectedBenchmarks = []api.CollectionGenerationBenchmarkReason{}
+	}
+	if result.Actions == nil {
+		result.Actions = []api.CollectionGenerationAction{}
 	}
 	if err := ValidateResult(request, result); err != nil {
 		return api.CollectionGenerationResult{}, err
@@ -414,7 +422,8 @@ func ValidateProgressEvent(event api.CollectionGenerationProgressEvent, previous
 	}
 	if previous != nil {
 		previousPhase, exists := phaseOrder[previous.Phase]
-		if event.Sequence <= previous.Sequence || !exists || phase < previousPhase {
+		correctionCycle := previous.Phase == "validation" && event.Phase == "model_generation"
+		if event.Sequence <= previous.Sequence || !exists || (phase < previousPhase && !correctionCycle) {
 			return errors.New("progress sequence must increase and phases must not move backward")
 		}
 	}
@@ -497,6 +506,71 @@ func ConfigFromJob(job *api.EvaluationJobConfig) (JobConfig, error) {
 		return JobConfig{}, errors.New("collection-generation snapshot is missing or invalid")
 	}
 	return DecodeJobConfig(raw)
+}
+
+// ResourceFromJob validates a stored generation workload and maps it to the
+// stable public representation without exposing evaluation-job implementation fields.
+func ResourceFromJob(job *api.EvaluationJobResource) (*api.CollectionGenerationResource, error) {
+	if job == nil || !IsJob(&job.EvaluationJobConfig) || job.Status == nil {
+		return nil, errors.New("stored collection-generation job is invalid")
+	}
+	snapshot, err := ConfigFromJob(&job.EvaluationJobConfig)
+	if err != nil {
+		return nil, errors.New("stored collection-generation request is invalid")
+	}
+	state := job.Status.State
+	switch state {
+	case api.OverallStatePending, api.OverallStateRunning, api.OverallStateCompleted, api.OverallStateFailed, api.OverallStateCancelled:
+	default:
+		return nil, errors.New("stored collection-generation state is invalid")
+	}
+	resource := &api.CollectionGenerationResource{
+		Resource: job.Resource.Resource,
+		Request:  snapshot.Request,
+		Status:   api.CollectionGenerationStatus{State: state},
+	}
+	for _, benchmark := range job.Status.Benchmarks {
+		if benchmark.ProviderID != ProviderID || benchmark.ID != BenchmarkID || benchmark.BenchmarkIndex != 0 {
+			continue
+		}
+		resource.Status.StartedAt = benchmark.StartedAt
+		resource.Status.CompletedAt = benchmark.CompletedAt
+		break
+	}
+	if state == api.OverallStateRunning && job.Status.CollectionGenerationProgress != nil {
+		progress := job.Status.CollectionGenerationProgress
+		resource.Status.Progress = &api.CollectionGenerationStatusProgress{
+			Phase: progress.Phase, UpdatedAt: progress.UpdatedAt, LastCompletedAction: progress.LastCompletedAction,
+		}
+	}
+	additionalInfo := generationAdditionalInfo(job)
+	switch state {
+	case api.OverallStateCompleted:
+		result, err := ResultFromAdditionalInfo(snapshot.Request, additionalInfo)
+		if err != nil {
+			return nil, errors.New("stored collection-generation result is invalid")
+		}
+		resource.Result = &result
+	case api.OverallStateFailed:
+		failure, err := FailureFromAdditionalInfo(additionalInfo)
+		if err != nil {
+			return nil, errors.New("stored collection-generation failure is invalid")
+		}
+		resource.Status.Error = &failure
+	}
+	return resource, nil
+}
+
+func generationAdditionalInfo(job *api.EvaluationJobResource) map[string]any {
+	if job.Results == nil {
+		return nil
+	}
+	for _, result := range job.Results.Benchmarks {
+		if result.ProviderID == ProviderID && result.ID == BenchmarkID && result.BenchmarkIndex == 0 {
+			return result.AdditionalInfo
+		}
+	}
+	return nil
 }
 
 // DecodeJobConfig validates the serialized immutable workload snapshot before the worker uses it.

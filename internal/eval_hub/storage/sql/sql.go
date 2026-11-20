@@ -389,6 +389,14 @@ func (s *sqlStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 }
 
 func (s *sqlStorage) WithContext(ctx context.Context) abstractions.Storage {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if workloads.TypeFromContext(ctx) == "" && s.ctx != nil {
+		if workloadType := workloads.TypeFromContext(s.ctx); workloadType != "" {
+			ctx = workloads.WithType(ctx, workloadType)
+		}
+	}
 	return &sqlStorage{
 		sqlConfig:         s.sqlConfig,
 		statementsFactory: s.statementsFactory,
