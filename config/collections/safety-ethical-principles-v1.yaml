@@ -49,6 +49,11 @@ benchmarks:
 
   - id: ethics_cm
     provider_id: lm_evaluation_harness
+    test_data_ref:
+      hf:
+        repo_id: hendrycks/ethics
+        revision: b8b47c589f8bee77175b8648e5497278b68da48a
+        sub_path: data/commonsense
     weight: 3
     primary_score:
       metric: acc

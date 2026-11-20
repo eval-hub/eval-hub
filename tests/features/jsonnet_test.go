@@ -1512,6 +1512,11 @@ type jsonnetTestDataRef struct {
 		Key       string `json:"key"`
 		SecretRef string `json:"secret_ref"`
 	} `json:"s3"`
+	HF struct {
+		RepoID   string `json:"repo_id"`
+		Revision string `json:"revision"`
+		SubPath  string `json:"sub_path"`
+	} `json:"hf"`
 }
 
 const fvtS3BundleRoot = "offline/fvt/benchmarks"
@@ -1563,6 +1568,34 @@ func evaluateJsonnetPayloadDocument(t *testing.T, tc *scenarioConfig, file strin
 		t.Fatalf("unmarshal %s: %v\noutput: %s", file, err, out)
 	}
 	return doc
+}
+
+func TestEthicsCMFVTJobUsesPinnedHFTestData(t *testing.T) {
+	tc := &scenarioConfig{
+		values:            map[string]string{},
+		jsonnetHarnessEnv: map[string]string{"ENVIRONMENT_ID": "connected"},
+	}
+	doc := evaluateJsonnetPayloadDocument(t, tc, "evaluation_job_lm_evaluation_harness_6.jsonnet")
+
+	for _, benchmark := range doc.Benchmarks {
+		if benchmark.ID != "ethics_cm" {
+			continue
+		}
+		if benchmark.ProviderID != "lm_evaluation_harness" {
+			t.Fatalf("ethics_cm provider_id = %q, want lm_evaluation_harness", benchmark.ProviderID)
+		}
+		if benchmark.Parameters["num_examples"] != float64(1) {
+			t.Errorf("ethics_cm num_examples = %v, want 1", benchmark.Parameters["num_examples"])
+		}
+		if benchmark.TestDataRef == nil {
+			t.Fatal("ethics_cm test_data_ref is missing")
+		}
+		if got := benchmark.TestDataRef.HF; got.RepoID != "hendrycks/ethics" || got.Revision != "b8b47c589f8bee77175b8648e5497278b68da48a" || got.SubPath != "data/commonsense" {
+			t.Errorf("ethics_cm test_data_ref.hf = %+v, want pinned ETHICS commonsense source", got)
+		}
+		return
+	}
+	t.Fatal("ethics_cm benchmark not found in group 6 FVT payload")
 }
 
 func TestJsonnetRagasEmbeddingEndpoint(t *testing.T) {
