@@ -122,8 +122,9 @@ func (s *sqlStorage) computeBenchmarkTestResult(txn *sql.Tx, job *api.Evaluation
 	if len(benchmarks) == 0 {
 		return nil
 	}
-	for _, benchmark := range benchmarks {
-		if benchmark.ID != benchmarkStatusEvent.ID || benchmark.ProviderID != benchmarkStatusEvent.ProviderID {
+	for index, benchmark := range benchmarks {
+		if index != benchmarkStatusEvent.BenchmarkIndex ||
+			benchmark.ID != benchmarkStatusEvent.ID || benchmark.ProviderID != benchmarkStatusEvent.ProviderID {
 			continue
 		}
 
