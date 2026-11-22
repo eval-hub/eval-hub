@@ -9,7 +9,7 @@ post:
     content:
       application/json:
         schema:
-          $ref: ../components/schemas/EvaluationJobConfig.yaml
+          $ref: ../components/schemas/EvaluationJobCreateRequest.yaml
         examples:
           CreateEvaluationWithBenchmarks:
             summary: Evaluate a model with inline benchmarks
