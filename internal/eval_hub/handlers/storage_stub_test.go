@@ -77,6 +77,6 @@ func (noopStorage) LoadSystemResources(_ map[string]api.CollectionResource, _ ma
 }
 func (noopStorage) Close() error { return nil }
 
-func (noopStorage) UpdateEvaluationJobOCI(_ string, _ *api.OCIProcessingStatus, _ *api.OCIArtifactReference) error {
+func (noopStorage) UpdateEvaluationJobOCI(_ string, _ *api.OCIProcessingStatus, _, _ *api.OCIArtifactReference) error {
 	return nil
 }
