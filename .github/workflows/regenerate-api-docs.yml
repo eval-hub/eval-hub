@@ -168,7 +168,13 @@ jobs:
             docs/openapi-internal.yaml
             docs/openapi-internal.json
           )
-          if git diff --quiet -- "${DOCS_FILES[@]}"; then
+          # Stage the allowlisted files before the no-change check: `git diff`
+          # ignores untracked files, so a regenerated documentation file that
+          # the branch does not track would otherwise be reported as "already
+          # up to date" and left uncommitted. Comparing the index with HEAD
+          # covers modifications, additions and deletions alike.
+          git add -- "${DOCS_FILES[@]}"
+          if git diff --cached --quiet -- "${DOCS_FILES[@]}"; then
             echo "result=noop" >> "${GITHUB_OUTPUT}"
             echo "API documentation is already up to date; nothing to commit."
             {
@@ -182,7 +188,6 @@ jobs:
           redocly_version="$(node -p "require('./package.json').devDependencies['@redocly/cli']")"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- "${DOCS_FILES[@]}"
           git commit -s \
             -m "chore(docs): regenerate API documentation" \
             -m "Generated with 'make documentation' for pull request #${PR_NUMBER}, requested by @${{ github.actor }}. Bundled @redocly/cli: ${redocly_version}."
