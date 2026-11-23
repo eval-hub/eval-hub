@@ -129,7 +129,7 @@ parameters:
   - name: invalid_input_policy
     type: string
     default: skip_invalid
-    description: skip_invalid records invalid candidates and continues; fail_fast aborts. Manifest rows follow the same policy, including empty manifests and absent entries. Without a manifest, no valid inputs always fails. With a manifest and skip_invalid, a manifest with no valid entries completes unscored and reports its invalid counts.
+    description: skip_invalid records invalid candidates and continues; fail_fast aborts. Manifest rows follow the same policy, including empty manifests and absent entries, but fatal manifest errors such as unsafe paths, symlinks, or an unreadable or oversized manifest abort under either policy. Without a manifest, no valid inputs always fails. With a manifest and skip_invalid, a manifest that has no fatal errors but no valid entries completes unscored and reports its invalid counts.
   - name: max_steps_per_trajectory
     type: integer
     default: 500
