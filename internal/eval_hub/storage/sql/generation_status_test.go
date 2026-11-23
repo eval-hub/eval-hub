@@ -1,6 +1,7 @@
 package sql_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -8,10 +9,69 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/common"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/generation"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"sigs.k8s.io/yaml"
 )
+
+func TestGenerationRejectsInvalidEventsWithoutChangingState(t *testing.T) {
+	store, err := getTestStorage(t, drivers[0], getDBName())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	tenant, owner := api.Tenant(common.GUID()), api.User("event-owner")
+	scoped := store.WithTenant(tenant).WithOwner(owner).WithWorkloadType(workloads.CollectionGeneration)
+	id := createRunningGenerationJob(t, scoped, tenant, owner)
+	for _, tc := range []struct {
+		name   string
+		change func(*api.BenchmarkStatusEvent)
+		code   *messages.MessageCode
+	}{
+		{"wrong benchmark", func(e *api.BenchmarkStatusEvent) { e.ID = "another-benchmark" }, messages.ResourceNotFound},
+		{"evaluation metrics", func(e *api.BenchmarkStatusEvent) { e.Metrics = map[string]any{"score": 1} }, messages.RequestValidationFailed},
+		{"client supplied timestamp", func(e *api.BenchmarkStatusEvent) { e.StartedAt = "2026-11-23T17:00:00Z" }, messages.RequestValidationFailed},
+		{"progress combined with completion", func(e *api.BenchmarkStatusEvent) {
+			e.Status = api.StateCompleted
+			e.CollectionGenerationProgress = &api.CollectionGenerationProgressEvent{Sequence: 2, Phase: "validation"}
+		}, messages.RequestValidationFailed},
+		{"stale progress", func(e *api.BenchmarkStatusEvent) {
+			e.CollectionGenerationProgress = &api.CollectionGenerationProgressEvent{Sequence: 1, Phase: "finalization"}
+		}, messages.RequestValidationFailed},
+		{"running event with results", func(e *api.BenchmarkStatusEvent) {
+			e.AdditionalInfo = map[string]any{"collection_generation_result": "unexpected"}
+		}, messages.RequestValidationFailed},
+		{"unsupported state", func(e *api.BenchmarkStatusEvent) { e.Status = api.StateCancelled }, messages.RequestValidationFailed},
+		{"unstructured failure", func(e *api.BenchmarkStatusEvent) { e.Status = api.StateFailed }, messages.RequestValidationFailed},
+		{"completion with error", func(e *api.BenchmarkStatusEvent) {
+			e.Status = api.StateCompleted
+			e.ErrorMessage = &api.MessageInfo{Message: "incompatible with completion"}
+		}, messages.RequestValidationFailed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			event := api.BenchmarkStatusEvent{ProviderID: generation.ProviderID, ID: generation.BenchmarkID, Status: api.StateRunning}
+			tc.change(&event)
+			err := scoped.UpdateEvaluationJob(id, &api.StatusEvent{BenchmarkStatusEvent: &event})
+			var serviceErr abstractions.ServiceError
+			if !errors.As(err, &serviceErr) || serviceErr.MessageCode() != tc.code {
+				t.Fatalf("UpdateEvaluationJob() = %v, want %v", err, tc.code)
+			}
+			job, err := scoped.GetEvaluationJob(id)
+			if err != nil || job.Status.State != api.OverallStateRunning ||
+				job.Status.CollectionGenerationProgress.Sequence != 1 || job.Status.CollectionGenerationProgress.Phase != "catalog_discovery" {
+				t.Fatalf("rejected event changed the job: %+v, %v", job, err)
+			}
+		})
+	}
+	failGenerationJob(t, scoped, id)
+	event := api.BenchmarkStatusEvent{ProviderID: generation.ProviderID, ID: generation.BenchmarkID, Status: api.StateRunning}
+	err = scoped.UpdateEvaluationJob(id, &api.StatusEvent{BenchmarkStatusEvent: &event})
+	var serviceErr abstractions.ServiceError
+	if !errors.As(err, &serviceErr) || serviceErr.MessageCode() != messages.JobCanNotBeUpdated {
+		t.Fatalf("late event after terminal failure = %v", err)
+	}
+}
 
 func proposalEvent(t *testing.T, selectedProvider, selectedID string, rejected []api.CollectionGenerationBenchmarkReason) *api.StatusEvent {
 	t.Helper()
@@ -67,6 +127,7 @@ func createRunningGenerationJob(t *testing.T, store abstractions.Storage, tenant
 	if err := store.CreateEvaluationJob(job); err != nil {
 		t.Fatalf("persist generation job: %v", err)
 	}
+	removeGenerationFixture(t, store, id)
 	if err := store.UpdateEvaluationJob(id, &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 		ProviderID: generation.ProviderID, ID: generation.BenchmarkID, BenchmarkIndex: 0,
 		Status: api.StateRunning,
@@ -152,9 +213,18 @@ func TestCollectionGenerationSQLPostgres(t *testing.T) {
 		testCollectionGenerationCompletionRequiresCallerVisibleCatalog(t, drivers[1], databaseName)
 	})
 	t.Run("retention-expiry-and-concurrency", func(t *testing.T) {
-		testCollectionGenerationRetentionIsBoundedAndWorkloadScoped(t, drivers[1], databaseName)
-		testExpiredGenerationIsHiddenBeforeCleanup(t, drivers[1], databaseName)
-		testGenerationRuntimeCleanupFailureCanBeRetried(t, drivers[1], databaseName)
-		testGenerationRetentionCannotDeleteRecordDuringRuntimeCleanup(t, drivers[1], databaseName)
+		for _, tc := range []struct {
+			name string
+			test func(*testing.T, string, string)
+		}{
+			{"bounded", testCollectionGenerationRetentionIsBoundedAndWorkloadScoped},
+			{"expiry", testExpiredGenerationIsHiddenBeforeCleanup},
+			{"retry", testGenerationRuntimeCleanupFailureCanBeRetried},
+			{"concurrent-cleanup", testGenerationRetentionCannotDeleteRecordDuringRuntimeCleanup},
+			{"same-tenant-delete", testGenerationDeleteProtectionIsTenantScopedAndPreservesExpiry},
+			{"finalize-after-expiry", testSuccessfulDeleteFinalizesAfterExpiry},
+		} {
+			t.Run(tc.name, func(t *testing.T) { tc.test(t, drivers[1], databaseName) })
+		}
 	})
 }

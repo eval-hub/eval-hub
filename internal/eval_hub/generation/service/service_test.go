@@ -116,7 +116,7 @@ func (s *generationTestStorage) UpdateEvaluationJobStatus(id string, state api.O
 	s.job.Status.State, s.job.Status.Message = state, message
 	return nil
 }
-func (s *generationTestStorage) DeleteEvaluationJob(id string) error {
+func (s *generationTestStorage) DeleteCleanedCollectionGenerationJob(id string) error {
 	if s.deleteErr != nil {
 		return s.deleteErr
 	}
@@ -126,13 +126,16 @@ func (s *generationTestStorage) DeleteEvaluationJob(id string) error {
 	s.deleted = true
 	return nil
 }
-func (s *generationTestStorage) ProtectCollectionGenerationJobForCleanup(id string, message *api.MessageInfo) error {
+func (s *generationTestStorage) ProtectCollectionGenerationJobForCleanup(id string, message *api.MessageInfo) (*api.EvaluationJobResource, error) {
 	s.protectCalls++
 	if s.protectErr != nil {
-		return s.protectErr
+		return nil, s.protectErr
 	}
-	if s.job == nil || s.job.Resource.ID != id || s.job.Status == nil {
-		return errors.New("job not found")
+	if s.getErr != nil {
+		return nil, s.getErr
+	}
+	if s.job == nil || s.job.Resource.ID != id || s.job.Status == nil || !generation.IsJob(&s.job.EvaluationJobConfig) {
+		return nil, errors.New("job not found")
 	}
 	if s.terminalOnProtect {
 		s.job.Status.State = api.OverallStateCompleted
@@ -141,7 +144,7 @@ func (s *generationTestStorage) ProtectCollectionGenerationJobForCleanup(id stri
 		s.job.Status.Message = message
 	}
 	s.protected = true
-	return nil
+	return s.GetEvaluationJob(id)
 }
 
 type generationTestRuntime struct {

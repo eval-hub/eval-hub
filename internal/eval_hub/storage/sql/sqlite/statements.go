@@ -267,6 +267,10 @@ func (s *sqliteStatementsFactory) CreateSetCollectionGenerationCleanupProtection
 		[]any{protectedUntil.UTC().Format(sqliteExpiryTimestampFormat), id, tenant.String()}
 }
 
+func (s *sqliteStatementsFactory) CreateDeleteCleanedCollectionGenerationJobStatement(tenant api.Tenant, id string) (string, []any) {
+	return `DELETE FROM evaluations WHERE id = ? AND tenant_id = ? AND workload_type = ?;`, []any{id, tenant.String(), string(workloads.CollectionGeneration)}
+}
+
 func (s *sqliteStatementsFactory) CreateDeleteExpiredGenerationJobsStatement(now time.Time, limit int) (string, []any) {
 	return `DELETE FROM evaluations WHERE id IN (
 		SELECT id FROM evaluations

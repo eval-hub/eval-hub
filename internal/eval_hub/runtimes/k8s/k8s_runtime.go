@@ -396,7 +396,12 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 	// Creator rollback covers confirmed-failed creates; uncertain leftovers need
 	// separate coordination (out of scope for the delete path).
 	cleanupSweep := func() error {
-		cleanupCtx, cancelCleanup := orphanCleanupContext()
+		parent := context.Background()
+		if generation.IsJob(&evaluation.EvaluationJobConfig) && r.ctx != nil {
+			// Generation DELETE owns a deadline shorter than its storage lease.
+			parent = r.ctx
+		}
+		cleanupCtx, cancelCleanup := context.WithTimeout(parent, orphanCleanupTimeout)
 		defer cancelCleanup()
 		return r.deleteLabeledJobsAndRefSecrets(cleanupCtx, jobID, namespace, labelSelector, deleteOptions)
 	}

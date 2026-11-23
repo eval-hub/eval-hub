@@ -3,6 +3,7 @@ package sql
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -293,22 +294,31 @@ func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runSt
 
 // UpdateEvaluationJobWithRunStatus runs in a transaction: fetches the job, merges RunStatusInternal into the entity, and persists.
 func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) error {
+	if runStatus == nil || runStatus.BenchmarkStatusEvent == nil {
+		return se.NewServiceError(messages.RequestValidationFailed, "Error", "benchmark status event is required")
+	}
 	// Capture once for internal runtime callers that bypass the events handler.
 	receivedAt := time.Now()
-	return s.withTransaction("update evaluation job", id, func(txn *sql.Tx) error {
+	var committedGenerationState api.State
+	err := s.withTransaction("update evaluation job", id, func(txn *sql.Tx) error {
 		s.logger.Info("Updating evaluation job", "id", id, "status", runStatus.BenchmarkStatusEvent.Status)
 
 		job, err := s.getEvaluationJobTransactionalForUpdate(txn, id)
 		if err != nil {
 			return err
 		}
-		if err := normalizeCollectionGenerationEvent(job, runStatus.BenchmarkStatusEvent, receivedAt); err != nil {
-			return se.NewServiceError(messages.RequestValidationFailed, "Error", err.Error())
-		}
 		// Test hook: no-op unless a test installs a callback (see test_hooks.go).
 		invokeEvaluationJobUpdateAfterLockedReadHook(id, runStatus.BenchmarkStatusEvent.ID)
 		if workloads.TypeForJob(&job.EvaluationJobConfig) == workloads.CollectionGeneration {
-			return s.updateCollectionGenerationJob(txn, job, runStatus, receivedAt)
+			// Normalization may turn an invalid completion into a failure. Each
+			// transaction retry must evaluate the original proposal again.
+			event := *runStatus.BenchmarkStatusEvent
+			err := s.updateCollectionGenerationJob(txn, job, &api.StatusEvent{BenchmarkStatusEvent: &event}, receivedAt)
+			committedGenerationState = event.Status
+			return err
+		}
+		if runStatus.BenchmarkStatusEvent.CollectionGenerationProgress != nil {
+			return se.NewServiceError(messages.RequestValidationFailed, "Error", "collection-generation progress is only valid for generation jobs")
 		}
 
 		// Guard: reject benchmark updates if job is already in a terminal state.
@@ -397,6 +407,11 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 
 		return nil
 	})
+	if err == nil && committedGenerationState != "" {
+		// The caller uses the persisted state for runtime phase notifications.
+		runStatus.BenchmarkStatusEvent.Status = committedGenerationState
+	}
+	return err
 }
 
 // updateCollectionGenerationJob persists the typed generation result/progress without
@@ -415,17 +430,18 @@ func (s *sqlStorage) updateCollectionGenerationJob(txn *sql.Tx, job *api.Evaluat
 	if err := s.validateBenchmarkExists(job, runStatus, nil); err != nil {
 		return err
 	}
-	if event.Status != api.StateRunning && event.Status != api.StateCompleted && event.Status != api.StateFailed {
-		return se.NewServiceError(messages.RequestValidationFailed, "Error", "unsupported collection-generation event state")
-	}
-	if event.Phase != "" || event.StartedAt != "" || event.CompletedAt != "" {
-		return se.NewServiceError(messages.RequestValidationFailed, "Error", "generation event timestamps and evaluation phase are server-managed")
+	if err := normalizeCollectionGenerationEvent(job, event, receivedAt); err != nil {
+		return se.NewServiceError(messages.RequestValidationFailed, "Error", err.Error())
 	}
 
-	if event.Status == api.StateCompleted || event.Status == api.StateFailed {
-		if err := s.validateCollectionGenerationCatalog(txn, job, event); err != nil {
-			if event.Status != api.StateCompleted {
-				return se.NewServiceError(messages.RequestValidationFailed, "Error", err.Error())
+	if event.Status == api.StateCompleted {
+		result, ok := event.AdditionalInfo["collection_generation_result"].(api.CollectionGenerationResult)
+		if !ok {
+			return errors.New("missing validated collection-generation result")
+		}
+		if err := s.validateCollectionGenerationCatalog(txn, result); err != nil {
+			if !errors.Is(err, errGenerationBenchmarkNotVisible) {
+				return se.WithRollback(err)
 			}
 			setGenerationValidationFailure(event)
 		}
@@ -467,22 +483,9 @@ func (s *sqlStorage) updateCollectionGenerationJob(txn *sql.Tx, job *api.Evaluat
 	return s.updateEvaluationJobTxn(txn, job.Resource.ID, state, &entity)
 }
 
-func (s *sqlStorage) validateCollectionGenerationCatalog(txn *sql.Tx, job *api.EvaluationJobResource, event *api.BenchmarkStatusEvent) error {
-	config, err := generation.ConfigFromJob(&job.EvaluationJobConfig)
-	if err != nil {
-		if event.Status == api.StateCompleted {
-			setGenerationValidationFailure(event)
-			return nil
-		}
-		return fmt.Errorf("invalid collection-generation job snapshot")
-	}
-	if event.Status == api.StateFailed {
-		return nil
-	}
-	result, err := generation.ResultFromAdditionalInfo(config.Request, event.AdditionalInfo)
-	if err != nil {
-		return fmt.Errorf("invalid generation result")
-	}
+var errGenerationBenchmarkNotVisible = errors.New("generation result references a benchmark outside the caller-visible catalog")
+
+func (s *sqlStorage) validateCollectionGenerationCatalog(txn *sql.Tx, result api.CollectionGenerationResult) error {
 	benchmarks := make([]api.CollectionBenchmarkConfig, 0, len(result.Collection.Benchmarks)+len(result.Explanation.RejectedBenchmarks))
 	benchmarks = append(benchmarks, result.Collection.Benchmarks...)
 	for _, rejected := range result.Explanation.RejectedBenchmarks {
@@ -490,8 +493,12 @@ func (s *sqlStorage) validateCollectionGenerationCatalog(txn *sql.Tx, job *api.E
 	}
 	for _, benchmark := range benchmarks {
 		provider, err := s.getUserProviderTransactional(txn, benchmark.ProviderID)
-		if err != nil || provider == nil {
-			return fmt.Errorf("generation result references a benchmark outside the caller-visible catalog")
+		if err != nil {
+			var serviceErr *se.ServiceError
+			if errors.As(err, &serviceErr) && serviceErr.MessageCode() == messages.ResourceNotFound {
+				return errGenerationBenchmarkNotVisible
+			}
+			return err
 		}
 		found := false
 		for _, catalogBenchmark := range provider.Benchmarks {
@@ -501,26 +508,13 @@ func (s *sqlStorage) validateCollectionGenerationCatalog(txn *sql.Tx, job *api.E
 			}
 		}
 		if !found {
-			return fmt.Errorf("generation result references a benchmark outside the caller-visible catalog")
+			return errGenerationBenchmarkNotVisible
 		}
 	}
 	return nil
 }
 
 func normalizeCollectionGenerationEvent(job *api.EvaluationJobResource, event *api.BenchmarkStatusEvent, receivedAt time.Time) error {
-	if job == nil || event == nil {
-		return fmt.Errorf("benchmark status event is required")
-	}
-	isGeneration := workloads.TypeForJob(&job.EvaluationJobConfig) == workloads.CollectionGeneration
-	if event.CollectionGenerationProgress != nil && !isGeneration {
-		return fmt.Errorf("collection-generation progress is only valid for generation jobs")
-	}
-	if !isGeneration {
-		return nil
-	}
-	if job.Status == nil {
-		return fmt.Errorf("collection-generation job has no status")
-	}
 	if event.Metrics != nil || event.MetricsSchema != nil || event.PrimaryScore != nil || event.Artifacts != nil || event.MLFlowRunID != "" || event.LogsPath != "" {
 		return fmt.Errorf("collection-generation jobs cannot report evaluation metrics or artifacts")
 	}
@@ -531,10 +525,7 @@ func normalizeCollectionGenerationEvent(job *api.EvaluationJobResource, event *a
 		if event.Status != api.StateRunning || event.AdditionalInfo != nil || event.ErrorMessage != nil {
 			return fmt.Errorf("generation progress must be a running-only status event")
 		}
-		var previous *api.CollectionGenerationProgress
-		if job.Status != nil {
-			previous = job.Status.CollectionGenerationProgress
-		}
+		previous := job.Status.CollectionGenerationProgress
 		if err := generation.ValidateProgressEvent(*event.CollectionGenerationProgress, previous); err != nil {
 			return err
 		}

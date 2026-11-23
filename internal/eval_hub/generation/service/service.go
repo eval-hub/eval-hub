@@ -32,14 +32,13 @@ type ModelSecretValidator interface {
 type JobStorage interface {
 	abstractions.RuntimeStorage
 	CreateEvaluationJob(*api.EvaluationJobResource) error
-	DeleteEvaluationJob(string) error
 }
 
-// GenerationCleanupProtector atomically cancels an active generation job when needed
-// and clears its retention deadline before runtime cleanup starts. This prevents the
-// retention janitor from deleting the record while cleanup is in progress.
+// GenerationCleanupProtector claims a visible job for cleanup and returns its
+// status after cancellation, if required. The retention deadline stays unchanged.
 type GenerationCleanupProtector interface {
-	ProtectCollectionGenerationJobForCleanup(string, *api.MessageInfo) error
+	ProtectCollectionGenerationJobForCleanup(string, *api.MessageInfo) (*api.EvaluationJobResource, error)
+	DeleteCleanedCollectionGenerationJob(string) error
 }
 
 // Service admits and owns the lifecycle of internal collection-generation workloads.
@@ -118,10 +117,13 @@ func (s *Service) Admit(ctx context.Context, tenant api.Tenant, owner api.User, 
 	return store.GetEvaluationJob(job.Resource.ID)
 }
 
-// Get returns a generation job scoped to its tenant, owner, workload type, and retention.
+// Get returns an unexpired generation job within the caller's tenant.
 func (s *Service) Get(ctx context.Context, tenant api.Tenant, owner api.User, id string) (*api.CollectionGenerationResource, error) {
 	if s == nil || s.storage == nil {
 		return nil, errors.New("collection generation is not configured")
+	}
+	if tenant.IsEmpty() {
+		return nil, errors.New("tenant is required for collection generation")
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -145,18 +147,11 @@ func (s *Service) Delete(ctx context.Context, tenant api.Tenant, owner api.User,
 	if s == nil || s.storage == nil || s.runtime == nil {
 		return errors.New("collection generation is not configured")
 	}
+	if tenant.IsEmpty() {
+		return errors.New("tenant is required for collection generation")
+	}
 	jobCtx := s.operationContext(ctx)
 	store := s.scopedStorage(jobCtx, tenant, owner)
-	job, err := store.GetEvaluationJob(id)
-	if err != nil {
-		return err
-	}
-	if !generation.IsJob(&job.EvaluationJobConfig) {
-		return errors.New("evaluation job is not a collection-generation workload")
-	}
-	if job.Status == nil {
-		return errors.New("collection-generation job has no status")
-	}
 	protector, ok := store.(GenerationCleanupProtector)
 	if !ok {
 		return errors.New("storage cannot protect collection-generation job during cleanup")
@@ -164,21 +159,16 @@ func (s *Service) Delete(ctx context.Context, tenant api.Tenant, owner api.User,
 	message := api.WithMessageOrigin(&api.MessageInfo{
 		Message: "Collection-generation job cancelled by the caller.", MessageCode: "collection_generation_cancelled",
 	}, api.MessageOriginServer)
-	if err := protector.ProtectCollectionGenerationJobForCleanup(id, message); err != nil {
-		return fmt.Errorf("protect collection-generation job before runtime cleanup: %w", err)
-	}
-	// The atomic protection step may have cancelled the job or observed a terminal
-	// callback racing with DELETE. Reload the status before passing the job to runtime.
-	job, err = store.GetEvaluationJob(id)
+	job, err := protector.ProtectCollectionGenerationJobForCleanup(id, message)
 	if err != nil {
-		return fmt.Errorf("read protected collection-generation job: %w", err)
+		return fmt.Errorf("protect collection-generation job before runtime cleanup: %w", err)
 	}
 	cleanupCtx, cancelCleanup := context.WithTimeout(jobCtx, generation.RuntimeResourceCleanupTimeout)
 	defer cancelCleanup()
 	if err := s.runtime.WithLogger(s.logger).WithContext(cleanupCtx).DeleteEvaluationJobResources(job); err != nil {
 		return fmt.Errorf("clean up collection-generation runtime resources: %w", err)
 	}
-	if err := store.DeleteEvaluationJob(id); err != nil {
+	if err := protector.DeleteCleanedCollectionGenerationJob(id); err != nil {
 		return fmt.Errorf("delete collection-generation job record: %w", err)
 	}
 	return nil

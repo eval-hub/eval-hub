@@ -1367,6 +1367,27 @@ func TestRunEvaluationJobMarksBenchmarkFailedOnCreateError(t *testing.T) {
 	}
 }
 
+func TestValidateGenerationModelSecretIsScopedToTenant(t *testing.T) {
+	const secretName = "generator-auth"
+	client := fake.NewSimpleClientset(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "tenant-a"},
+	})
+	runtime := &K8sRuntime{helper: &KubernetesHelper{clientset: client}}
+	ctx := context.Background()
+	if err := runtime.ValidateModelSecret(ctx, "tenant-a", secretName); err != nil {
+		t.Fatalf("valid tenant secret: %v", err)
+	}
+	if err := runtime.ValidateModelSecret(ctx, "tenant-b", secretName); err == nil {
+		t.Fatal("accepted a Secret that exists only in another namespace")
+	}
+	if err := runtime.ValidateModelSecret(ctx, "", secretName); err == nil {
+		t.Fatal("accepted an empty Secret namespace")
+	}
+	if err := (&K8sRuntime{}).ValidateModelSecret(ctx, "tenant-a", secretName); err == nil {
+		t.Fatal("accepted a Secret reference with no Kubernetes client")
+	}
+}
+
 func TestRunGenerationJobReportsStructuredFailureOnCreateError(t *testing.T) {
 	budget, err := loop.DefaultPresets().Resolve(loop.EffortStandard, loop.DefaultHardLimits())
 	if err != nil {

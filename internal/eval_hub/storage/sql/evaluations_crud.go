@@ -164,9 +164,10 @@ func (s *sqlStorage) DeleteEvaluationJob(id string) error {
 // necessary, and installs a bounded cleanup lease in one transaction. The lease
 // protects an in-flight runtime cleanup from the retention sweep without changing
 // the job's first-terminal expires_at deadline.
-func (s *sqlStorage) ProtectCollectionGenerationJobForCleanup(id string, message *api.MessageInfo) error {
+func (s *sqlStorage) ProtectCollectionGenerationJobForCleanup(id string, message *api.MessageInfo) (*api.EvaluationJobResource, error) {
 	api.WithMessageOrigin(message, api.MessageOriginServer)
-	return s.withTransaction("protect collection-generation job for cleanup", id, func(txn *sql.Tx) error {
+	var protected *api.EvaluationJobResource
+	err := s.withTransaction("protect collection-generation job for cleanup", id, func(txn *sql.Tx) error {
 		job, err := s.getEvaluationJobTransactionalForUpdateWithType(txn, id, workloads.CollectionGeneration)
 		if err != nil {
 			return err
@@ -199,6 +200,7 @@ func (s *sqlStorage) ProtectCollectionGenerationJobForCleanup(id string, message
 			if err := s.updateEvaluationJobTxn(txn, id, api.OverallStateCancelled, &entity); err != nil {
 				return err
 			}
+			job.Status = entity.Status
 		}
 
 		protectedUntil := time.Now().UTC().Add(generation.CleanupProtectionLease)
@@ -214,8 +216,21 @@ func (s *sqlStorage) ProtectCollectionGenerationJobForCleanup(id string, message
 		if rows == 0 {
 			return se.WithRollback(se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id))
 		}
+		protected = job
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return protected, nil
+}
+
+// DeleteCleanedCollectionGenerationJob finalizes a DELETE that has already
+// cleaned runtime resources. The row may have expired or been removed by then.
+func (s *sqlStorage) DeleteCleanedCollectionGenerationJob(id string) error {
+	query, args := s.statementsFactory.CreateDeleteCleanedCollectionGenerationJobStatement(s.tenant, id)
+	_, err := s.exec(nil, query, args...)
+	return err
 }
 
 // DeleteExpiredCollectionGenerationJobs removes a bounded batch of terminal generation

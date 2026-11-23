@@ -182,6 +182,50 @@ func TestSetCollectionGenerationCleanupProtectionIsTenantScopedAndPreservesExpir
 	}
 }
 
+func TestGenerationStatementsKeepExpiryOnSubsequentUpdates(t *testing.T) {
+	db, err := sql.Open("sqlite", "file:generation-expiry-statement?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	factory := NewStatementsFactory(slog.Default())
+	if _, err := db.Exec(factory.GetTablesSchema()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO evaluations (id, tenant_id, owner, status, experiment_id, workload_type, entity)
+		VALUES ('job', 'tenant', 'owner', 'running', '', 'collection-generation', '{}')`); err != nil {
+		t.Fatal(err)
+	}
+	firstExpiry := time.Now().UTC().Add(time.Hour)
+	laterExpiry := firstExpiry.Add(time.Hour)
+	for _, expires := range []*time.Time{nil, &firstExpiry, &laterExpiry} {
+		statement, args := factory.CreateUpdateEvaluationEntityStatement("tenant", "job", "{}", api.OverallStateFailed, expires)
+		if _, err := db.Exec(statement, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var preserved string
+	if err := db.QueryRow("SELECT CAST(expires_at AS TEXT) FROM evaluations WHERE id = 'job'").Scan(&preserved); err != nil {
+		t.Fatal(err)
+	}
+	if want := firstExpiry.Format(sqliteExpiryTimestampFormat); preserved != want {
+		t.Fatalf("expiry = %q, want %q", preserved, want)
+	}
+	query := shared.EntityQuery{Resource: api.Resource{ID: "job", Tenant: "tenant"}, WorkloadType: workloads.CollectionGeneration}
+	statement, args, scan := factory.CreateEvaluationGetEntityForUpdateStatement(&query)
+	if err := db.QueryRow(statement, args...).Scan(scan...); err != nil {
+		t.Fatalf("unexpired job is unavailable: %v", err)
+	}
+	statement, args = factory.CreateDeleteCleanedCollectionGenerationJobStatement("different-tenant", "job")
+	deletion, err := db.Exec(statement, args...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if affected, err := deletion.RowsAffected(); err != nil || affected != 0 {
+		t.Fatalf("cleanup removed another tenant's job: rows=%d err=%v", affected, err)
+	}
+}
+
 func TestCreateProviderAddEntityStatementIncludesTimestamps(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
 	created := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)

@@ -272,6 +272,10 @@ func (s *postgresStatementsFactory) CreateSetCollectionGenerationCleanupProtecti
 		[]any{protectedUntil, id, tenant.String(), string(workloads.CollectionGeneration)}
 }
 
+func (s *postgresStatementsFactory) CreateDeleteCleanedCollectionGenerationJobStatement(tenant api.Tenant, id string) (string, []any) {
+	return `DELETE FROM evaluations WHERE id = $1 AND tenant_id = $2 AND workload_type = $3;`, []any{id, tenant.String(), string(workloads.CollectionGeneration)}
+}
+
 func (s *postgresStatementsFactory) CreateDeleteExpiredGenerationJobsStatement(now time.Time, limit int) (string, []any) {
 	return `DELETE FROM evaluations WHERE id IN (
 		SELECT id FROM evaluations

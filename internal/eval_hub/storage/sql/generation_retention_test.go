@@ -23,7 +23,19 @@ type generationRetentionCleaner interface {
 }
 
 type generationCleanupProtector interface {
-	ProtectCollectionGenerationJobForCleanup(string, *api.MessageInfo) error
+	ProtectCollectionGenerationJobForCleanup(string, *api.MessageInfo) (*api.EvaluationJobResource, error)
+	DeleteCleanedCollectionGenerationJob(string) error
+}
+
+// removeGenerationFixture keeps tests sharing a PostgreSQL database from
+// contributing expired rows to one another's global retention sweeps.
+func removeGenerationFixture(t *testing.T, scoped abstractions.Storage, id string) {
+	t.Helper()
+	t.Cleanup(func() {
+		if err := scoped.(generationCleanupProtector).DeleteCleanedCollectionGenerationJob(id); err != nil {
+			t.Errorf("remove generation fixture: %v", err)
+		}
+	})
 }
 
 type blockingGenerationCleanupRuntime struct {
@@ -216,6 +228,7 @@ func testExpiredGenerationIsHiddenBeforeCleanup(t *testing.T, driver, databaseNa
 		t.Fatal(err)
 	}
 	generationStore := scoped.WithWorkloadType(workloads.CollectionGeneration)
+	removeGenerationFixture(t, generationStore, job.Resource.ID)
 	if err := generationStore.UpdateEvaluationJob(job.Resource.ID, &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 		ProviderID: generation.ProviderID, ID: generation.BenchmarkID, BenchmarkIndex: 0,
 		Status: api.StateFailed, AdditionalInfo: map[string]any{"collection_generation_error": map[string]any{"code": "timeout"}},
@@ -250,12 +263,13 @@ func testGenerationRuntimeCleanupFailureCanBeRetried(t *testing.T, driver, datab
 		t.Fatal(err)
 	}
 	generationStore := scoped.WithWorkloadType(workloads.CollectionGeneration)
+	removeGenerationFixture(t, generationStore, job.Resource.ID)
 	failGenerationJob(t, generationStore, job.Resource.ID)
 	protector, ok := generationStore.(generationCleanupProtector)
 	if !ok {
 		t.Fatal("SQL storage does not support protecting records before runtime cleanup")
 	}
-	if err := protector.ProtectCollectionGenerationJobForCleanup(job.Resource.ID, &api.MessageInfo{Message: "cancelled", MessageCode: "cancelled"}); err != nil {
+	if _, err := protector.ProtectCollectionGenerationJobForCleanup(job.Resource.ID, &api.MessageInfo{Message: "cancelled", MessageCode: "cancelled"}); err != nil {
 		t.Fatalf("protect record before runtime cleanup: %v", err)
 	}
 	cleaner, ok := store.(generationRetentionCleaner)
@@ -284,7 +298,7 @@ func testGenerationDeleteProtectionIsTenantScopedAndPreservesExpiry(t *testing.T
 	t.Cleanup(func() { _ = store.Close() })
 	tenant := api.Tenant(common.GUID())
 	owner := api.User("generation-owner")
-	otherTenantUser := api.User("same-tenant-caller")
+	sameTenantUser := api.User("same-tenant-caller")
 	scoped := store.WithTenant(tenant).WithOwner(owner)
 	job := generationJobForRetention(t, common.GUID(), tenant, owner, time.Second)
 	if err := scoped.CreateEvaluationJob(job); err != nil {
@@ -297,9 +311,12 @@ func testGenerationDeleteProtectionIsTenantScopedAndPreservesExpiry(t *testing.T
 	if !ok {
 		t.Fatal("SQL storage does not expose generation retention cleanup")
 	}
-	deleteStore := store.WithTenant(tenant).WithOwner(otherTenantUser)
+	deleteStore := store.WithTenant(tenant).WithOwner(sameTenantUser)
 	service := generationservice.NewService(deleteStore, successfulGenerationCleanupRuntime{}, &config.ServiceGenerationConfig{}, nil)
-	if err := service.Delete(context.Background(), tenant, otherTenantUser, job.Resource.ID); err != nil {
+	if err := service.Delete(context.Background(), api.Tenant(common.GUID()), sameTenantUser, job.Resource.ID); err == nil {
+		t.Fatal("different tenant could delete a generation job")
+	}
+	if err := service.Delete(context.Background(), tenant, sameTenantUser, job.Resource.ID); err != nil {
 		t.Fatalf("same-tenant user could not delete generation job: %v", err)
 	}
 	if _, err := generationStore.GetEvaluationJob(job.Resource.ID); err == nil {
@@ -315,7 +332,7 @@ func testGenerationDeleteProtectionIsTenantScopedAndPreservesExpiry(t *testing.T
 	}
 	failGenerationJob(t, generationStore, job.Resource.ID)
 	protector := generationStore.(generationCleanupProtector)
-	if err := protector.ProtectCollectionGenerationJobForCleanup(job.Resource.ID, &api.MessageInfo{Message: "cancelled", MessageCode: "cancelled"}); err != nil {
+	if _, err := protector.ProtectCollectionGenerationJobForCleanup(job.Resource.ID, &api.MessageInfo{Message: "cancelled", MessageCode: "cancelled"}); err != nil {
 		t.Fatalf("protect terminal job: %v", err)
 	}
 	protectedSweepTime := time.Now().UTC().Add(time.Minute)
@@ -386,6 +403,51 @@ func TestFailedDeleteKeepsExpiryAndEventuallySweepsRecord(t *testing.T) {
 	deleted, err = cleaner.DeleteExpiredCollectionGenerationJobs(time.Now().UTC().Add(generation.CleanupProtectionLease+time.Minute), 10)
 	if err != nil || deleted != 1 {
 		t.Fatalf("retention sweep after cleanup lease = (%d, %v), want (1, nil)", deleted, err)
+	}
+}
+
+func TestSuccessfulDeleteFinalizesAfterExpiry(t *testing.T) {
+	testSuccessfulDeleteFinalizesAfterExpiry(t, drivers[0], getDBName())
+}
+
+type delayedGenerationCleanupRuntime struct {
+	successfulGenerationCleanupRuntime
+	onCleanup func()
+}
+
+func (r delayedGenerationCleanupRuntime) WithLogger(*slog.Logger) abstractions.Runtime     { return r }
+func (r delayedGenerationCleanupRuntime) WithContext(context.Context) abstractions.Runtime { return r }
+func (r delayedGenerationCleanupRuntime) DeleteEvaluationJobResources(*api.EvaluationJobResource) error {
+	r.onCleanup()
+	return nil
+}
+
+func testSuccessfulDeleteFinalizesAfterExpiry(t *testing.T, driver, databaseName string) {
+	t.Helper()
+	store, err := getTestStorage(t, driver, databaseName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	tenant, owner := api.Tenant(common.GUID()), api.User("cleanup-owner")
+	job := generationJobForRetention(t, common.GUID(), tenant, owner, 20*time.Millisecond)
+	scoped := store.WithTenant(tenant).WithOwner(owner).WithWorkloadType(workloads.CollectionGeneration)
+	if err := scoped.CreateEvaluationJob(job); err != nil {
+		t.Fatal(err)
+	}
+	runtime := delayedGenerationCleanupRuntime{onCleanup: func() {
+		time.Sleep(40 * time.Millisecond)
+		if _, err := scoped.GetEvaluationJob(job.Resource.ID); err == nil {
+			t.Error("expired job remained visible while runtime cleanup was active")
+		}
+	}}
+	service := generationservice.NewService(store, runtime, nil, nil)
+	if err := service.Delete(context.Background(), tenant, owner, job.Resource.ID); err != nil {
+		t.Fatalf("cleanup finished after expiry, DELETE returned %v", err)
+	}
+	deleted, err := store.(generationRetentionCleaner).DeleteExpiredCollectionGenerationJobs(time.Now().UTC().Add(generation.CleanupProtectionLease), 10)
+	if err != nil || deleted != 0 {
+		t.Fatalf("DELETE left an expired row for the janitor: (%d, %v)", deleted, err)
 	}
 }
 

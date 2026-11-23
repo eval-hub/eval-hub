@@ -105,19 +105,11 @@ func RunSpec(ctx context.Context, data []byte, client *http.Client) error {
 	}
 
 	failure, _ := generation.SafeFailure("workload_failed", "")
-	info, err := json.Marshal(map[string]any{"collection_generation_error": failure})
-	if err != nil { // A struct of fixed strings cannot fail JSON encoding.
-		return errors.New("encode generation failure event")
-	}
-	var additionalInfo map[string]any
-	if err := json.Unmarshal(info, &additionalInfo); err != nil {
-		return errors.New("encode generation failure event")
-	}
 	terminalCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), workerTimeout)
 	defer cancel()
 	return postEvent(terminalCtx, client, endpoint, tenant, api.BenchmarkStatusEvent{
 		ProviderID: generation.ProviderID, ID: generation.BenchmarkID, BenchmarkIndex: 0,
-		Status: api.StateFailed, AdditionalInfo: additionalInfo,
+		Status: api.StateFailed, AdditionalInfo: map[string]any{"collection_generation_error": failure},
 	})
 }
 

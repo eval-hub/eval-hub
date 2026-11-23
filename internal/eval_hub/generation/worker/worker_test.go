@@ -3,12 +3,16 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/agent/loop"
@@ -201,6 +205,101 @@ func TestRunSpecReportsTerminalFailureAfterCallerCancellation(t *testing.T) {
 	}
 	if calls != 2 {
 		t.Fatalf("event calls = %d, want running and terminal failure", calls)
+	}
+}
+
+func TestRunRejectsUnreadableOrOversizedMountedSpecs(t *testing.T) {
+	if err := Run(context.Background(), "/different/job.json", nil); err == nil || !strings.Contains(err.Error(), "not allowed") {
+		t.Fatalf("unexpected path error = %v", err)
+	}
+	oldOpenSpec := openSpec
+	t.Cleanup(func() { openSpec = oldOpenSpec })
+	for _, tc := range []struct {
+		name string
+		body io.ReadCloser
+		want string
+	}{
+		{"read error", io.NopCloser(iotest.ErrReader(errors.New("fixture read error"))), "read generation job specification"},
+		{"close error", failingCloseBody{strings.NewReader("")}, "close generation job specification"},
+		{"size limit", io.NopCloser(strings.NewReader(strings.Repeat("x", maxJobSpecBytes+1))), "exceeds the size limit"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			openSpec = func(path string) (io.ReadCloser, error) {
+				if path != DefaultJobSpecPath {
+					t.Errorf("default path = %q", path)
+				}
+				return tc.body, nil
+			}
+			if err := Run(context.Background(), "", nil); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Run() error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+type failingCloseBody struct{ io.Reader }
+
+func (failingCloseBody) Close() error { return errors.New("fixture close error") }
+
+func TestRunSpecDefaultClientDoesNotFollowRedirects(t *testing.T) {
+	useTestNamespace(t)
+	sidecar := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/redirected" {
+			t.Error("worker followed the sidecar redirect")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.Header().Set("Location", "/redirected")
+		w.WriteHeader(http.StatusTemporaryRedirect)
+	}))
+	defer sidecar.Close()
+	spec, _ := validWorkerSpec(t, sidecar.URL, sidecar.URL+"/model/job/v1")
+	if err := RunSpec(context.Background(), spec, nil); err == nil || !strings.Contains(err.Error(), "HTTP 307") {
+		t.Fatalf("RunSpec() error = %v, want an unfollowed redirect", err)
+	}
+}
+
+func TestRunSpecRequiresPodNamespace(t *testing.T) {
+	useTestNamespace(t)
+	readPodNamespace = func() (string, error) { return "", errors.New("missing service account projection") }
+	spec, _ := validWorkerSpec(t, "http://localhost:8080", "http://localhost:8080/model/job/v1")
+	if err := RunSpec(context.Background(), spec, nil); err == nil || err.Error() != "read generation pod namespace" {
+		t.Fatalf("RunSpec() error = %v", err)
+	}
+}
+
+func TestPostEventBoundsPayloadAndSanitizesIOFailures(t *testing.T) {
+	endpoint, err := url.Parse("http://localhost:8080")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		info map[string]any
+		body io.ReadCloser
+		err  error
+		want string
+	}{
+		{name: "too large", info: map[string]any{"data": strings.Repeat("x", maxEventBytes)}, want: "generation event is invalid"},
+		{name: "transport error", err: errors.New("sensitive upstream message"), want: "send generation event through the local sidecar"},
+		{name: "response read error", body: io.NopCloser(iotest.ErrReader(errors.New("sensitive upstream message"))), want: "read generation event response"},
+		{name: "response close error", body: failingCloseBody{strings.NewReader("")}, want: "read generation event response"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				if tc.err != nil {
+					return nil, tc.err
+				}
+				if tc.body == nil {
+					t.Fatal("invalid event was sent")
+				}
+				return &http.Response{StatusCode: http.StatusNoContent, Body: tc.body}, nil
+			})}
+			event := api.BenchmarkStatusEvent{AdditionalInfo: tc.info}
+			if err := postEvent(context.Background(), client, endpoint, "tenant", event); err == nil || err.Error() != tc.want {
+				t.Fatalf("postEvent() error = %v, want %q", err, tc.want)
+			}
+		})
 	}
 }
 

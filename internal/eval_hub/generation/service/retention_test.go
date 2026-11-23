@@ -1,8 +1,11 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,13 +16,14 @@ import (
 
 type fakeCleanerStorage struct {
 	abstractions.Storage
-	mu      sync.Mutex
-	calls   int
-	now     time.Time
-	limit   int
-	deleted int
-	err     error
-	called  chan struct{}
+	mu        sync.Mutex
+	calls     int
+	successes int
+	now       time.Time
+	limit     int
+	deleted   int
+	err       error
+	called    chan struct{}
 }
 
 func (s *fakeCleanerStorage) WithContext(context.Context) abstractions.Storage { return s }
@@ -30,6 +34,9 @@ func (s *fakeCleanerStorage) DeleteExpiredCollectionGenerationJobs(now time.Time
 	s.now = now
 	s.limit = limit
 	deleted, err := s.deleted, s.err
+	if err == nil {
+		s.successes++
+	}
 	s.mu.Unlock()
 	if s.called != nil {
 		select {
@@ -102,6 +109,50 @@ func TestRetentionJanitorSweepPropagatesStorageErrors(t *testing.T) {
 	var nilJanitor *RetentionJanitor
 	if _, err := nilJanitor.Sweep(context.Background()); err == nil {
 		t.Fatal("nil janitor Sweep() succeeded")
+	}
+}
+
+func TestRetentionJanitorContinuesAfterSweepFailure(t *testing.T) {
+	storage := &fakeCleanerStorage{err: errors.New("database unavailable"), called: make(chan struct{}, 1)}
+	ctx, cancel := context.WithCancel(context.Background())
+	var logs bytes.Buffer
+	janitor := &RetentionJanitor{
+		storage: storage, batch: 10, now: time.Now,
+		logger: slog.New(slog.NewTextHandler(&logs, nil)),
+		cancel: cancel, done: make(chan struct{}),
+		nextInterval: func() time.Duration { return time.Millisecond },
+	}
+	go func() {
+		defer close(janitor.done)
+		janitor.run(ctx)
+	}()
+	t.Cleanup(janitor.Stop)
+	select {
+	case <-storage.called:
+	case <-time.After(time.Second):
+		t.Fatal("initial retention sweep did not run")
+	}
+	storage.mu.Lock()
+	storage.err, storage.deleted = nil, 1
+	storage.mu.Unlock()
+
+	deadline := time.After(time.Second)
+	for {
+		select {
+		case <-storage.called:
+			storage.mu.Lock()
+			successes := storage.successes
+			storage.mu.Unlock()
+			if successes > 0 {
+				janitor.Stop()
+				if !strings.Contains(logs.String(), "database unavailable") || !strings.Contains(logs.String(), "deleted=1") {
+					t.Fatalf("expected logged failure and successful retry, got %q", logs.String())
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("retention janitor did not retry after the storage error")
+		}
 	}
 }
 
