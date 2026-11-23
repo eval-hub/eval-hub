@@ -3,6 +3,7 @@
 - **Status:** Proposed
 - **Date:** 2026-10-19
 - **Decided:** 2026-11-17 — agreed with the OpenShift AI architecture team on three points: one static sandbox namespace for all evaluation job sandboxes, in the driver's `shared` workspace namespace mode; one OpenShell workspace per EvalHub tenant (`X-Tenant`); and one sandbox per evaluation job rather than one per benchmark. Decisions 2 and 4 record these. Decision 3 records the job-to-job residual risk that the model leaves. The platform still has to record the namespace model through one of the outcomes in [Platform alignment and namespace decision](#platform-alignment-and-namespace-decision), so this record stays Proposed for its remaining gates, its named approvers and the `SandboxedEvaluation` contract.
+- **Revised:** 2026-11-23 (gateway interaction contract) — adds decision 8 and [Gateway interaction contract](#gateway-interaction-contract-extension): sandbox execution is off unless `spec.sandbox` explicitly enables it and the operator observes a platform-published, qualified gateway contract; the extension records the administrator bootstrap performed before the EvalHub operator, the operator's reconciliation duties and the trusted `SandboxedEvaluation` interaction surface. No change to decisions 1–7.
 - **Revised:** 2026-11-19 (prose) — prose-only edit: long conjoined sentences are split and the wording is tightened for readability. No requirement, decision, reference or gate changed.
 - **Revised:** 2026-11-18 (workspace decision) — the summary at the start of [Decision](#decision) and decision 2's heading now name the one-OpenShell-workspace-per-EvalHub-tenant decision explicitly, instead of leaving it in the allocation paragraphs and decision 4. No change to the decision.
 - **Revised:** 2026-11-17 (sign-off review) — the first acceptance gate now allows all three recorded namespace-model outcomes. The required-OpenShell-changes gate names PR 174's both-mode rows and states that its table does not assess `shared` mode. The gate grouping is described by capability area rather than implementation phase, the supervisor egress and installation-wide wording match the pinned driver and the gateway outcomes, and the missing named approvers are flagged in the deciders and open questions. No change to the decisions.
@@ -69,7 +70,7 @@ Until the outcome is recorded, no sandbox provider is enabled and no implementat
 
 ## Decision
 
-EvalHub decides to run every sandbox-required evaluation as an OpenShell sandbox on the shared internal gateway with **one OpenShell workspace per EvalHub tenant** and **one primary sandbox per evaluation job**, all rendered into **one installation-wide sandbox namespace**. The workspace-per-tenant decision is normative. The workspace is the tenancy scope for gateway authorization, workspace membership, templates and provider and credential bindings; the platform provisioning service creates it once per authorized tenant (the `X-Tenant` namespace) and keeps it across jobs; and a tenant's jobs run as sandboxes inside that shared workspace instead of each getting its own workspace or Kubernetes namespace. Decisions 2 and 4 record the allocation, and decisions 3, 5, 6 and 7 record the broker, credential, capacity and cleanup obligations it implies. Decision 4's installation-wide namespace in the driver's `shared` mode remains gated on the platform recording one of the outcomes in [Platform alignment and namespace decision](#platform-alignment-and-namespace-decision); the one-workspace-per-tenant and one-sandbox-per-job allocations are decided.
+EvalHub decides to run every sandbox-required evaluation as an OpenShell sandbox on the shared internal gateway with **one OpenShell workspace per EvalHub tenant** and **one primary sandbox per evaluation job**, all rendered into **one installation-wide sandbox namespace**. The workspace-per-tenant decision is normative. The workspace is the tenancy scope for gateway authorization, workspace membership, templates and provider and credential bindings; the platform provisioning service creates it once per authorized tenant (the `X-Tenant` namespace) and keeps it across jobs; and a tenant's jobs run as sandboxes inside that shared workspace instead of each getting its own workspace or Kubernetes namespace. Decisions 2 and 4 record the allocation, and decisions 3, 5, 6 and 7 record the broker, credential, capacity and cleanup obligations it implies. Decision 4's installation-wide namespace in the driver's `shared` mode remains gated on the platform recording one of the outcomes in [Platform alignment and namespace decision](#platform-alignment-and-namespace-decision); the one-workspace-per-tenant and one-sandbox-per-job allocations are decided. Decision 8 makes the capability opt-in and contract-gated, and changes none of the allocations above.
 
 ### 1. Use the shared gateway for mandatory sandbox execution
 
@@ -137,6 +138,16 @@ Record gateway and component versions, tenant and job IDs, workspace names and I
 
 Data handling is part of the decision, not only an open question. A consuming service documents data classification, minimization, retention period, geographic and regulatory constraints, log-redaction rules and audit retention for sandbox inputs, outputs and logs before any provider is enabled. Platform telemetry must not capture credentials, raw prompts, datasets, source files or model outputs without that governance; where a benchmark requires such capture, the record names the authorized destination, retention and access policy. Provenance records identifiers, metadata digests and cleanup state, never secret values or evaluation payloads. Owner: Security and EvalHub; the qualified rules remain the question recorded in [Open questions](#open-questions).
 
+### 8. Keep sandbox execution off by default and enable it only against a published gateway contract
+
+Sandbox execution is a disabled capability, not a default. `EvalHub.spec.sandbox` is optional, and its absence or `enabled: false` leaves the instance with no sandbox execution path at all: the server renders no `sandbox` configuration, no gateway identity is requested, no workspace binding is recorded, and ordinary Job-backed evaluations behave exactly as they do without this feature. Existing `EvalHub` custom resources therefore keep their current behaviour across an upgrade, and an installation that never opts in never depends on the gateway.
+
+`enabled: true` is necessary but not sufficient. The operator resolves the platform-published contract named by `spec.sandbox.gatewayRef` and requires all of: `qualified: "true"`, a `workspaceMode` equal to the mode the operator and server support, a non-empty `sandboxNamespaceUID`, an `openShellVersion` and `agentSandboxVersion` on the supported matrix, and a resolvable instance identity ([Identity, admission and policy](#identity-admission-and-policy)). Until `SandboxGatewayReady`, `SandboxNamespaceAttested` and `SandboxIdentityReady` are all `True`, sandbox-required providers are rejected during onboarding and dispatch, `/api/v1/info` reports the reason, and no sandbox is created. The operator never infers a usable gateway from a reachable endpoint, a present ConfigMap or a populated object: an absent or malformed contract is a disabling condition, not a reason to use defaults.
+
+Only the platform writes `qualified`, and only the platform can withdraw it. Revoking the attestation, an upgrade that invalidates it, or a contract/version mismatch stops new dispatch and is visible in status without an operator restart. The operator never self-attests. No request-time input — collection, benchmark, evaluation request or tenant value — can enable, disable, broaden or retarget sandbox execution, which preserves decision 1's precedence. Local mode continues to reject mandatory-sandbox providers regardless of `spec.sandbox`, per decision 1.
+
+Enabling the capability moves no responsibility that decisions 2, 3 and 7 already assign: the platform provisioning service still creates workspaces, membership, templates and credential bindings, TrustyAI still reconciles `SandboxedEvaluation`, and the broker still performs sandbox operations. `spec.sandbox` decides only whether this instance may participate, and against which qualified contract. The bootstrap the administrator performs before the operator, the operator's reconciliation duties and the `SandboxedEvaluation` surface are recorded in [Gateway interaction contract](#gateway-interaction-contract-extension).
+
 ## Architecture and execution
 
 ![Architecture](../diagrams/openshell-evaluation-architecture.svg)
@@ -146,6 +157,214 @@ Data handling is part of the decision, not only an open question. A consuming se
 ![Execution sequence](../diagrams/openshell-evaluation-sequence.svg)
 
 [Sequence source](../diagrams/openshell-evaluation-sequence.mmd). The sequence covers one evaluation job inside its tenant workspace; the job's sandbox serves every sandbox-required benchmark in that job.
+
+The gateway interaction contract — the enablement gate, the administrator bootstrap performed before the EvalHub operator, the operator's reconciliation duties and the `SandboxedEvaluation` surface it drives — is recorded in [Gateway interaction contract](#gateway-interaction-contract-extension).
+
+## Gateway interaction contract (extension)
+
+This section records *how* the components in decisions 1–8 fit together. It adds no placement or namespace decision and moves no responsibility: the platform provisioning service creates tenant workspaces, membership, templates and credential bindings (decision 2); TrustyAI reconciles `SandboxedEvaluation` and owns finalizer-driven cancellation and result recovery (decisions 2 and 7); the `eval-sandbox-broker` performs sandbox operations with a job-bound capability (decision 3); and the platform lifecycle controller owns TTL expiry and abandoned-resource reclamation (decision 7). The EvalHub API server persists dispatch intent and observes the contract object; it never calls the gateway and never holds an OpenShell credential, so the workspace `user` identity that decision 3 assigns belongs to the broker rather than to the API process.
+
+### Bootstrap: the administrator, before the EvalHub operator
+
+The administrator (platform or cluster administrator, with `cluster-admin` used only for this bootstrap) completes the following before installing or upgrading the EvalHub/TrustyAI operator with the sandbox feature. The ordering matters: the operator treats an incomplete bootstrap as a disabling condition, so a half-installed gateway produces a visible `SandboxGatewayReady=False`, not a silently working or silently broken sandbox path.
+
+Cluster prerequisites:
+
+1. OpenShift 4.21 or later, and the Red Hat build of Agent Sandbox v0.9.0 installed in `openshift-operators` through the Software Catalog. The OpenShell Kubernetes driver depends on it.
+2. A default StorageClass that supports dynamic provisioning, recorded by name because it becomes part of the namespace attestation. The gateway database and the per-sandbox `/sandbox` volumes are PVC-backed.
+3. A qualified Kata `RuntimeClass` if, and only if, a provider declares `kata`. Kata is an installation option, not a default.
+
+Gateway installation and identity:
+
+4. Create the gateway namespace and bind the sandbox ServiceAccount's SCC **before** the chart installs. The current midstream path uses the privileged SCC because the supervisor creates its own network namespace, nftables rules and Landlock policy; treat that as a recorded, time-boxed exception with a named owner and a replacement plan, not as a production posture.
+5. Install the pinned OpenShell release with the gateway Route hostname passed to `pkiInitJob.serverDnsNames`. A mismatch between the certificate DNS names and the Route host is the documented cause of a disconnected gateway, so the operator must not be asked to work around it.
+6. Configure `workspace_mode: shared` and the single static `sandboxNamespace` that decision 4 requires. `workspace_mode` is gateway-wide: if the platform standardises the shared gateway on `managed` for other consumers, EvalHub needs its own `shared` gateway, and that is the second outcome in [Platform alignment and namespace decision](#platform-alignment-and-namespace-decision), not an operator option.
+7. Configure gateway authentication with a qualified OIDC issuer or token broker able to issue the required audience, a stable subject and the array-valued role claim. Identity is a hard dependency: there is no anonymous or shared-identity fallback.
+8. Provision the static sandbox namespace with the guardrails the attestation will check: SCC/PSA allocation and effective constraints, `ResourceQuota`, `LimitRange`, the approved storage class with `Delete` reclaim, encryption at rest and no snapshots, the driver's NetworkPolicy baseline with supervisor egress explicitly resolved, and an admission or equivalent boundary that restricts the gateway and Agent Sandbox controller to that namespace and its sandbox resources. Labels alone do not constrain a compromised cluster-wide credential.
+9. Publish the workspace baseline policy and the qualified sandbox template skeleton. Per-job policy additions must be a subset of what the server can enforce; if the supported release cannot enforce the effective profile, dispatch fails closed rather than falling back to a template reference alone.
+10. Distribute the gateway CA bundle to the namespace where EvalHub runs, so the operator can mount it and the broker can verify the gateway. Verification is always on: no `insecure_skip_verify`, no `--no-verify`, no disabled-TLS gateway on any path that enables providers.
+
+Contract publication:
+
+11. Publish a non-secret contract that the operator consumes, and set `qualified` only after items 1–10 pass. The contract names the endpoint, the workspace mode, the sandbox namespace and its immutable UID, versions, runtime class, storage class and CA bundle. It never contains a gateway administrator credential, and the platform is the only writer.
+12. Record the qualification outcome (versions, CNI, the CNI-specific egress result, Kata qualification, quota and storage class) with Security and the platform. The operator mirrors that outcome in status; it does not re-derive it.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openshell-gateway-info          # named by EvalHub.spec.sandbox.gatewayRef
+  namespace: openshift-operators        # platform-owned contract namespace
+data:
+  endpoint: https://openshell-openshell.apps.example.com:443
+  workspaceMode: shared
+  sandboxNamespace: openshell-sandboxes
+  sandboxNamespaceUID: 6f1c...          # immutable; revalidated on every reconcile
+  openShellVersion: v0.1.4
+  agentSandboxVersion: v0.9.0
+  runtimeClass: ""                      # "" = cluster default; "kata" = VM isolation
+  storageClass: gp3-csi
+  qualified: "true"                     # platform-only; absence or "false" disables dispatch
+  caBundle: |
+    -----BEGIN CERTIFICATE-----
+```
+
+The administrator does **not** create `EvalHub` or `SandboxedEvaluation` objects, tenants, providers, collections or sandboxes, does not grant EvalHub or the operator gateway `platform_admin` or cluster-admin, does not hand over the gateway database, KEK, JWT signing key or PKI, and does not share one identity across workspaces. Those boundaries are what make the operator safe to install.
+
+The midstream OpenShell-on-OpenShift path is documented as experimental, so the following deltas are required before any provider is enabled by default:
+
+| Midstream path (experimental) | Required for EvalHub |
+|---|---|
+| Gateway TLS verification disabled (`--no-verify`) | The gateway trusts the OpenShift service CA, the broker and operator verify it, and no configuration can switch verification off |
+| An edge or passthrough Route from the quick-start, or a hand-made `reencrypt` Route | A `reencrypt` Route whose destination CA is recorded in the contract and covered by the qualification |
+| A user's `oc whoami -t` as the model credential | A dedicated ServiceAccount token bound to a workspace-scoped provider, rotated by the platform, never a user OAuth token |
+| Ad-hoc `openshell policy update` from a workstation | A workspace baseline plus per-job subsets, both server-enforced and recorded in provenance |
+| No namespace attestation or quota | The attestation and quota described in items 8 and 11; an unqualified namespace blocks dispatch |
+| The privileged SCC as the permanent posture | A recorded exception with an owner, plus the platform's replacement plan for the sandbox ServiceAccount |
+
+### The operator's responsibilities
+
+The operator is the only EvalHub-aware component allowed to translate an `EvalHub` custom resource into gateway-facing intent. Its surface is additive and optional, and `sandbox` is disabled by default:
+
+```yaml
+apiVersion: trustyai.opendatahub.io/v1
+kind: EvalHub
+metadata:
+  name: evalhub
+spec:
+  tenancy: multi                        # existing: single | multi
+  sandbox:                              # NEW, optional; absent = disabled
+    enabled: false                      # explicit default; must be true for this instance to participate
+    gatewayRef:
+      name: openshell-gateway-info
+      namespace: openshift-operators
+    workspace:
+      namePrefix: evalhub-              # names are derived from the tenant, not from request input
+    profile: standard                   # standard | kata; never a request-time value
+    template: evalhub-evaluator-v1
+    limits:
+      maxConcurrentSandboxes: 20
+      maxSandboxesPerTenant: 10
+      maxSandboxCPU: "8"
+      maxSandboxMemory: 32Gi
+      maxSandboxStorage: 50Gi
+    providerBindings:                   # references only; secret values never appear in the CR
+      - name: rhoai
+        type: openai
+        credentialSecretRef:
+          name: tenant-model-credentials
+          key: OPENAI_API_KEY
+        config:
+          OPENAI_BASE_URL: https://model-route.example.com/v1
+status:
+  sandbox:
+    gatewayReachable: true
+    gatewayVersion: v0.1.4
+    workspaceMode: shared
+    namespaceQualified: true
+    workspaces:
+      - tenant: tenant-a
+        workspace: evalhub-tenant-a
+        ready: true
+    conditions:
+      - type: SandboxGatewayReady
+        status: "True"
+        reason: Qualified
+      - type: SandboxNamespaceAttested
+      - type: SandboxIdentityReady
+```
+
+The operator's duties are:
+
+1. **Consume and validate the contract; never invent one.** Read the ConfigMap named by `spec.sandbox.gatewayRef`, require `qualified: "true"`, a supported `workspaceMode`, a non-empty `sandboxNamespaceUID` and a supported version, and set `SandboxGatewayReady` and `SandboxNamespaceAttested` from the evidence. Absence, malformation or mismatch is a disabling condition with a distinct reason, never a reason to fall back to defaults or to a discovered endpoint.
+2. **Own the instance's gateway identity.** Create the ServiceAccount and the audience-scoped projected token (or the token-broker client Secret) that the broker and the API process use, mount the CA bundle, and keep the material in a Secret the operator manages rather than in the CR or the instance ConfigMap. The operator uses the platform record's least-privilege automation role for its own calls; EvalHub and its brokers receive only workspace `user` membership, never `platform_admin`.
+3. **Request tenant workspace provisioning; do not create workspaces.** Under `spec.tenancy: multi`, watch the namespaces already labelled `evalhub.trustyai.opendatahub.io/tenant` and, for each authorized tenant, ask the platform provisioning service for that tenant's workspace and membership. Derive a bounded DNS-1123-safe name from trusted identifiers and the immutable namespace UID rather than from request input, because shared mode embeds the workspace name in `{workspace}--{name}` resource names. Record the returned workspace name and UID and revalidate them on restart. Under `tenancy: single` the instance has one tenant and one workspace. The operator never deletes a workspace on uninstall or job teardown; tenant decommissioning is a platform operation (decision 7).
+4. **Reconcile `SandboxedEvaluation`.** Report phase and progress from broker observations, set conditions for each benchmark, keep the idempotency key stable across retries, run finalizer-driven cancellation and result recovery, revoke the job's broker capability on terminal events, and remain idempotent against the platform lifecycle controller that owns TTL expiry and abandoned-resource reclamation. A stalled cleanup raises a condition and a durable orphan record; it never becomes a success assertion.
+
+5. **Render the server's sandbox configuration.** Write the `sandbox:` block and its env vars into the instance ConfigMap the operator already produces, so the API process never discovers the gateway at runtime and cannot be pointed somewhere else by a caller. With `enabled: false` or absent, the block is omitted entirely and the rendered configuration is indistinguishable from a build without the feature.
+6. **Publish status and Events, not logs.** Set `SandboxGatewayReady`, `SandboxNamespaceAttested`, `SandboxIdentityReady` and a per-tenant `SandboxWorkspaceReady`, emit a `SandboxWorkspaceFailed` event with a reason, and keep secret material out of status. `/api/v1/info` and the API's own degraded reporting read this surface, so a reviewer can see *why* dispatch is off without the operator's logs.
+7. **Validate at admission.** Reject `sandbox.enabled: true` with no resolvable contract, `profile: kata` when the contract does not qualify Kata, limits above the published administrator ceiling, inline credential values in `providerBindings`, and `workspace` settings that contradict the contract's `workspaceMode`. Admission runs before persistence so a rejected CR never renders a half-configured instance.
+8. **Hold only the RBAC it needs.** `configmaps` read where the contract lives; `secrets` create/update in its own namespace; `serviceaccounts` and token projection; `namespaces` get/list/watch for the tenant label; `evalhubs/status` patch; and the `SandboxedEvaluation` resources it reconciles. It does not need `sandboxes`, namespace create/delete, cluster-wide Secret read, or any gateway administrator role.
+
+What the operator must not do, and why:
+
+| Must not | Reason |
+|---|---|
+| Create or delete sandboxes, execute commands, or stream logs | That is per-job data-plane work performed by the broker under a job-bound capability (decision 3); the operator has no job-scoped authority and duplicating it would create a second, weaker enforcement path |
+| Install or own the OpenShell gateway, Agent Sandbox operator or sandbox namespace | Platform scope: HA, PKI, database/KEK, version skew and the namespace attestation are platform properties (decisions 2 and 4) |
+| Create or delete tenant workspaces | Decision 2 assigns workspace provisioning to the platform provisioning service; the operator requests and records |
+| Hold gateway `platform_admin` | One compromised administrator credential would reach every consumer's workspaces |
+| Copy credentials into the CR, the instance ConfigMap or the Deployment environment | Defeats the credential-hiding objective of EH-0004 and moves secret values into objects with broader read access |
+| Delete a tenant workspace on uninstall by default | Other jobs and consumers may depend on it; decommissioning is an explicit platform operation (decision 7) |
+| Treat "gateway reachable" as "sandbox enabled" | Decision 8 requires the published contract and the three ready conditions, not endpoint reachability |
+
+### The `SandboxedEvaluation` interaction surface
+
+Decision 2 keeps `SandboxedEvaluation` as the asynchronous cross-repository contract, so it — not a direct gRPC client in the API server — is where EvalHub meets the gateway. The concrete group/version, conditions, idempotency key and compatibility policy are recorded in the implementation plan and the TrustyAI repository before a provider is enabled. The shape below is what this record requires of that contract: field names may change, the semantics may not.
+
+```yaml
+apiVersion: trustyai.opendatahub.io/v1alpha1   # placeholder; the group/version is recorded per decision 2
+kind: SandboxedEvaluation
+metadata:
+  name: <evaluation job id>
+  namespace: <control namespace or tenant namespace, per the recorded contract>
+spec:
+  idempotencyKey: <evaluation job GUID>        # stable across retries; drives the gateway request_id
+  tenant: tenant-a
+  workspace: evalhub-tenant-a
+  workspaceUID: 6f1c...
+  profile: standard                            # standard | kata
+  template: evalhub-evaluator-v1
+  image: registry.example.com/eval-hub@sha256:...   # immutable digest
+  command: [...]
+  env: [...]                                   # non-secret only
+  resources: {cpu: "4", memory: 8Gi, storage: 20Gi}
+  deadline: 2026-11-23T12:00:00Z
+  providerBindings: [rhoai]
+  policy: {profile: evalhub-restricted, addEndpoints: [...]}
+  relay: {url: "https://evalhub-relay.example.svc:8443", audience: evalhub-sandbox-relay}
+status:
+  phase: Pending | Provisioning | Running | Succeeded | Failed | Cancelled
+  sandboxName: evalhub-tenant-a--evalhub-abc123    # gateway-generated; {workspace}--{name}
+  sandboxUID: ...
+  benchmarks: [{id: toxicity, index: 0, state: Running}]
+  conditions: [...]
+  cleanup: {sandboxRemoved: true, pvcReclaimed: true}
+  observedGatewayVersion: v0.1.4
+```
+
+Every gateway call stays behind this object, so neither the API server nor a client request ever names a gateway endpoint, a workspace, a template or a policy directly:
+
+| Step | `SandboxedEvaluation` behaviour | Gateway operation | Performed by |
+|---|---|---|---|
+| Create | Spec accepted; `phase: Provisioning`; one object per evaluation job | `CreateSandbox` with `request_id` = idempotency key, one primary sandbox for every sandbox-required benchmark in the job | broker |
+| Start | `phase: Running`; main process is the template command | Sandbox main process; the workload and supervisor Pods are the driver's | broker, through the template |
+| Observe | Phase and per-benchmark conditions update | `GetSandbox` / `ListSandboxes`, workspace-scoped, with bounded backoff | broker, reported through the operator |
+| Logs | `StreamEvaluationLogs` keeps the existing byte cap and stream timeout | log/attach stream for the sandbox main process | broker |
+| Cancel | Deletion timestamp or an explicit cancel; finalizer runs | `DeleteSandbox` (cancel is not `stop`, and `stop` is not deletion) | broker, driven by the operator finalizer |
+| Teardown | `cleanup.sandboxRemoved` / `cleanup.pvcReclaimed` gate success | `DeleteSandbox(allow_missing=true)` and PVC/PV reclamation verification | broker plus the platform lifecycle controller |
+| Results | Benchmarks reach a terminal state after the export is accepted | relay calls to the EvalHub events API, MLflow and OCI with a job-bound credential | relay |
+| Credentials | Only binding names appear in the spec | Provider attachment resolution at approved endpoints inside the sandbox | gateway |
+
+### Enablement and degradation
+
+`spec.sandbox` is off by default, and every way it can be on without working has a named condition. The table is normative for the status names; the user-visible conditions in the right-hand column use the plan's [Framework compatibility](../design/openshell-evaluation-plan.md#framework-compatibility) taxonomy.
+
+| State | Operator status | API and server behaviour |
+|---|---|---|
+| `spec.sandbox` absent or `enabled: false` | No sandbox conditions are set | No `sandbox:` configuration is rendered; sandbox-required providers are rejected during onboarding as unsupported on this instance; ordinary Job-backed evaluations are unchanged |
+| `enabled: true`, contract ConfigMap missing or unreadable | `SandboxGatewayReady=False`, reason `ContractNotFound` | Sandbox-required dispatch rejected with `SandboxUnavailable`; `/api/v1/info` reports the reason; ordinary Jobs continue |
+| Contract present, `qualified` not `"true"` | `SandboxNamespaceAttested=False`, reason `AttestationNotQualified` | Same as above; the operator does not substitute its own assessment |
+| `workspaceMode` differs from the supported mode | `SandboxGatewayReady=False`, reason `WorkspaceModeMismatch` | Same as above; this is also the signal that the platform selected a different namespace-model outcome |
+| `openShellVersion` or `agentSandboxVersion` outside the supported matrix | `SandboxGatewayReady=False`, reason `UnsupportedVersion` | Same as above, until the support matrix or the release changes |
+| Identity cannot be issued or resolved | `SandboxIdentityReady=False`, reason `IdentityUnavailable` | Same as above; no shared-identity fallback and no anonymous dispatch |
+| Tenant workspace not yet ready | `SandboxWorkspaceReady{tenant}=False` | Degraded condition scoped to that tenant; other tenants and ordinary Jobs continue, and the evaluation is rejected rather than queued indefinitely |
+| Attestation withdrawn or invalidated by an upgrade | Conditions flip to `False` without an operator restart | New dispatch stops immediately; in-flight sandboxes stay visible and are reconciled to a terminal state |
+| Gateway or issuer outage at dispatch | Conditions unchanged until the next reconcile | The affected evaluation fails with `SandboxUnavailable`; ordinary evaluations continue; no unsandboxed fallback |
+| Teardown blocked by an export or a retained storage decision | Cleanup condition remains `False` with a durable orphan record | Deletion is not reported as successful and protected storage is retained until an authorized disposition is recorded |
+| Local mode (`--local`) with a mandatory-sandbox provider | Not applicable; no gateway contract is consumed | The provider is rejected at validation regardless of `spec.sandbox`, per decision 1 |
+
+A provider is enabled only while every row that applies to it is in its ready state. Enabling a provider is never a way to work around a failed gate.
 
 ## Alternatives considered
 
@@ -159,6 +378,7 @@ Data handling is part of the decision, not only an open question. A consuming se
 - **Defer sandbox-required providers until the platform gateway is ready:** keeps the existing Job path and avoids a premature dependency, but leaves the strategy's mandatory-sandbox requirements unmet and delays provider coverage. Rejected as the long-term path; it is the safe fallback if the platform amendment or Phase 0 gates fail.
 - **One static namespace per consumer or trust domain:** uses shared mode but gives each consumer or trust domain its own qualified namespace. It preserves a service-level boundary without per-job namespace churn, but requires a separate gateway per namespace because one `shared`-mode gateway renders into one static namespace. Not selected for this record; it is the preferred alternative if platform/Security rejects an installation-wide shared namespace but does not require per-`SandboxedEvaluation` namespaces.
 - **Dedicated EvalHub gateway:** gives EvalHub a distinct compromise and administrative boundary, but duplicates packaging, state, upgrades, credentials, observability and security qualification. Rejected for the default path under PR 174; use only if the platform determines EvalHub's threat model or release lifecycle cannot use the shared gateway.
+- **A direct gRPC gateway client inside the EvalHub API server:** shortens the path to `CreateSandbox` and avoids a custom resource, but hands the API process a workspace credential, makes dispatch state non-durable across restarts and contradicts decision 2's asynchronous contract. Rejected; the credential stays with the broker and the durable intent stays in `SandboxedEvaluation`.
 
 ## Open questions
 
@@ -170,6 +390,8 @@ Each question names an owner and what it blocks.
 - Which namespace-model outcome resolves the PR 174 divergence: amend PR 174 to `shared`, give EvalHub its own `shared` gateway, or supersede this record with a managed- or operator-mode variant at per-job or per-tenant granularity? Owner: OpenShift AI platform and Security. Blocking for decision 4 and every sandboxed provider. See [Platform alignment and namespace decision](#platform-alignment-and-namespace-decision).
 - How are tenant workspaces provisioned, named and decommissioned, and who reconciles membership when a tenant or an EvalHub instance is removed? Owner: platform and EvalHub. Blocking for tenant onboarding and removal.
 - Which platform operator owns the gateway and sandbox lifecycle controller, and what are the HA, backup/restore, version-skew and cleanup SLOs? Owner: platform. Blocking for readiness.
+- Which component is the platform provisioning service for EvalHub tenants, and does the operator act as its client through a documented request resource, or does the service watch tenant namespaces and the `EvalHub` resource independently? Owner: platform and EvalHub. Blocking for the operator's workspace duties and for tenant onboarding.
+- Where is the gateway contract published, who may write it, and how is a change to it authorised and audited? Owner: platform and Security. Blocking for decision 8's enablement gate.
 - How are the gateway database, KEK, JWT signing key, PKI and stable gateway ID preserved across restore or clone, and how are the workspace-to-tenant mappings revalidated? Owner: platform. Blocking for recovery.
 
 ### Identity, admission and policy
@@ -232,6 +454,17 @@ Approval of this design does not assert implementation readiness. A provider is 
 - [ ] Each row of PR 174 head's "Required OpenShell changes" table that applies to both its `managed` and `operator` modes (enforceable sandbox profiles, workload identity and scoped automation, recoverable workspace lifecycle) is mapped to the supported release, and every unimplemented row carries a recorded upstream change and owner. That table does not assess `shared` mode, so shared-mode qualification rests on this record's namespace, isolation and recovery gates (owner: OpenShell integration and platform).
 - [ ] The supported OpenShell, Agent Sandbox, OpenShift, CNI and Kata versions and the upgrade/rollback order are recorded, and upgrade/rollback is exercised before a provider is enabled (owner: platform and OpenShell integration).
 
+### Enablement and operator contract
+
+- [ ] `spec.sandbox` absent or `enabled: false` renders a configuration indistinguishable from a build without the feature, and existing `EvalHub` custom resources and Job-backed evaluations are unchanged across an upgrade (owner: EvalHub and QE).
+- [ ] Every disabling state in [Enablement and degradation](#enablement-and-degradation) is exercised and produces its named condition and user-visible error, with no default endpoint, CA, workspace, template or version assumed (owner: EvalHub and platform).
+- [ ] Attestation revocation, and an upgrade that invalidates the attestation, stop new dispatch without an operator restart and are visible in status (owner: platform and Security).
+- [ ] The platform-published contract is the only source of endpoint, workspace mode, namespace UID, versions, runtime class and CA, and a contract that fails any check cannot be overridden by CR fields, request input or environment variables (owner: EvalHub and Security).
+- [ ] The operator is verified to hold no gateway `platform_admin` credential, no namespace create/delete and no Secret read beyond its delegated references, by RBAC review and a negative test (owner: EvalHub and Security).
+- [ ] The `SandboxedEvaluation` group/version, status conditions, idempotency key and compatibility policy are recorded in both repositories and exercised end to end before a provider is enabled (owner: EvalHub and TrustyAI Service Operator).
+- [ ] The operator finalizer and the platform lifecycle controller are exercised together for cancel, deadline, orphan and blocked-export cases without double deletion or a lost cleanup record (owner: EvalHub and platform).
+- [ ] Tenant workspace request, record and verify survive an operator restart with immutable-UID revalidation, and uninstall leaves the workspace intact (owner: EvalHub and platform).
+
 ### Identity, admission and capacity
 
 - [ ] A qualified OIDC issuer or token broker issues the required audience, stable subject and array-valued role claim; missing, invalid or expired identity fails closed with no shared service identity (owner: platform identity).
@@ -281,3 +514,6 @@ The implementation plan names proposed phase owners and cleanup/qualification ta
 - [EH-0002 multi-tenancy and authz](https://github.com/opendatahub-io/architecture-decision-records/blob/main/architecture-decision-records/eval-hub/ODH-ADR-EH-0002-multi-tenancy-and-authz.md).
 - [EH-0004 eval sidecar credential injection](https://github.com/opendatahub-io/architecture-decision-records/blob/main/architecture-decision-records/eval-hub/ODH-ADR-EH-0004-eval-sidecar-creds-injection.md).
 - [Implementation plan](../design/openshell-evaluation-plan.md).
+- [OpenShell on OpenShift guides and demos](https://github.com/opendatahub-io/agent-ops), used for the bootstrap prerequisites, the Route/PKI requirement and the hardening deltas. The repository documents the OpenShift install path as experimental.
+- [OpenShell gateway management](https://docs.nvidia.com/openshell/how-it-works/gateways/overview.md), [workspaces and role model](https://docs.nvidia.com/openshell/how-it-works/workspaces.md) and [sandbox lifecycle](https://docs.nvidia.com/openshell/how-it-works/sandboxes/overview.md).
+- [EvalHub custom resource definition](https://github.com/opendatahub-io/trustyai-service-operator/blob/main/config/components/evalhub/crd/trustyai.opendatahub.io_evalhubs.yaml) in the TrustyAI Service Operator, including `spec.tenancy` and the tenant namespace label.

@@ -8,7 +8,7 @@ Use the platform-managed internal OpenShell gateway proposed in [architecture PR
 
 This replaces the earlier independent namespace-and-Kubernetes-proxy control plane. It preserves the isolation, resource, lifecycle, connectivity and provenance requirements of [RHAISTRAT-2289](https://redhat.atlassian.net/browse/RHAISTRAT-2289), with the requirement changes below submitted for review. It does not claim that OpenShell already implements every required platform control.
 
-The decision is recorded in [ADR 0002](../adr/0002-evaluation-sandboxes-through-internal-openshell-gateway.md). PR 174 was open when read, so it is not an accepted platform contract.
+The decision is recorded in [ADR 0002](../adr/0002-evaluation-sandboxes-through-internal-openshell-gateway.md). PR 174 was open when read, so it is not an accepted platform contract. The enablement gate and the component contract are recorded in ADR 0002's [Gateway interaction contract](../adr/0002-evaluation-sandboxes-through-internal-openshell-gateway.md#gateway-interaction-contract-extension): sandbox execution stays off unless `EvalHub.spec.sandbox` enables it and the operator observes a qualified, platform-published gateway contract, and this plan's phases do not change that default.
 
 ## What changes from the previous plan
 
