@@ -53,10 +53,6 @@ on:
 permissions:  # added using https://github.com/step-security/secure-repo
   contents: read
 
-concurrency:
-  group: regenerate-api-docs-${{ inputs.pr || github.event.issue.number }}
-  cancel-in-progress: true
-
 jobs:
   regenerate-docs:
     if: >-
@@ -71,6 +67,19 @@ jobs:
     permissions:
       contents: read
       pull-requests: write  # reply on the pull request when triggered by a comment
+    env:
+      # gh resolves the repository from GH_REPO: actions/checkout has not run
+      # yet when "Resolve the pull request" executes, so the workspace has no
+      # git remote to infer it from, and the failure report has to work even
+      # when the run stops before the checkout.
+      GH_REPO: ${{ github.repository }}
+    # Serialise runs per pull request for authorised requests only: this job's
+    # `if` is evaluated before job-level concurrency, so an unrelated comment
+    # (every issue_comment triggers this workflow, not just /regen-docs) cannot
+    # cancel an in-flight regeneration.
+    concurrency:
+      group: regenerate-api-docs-${{ inputs.pr || github.event.issue.number }}
+      cancel-in-progress: true
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
