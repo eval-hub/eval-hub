@@ -1,0 +1,416 @@
+# Regenerate the bundled API documentation on a pull request branch.
+#
+# The "Build and verify the API documentation" step in .github/workflows/ci.yml
+# fails whenever `make documentation` produces a diff. That is what happens on a
+# pure @redocly/cli bump: `redocly build-docs` inlines the Redoc bundle, its
+# styled-components CSS and the CDN URL of the Redoc version it was built with,
+# so 2.79.0 -> 2.82.0 rewrote ~630 lines in docs/index.html,
+# docs/index-public.html and docs/index-private.html (PR #1313; the manual
+# regeneration is PR #1319). The OpenAPI bundles (docs/openapi*.yaml/json)
+# normally do not change on a redocly bump.
+#
+# Dependabot cannot run commands itself (`.github/dependabot.yml` has no
+# post-update hook), so this workflow gives a maintainer a one-click (or
+# one-comment) way to run `make documentation` for a pull request and push the
+# regenerated files back onto its branch.
+#
+# Two triggers:
+#   * Comment `/regen-docs` on the pull request. GitHub always runs
+#     issue_comment workflows from the default branch, so the pull request can
+#     neither add nor modify the trigger and cannot run unreviewed workflow
+#     code. Only OWNER, MEMBER and COLLABORATOR comments are honoured, and the
+#     workflow replies with the outcome on the pull request.
+#   * Actions -> "Regenerate API documentation" -> Run workflow. Select the
+#     **default branch** in "Use workflow from" (not the pull request branch)
+#     and enter the pull request number (`pr` input). `workflow_dispatch` can be
+#     dispatched against any branch or tag, and that ref's copy of this file is
+#     what executes, so the guard below rejects every dispatch that is not on
+#     the default branch. Because that guard is itself editable on the
+#     dispatched ref, the App credentials are additionally kept in the
+#     `docs-sync` environment, whose deployment branch policy must be limited
+#     to the default branch (see the push job).
+#
+# The push uses a GitHub App installation token instead of GITHUB_TOKEN: a
+# GITHUB_TOKEN push creates no new workflow runs, and the "main" ruleset
+# requires quality-checks, docker-build-check, dependency-review, CodeQL and
+# gosec on the head commit, so the pull request would wait forever on
+# unreported checks and could never be merged. actions/create-github-app-token
+# mints the token from the DOCS_SYNC_APP_CLIENT_ID and
+# DOCS_SYNC_APP_PRIVATE_KEY environment secrets. The App is installed on this
+# repository with "Contents: read and write" only, the minted token is further
+# limited to contents: write, and it expires with the job, so there is no
+# long-lived credential to rotate.
+#
+# Security note: generation runs the pull request branch's `npm ci` and `make
+# documentation` in a job with read-only permissions and no secrets, and only
+# an allowlisted set of generated documentation files is handed to a separate
+# push job that never runs branch code. A mutated Makefile or docs script
+# therefore cannot get other repository changes committed. Pull requests from
+# forks are rejected by the guard below (this repository cannot push to them).
+name: Regenerate API documentation
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: 'Pull request number to regenerate the API documentation on (run the workflow from the default branch)'
+        required: true
+        type: string
+  issue_comment:
+    types: [created]
+
+permissions:  # added using https://github.com/step-security/secure-repo
+  contents: read
+
+jobs:
+  regenerate-docs:
+    # issue_comment runs always execute the workflow file from the default
+    # branch, but a manual dispatch can target any branch and would execute that
+    # ref's copy of this file, so require the default branch explicitly. The
+    # `docs-sync` environment on the push job restricts the App credentials
+    # independently of this guard.
+    if: >-
+      github.repository == 'eval-hub/eval-hub' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request != null &&
+        startsWith(github.event.comment.body, '/regen-docs') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Read-only: the pull request branch's npm/make code runs in this job, so it
+    # gets no secrets and no write permission. `pull-requests: read` is for the
+    # `gh pr view` lookups below; the comment is posted by the report job.
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      # gh resolves the repository from GH_REPO: actions/checkout has not run
+      # yet when "Resolve the pull request" executes, so the workspace has no
+      # git remote to infer it from.
+      GH_REPO: ${{ github.repository }}
+    # Serialise runs per pull request for authorised requests only: this job's
+    # `if` is evaluated before job-level concurrency, so an unrelated comment
+    # (every issue_comment triggers this workflow, not just /regen-docs) cannot
+    # cancel an in-flight regeneration.
+    concurrency:
+      group: regenerate-api-docs-${{ inputs.pr || github.event.issue.number }}
+      cancel-in-progress: true
+    outputs:
+      number: ${{ steps.pr.outputs.number }}
+      head_ref: ${{ steps.pr.outputs.head_ref }}
+      sha: ${{ steps.docs.outputs.sha }}
+      changed: ${{ steps.docs.outputs.changed }}
+      redocly_version: ${{ steps.docs.outputs.redocly_version }}
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
+        with:
+          egress-policy: audit
+
+      - name: Resolve the pull request
+        id: pr
+        env:
+          # GITHUB_TOKEN suffices for the read-only lookups; the App token is
+          # only minted in the push job.
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr || github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          case "${PR_NUMBER}" in
+            '' | *[!0-9]*)
+              echo "::error::'${PR_NUMBER}' is not a pull request number."
+              exit 1
+              ;;
+          esac
+          if ! pr_json="$(gh pr view "${PR_NUMBER}" \
+            --json state,isCrossRepository,headRefName \
+            --jq '[.state, .isCrossRepository, .headRefName] | @tsv')"; then
+            echo "::error::Could not read pull request #${PR_NUMBER}."
+            exit 1
+          fi
+          IFS=$'\t' read -r state cross head_ref <<<"${pr_json}"
+          if [ "${state}" != "OPEN" ]; then
+            echo "::error::Pull request #${PR_NUMBER} is ${state}; only open pull requests can be updated."
+            exit 1
+          fi
+          if [ "${cross}" != "false" ]; then
+            echo "::error::Pull request #${PR_NUMBER} is from a fork; regenerate the documentation in the fork instead."
+            exit 1
+          fi
+          case "${head_ref}" in
+            main|develop)
+              echo "::error::Refusing to push the regenerated documentation to ${head_ref}."
+              exit 1
+              ;;
+          esac
+          echo "number=${PR_NUMBER}" >> "${GITHUB_OUTPUT}"
+          echo "head_ref=${head_ref}" >> "${GITHUB_OUTPUT}"
+          echo "Resolved pull request #${PR_NUMBER} (branch ${head_ref})."
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.pr.outputs.head_ref }}
+          persist-credentials: false
+
+      - name: Regenerate the API documentation
+        run: |
+          npm ci
+          make documentation
+
+      - name: Validate and stage the regenerated documentation
+        id: docs
+        env:
+          HEAD_REF: ${{ steps.pr.outputs.head_ref }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          DOCS_FILES=(
+            docs/index.html
+            docs/index-public.html
+            docs/index-private.html
+            docs/openapi.yaml
+            docs/openapi.json
+            docs/openapi-internal.yaml
+            docs/openapi-internal.json
+          )
+          echo "sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+
+          # `npm ci` and `make documentation` execute branch code. This job has
+          # no secrets and read-only permissions, and nothing but the allowlisted
+          # files may leave it for the push job, so fail loudly if generation
+          # touched anything else (for example a Makefile edit that rewrites
+          # .github/workflows). `git diff HEAD` includes staged changes as well as
+          # worktree changes, in case the branch script ran `git add` itself.
+          while IFS= read -r changed_file; do
+            [ -n "${changed_file}" ] || continue
+            case "${changed_file}" in
+              docs/index.html | docs/index-public.html | docs/index-private.html | docs/openapi.yaml | docs/openapi.json | docs/openapi-internal.yaml | docs/openapi-internal.json) ;;
+              *)
+                echo "::error::'${changed_file}' changed but is not part of the generated documentation."
+                exit 1
+                ;;
+            esac
+          done < <({ git diff --name-only HEAD; git ls-files --others --exclude-standard; } | sort -u)
+
+          # Stage the allowlisted files before the no-change check: `git diff`
+          # ignores untracked files, so a regenerated documentation file that
+          # the branch does not track would otherwise be reported as "already
+          # up to date" and left uncommitted. Comparing the index with HEAD
+          # covers modifications, additions and deletions alike.
+          git add -- "${DOCS_FILES[@]}"
+          if git diff --cached --quiet -- "${DOCS_FILES[@]}"; then
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+            echo "API documentation is already up to date; nothing to commit."
+            {
+              echo "### API documentation"
+              echo ""
+              echo "Pull request #${PR_NUMBER} (${HEAD_REF}) is already up to date."
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+
+          echo "changed=true" >> "${GITHUB_OUTPUT}"
+          redocly_version="$(node -p 'require("./package.json").devDependencies["@redocly/cli"]')"
+          echo "redocly_version=${redocly_version}" >> "${GITHUB_OUTPUT}"
+
+          # Copy exactly the allowlisted files into a staging directory: this is
+          # the only thing the push job accepts from this job.
+          mkdir -p generated-docs
+          for file in "${DOCS_FILES[@]}"; do
+            cp -- "${file}" "generated-docs/$(basename "${file}")"
+          done
+
+      - name: Upload the regenerated documentation
+        if: steps.docs.outputs.changed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: regenerated-api-docs
+          path: generated-docs
+          if-no-files-found: error
+          # A re-run of this workflow reuses the run ID, so the artifact from the
+          # previous attempt has the same name.
+          overwrite: true
+          retention-days: 1
+
+  push-docs:
+    name: Push the regenerated documentation
+    needs: regenerate-docs
+    if: needs.regenerate-docs.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Independent of the workflow guard: configure (repository settings ->
+    # Environments) an environment named `docs-sync` whose "Deployment branches
+    # and tags" policy allows only the default branch, and store
+    # DOCS_SYNC_APP_CLIENT_ID and DOCS_SYNC_APP_PRIVATE_KEY as environment
+    # secrets there. A run dispatched from another ref then cannot read the App
+    # credentials even if that ref edits the guard in its copy of this file.
+    # Do not also configure repository-level secrets with these names: those
+    # would be readable from every ref.
+    environment:
+      name: docs-sync
+    permissions:
+      contents: read
+    # Same group as the generation job: a newer request cancels the push that
+    # belongs to the superseded request instead of letting it land late.
+    concurrency:
+      group: regenerate-api-docs-${{ inputs.pr || github.event.issue.number }}
+      cancel-in-progress: true
+    outputs:
+      result: ${{ steps.push.outputs.result }}
+      sha: ${{ steps.push.outputs.sha }}
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
+        with:
+          egress-policy: audit
+
+      # Checkout runs no branch code; the regeneration already happened in the
+      # generation job. It only provides the branch to commit onto, with a fresh
+      # Git configuration on a fresh runner.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.regenerate-docs.outputs.head_ref }}
+          persist-credentials: false
+
+      - name: Download the regenerated documentation
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: regenerated-api-docs
+          path: generated-docs
+
+      - name: Mint a GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          # Client ID (not the deprecated app-id input) and private key from the
+          # `docs-sync` environment, whose App has Contents: read and write only.
+          client-id: ${{ secrets.DOCS_SYNC_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DOCS_SYNC_APP_PRIVATE_KEY }}
+          # Scope the installation token to this repository even if the App is
+          # installed elsewhere, and narrow it to contents: write.
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+
+      - name: Commit and push the regenerated documentation
+        id: push
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          EXPECTED_SHA: ${{ needs.regenerate-docs.outputs.sha }}
+          HEAD_REF: ${{ needs.regenerate-docs.outputs.head_ref }}
+          PR_NUMBER: ${{ needs.regenerate-docs.outputs.number }}
+          REDOCLY_VERSION: ${{ needs.regenerate-docs.outputs.redocly_version }}
+        run: |
+          set -euo pipefail
+          DOCS_FILES=(
+            docs/index.html
+            docs/index-public.html
+            docs/index-private.html
+            docs/openapi.yaml
+            docs/openapi.json
+            docs/openapi-internal.yaml
+            docs/openapi-internal.json
+          )
+          # The branch could have moved while the generation job ran; the
+          # generated files would then be stale. Fail instead of committing them
+          # on top of newer branch state.
+          actual_sha="$(git rev-parse HEAD)"
+          if [ "${actual_sha}" != "${EXPECTED_SHA}" ]; then
+            echo "::error::Pull request branch moved from ${EXPECTED_SHA} to ${actual_sha} during generation; re-run the workflow."
+            exit 1
+          fi
+
+          for file in "${DOCS_FILES[@]}"; do
+            # The branch is untrusted input: remove the destination first so a
+            # committed symlink (such as docs/index.html -> .github/workflows/ci.yml)
+            # cannot redirect the copy outside docs/.
+            rm -f -- "${file}"
+            cp -- "generated-docs/$(basename "${file}")" "${file}"
+          done
+          git add -- "${DOCS_FILES[@]}"
+          if git diff --cached --quiet -- "${DOCS_FILES[@]}"; then
+            echo "result=noop" >> "${GITHUB_OUTPUT}"
+            echo "API documentation is already up to date; nothing to commit."
+            {
+              echo "### API documentation"
+              echo ""
+              echo "Pull request #${PR_NUMBER} (${HEAD_REF}) is already up to date."
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -s \
+            -m "chore(docs): regenerate API documentation" \
+            -m "Generated with 'make documentation' for pull request #${PR_NUMBER}, requested by @${{ github.actor }}. Bundled @redocly/cli: ${REDOCLY_VERSION}."
+          git push \
+            "https://x-access-token:${APP_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:${HEAD_REF}"
+
+          sha="$(git rev-parse --short HEAD)"
+          echo "result=pushed" >> "${GITHUB_OUTPUT}"
+          echo "sha=${sha}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "### API documentation"
+            echo ""
+            echo "Pushed ${sha} to pull request #${PR_NUMBER} (${HEAD_REF}); CI re-runs on the new commit."
+            git show --stat --oneline HEAD
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  report:
+    name: Report the result on the pull request
+    needs: [regenerate-docs, push-docs]
+    # Only for a `/regen-docs` comment on this repository: `skipped` here means
+    # the guard rejected the event (including unrelated comments), and a
+    # workflow_dispatch run already reports its result in the Actions UI.
+    if: >-
+      always() &&
+      github.repository == 'eval-hub/eval-hub' &&
+      github.event_name == 'issue_comment' &&
+      needs.regenerate-docs.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      # gh resolves the repository from GH_REPO: this job does not check out the
+      # repository, so the workspace has no git remote to infer it from.
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
+        with:
+          egress-policy: audit
+
+      - name: Report the result on the pull request
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.regenerate-docs.outputs.number || github.event.issue.number }}
+          REGENERATE_RESULT: ${{ needs.regenerate-docs.result }}
+          PUSH_RESULT: ${{ needs.push-docs.result }}
+          PUSH_OUTCOME: ${{ needs.push-docs.outputs.result }}
+          NEW_SHA: ${{ needs.push-docs.outputs.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ "${REGENERATE_RESULT}" = "cancelled" ] || [ "${PUSH_RESULT}" = "cancelled" ]; then
+            echo "The run was superseded by a newer request; not commenting."
+            exit 0
+          fi
+          if [ "${REGENERATE_RESULT}" != "success" ]; then
+            body="Regenerating the API documentation failed; see ${RUN_URL}."
+          elif [ "${PUSH_RESULT}" = "failure" ]; then
+            body="Pushing the regenerated API documentation failed; see ${RUN_URL}."
+          elif [ "${PUSH_OUTCOME}" = "pushed" ]; then
+            body="Regenerated the API documentation with 'make documentation' and pushed ${NEW_SHA} to this branch. CI re-runs on the new commit."
+          else
+            body="The API documentation is already up to date; nothing to commit."
+          fi
+          gh pr comment "${PR_NUMBER}" --body "${body}"

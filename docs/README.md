@@ -78,6 +78,14 @@ This target:
 
 Run `make generate-public-docs` after editing **src/openapi.yaml** so that **openapi.yaml**, **openapi-internal.yaml**, **index-public.html**, and **index-private.html** stay in sync. The server serves **openapi.yaml** at `/openapi.yaml` and **index.html** at `/docs` (Swagger UI).
 
+## Regenerating the docs from a pull request (maintainers)
+
+`ci.yml` fails when `make documentation` produces a diff, which is what happens on a `@redocly/cli` bump: `redocly build-docs` inlines the Redoc bundle and its CSS, so every redocly release that moves the bundled Redoc version rewrites **index.html**, **index-public.html** and **index-private.html** (2.79.0 → 2.82.0 rewrote ~630 lines in each). Dependabot cannot run commands, so a pure version bump always needs this step.
+
+Maintainers do not have to check the branch out locally. Either run the **Regenerate API documentation** workflow ([regenerate-api-docs.yml](../.github/workflows/regenerate-api-docs.yml)) from the **Actions** tab — select the repository's **default branch** in "Use workflow from" (not the pull request branch) and enter the pull request number — or comment `/regen-docs` on the pull request (owner, member and collaborator comments only). A `workflow_dispatch` run started from any other branch would execute that branch's copy of the workflow, so the workflow refuses it. Generation runs `npm ci && make documentation` in a read-only job without secrets and passes only the allowlisted generated documentation to a separate push job, which pushes it back to the pull request branch so CI re-runs on the new commit; with the comment trigger it also replies with the outcome on the pull request.
+
+It needs a GitHub App installed on this repository with **Contents: read and write** and no other permissions. Create an environment named `docs-sync` whose **deployment branch policy is limited to the default branch**, and store the App's Client ID and a private key generated for the App as **environment secrets** of that environment: `DOCS_SYNC_APP_CLIENT_ID` and `DOCS_SYNC_APP_PRIVATE_KEY`. The environment (and its branch policy) is the control that keeps the credentials unreadable from a `workflow_dispatch` run started on another branch, independently of the workflow file's own guard. Repository secrets are visible to runs from every branch, so do not configure these two names at repository level. The workflow mints a short-lived installation token with `actions/create-github-app-token` because a push authenticated with `GITHUB_TOKEN` starts no new workflow runs, so the required checks on the pull request would never be reported.
+
 ## Viewing docs locally (avoiding CORS)
 
 If you open **index.html** directly in the browser (`file:///path/to/docs/index.html`), the page tries to fetch `openapi.yaml` via a relative URL. Browsers treat that as a cross-origin request from the `file://` origin and block it (CORS / same-origin policy), so Swagger UI shows no spec.
