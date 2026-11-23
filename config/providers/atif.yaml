@@ -28,7 +28,7 @@ agent:
   hints:
     - "trajectory_path must hold an ATIF export; rerun the agent elsewhere and score the traces here"
     - "A top-level manifest.jsonl is authoritative and fixes evaluation order; without one, recursive discovery applies"
-    - "Set experiment_name on the job or no MLflow artifacts are kept"
+    - "The job fails without experiment_name: the adapter requires MLflow artifact persistence before it loads trajectories"
   result_interpretation:
     - "atif_overall_score is present only when at least one trajectory scored; an unscored run reports its counts instead"
     - "atif_complete is false when any input was unscored, invalid, or withheld for a digest mismatch"
