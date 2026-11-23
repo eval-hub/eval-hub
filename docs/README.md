@@ -78,6 +78,14 @@ This target:
 
 Run `make generate-public-docs` after editing **src/openapi.yaml** so that **openapi.yaml**, **openapi-internal.yaml**, **index-public.html**, and **index-private.html** stay in sync. The server serves **openapi.yaml** at `/openapi.yaml` and **index.html** at `/docs` (Swagger UI).
 
+## Regenerating the docs from a pull request (maintainers)
+
+`ci.yml` fails when `make documentation` produces a diff, which is what happens on a `@redocly/cli` bump: `redocly build-docs` inlines the Redoc bundle and its CSS, so every redocly release that moves the bundled Redoc version rewrites **index.html**, **index-public.html** and **index-private.html** (2.79.0 → 2.82.0 rewrote ~630 lines in each). Dependabot cannot run commands, so a pure version bump always needs this step.
+
+Maintainers do not have to check the branch out locally. Either run the **Regenerate API documentation** workflow ([regenerate-api-docs.yml](../.github/workflows/regenerate-api-docs.yml)) from the **Actions** tab with the pull request number, or comment `/regen-docs` on the pull request (owner, member and collaborator comments only). The workflow runs `npm ci && make documentation` on the pull request branch and pushes the regenerated files back to it, so CI re-runs on the new commit; with the comment trigger it also replies with the outcome on the pull request.
+
+It needs two repository secrets for a GitHub App installed on this repository with **Contents: read and write** and no other permissions: `DOCS_SYNC_APP_CLIENT_ID` (the App's Client ID) and `DOCS_SYNC_APP_PRIVATE_KEY` (a private key generated for the App). The workflow mints a short-lived installation token with `actions/create-github-app-token` because a push authenticated with `GITHUB_TOKEN` starts no new workflow runs, so the required checks on the pull request would never be reported.
+
 ## Viewing docs locally (avoiding CORS)
 
 If you open **index.html** directly in the browser (`file:///path/to/docs/index.html`), the page tries to fetch `openapi.yaml` via a relative URL. Browsers treat that as a cross-origin request from the `file://` origin and block it (CORS / same-origin policy), so Swagger UI shows no spec.
