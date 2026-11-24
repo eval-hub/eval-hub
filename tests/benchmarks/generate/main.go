@@ -146,8 +146,16 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 			f["notes"] = "Requires KFP_ENDPOINT, KFP_NAMESPACE, and KFP_S3_SECRET_NAME for a working Data Science Pipelines deployment and Data Connection Secret. Configure KFP authentication through the model auth Secret. One example per probe; broad groups still invoke multiple probes."
 		}
 		if benchmark == "intents" {
-			p["intents_models"] = map[string]any{"judge": map[string]any{"name": "${JUDGE_MODEL_NAME}", "url": "${JUDGE_BASE_URL}"}}
-			p["sdg_model"], p["sdg_api_base"] = "openai/${MODEL_NAME}", "${MODEL_URL}"
+			judge := map[string]any{"name": "${JUDGE_MODEL_NAME}"}
+			p["intents_models"] = map[string]any{"judge": judge}
+			p["sdg_model"] = "openai/${MODEL_NAME}"
+			if provider == "garak-kfp" {
+				judge["url"] = "${JUDGE_BASE_URL}"
+				p["sdg_api_base"] = "${MODEL_URL}"
+			} else {
+				p["sdg_max_concurrency"] = 1
+				f["notes"] = "Configure sdg_url/sdg_api-key and judge_url/judge_api-key in MODEL_AUTH_SECRET_REF. One example per probe; SDG generates prompts serially."
+			}
 		}
 	case "guidellm":
 		p["num_examples"], p["max_requests"], p["max_seconds"] = 1, 1, 10
