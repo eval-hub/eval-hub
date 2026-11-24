@@ -56,8 +56,21 @@ func TestJudgeProfiles(t *testing.T) {
 		}
 		p := f["parameters"].(map[string]any)
 		judge := p["intents_models"].(map[string]any)["judge"].(map[string]any)
-		if judge["name"] != "${JUDGE_MODEL_NAME}" || judge["url"] != "${JUDGE_BASE_URL}" || p["sdg_model"] != "openai/${MODEL_NAME}" {
+		if judge["name"] != "${JUDGE_MODEL_NAME}" || p["sdg_model"] != "openai/${MODEL_NAME}" {
 			t.Fatalf("%s must separate judge inputs from generation inputs: %v", provider, p)
+		}
+		if provider == "garak" {
+			if _, ok := judge["url"]; ok {
+				t.Fatal("garak judge URL must come from the model-auth Secret")
+			}
+			if p["sdg_max_concurrency"] != 1 {
+				t.Fatal("garak SDG requests must run serially")
+			}
+			if _, ok := p["sdg_api_base"]; ok {
+				t.Fatal("garak SDG URL must come from the model-auth Secret")
+			}
+		} else if judge["url"] != "${JUDGE_BASE_URL}" || p["sdg_api_base"] != "${MODEL_URL}" {
+			t.Fatalf("garak-kfp requires its existing endpoint bindings: %v", p)
 		}
 	}
 }
