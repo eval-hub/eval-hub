@@ -120,13 +120,13 @@ func TestCreateEvaluationOCITag(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				want := created.Resource.ID
+				want := "evaluation-bundle-" + created.Resource.ID
 				if tt.tag != "" {
 					prefix := tt.tag
 					if len(prefix) > 91 {
 						prefix = prefix[:91]
 					}
-					want = prefix + "-" + want
+					want = prefix + "-" + created.Resource.ID
 				}
 				if tag != want {
 					t.Fatalf("final tag = %q, want %q", tag, want)

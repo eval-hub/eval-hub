@@ -11,7 +11,8 @@ func TestEvaluationBundleManifestTag(t *testing.T) {
 		name, jobID, prefix, want string
 		wantErr                   bool
 	}{
-		{name: "default", jobID: uuid, want: uuid},
+		{name: "default", jobID: uuid, want: "evaluation-bundle-" + uuid},
+		{name: "explicit default", jobID: uuid, prefix: "evaluation-bundle", want: "evaluation-bundle-" + uuid},
 		{name: "custom", jobID: uuid, prefix: "final", want: "final-" + uuid},
 		{name: "reserved card prefix", jobID: uuid, prefix: "evaluation-card", wantErr: true},
 		{name: "custom card prefix", jobID: uuid, prefix: "evaluation-card-custom", want: "evaluation-card-custom-" + uuid},
@@ -21,7 +22,10 @@ func TestEvaluationBundleManifestTag(t *testing.T) {
 		{name: "short job ID boundary", jobID: "job-1", prefix: strings.Repeat("a", 122), want: strings.Repeat("a", 122) + "-job-1"},
 		{name: "short job ID over boundary", jobID: "job-1", prefix: strings.Repeat("a", 123), want: strings.Repeat("a", 122) + "-job-1"},
 		{name: "long job ID boundary", jobID: strings.Repeat("j", 127), prefix: "a", wantErr: true},
-		{name: "default boundary", jobID: strings.Repeat("j", 128), want: strings.Repeat("j", 128)},
+		{name: "default prefix boundary", jobID: strings.Repeat("j", 110), want: "evaluation-bundle-" + strings.Repeat("j", 110)},
+		{name: "default prefix truncated", jobID: strings.Repeat("j", 111), want: "evaluation-bundl-" + strings.Repeat("j", 111)},
+		{name: "default no room for prefix", jobID: strings.Repeat("j", 127), wantErr: true},
+		{name: "default boundary", jobID: strings.Repeat("j", 128), wantErr: true},
 		{name: "default over boundary", jobID: strings.Repeat("j", 129), wantErr: true},
 		{name: "long prefix", jobID: uuid, prefix: strings.Repeat("a", 200), want: strings.Repeat("a", 91) + "-" + uuid},
 		{name: "invalid beyond truncation", jobID: uuid, prefix: strings.Repeat("a", 200) + "/", wantErr: true},
