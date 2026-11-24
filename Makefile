@@ -587,12 +587,14 @@ test-benchmarks-kind: test-benchmarks-kind-deploy ## Run benchmark smoke tests a
 		'  annotations:' '    $(KIND_BENCHMARK_OWNERSHIP_ANNOTATION): $(KIND_CLUSTER_NAME)' \
 		'type: Opaque' 'stringData:' \
 		'  api-key: target-test-token' \
+		'  sdg_api-key: target-test-token' \
+		'  sdg_url: $(KIND_BENCHMARK_MODEL_URL)' \
 		'  judge_api-key: $(KIND_BENCHMARK_JUDGE_API_KEY)' \
 		'  judge_url: $(KIND_BENCHMARK_JUDGE_URL)' \
 		'  grader_api-key: $(KIND_BENCHMARK_JUDGE_API_KEY)' \
 		'  grader_url: $(KIND_BENCHMARK_JUDGE_URL)' \
 		| kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" apply -f - >/dev/null; \
-	echo "Applied the dev-deploy-owned mock-auth Secret $(KIND_BENCHMARK_MODEL_SECRET) with the mock target, judge, and grader keys."; \
+	echo "Applied the dev-deploy-owned mock-auth Secret $(KIND_BENCHMARK_MODEL_SECRET) with the mock target, SDG, judge, and grader keys."; \
 	token_duration="$(KIND_BENCHMARK_TOKEN_DURATION)"; \
 	token="$$(kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" create token evalhub-local-service --duration="$$token_duration")"; \
 	echo "Running benchmark smoke tests against $(KIND_BENCHMARK_SERVER_URL) with model $(KIND_BENCHMARK_MODEL_NAME) and a $$token_duration token for the $(KIND_BENCHMARK_TIMEOUT) deadline."; \

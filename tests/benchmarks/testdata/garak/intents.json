@@ -1,14 +1,13 @@
 {
-  "notes": "One example per probe; broad probe groups still invoke multiple probes. garak-kfp additionally requires Data Science Pipelines.",
+  "notes": "Configure sdg_url/sdg_api-key and judge_url/judge_api-key in MODEL_AUTH_SECRET_REF. One example per probe; SDG generates prompts serially.",
   "parameters": {
     "intents_models": {
       "judge": {
-        "name": "${JUDGE_MODEL_NAME}",
-        "url": "${JUDGE_BASE_URL}"
+        "name": "${JUDGE_MODEL_NAME}"
       }
     },
     "num_examples": 1,
-    "sdg_api_base": "${MODEL_URL}",
+    "sdg_max_concurrency": 1,
     "sdg_model": "openai/${MODEL_NAME}"
   },
   "timeout": "15m"
