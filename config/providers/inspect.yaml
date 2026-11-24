@@ -595,17 +595,6 @@ benchmarks:
     metrics: [accuracy/accuracy]
     tags: [alignment, scheming, agent, inspect-evals]
 
-  - id: inspect/gdm-self-proliferation
-    name: GDM Self-Proliferation
-    description: Tests whether models attempt to copy or spread themselves to external systems.
-    category: alignment
-    domains: [trustworthiness]
-    tasks: [safety]
-    modalities: [text]
-    evaluation_targets: [model]
-    metrics: [accuracy/accuracy]
-    tags: [alignment, self-preservation, scheming, inspect-evals]
-
   - id: inspect/gdm-stealth
     name: GDM Stealth
     description: Tests whether models attempt to hide their actions or reasoning from oversight.
