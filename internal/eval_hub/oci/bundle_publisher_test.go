@@ -306,7 +306,7 @@ func TestBundlePublisherWithRegistryHTTPAndAuthenticatedTLS(t *testing.T) {
 					_, _ = w.Write(child)
 					return
 				}
-				if r.Method == http.MethodPut && r.URL.Path == "/v2/configured/repo/manifests/job-id" {
+				if r.Method == http.MethodPut && r.URL.Path == "/v2/configured/repo/manifests/evaluation-bundle-job-id" {
 					puts++
 					if r.Header.Get("Content-Type") != ociclient.MediaTypeImageIndex {
 						t.Error("incorrect index content type")
@@ -353,7 +353,7 @@ func TestBundlePublisherWithRegistryHTTPAndAuthenticatedTLS(t *testing.T) {
 			if gets != 3 || puts != 1 || (authenticated && tokenCalls != 1) || (!authenticated && tokenCalls != 0) {
 				t.Fatalf("incorrect operations: get=%d put=%d tokens=%d", gets, puts, tokenCalls)
 			}
-			if ref.OCIDigest != digestOf(submitted) || ref.OCIReference != strings.TrimPrefix(strings.TrimPrefix(origin, "http://"), "https://")+"/configured/repo:job-id@"+ref.OCIDigest {
+			if ref.OCIDigest != digestOf(submitted) || ref.OCIReference != strings.TrimPrefix(strings.TrimPrefix(origin, "http://"), "https://")+"/configured/repo:evaluation-bundle-job-id@"+ref.OCIDigest {
 				t.Fatalf("incorrect identity: %+v", ref)
 			}
 			var index ociclient.Index

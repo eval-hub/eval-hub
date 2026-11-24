@@ -1,6 +1,7 @@
 package ociclient
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -120,7 +121,8 @@ func validateChildManifest(body []byte, contentType string) (string, error) {
 			return "", fmt.Errorf("layer %d descriptor: %w", i, err)
 		}
 	}
-	if len(child.Subject) > 0 {
+	// Tolerate publishers that encode an absent optional subject as null.
+	if len(child.Subject) > 0 && !bytes.Equal(bytes.TrimSpace(child.Subject), []byte("null")) {
 		if err := validateChildDescriptor(child.Subject); err != nil {
 			return "", fmt.Errorf("subject descriptor: %w", err)
 		}
@@ -139,17 +141,24 @@ func validateChildDescriptor(raw json.RawMessage) error {
 	if err := json.Unmarshal(raw, &d); err != nil {
 		return err
 	}
-	if d.Size == nil || *d.Size < 0 {
+	if d.Size == nil {
 		return fmt.Errorf("nonnegative size is required")
 	}
-	if mediaType, params, err := mime.ParseMediaType(d.MediaType); err != nil || !strings.Contains(mediaType, "/") || len(params) != 0 {
-		return fmt.Errorf("invalid mediaType %q", d.MediaType)
+	return validateDescriptorFields(d.MediaType, *d.Size, d.Digest)
+}
+
+func validateDescriptorFields(mediaType string, size int64, digest string) error {
+	if size < 0 {
+		return fmt.Errorf("nonnegative size is required")
+	}
+	if parsedType, params, err := mime.ParseMediaType(mediaType); err != nil || !strings.Contains(parsedType, "/") || len(params) != 0 {
+		return fmt.Errorf("invalid mediaType %q", mediaType)
 	}
 	// Child blob descriptors may use other OCI digest algorithms. Retrieval of the
 	// enclosing manifest still requires SHA-256; no child blob is fetched here.
-	parts := strings.SplitN(d.Digest, ":", 2)
-	if !descriptorDigestPattern.MatchString(d.Digest) {
-		return fmt.Errorf("invalid descriptor digest %q", d.Digest)
+	parts := strings.SplitN(digest, ":", 2)
+	if !descriptorDigestPattern.MatchString(digest) {
+		return fmt.Errorf("invalid descriptor digest %q", digest)
 	}
 	switch parts[0] {
 	case "sha256", "sha512":
@@ -158,7 +167,7 @@ func validateChildDescriptor(raw json.RawMessage) error {
 			length = 128
 		}
 		if _, err := hex.DecodeString(parts[1]); err != nil || len(parts[1]) != length || parts[1] != strings.ToLower(parts[1]) {
-			return fmt.Errorf("invalid descriptor digest %q", d.Digest)
+			return fmt.Errorf("invalid descriptor digest %q", digest)
 		}
 	}
 	return nil
@@ -179,14 +188,16 @@ func checkResponseDigest(resp *http.Response, expected string) error {
 // PushIndex publishes exact, deterministic JSON bytes and returns the final tag
 // and locally computed digest. The client is shared by local and cluster callers.
 func (c *Client) PushIndex(ctx context.Context, tag string, index Index) (*api.OCIArtifactReference, error) {
-	if tag == "" || len(tag) > 128 {
-		return nil, fmt.Errorf("invalid index tag")
-	}
-	if err := api.ValidateOCIExportPrefix(tag); err != nil {
-		return nil, err
+	if err := api.ValidateOCIManifestTag(tag); err != nil {
+		return nil, fmt.Errorf("invalid index tag: %w", err)
 	}
 	if index.SchemaVersion != 2 || index.MediaType != MediaTypeImageIndex || len(index.Manifests) == 0 {
 		return nil, fmt.Errorf("invalid OCI index")
+	}
+	for i, descriptor := range index.Manifests {
+		if err := validateDescriptorFields(descriptor.MediaType, descriptor.Size, descriptor.Digest); err != nil {
+			return nil, fmt.Errorf("index manifest %d descriptor: %w", i, err)
+		}
 	}
 	body, err := json.Marshal(index)
 	if err != nil {

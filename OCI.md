@@ -77,7 +77,7 @@ service's OCI HTTP client uses the configured `sidecar.oci` timeout and CA setti
 falling back to the cluster service CA or system roots.
 
 `oci_tag` is a bundle tag **prefix**. With job ID `job-123`, the example produces
-`release-job-123`; without a prefix, the bundle tag is `job-123`. A nonempty prefix
+`release-job-123`; without a prefix, the bundle tag is `evaluation-bundle-job-123`. A nonempty prefix
 must match `^[a-zA-Z0-9_][a-zA-Z0-9._-]*$`. Long prefixes are truncated to fit the
 128-character final tag limit while preserving the full job ID. The evaluation
 card always uses `evaluation-card-job-123`, independently of this prefix.

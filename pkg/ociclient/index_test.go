@@ -67,6 +67,30 @@ func TestGetManifestFormats(t *testing.T) {
 	}
 }
 
+func TestGetManifestAcceptsNullSubject(t *testing.T) {
+	body := bytes.Replace(childManifest(t, MediaTypeImageManifest), []byte(`"schemaVersion":2`), []byte(`"subject": null ,"schemaVersion":2`), 1)
+	digest := blobDigest(body)
+	httpClient := &http.Client{Transport: manifestRoundTripper(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode:    http.StatusOK,
+			Header:        http.Header{"Content-Type": {MediaTypeImageManifest}},
+			ContentLength: int64(len(body)),
+			Body:          io.NopCloser(bytes.NewReader(body)),
+		}, nil
+	})}
+	client, err := NewClient("http://localhost:5000", "repo", Credentials{}, httpClient)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := client.GetManifest(context.Background(), digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Digest != digest || d.Size != int64(len(body)) || d.MediaType != MediaTypeImageManifest {
+		t.Fatalf("incorrect descriptor: %+v", d)
+	}
+}
+
 func TestGetManifestRejectsInvalidResponses(t *testing.T) {
 	valid := string(childManifest(t, MediaTypeImageManifest))
 	for _, tc := range []struct{ name, body, contentType, headerDigest, requestDigest string }{
@@ -292,6 +316,34 @@ func TestIndexPublication(t *testing.T) {
 	}
 }
 
+func TestPushIndexAcceptsGeneratedEvaluationCardTag(t *testing.T) {
+	tag, err := EvaluationBundleManifestTag("card", "evaluation")
+	if err != nil || tag != "evaluation-card" {
+		t.Fatalf("bundle tag = %q, err = %v, want evaluation-card", tag, err)
+	}
+	client, err := NewClient("http://localhost:5000", "repo", Credentials{}, &http.Client{Transport: manifestRoundTripper(func(r *http.Request) (*http.Response, error) {
+		if r.Method != http.MethodPut || r.URL.Path != "/v2/repo/manifests/evaluation-card" {
+			t.Errorf("incorrect index request: %s %s", r.Method, r.URL)
+		}
+		return &http.Response{StatusCode: http.StatusCreated, Body: http.NoBody}, nil
+	})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	index := Index{
+		SchemaVersion: 2,
+		MediaType:     MediaTypeImageIndex,
+		Manifests:     []Descriptor{{MediaType: MediaTypeImageManifest, Size: 2, Digest: blobDigest([]byte("{}"))}},
+	}
+	ref, err := client.PushIndex(context.Background(), tag, index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "localhost:5000/repo:evaluation-card@" + ref.OCIDigest; ref.OCIReference != want {
+		t.Fatalf("OCI reference = %q, want %q", ref.OCIReference, want)
+	}
+}
+
 func TestPushIndexRejectsInvalidInputBeforeRequest(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -305,6 +357,9 @@ func TestPushIndexRejectsInvalidInputBeforeRequest(t *testing.T) {
 		{name: "wrong media type", tag: "job", mutate: func(index *Index) { index.MediaType = MediaTypeImageManifest }},
 		{name: "missing manifests", tag: "job", mutate: func(index *Index) { index.Manifests = nil }},
 		{name: "empty manifests", tag: "job", mutate: func(index *Index) { index.Manifests = []Descriptor{} }},
+		{name: "empty child descriptor", tag: "job", mutate: func(index *Index) {
+			index.Manifests = append(index.Manifests, Descriptor{})
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			client, err := NewClient("http://localhost:5000", "repo", Credentials{}, &http.Client{Transport: manifestRoundTripper(func(*http.Request) (*http.Response, error) {
@@ -351,7 +406,12 @@ func TestManifestOperationsPreserveHTTPDiagnostics(t *testing.T) {
 				if operation == "get" {
 					_, err = client.GetManifest(context.Background(), blobDigest(nil))
 				} else {
-					_, err = client.PushIndex(context.Background(), "job", Index{SchemaVersion: 2, MediaType: MediaTypeImageIndex, Manifests: []Descriptor{{}}})
+					index := Index{
+						SchemaVersion: 2,
+						MediaType:     MediaTypeImageIndex,
+						Manifests:     []Descriptor{{MediaType: MediaTypeImageManifest, Size: 2, Digest: blobDigest([]byte("{}"))}},
+					}
+					_, err = client.PushIndex(context.Background(), "job", index)
 				}
 				var httpErr *RegistryHTTPError
 				if !errors.As(err, &httpErr) || httpErr.StatusCode != status || httpErr.Message != "permission diagnostic" {
