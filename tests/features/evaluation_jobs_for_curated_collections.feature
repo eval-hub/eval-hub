@@ -127,11 +127,10 @@ Feature: Collections Endpoint
     And the response should contain the value "safety-ethical-principles-v1" at path "$.collection.id"
     And the response should contain the value "completed" at path "$.status.state"
     And the response should contain the value "Evaluation job is completed" at path "$.status.message.message"
-    And the array at path "$.results.benchmarks" in the response should have length 3
+    And the array at path "$.results.benchmarks" in the response should have length 2
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics
     And the response should contain the value "toxigen" at path "$.results.benchmarks[*].id"
-    And the response should contain the value "ethics_cm" at path "$.results.benchmarks[*].id"
     And the response should contain the value "bigbench_hhh_alignment_multiple_choice" at path "$.results.benchmarks[*].id"
     And the response should contain "results"
 

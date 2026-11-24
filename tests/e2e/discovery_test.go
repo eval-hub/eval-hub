@@ -280,7 +280,7 @@ func TestFindLMESToxiGenProvider(t *testing.T) {
 }
 
 func TestFindLMESToxiGenProviderSkipsProviderWithoutTask(t *testing.T) {
-	client := collectionAPIClient(`{"items":[{"resource":{"id":"lm_evaluation_harness"},"runtime":{"k8s":{"image":"registry.example/lmes:latest"}},"benchmarks":[{"id":"ethics_cm"}]}],"limit":100,"total_count":1}`)
+	client := collectionAPIClient(`{"items":[{"resource":{"id":"lm_evaluation_harness"},"runtime":{"k8s":{"image":"registry.example/lmes:latest"}},"benchmarks":[{"id":"arc_easy"}]}],"limit":100,"total_count":1}`)
 
 	provider, err := findLMESToxiGenProvider(context.Background(), client)
 	if err != nil {

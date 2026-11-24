@@ -197,7 +197,7 @@ local harness = std.parseJson(std.extVar('harness'));
   defaultOobNumExamples():: 5,
 
   safetyAndFairnessV1BenchmarkIds()::
-    ['truthfulqa_mc1', 'toxigen', 'winogender', 'crows_pairs_english', 'bbq', 'ethics_cm'],
+    ['truthfulqa_mc1', 'toxigen', 'winogender', 'crows_pairs_english', 'bbq'],
 
   toxicityAndEthicalPrinciplesBenchmarkIds()::
     ['toxigen', 'truthfulqa_mc1', 'bigbench_hhh_alignment_multiple_choice'],

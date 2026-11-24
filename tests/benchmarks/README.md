@@ -44,10 +44,10 @@ cluster routes with untrusted certificates. Identity headers are not forwarded t
 
 Default concurrency is **2 evaluation jobs across all providers**. Each job uses
 its fixture deadline (initially five minutes), and the suite has a 30-minute
-deadline. The catalog this checkout deploys is 307 benchmarks, 285 of which
-submit a job (the rest skip for a missing fixture or a missing input), and a full
-sweep can take longer than 30 minutes even with tiny inputs: select a provider or
-benchmark first, or increase the suite deadline deliberately.
+deadline. The number of submitted jobs depends on the discovered catalog and
+fixture prerequisites. A full sweep can take longer than 30 minutes even with
+tiny inputs: select a provider or benchmark first, or increase the suite deadline
+deliberately.
 
 ```bash
 make test-benchmarks BENCHMARK_RUN='TestBenchmarkSmoke/lm_evaluation_harness/arc_easy$'
@@ -518,7 +518,7 @@ also need an endpoint implementing the vLLM completions echo contract
 provides it, and `EVALHUB_LIGHTEVAL_LOGLIKELIHOOD_TOKENIZATION=joint` is the
 adapter fallback for real servers that do not.
 
-For 11 of the 12 dataset-loader failures, the fixtures now use prepared offline data
+The six Pile fixtures use prepared offline data
 and a matching local tokenizer through `test_data_ref.hf`. See
 [offline preparation](offline/README.md) for the build command, runtime
 requirements, and `LM_EVAL_OFFLINE_HF_REPO_ID` / `LM_EVAL_OFFLINE_HF_REVISION`

@@ -1,12 +1,12 @@
-# Offline data for the 12 loader-dependent smoke benchmarks
+# Offline data for the 7 loader-dependent smoke benchmarks
 
-The bundle contains CMMLU (4), ACLUE (1), Pile (6), and SCROLLS/Qasper (1).
-The 11 CMMLU, ACLUE and Pile job fixtures use a prepared HF dataset repository
+The bundle contains Pile (6) and SCROLLS/Qasper (1).
+The six Pile job fixtures use a prepared HF dataset repository
 instead of invoking legacy dataset loaders in evaluation pods. Qasper's data
 is prepared but its job fixture remains unchanged pending the adapter fix below.
 The selected model's tokenizer must be packaged with the data.
 
-`prepare.py` reads pinned upstream CSV/JSONL archives and Parquet directly. It
+`prepare.py` reads pinned upstream JSONL archives and Parquet directly. It
 does not execute dataset loading scripts or download model weights. It exports
 one real row per required split by default, using `DatasetDict.save_to_disk()`.
 The six Pile subsets use matching `meta.pile_set_name` records from the pinned
@@ -38,7 +38,7 @@ the preparation environment separate from any existing workspace virtualenv.
 The output contains:
 
 - `tokenizer/`: a complete `save_pretrained()` export, including special tokens.
-- Dataset directories such as `haonan-li--cmmlu--high_school_mathematics/`: the exact
+- Dataset directories such as `EleutherAI--pile--pile_arxiv/`: the exact
   names the downstream runtime resolves, each with `dataset_dict.json` and split
   Arrow files. Pile directories retain `EleutherAI--pile--pile_<subset>` names.
 - `hub/`, `modules/`, `evaluate/downloads/`: SCROLLS metric and imported helper
@@ -82,7 +82,7 @@ export MODEL_NAME=Qwen/Qwen3-VL-30B-A3B-Instruct
 make test-benchmarks BENCHMARK_RUN='TestBenchmarkSmoke/lm_evaluation_harness/'
 ```
 
-The 11 enabled fixtures and generator defaults send:
+The six enabled fixtures and generator defaults send:
 
 ```json
 {

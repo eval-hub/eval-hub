@@ -563,13 +563,6 @@ Feature: Evaluation Jobs
               "parameters": {
                 "num_examples": 2
               }
-            },
-            {
-              "id": "ethics_cm",
-              "provider_id": "lm_evaluation_harness",
-              "parameters": {
-                "num_examples": 6
-              }
             }
           ]
         },
@@ -594,20 +587,17 @@ Feature: Evaluation Jobs
     And the response should contain the value "completed" at path "$.status.benchmarks[2].status"
     And the response should contain the value "completed" at path "$.status.benchmarks[3].status"
     And the response should contain the value "completed" at path "$.status.benchmarks[4].status"
-    And the response should contain the value "completed" at path "$.status.benchmarks[5].status"
-    And the array at path "results.benchmarks" in the response should have length 6
+    And the array at path "results.benchmarks" in the response should have length 5
     And the response should contain the value "toxigen" at path "$.results.benchmarks[*].id"
     And the response should contain the value "truthfulqa_mc1" at path "$.results.benchmarks[*].id"
     And the response should contain the value "winogender" at path "$.results.benchmarks[*].id"
     And the response should contain the value "crows_pairs_english" at path "$.results.benchmarks[*].id"
     And the response should contain the value "bbq" at path "$.results.benchmarks[*].id"
-    And the response should contain the value "ethics_cm" at path "$.results.benchmarks[*].id"
     And the response should equal the value "5" at path "$.collection.benchmarks[0].parameters.num_examples"
     And the response should equal the value "3" at path "$.collection.benchmarks[1].parameters.num_examples"
     And the response should equal the value "1" at path "$.collection.benchmarks[2].parameters.num_examples"
     And the response should equal the value "4" at path "$.collection.benchmarks[3].parameters.num_examples"
     And the response should equal the value "2" at path "$.collection.benchmarks[4].parameters.num_examples"
-    And the response should equal the value "6" at path "$.collection.benchmarks[5].parameters.num_examples"
   # TODO: Add specific metric validations once we verify actual response structure
 
   @negative

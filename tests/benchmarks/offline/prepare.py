@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Export model-specific smoke data; run with offline/requirements.txt installed.
 
-Preparation reads pinned CSV/JSONL archives and Parquet, without dataset loaders.
+Preparation reads pinned JSONL archives and Parquet, without dataset loaders.
 The output is a directory to upload intact to an HF dataset repo or mount by PVC.
 """
 
 import argparse
-import csv
 import hashlib
 import io
 import importlib.metadata
@@ -29,17 +28,16 @@ def bundle_name(spec):
 
 
 def read_archive(spec, archive, samples):
-    """Read a bounded number of real records, preserving task column names."""
+    """Read bounded SCROLLS records, preserving the task's raw input/output columns."""
     result = {}
     with zipfile.ZipFile(archive) as zipped:
         for split in spec["splits"]:
-            filename = (f"qasper/{split}.jsonl" if spec["subset"] == "qasper"
-                        else f"{split}/{spec['subset']}.csv")
+            filename = f"{spec['subset']}/{split}.jsonl"
             with zipped.open(filename) as raw:
                 text = io.TextIOWrapper(raw, encoding="utf-8-sig")
-                records = (json.loads(line) for line in text) if filename.endswith("jsonl") else csv.DictReader(text)
+                records = (json.loads(line) for line in text)
                 result[split] = list(itertools.islice(records, samples))
-            required = {"id", "pid", "input", "output"} if spec["subset"] == "qasper" else {"Question", "A", "B", "C", "D", "Answer"}
+            required = {"id", "pid", "input", "output"}
             if not result[split] or not required <= result[split][0].keys():
                 raise ValueError(f"Missing records/columns in {filename}")
     return result

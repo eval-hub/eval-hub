@@ -194,7 +194,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain the value "{{env:MODEL_URL|http://test.com}}" at path "$.model.url"
     And the response should contain the value "test-evaluation-job-for-lm_evaluation_harness-benchmark" at path "$.name"
     And the response should contain "results"
-    And the array at path "results.benchmarks" in the response should have length 25
+    And the array at path "results.benchmarks" in the response should have length 24
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
     And all benchmarks in the response should have additional_info matching the expected fields
@@ -264,7 +264,7 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain the value "{{env:MODEL_URL|http://test.com}}" at path "$.model.url"
     And the response should contain the value "test-evaluation-job-for-lm_evaluation_harness-benchmark" at path "$.name"
     And the response should contain "results"
-    And the array at path "results.benchmarks" in the response should have length 18
+    And the array at path "results.benchmarks" in the response should have length 17
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
     And all benchmarks in the response should have additional_info matching the expected fields

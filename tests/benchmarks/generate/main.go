@@ -102,10 +102,7 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 		p["num_examples"], p["num_fewshot"] = 1, 0
 		f["notes"] = "One example per underlying task; grouped benchmarks may expand into multiple tasks. Model endpoint must support the benchmark's request type (including loglikelihood where applicable)."
 		switch benchmark {
-		case "cmmlu_high_school_mathematics", "cmmlu_college_mathematics",
-			"cmmlu_traditional_chinese_medicine", "cmmlu_professional_medicine",
-			"aclue_ancient_chinese_culture",
-			"pile_youtubesubtitles", "pile_ubuntu-irc", "pile_openwebtext2",
+		case "pile_youtubesubtitles", "pile_ubuntu-irc", "pile_openwebtext2",
 			"pile_hackernews", "pile_freelaw", "pile_arxiv":
 			p["tokenizer"] = "/test_data/tokenizer"
 			f["test_data_ref"] = map[string]any{"hf": map[string]any{
