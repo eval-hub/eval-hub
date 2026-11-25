@@ -284,6 +284,9 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 		p["dataset_format"], p["max_concurrent"], p["retry_max_attempts"] = "jsonl", 1, 1
 		f["test_data_ref_env"] = "DEEPEVAL_TEST_DATA_REF"
 		f["notes"] = "Stage exactly one record in a JSONL file with input, actual_output, expected_output, context, and retrieval_context fields. No adapter sample cap; input size bounds work. Requires a structured-output judge."
+	case "promptfoo":
+		p["max_concurrency"], p["request_timeout"], p["num_tests_per_plugin"] = 1, 60, 1
+		f["notes"] = "Minimal concurrency/timeout for catalog smoke. promptfoo-eval requires prompts+tests or config_yaml; promptfoo-rag-quality can use the built-in fixture; red-team suites need a generation_provider (or OPENAI_API_KEY via model.auth.secret_ref)."
 	case "ibm-clear":
 		p["provider"], p["eval_model_name"], p["inference_backend"], p["max_workers"] = "openai", "${MODEL_NAME}", "endpoint", 1
 		f["test_data_ref_env"] = "CLEAR_TEST_DATA_REF"
