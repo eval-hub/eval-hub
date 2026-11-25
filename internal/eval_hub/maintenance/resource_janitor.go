@@ -6,6 +6,10 @@ import (
 	"log/slog"
 	"math/rand"
 	"time"
+
+	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	generationservice "github.com/eval-hub/eval-hub/internal/eval_hub/generation/service"
 )
 
 // ResourceJanitor schedules periodic maintenance. Its tasks must be safe to run
@@ -18,9 +22,20 @@ type ResourceJanitor struct {
 	done     chan struct{}
 }
 
-// NewResourceJanitor starts a sweep at startup and schedules subsequent sweeps.
-// Stop the janitor before closing dependencies used by the sweep.
-func NewResourceJanitor(parent context.Context, interval time.Duration, sweep func(context.Context) error, logger *slog.Logger) (*ResourceJanitor, error) {
+// StartResourceJanitor wires the service's maintenance tasks and starts their
+// periodic execution. Stop the janitor before closing storage.
+func StartResourceJanitor(parent context.Context, storage abstractions.Storage, cfg *config.ResourceJanitorConfig, logger *slog.Logger) (*ResourceJanitor, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	sweep, err := generationservice.NewGenerationRetentionSweep(storage, logger)
+	if err != nil {
+		return nil, err
+	}
+	return newResourceJanitor(parent, cfg.EffectiveInterval(), sweep, logger)
+}
+
+func newResourceJanitor(parent context.Context, interval time.Duration, sweep func(context.Context) error, logger *slog.Logger) (*ResourceJanitor, error) {
 	if interval <= 0 || sweep == nil {
 		return nil, errors.New("resource janitor requires a positive interval and a sweep function")
 	}

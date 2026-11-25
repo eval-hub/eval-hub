@@ -94,6 +94,11 @@ func TestRunSpecReportsOnlySafeLifecycleEventsThroughLoopback(t *testing.T) {
 }
 
 func TestRunSpecRejectsMalformedAndUntrustedJobSpecs(t *testing.T) {
+	useTestNamespace(t)
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		t.Error("invalid spec reached the callback transport")
+		return nil, errors.New("unexpected request")
+	})}
 	valid, _ := validWorkerSpec(t, "http://127.0.0.1:8080", "http://127.0.0.1:8080/model/job/v1")
 	tests := []struct {
 		name string
@@ -107,7 +112,7 @@ func TestRunSpecRejectsMalformedAndUntrustedJobSpecs(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := RunSpec(context.Background(), tc.data, nil); err == nil {
+			if err := RunSpec(context.Background(), tc.data, client); err == nil {
 				t.Fatal("RunSpec() succeeded")
 			}
 		})
@@ -120,16 +125,17 @@ func TestRunSpecRejectsMalformedAndUntrustedJobSpecs(t *testing.T) {
 	mutations := []struct {
 		name   string
 		change func(*jobSpec)
+		want   string
 	}{
-		{name: "invalid ID", change: func(s *jobSpec) { s.JobID = "not-a-uuid" }},
-		{name: "wrong workload", change: func(s *jobSpec) { s.ProviderID = "external-provider" }},
-		{name: "missing model", change: func(s *jobSpec) { s.Model = nil }},
-		{name: "missing callback", change: func(s *jobSpec) { s.CallbackURL = nil }},
-		{name: "missing snapshot", change: func(s *jobSpec) { s.Parameters = nil }},
-		{name: "external model target", change: func(s *jobSpec) { s.Model.URL = "https://model.example/v1" }},
-		{name: "mismatched model name", change: func(s *jobSpec) { s.Model.Name = "different" }},
-		{name: "mismatched secret ref", change: func(s *jobSpec) { s.Model.Auth.SecretRef = "other-secret" }},
-		{name: "external callback", change: func(s *jobSpec) { value := "http://example.com:8080"; s.CallbackURL = &value }},
+		{name: "invalid ID", change: func(s *jobSpec) { s.JobID = "not-a-uuid" }, want: "generation job ID is invalid"},
+		{name: "wrong workload", change: func(s *jobSpec) { s.ProviderID = "external-provider" }, want: "job does not identify the collection-generation workload"},
+		{name: "missing model", change: func(s *jobSpec) { s.Model = nil }, want: "generation model and callback are required"},
+		{name: "missing callback", change: func(s *jobSpec) { s.CallbackURL = nil }, want: "generation model and callback are required"},
+		{name: "missing snapshot", change: func(s *jobSpec) { s.Parameters = nil }, want: "generation snapshot is invalid"},
+		{name: "external model target", change: func(s *jobSpec) { s.Model.URL = "https://model.example/v1" }, want: "job model does not match the trusted generation connection"},
+		{name: "mismatched model name", change: func(s *jobSpec) { s.Model.Name = "different" }, want: "job model does not match the trusted generation connection"},
+		{name: "mismatched secret ref", change: func(s *jobSpec) { s.Model.Auth.SecretRef = "other-secret" }, want: "job model Secret reference does not match the trusted generation request"},
+		{name: "external callback", change: func(s *jobSpec) { value := "http://example.com:8080"; s.CallbackURL = &value }, want: "generation callback must use the local sidecar URL"},
 	}
 	for _, tc := range mutations {
 		t.Run(tc.name, func(t *testing.T) {
@@ -145,8 +151,8 @@ func TestRunSpecRejectsMalformedAndUntrustedJobSpecs(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := RunSpec(context.Background(), data, nil); err == nil {
-				t.Fatal("RunSpec() accepted an untrusted spec")
+			if err := RunSpec(context.Background(), data, client); err == nil || err.Error() != tc.want {
+				t.Fatalf("RunSpec() error = %v, want %q", err, tc.want)
 			}
 		})
 	}
@@ -177,6 +183,48 @@ func TestRunSpecRejectsEventEndpointFailure(t *testing.T) {
 	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) { return response(http.StatusForbidden), nil })}
 	if err := RunSpec(context.Background(), data, client); err == nil || !strings.Contains(err.Error(), "HTTP 403") {
 		t.Fatalf("RunSpec() error = %v, want HTTP 403", err)
+	}
+}
+
+func TestRunSpecAttemptsTerminalReportWhenRunningReportFails(t *testing.T) {
+	useTestNamespace(t)
+	data, _ := validWorkerSpec(t, "http://127.0.0.1:8080", "http://127.0.0.1:8080/model/job/v1")
+	for _, tc := range []struct {
+		name           string
+		terminalStatus int
+	}{
+		{name: "terminal report succeeds", terminalStatus: http.StatusNoContent},
+		{name: "terminal report also fails", terminalStatus: http.StatusBadGateway},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			var states []api.State
+			client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				var event api.StatusEvent
+				if err := json.NewDecoder(request.Body).Decode(&event); err != nil || event.BenchmarkStatusEvent == nil {
+					t.Fatalf("decode benchmark status event: %v", err)
+				}
+				states = append(states, event.BenchmarkStatusEvent.Status)
+				if len(states) == 1 {
+					cancel()
+					return response(http.StatusServiceUnavailable), nil
+				}
+				if err := request.Context().Err(); err != nil {
+					t.Errorf("terminal report inherited cancellation: %v", err)
+				}
+				if deadline, ok := request.Context().Deadline(); !ok || time.Until(deadline) > workerTimeout {
+					t.Error("terminal report lacks a bounded deadline")
+				}
+				return response(tc.terminalStatus), nil
+			})}
+			if err := RunSpec(ctx, data, client); err == nil || err.Error() != "report generation start: generation event endpoint returned HTTP 503" {
+				t.Fatalf("RunSpec() = %v, want original running report error", err)
+			}
+			if len(states) != 2 || states[0] != api.StateRunning || states[1] != api.StateFailed {
+				t.Fatalf("callback states = %v, want running then failed", states)
+			}
+		})
 	}
 }
 

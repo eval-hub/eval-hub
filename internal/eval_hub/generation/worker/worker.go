@@ -101,19 +101,22 @@ func RunSpec(ctx context.Context, data []byte, client *http.Client) error {
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		}
 	}
-	if err := postEvent(ctx, client, endpoint, tenant, api.BenchmarkStatusEvent{
+	startErr := postEvent(ctx, client, endpoint, tenant, api.BenchmarkStatusEvent{
 		ProviderID: generation.ProviderID, ID: generation.BenchmarkID, BenchmarkIndex: 0, Status: api.StateRunning,
-	}); err != nil {
-		return fmt.Errorf("report generation start: %w", err)
-	}
+	})
 
+	// Always attempt to record terminal state, even if the first callback failed.
 	failure, _ := generation.SafeFailure("workload_failed", "")
 	terminalCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), workerTimeout)
 	defer cancel()
-	return postEvent(terminalCtx, client, endpoint, tenant, api.BenchmarkStatusEvent{
+	terminalErr := postEvent(terminalCtx, client, endpoint, tenant, api.BenchmarkStatusEvent{
 		ProviderID: generation.ProviderID, ID: generation.BenchmarkID, BenchmarkIndex: 0,
 		Status: api.StateFailed, AdditionalInfo: map[string]any{"collection_generation_error": failure},
 	})
+	if startErr != nil {
+		return fmt.Errorf("report generation start: %w", startErr)
+	}
+	return terminalErr
 }
 
 func validateSpec(spec jobSpec) (generation.JobConfig, *url.URL, error) {

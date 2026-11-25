@@ -45,6 +45,44 @@ func TestValidateResultAcceptsCompleteDryRunProposal(t *testing.T) {
 	}
 }
 
+func TestResultFromAdditionalInfoBoundsNormalizedSize(t *testing.T) {
+	const key = "collection_generation_result"
+	request := api.CollectionGenerationRequest{MaxBenchmarks: 1}
+	proposal := validResult(t)
+	if _, err := ResultFromAdditionalInfo(request, map[string]any{key: proposal}); err != nil {
+		t.Fatalf("small proposal rejected: %v", err)
+	}
+	proposal.Rationale = strings.Repeat("x", 10_000)
+	proposal.Actions[0].Summary = "x"
+	withPadding := func(size int) []byte {
+		t.Helper()
+		proposal.Collection.Benchmarks[0].Parameters = map[string]any{"fixture": strings.Repeat("x", size)}
+		serialized, err := yaml.Marshal(proposal.Collection)
+		if err != nil {
+			t.Fatal(err)
+		}
+		proposal.YAML = string(serialized)
+		raw, err := json.Marshal(proposal)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	raw := withPadding(1)
+	// Every byte of padding appears once in the structured config and once
+	// in the matching YAML. Leave at most two bytes for summary normalization.
+	raw = withPadding(1 + (maxResultBytes-len(raw)-1)/2)
+	if remaining := maxResultBytes - len(raw); remaining < 1 || remaining > 2 {
+		t.Fatalf("fixture has %d bytes left under the proposal size limit", remaining)
+	}
+	if err := ValidateResult(request, proposal); err != nil {
+		t.Fatalf("proposal should pass validation before normalization: %v", err)
+	}
+	if _, err := ResultFromAdditionalInfo(request, map[string]any{key: proposal}); err == nil || err.Error() != "generation proposal is malformed or exceeds the size limit" {
+		t.Fatalf("ResultFromAdditionalInfo() = %v, want size error after normalization", err)
+	}
+}
+
 func TestValidateResultRejectsInvalidProposalFields(t *testing.T) {
 	tests := []struct {
 		name   string

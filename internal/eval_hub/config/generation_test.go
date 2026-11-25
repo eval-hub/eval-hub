@@ -109,16 +109,20 @@ func TestGenerationConfigRetentionDefaultsAndValidation(t *testing.T) {
 }
 
 func TestResourceJanitorConfigDefaultsAndValidation(t *testing.T) {
-	if got := (config.ResourceJanitorConfig{}).EffectiveInterval(); got != 24*time.Hour {
-		t.Fatalf("default interval = %s, want 24h", got)
+	var omitted *config.ResourceJanitorConfig
+	if err := omitted.Validate(); err != nil || omitted.EffectiveInterval() != 24*time.Hour {
+		t.Fatalf("omitted config = (%s, %v), want default interval", omitted.EffectiveInterval(), err)
+	}
+	if got := (&config.ResourceJanitorConfig{}).EffectiveInterval(); got != 24*time.Hour {
+		t.Fatalf("zero interval = %s, want 24h", got)
 	}
 	for _, interval := range []time.Duration{0, time.Minute, 90 * time.Minute, 24 * time.Hour} {
-		if err := (config.ResourceJanitorConfig{Interval: interval}).Validate(); err != nil {
+		if err := (&config.ResourceJanitorConfig{Interval: interval}).Validate(); err != nil {
 			t.Errorf("valid interval %s rejected: %v", interval, err)
 		}
 	}
 	for _, interval := range []time.Duration{-time.Minute, time.Second, 90 * time.Second, 25 * time.Hour} {
-		if err := (config.ResourceJanitorConfig{Interval: interval}).Validate(); err == nil {
+		if err := (&config.ResourceJanitorConfig{Interval: interval}).Validate(); err == nil {
 			t.Errorf("invalid interval %s accepted", interval)
 		}
 	}

@@ -12,8 +12,8 @@ type ResourceJanitorConfig struct {
 
 const DefaultResourceJanitorInterval = 24 * time.Hour
 
-func (c ResourceJanitorConfig) Validate() error {
-	if c.Interval == 0 {
+func (c *ResourceJanitorConfig) Validate() error {
+	if c == nil || c.Interval == 0 {
 		return nil
 	}
 	if c.Interval < time.Minute || c.Interval > 24*time.Hour || c.Interval%time.Minute != 0 {
@@ -22,8 +22,8 @@ func (c ResourceJanitorConfig) Validate() error {
 	return nil
 }
 
-func (c ResourceJanitorConfig) EffectiveInterval() time.Duration {
-	if c.Interval == 0 {
+func (c *ResourceJanitorConfig) EffectiveInterval() time.Duration {
+	if c == nil || c.Interval == 0 {
 		return DefaultResourceJanitorInterval
 	}
 	return c.Interval

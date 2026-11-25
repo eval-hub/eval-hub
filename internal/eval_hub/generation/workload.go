@@ -344,6 +344,10 @@ func ResultFromAdditionalInfo(request api.CollectionGenerationRequest, info map[
 	for i := range result.Actions {
 		result.Actions[i].Summary = safeActionSummary(result.Actions[i].Name, result.Actions[i].Outcome)
 	}
+	normalized, err := json.Marshal(result)
+	if err != nil || len(normalized) > maxResultBytes {
+		return api.CollectionGenerationResult{}, errors.New("generation proposal is malformed or exceeds the size limit")
+	}
 	return result, nil
 }
 

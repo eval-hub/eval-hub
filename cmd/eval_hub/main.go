@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
-	generationservice "github.com/eval-hub/eval-hub/internal/eval_hub/generation/service"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/maintenance"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
@@ -135,11 +134,7 @@ func main() {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create storage", logger)
 	}
-	generationSweep, err := generationservice.NewGenerationRetentionSweep(storage, logger)
-	if err != nil {
-		startUpFailed(serviceConfig, err, "Failed to configure collection-generation retention cleanup", logger)
-	}
-	resourceJanitor, err := maintenance.NewResourceJanitor(context.Background(), serviceConfig.ResourceJanitor.EffectiveInterval(), generationSweep, logger)
+	resourceJanitor, err := maintenance.StartResourceJanitor(context.Background(), storage, serviceConfig.ResourceJanitor, logger)
 	if err != nil {
 		startUpFailed(serviceConfig, err, "Failed to start resource janitor", logger)
 	}
