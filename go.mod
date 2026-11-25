@@ -16,7 +16,7 @@ require (
 	github.com/go-logr/logr v1.4.4
 	github.com/go-playground/validator/v10 v10.30.6
 	github.com/go-viper/mapstructure/v2 v2.5.0
-	github.com/gomlx/go-huggingface v0.4.39
+	github.com/gomlx/go-huggingface v0.4.40
 	github.com/google/go-jsonnet v0.22.0
 	github.com/google/jsonschema-go v0.4.3
 	github.com/google/uuid v1.6.0
@@ -118,7 +118,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.2 // indirect
 	github.com/gofrs/flock v0.13.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
-	github.com/gomlx/compute v0.1.32 // indirect
+	github.com/gomlx/compute v0.1.33 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.33.0 // indirect
