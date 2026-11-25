@@ -258,7 +258,7 @@ func TestResourceFromJobMapsOnlyPublicGenerationFields(t *testing.T) {
 	}
 	job.Status.State = api.OverallStateRunning
 	job.Status.CollectionGenerationProgress = &api.CollectionGenerationProgress{
-		Sequence: 7, Phase: "validation", UpdatedAt: time.Now().UTC(),
+		Sequence: 7, CollectionGenerationStatusProgress: api.CollectionGenerationStatusProgress{Phase: "validation", UpdatedAt: time.Now().UTC()},
 	}
 	resource, err := ResourceFromJob(job)
 	if err != nil {
@@ -353,7 +353,7 @@ func TestSafeFailureAndFailureFromAdditionalInfo(t *testing.T) {
 }
 
 func TestProgressValidationAndServerTimestamps(t *testing.T) {
-	previous := &api.CollectionGenerationProgress{Sequence: 2, Phase: "catalog_discovery", LastCompletedAction: &api.CollectionGenerationProgressAction{Name: "search_benchmarks", CompletedAt: time.Unix(1, 0)}}
+	previous := &api.CollectionGenerationProgress{Sequence: 2, CollectionGenerationStatusProgress: api.CollectionGenerationStatusProgress{Phase: "catalog_discovery", LastCompletedAction: &api.CollectionGenerationProgressAction{Name: "search_benchmarks", CompletedAt: time.Unix(1, 0)}}}
 	for _, event := range []api.CollectionGenerationProgressEvent{
 		{Sequence: 0, Phase: "guardrails"},
 		{Sequence: 1, Phase: "unknown"},
@@ -373,11 +373,11 @@ func TestProgressValidationAndServerTimestamps(t *testing.T) {
 	if err := ValidateProgressEvent(valid, previous); err != nil {
 		t.Fatalf("valid progress rejected: %v", err)
 	}
-	correction := api.CollectionGenerationProgress{Sequence: 3, Phase: "validation"}
+	correction := api.CollectionGenerationProgress{Sequence: 3, CollectionGenerationStatusProgress: api.CollectionGenerationStatusProgress{Phase: "validation"}}
 	if err := ValidateProgressEvent(api.CollectionGenerationProgressEvent{Sequence: 4, Phase: "model_generation"}, &correction); err != nil {
 		t.Fatalf("validation-to-model correction phase rejected: %v", err)
 	}
-	secondValidation := api.CollectionGenerationProgress{Sequence: 4, Phase: "model_generation"}
+	secondValidation := api.CollectionGenerationProgress{Sequence: 4, CollectionGenerationStatusProgress: api.CollectionGenerationStatusProgress{Phase: "model_generation"}}
 	if err := ValidateProgressEvent(api.CollectionGenerationProgressEvent{Sequence: 5, Phase: "validation"}, &secondValidation); err != nil {
 		t.Fatalf("repeated validation phase rejected: %v", err)
 	}

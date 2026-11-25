@@ -12,6 +12,7 @@ import (
 func TestLoadConfigMapsGenerationBudgetEnvironmentVariables(t *testing.T) {
 	t.Setenv("CONFIG_PATH", "")
 	t.Setenv("EVALHUB_COLLECTION_GENERATION_RUNNER_IMAGE", "registry.example/evalhub:v1")
+	t.Setenv("EVALHUB_RESOURCE_JANITOR_INTERVAL", "90m")
 	t.Setenv("EVALHUB_GENERATION_STANDARD_MAX_ITERATIONS", "25")
 	t.Setenv("EVALHUB_GENERATION_STANDARD_MAX_MODEL_CALLS", "25")
 	t.Setenv("EVALHUB_GENERATION_STANDARD_MAX_DURATION", "3m")
@@ -19,10 +20,13 @@ func TestLoadConfigMapsGenerationBudgetEnvironmentVariables(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig(): %v", err)
 	}
-	if got := loaded.Service.Generation.RunnerImage; got != "registry.example/evalhub:v1" {
+	if got := loaded.Generation.RunnerImage; got != "registry.example/evalhub:v1" {
 		t.Fatalf("generation runner image = %q", got)
 	}
-	presets, err := loaded.Service.Generation.EffectiveEffortBudgets()
+	if got := loaded.ResourceJanitor.EffectiveInterval(); got != 90*time.Minute {
+		t.Fatalf("resource janitor interval = %s, want 90m", got)
+	}
+	presets, err := loaded.Generation.EffectiveEffortBudgets()
 	if err != nil {
 		t.Fatalf("EffectiveEffortBudgets(): %v", err)
 	}
@@ -34,14 +38,14 @@ func TestLoadConfigMapsGenerationBudgetEnvironmentVariables(t *testing.T) {
 	}
 }
 
-func TestServiceGenerationConfigEffectiveEffortBudgets(t *testing.T) {
+func TestGenerationConfigEffectiveEffortBudgets(t *testing.T) {
 	standardIterations := 15
 	standardCalls := loop.DefaultPresets()[loop.EffortStandard].MaxModelCalls
 	standardToolCalls := loop.DefaultPresets()[loop.EffortStandard].MaxToolCalls
 	standardTokens := loop.DefaultPresets()[loop.EffortStandard].MaxTotalTokens
 	standardOutput := loop.DefaultPresets()[loop.EffortStandard].MaxOutputTokens
 	standardDuration := 3 * time.Minute
-	cfg := &config.ServiceGenerationConfig{EffortBudgets: map[string]config.GenerationEffortBudget{
+	cfg := &config.GenerationConfig{EffortBudgets: map[string]config.GenerationEffortBudget{
 		"standard": {
 			MaxIterations: &standardIterations, MaxModelCalls: &standardCalls,
 			MaxToolCalls: &standardToolCalls, MaxTotalTokens: &standardTokens,
@@ -62,24 +66,24 @@ func TestServiceGenerationConfigEffectiveEffortBudgets(t *testing.T) {
 	if got := presets[loop.EffortLow].MaxIterations; got != loop.DefaultPresets()[loop.EffortLow].MaxIterations {
 		t.Fatalf("omitted low preset was not inherited: got %d", got)
 	}
-	var nilConfig *config.ServiceGenerationConfig
+	var nilConfig *config.GenerationConfig
 	if _, err := nilConfig.EffectiveEffortBudgets(); err != nil {
 		t.Fatalf("nil config did not use bounded defaults: %v", err)
 	}
 }
 
-func TestServiceGenerationConfigRejectsInvalidPresets(t *testing.T) {
+func TestGenerationConfigRejectsInvalidPresets(t *testing.T) {
 	zero := 0
 	tooLong := 31 * time.Minute
 	badOrdering := 7
 	tests := []struct {
 		name string
-		cfg  *config.ServiceGenerationConfig
+		cfg  *config.GenerationConfig
 	}{
-		{name: "explicit zero", cfg: &config.ServiceGenerationConfig{EffortBudgets: map[string]config.GenerationEffortBudget{"low": {MaxIterations: &zero}}}},
-		{name: "above hard limit", cfg: &config.ServiceGenerationConfig{EffortBudgets: map[string]config.GenerationEffortBudget{"high": {MaxDuration: &tooLong}}}},
-		{name: "effort ordering", cfg: &config.ServiceGenerationConfig{EffortBudgets: map[string]config.GenerationEffortBudget{"standard": {MaxIterations: &badOrdering}}}},
-		{name: "unknown effort", cfg: &config.ServiceGenerationConfig{EffortBudgets: map[string]config.GenerationEffortBudget{"urgent": {}}}},
+		{name: "explicit zero", cfg: &config.GenerationConfig{EffortBudgets: map[string]config.GenerationEffortBudget{"low": {MaxIterations: &zero}}}},
+		{name: "above hard limit", cfg: &config.GenerationConfig{EffortBudgets: map[string]config.GenerationEffortBudget{"high": {MaxDuration: &tooLong}}}},
+		{name: "effort ordering", cfg: &config.GenerationConfig{EffortBudgets: map[string]config.GenerationEffortBudget{"standard": {MaxIterations: &badOrdering}}}},
+		{name: "unknown effort", cfg: &config.GenerationConfig{EffortBudgets: map[string]config.GenerationEffortBudget{"urgent": {}}}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -90,56 +94,38 @@ func TestServiceGenerationConfigRejectsInvalidPresets(t *testing.T) {
 	}
 }
 
-func TestServiceGenerationConfigRetentionDefaultsAndValidation(t *testing.T) {
-	var nilConfig *config.ServiceGenerationConfig
+func TestGenerationConfigRetentionDefaultsAndValidation(t *testing.T) {
+	var nilConfig *config.GenerationConfig
 	if got := nilConfig.EffectiveRetention(); got != config.DefaultGenerationRetention {
 		t.Fatalf("nil retention = %s, want %s", got, config.DefaultGenerationRetention)
 	}
-	if got := (&config.ServiceGenerationConfig{}).EffectiveCleanupInterval(); got != config.DefaultGenerationCleanupInterval {
-		t.Fatalf("default cleanup interval = %s", got)
-	}
-	if got := (&config.ServiceGenerationConfig{}).EffectiveCleanupBatchSize(); got != config.DefaultGenerationCleanupBatch {
-		t.Fatalf("default cleanup batch = %d", got)
-	}
-	if got := nilConfig.EffectiveCleanupInterval(); got != config.DefaultGenerationCleanupInterval {
-		t.Fatalf("nil cleanup interval = %s", got)
-	}
-	if got := nilConfig.EffectiveCleanupBatchSize(); got != config.DefaultGenerationCleanupBatch {
-		t.Fatalf("nil cleanup batch = %d", got)
-	}
-	configured := &config.ServiceGenerationConfig{Retention: 2 * time.Hour, CleanupInterval: 2 * time.Minute, CleanupBatchSize: 42}
+	configured := &config.GenerationConfig{Retention: 2 * time.Hour}
 	if got := configured.EffectiveRetention(); got != 2*time.Hour {
 		t.Fatalf("configured retention = %s", got)
 	}
-	if got := configured.EffectiveCleanupInterval(); got != 2*time.Minute {
-		t.Fatalf("configured cleanup interval = %s", got)
-	}
-	if got := configured.EffectiveCleanupBatchSize(); got != 42 {
-		t.Fatalf("configured cleanup batch = %d", got)
-	}
-	for _, tc := range []struct {
-		name string
-		cfg  config.ServiceGenerationConfig
-	}{
-		{name: "negative retention", cfg: config.ServiceGenerationConfig{Retention: -time.Second}},
-		{name: "negative interval", cfg: config.ServiceGenerationConfig{CleanupInterval: -time.Second}},
-		{name: "interval below minimum", cfg: config.ServiceGenerationConfig{CleanupInterval: time.Millisecond}},
-		{name: "interval above maximum", cfg: config.ServiceGenerationConfig{CleanupInterval: config.MaxGenerationCleanupInterval + time.Second}},
-		{name: "negative batch", cfg: config.ServiceGenerationConfig{CleanupBatchSize: -1}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if err := tc.cfg.Validate(); err == nil {
-				t.Fatal("Validate() succeeded")
-			}
-		})
-	}
-	if err := (&config.ServiceGenerationConfig{CleanupInterval: config.MinGenerationCleanupInterval}).Validate(); err != nil {
-		t.Fatalf("custom cleanup interval should use the default batch size: %v", err)
+	if err := (&config.GenerationConfig{Retention: -time.Second}).Validate(); err == nil {
+		t.Fatal("Validate() accepted negative retention")
 	}
 }
 
-func TestServiceGenerationConfigResolveReasoningEffortExactMatch(t *testing.T) {
-	cfg := &config.ServiceGenerationConfig{ReasoningCapabilities: []config.GenerationReasoningCapability{{
+func TestResourceJanitorConfigDefaultsAndValidation(t *testing.T) {
+	if got := (config.ResourceJanitorConfig{}).EffectiveInterval(); got != 24*time.Hour {
+		t.Fatalf("default interval = %s, want 24h", got)
+	}
+	for _, interval := range []time.Duration{0, time.Minute, 90 * time.Minute, 24 * time.Hour} {
+		if err := (config.ResourceJanitorConfig{Interval: interval}).Validate(); err != nil {
+			t.Errorf("valid interval %s rejected: %v", interval, err)
+		}
+	}
+	for _, interval := range []time.Duration{-time.Minute, time.Second, 90 * time.Second, 25 * time.Hour} {
+		if err := (config.ResourceJanitorConfig{Interval: interval}).Validate(); err == nil {
+			t.Errorf("invalid interval %s accepted", interval)
+		}
+	}
+}
+
+func TestGenerationConfigResolveReasoningEffortExactMatch(t *testing.T) {
+	cfg := &config.GenerationConfig{ReasoningCapabilities: []config.GenerationReasoningCapability{{
 		ModelURL: "https://model.example/v1", ModelName: "reasoner",
 		Efforts: map[string]string{"low": "minimal", "standard": "medium", "high": "high"},
 	}}}
@@ -161,7 +147,7 @@ func TestServiceGenerationConfigResolveReasoningEffortExactMatch(t *testing.T) {
 	}
 }
 
-func TestServiceGenerationConfigRejectsInvalidReasoningCapabilities(t *testing.T) {
+func TestGenerationConfigRejectsInvalidReasoningCapabilities(t *testing.T) {
 	tests := []struct {
 		name string
 		caps []config.GenerationReasoningCapability
@@ -176,7 +162,7 @@ func TestServiceGenerationConfigRejectsInvalidReasoningCapabilities(t *testing.T
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := (&config.ServiceGenerationConfig{ReasoningCapabilities: tc.caps}).Validate(); err == nil {
+			if err := (&config.GenerationConfig{ReasoningCapabilities: tc.caps}).Validate(); err == nil {
 				t.Fatal("Validate() succeeded")
 			}
 		})

@@ -30,6 +30,9 @@ const (
 	podNamespacePath   = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 )
 
+// jobSpec is the subset of the shared runtime JobSpec used by the generation
+// worker. Its reserved provider and benchmark identify the single work item
+// whose lifecycle the worker reports through the evaluation events route.
 type jobSpec struct {
 	JobID          string         `json:"id"`
 	ProviderID     string         `json:"provider_id"`
@@ -123,11 +126,7 @@ func validateSpec(spec jobSpec) (generation.JobConfig, *url.URL, error) {
 	if spec.Model == nil || spec.CallbackURL == nil {
 		return generation.JobConfig{}, nil, errors.New("generation model and callback are required")
 	}
-	rawConfig, ok := spec.Parameters[generation.ConfigParameter].(string)
-	if !ok {
-		return generation.JobConfig{}, nil, errors.New("generation snapshot is missing from the job specification")
-	}
-	snapshot, err := generation.DecodeJobConfig(rawConfig)
+	snapshot, err := generation.ConfigFromParameters(spec.Parameters)
 	if err != nil {
 		return generation.JobConfig{}, nil, errors.New("generation snapshot is invalid")
 	}

@@ -237,6 +237,11 @@ func TestConfigFromJobRejectsMalformedSnapshotAndProviderBuild(t *testing.T) {
 	if provider == nil || provider.Runtime.K8s.Image != "image" || provider.Runtime.K8s.Entrypoint[0] != RunnerEntrypoint {
 		t.Fatalf("runtime provider = %+v", provider)
 	}
+	delete(job.Benchmarks[0].Parameters, ConfigParameter)
+	job.Benchmarks[0].Parameters[legacyConfigParameter] = validSnapshot
+	if snapshot, err := ConfigFromJob(&job.EvaluationJobConfig); err != nil || snapshot.RunnerImage != "image" {
+		t.Fatalf("read legacy snapshot = %+v, %v", snapshot, err)
+	}
 	job.Benchmarks[0].Parameters[ConfigParameter] = "{}"
 	if RuntimeProviderForJob(&job.EvaluationJobConfig) != nil {
 		t.Fatal("runtime provider accepted invalid persisted config")

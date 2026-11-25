@@ -187,7 +187,7 @@ func (r *generationTestRuntime) ValidateModelSecret(_ context.Context, namespace
 type runtimeWithoutSecretValidator struct{ abstractions.Runtime }
 
 func newGenerationTestService(storage *generationTestStorage, runtime abstractions.Runtime) *Service {
-	return NewService(storage, runtime, &config.ServiceGenerationConfig{RunnerImage: "registry.example/evalhub:v1"}, nil)
+	return NewService(storage, runtime, &config.GenerationConfig{RunnerImage: "registry.example/evalhub:v1"}, nil)
 }
 
 func generationTestJob(state api.OverallState) *api.EvaluationJobResource {
@@ -273,9 +273,9 @@ func TestGenerationServiceAdmitRejectsMissingOrInvalidDependencies(t *testing.T)
 	}{
 		{name: "missing tenant", service: newGenerationTestService(&generationTestStorage{}, &generationTestRuntime{}), owner: "owner", request: request},
 		{name: "missing owner", service: newGenerationTestService(&generationTestStorage{}, &generationTestRuntime{}), tenant: "tenant", request: request},
-		{name: "invalid config", service: NewService(&generationTestStorage{}, &generationTestRuntime{}, &config.ServiceGenerationConfig{RunnerImage: "image", CleanupInterval: -time.Second}, nil), tenant: "tenant", owner: "owner", request: request},
+		{name: "invalid config", service: NewService(&generationTestStorage{}, &generationTestRuntime{}, &config.GenerationConfig{RunnerImage: "image", Retention: -time.Second}, nil), tenant: "tenant", owner: "owner", request: request},
 		{name: "invalid request", service: newGenerationTestService(&generationTestStorage{}, &generationTestRuntime{}), tenant: "tenant", owner: "owner"},
-		{name: "missing image", service: NewService(&generationTestStorage{}, &generationTestRuntime{}, &config.ServiceGenerationConfig{}, nil), tenant: "tenant", owner: "owner", request: request},
+		{name: "missing image", service: NewService(&generationTestStorage{}, &generationTestRuntime{}, &config.GenerationConfig{}, nil), tenant: "tenant", owner: "owner", request: request},
 		{name: "storage create error", service: newGenerationTestService(&generationTestStorage{createErr: errors.New("db down")}, &generationTestRuntime{}), tenant: "tenant", owner: "owner", request: request},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

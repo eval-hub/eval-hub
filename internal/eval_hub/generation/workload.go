@@ -23,13 +23,14 @@ import (
 )
 
 const (
-	ProviderID           = "evalhub-collection-generation"
-	BenchmarkID          = "collection-generation"
-	ConfigParameter      = "collection_generation_config"
-	RunnerEntrypoint     = "/app/eval-generation-worker"
-	maxConfigBytes       = 64 * 1024
-	maxResultBytes       = 512 * 1024
-	LaunchFailureMessage = "The collection-generation worker could not be started."
+	ProviderID            = "evalhub-collection-generation"
+	BenchmarkID           = "collection-generation"
+	ConfigParameter       = "collection-generation-config"
+	legacyConfigParameter = "collection_generation_config"
+	RunnerEntrypoint      = "/app/eval-generation-worker"
+	maxConfigBytes        = 64 * 1024
+	maxResultBytes        = 512 * 1024
+	LaunchFailureMessage  = "The collection-generation worker could not be started."
 )
 
 func init() {
@@ -425,7 +426,12 @@ func ValidateProgressEvent(event api.CollectionGenerationProgressEvent, previous
 
 // ProgressFromEvent creates progress with server-owned timestamps.
 func ProgressFromEvent(event api.CollectionGenerationProgressEvent, previous *api.CollectionGenerationProgress, now time.Time) api.CollectionGenerationProgress {
-	progress := api.CollectionGenerationProgress{Sequence: event.Sequence, Phase: event.Phase, UpdatedAt: now.UTC()}
+	progress := api.CollectionGenerationProgress{
+		Sequence: event.Sequence,
+		CollectionGenerationStatusProgress: api.CollectionGenerationStatusProgress{
+			Phase: event.Phase, UpdatedAt: now.UTC(),
+		},
+	}
 	if event.LastCompletedAction != "" {
 		progress.LastCompletedAction = &api.CollectionGenerationProgressAction{Name: event.LastCompletedAction, CompletedAt: now.UTC()}
 	} else if previous != nil {
@@ -494,8 +500,18 @@ func ConfigFromJob(job *api.EvaluationJobConfig) (JobConfig, error) {
 	if !IsJob(job) {
 		return JobConfig{}, errors.New("job is not a collection-generation workload")
 	}
-	raw, ok := job.Benchmarks[0].Parameters[ConfigParameter].(string)
-	if !ok || raw == "" || len(raw) > maxConfigBytes {
+	return ConfigFromParameters(job.Benchmarks[0].Parameters)
+}
+
+// ConfigFromParameters reads the snapshot from a persisted job or mounted job spec.
+func ConfigFromParameters(parameters map[string]any) (JobConfig, error) {
+	value, exists := parameters[ConfigParameter]
+	if !exists {
+		// Read snapshots written by earlier builds of the generation workload.
+		value = parameters[legacyConfigParameter]
+	}
+	raw, ok := value.(string)
+	if !ok {
 		return JobConfig{}, errors.New("collection-generation snapshot is missing or invalid")
 	}
 	return DecodeJobConfig(raw)
@@ -531,10 +547,8 @@ func ResourceFromJob(job *api.EvaluationJobResource) (*api.CollectionGenerationR
 		break
 	}
 	if state == api.OverallStateRunning && job.Status.CollectionGenerationProgress != nil {
-		progress := job.Status.CollectionGenerationProgress
-		resource.Status.Progress = &api.CollectionGenerationStatusProgress{
-			Phase: progress.Phase, UpdatedAt: progress.UpdatedAt, LastCompletedAction: progress.LastCompletedAction,
-		}
+		progress := job.Status.CollectionGenerationProgress.CollectionGenerationStatusProgress
+		resource.Status.Progress = &progress
 	}
 	additionalInfo := generationAdditionalInfo(job)
 	switch state {

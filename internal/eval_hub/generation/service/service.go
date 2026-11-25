@@ -46,18 +46,18 @@ type GenerationCleanupProtector interface {
 type Service struct {
 	storage abstractions.Storage
 	runtime abstractions.Runtime
-	config  *config.ServiceGenerationConfig
+	config  *config.GenerationConfig
 	logger  *slog.Logger
 	now     func() time.Time
 	newID   func() string
 }
 
-func NewService(storage abstractions.Storage, runtime abstractions.Runtime, cfg *config.ServiceGenerationConfig, logger *slog.Logger) *Service {
+func NewService(storage abstractions.Storage, runtime abstractions.Runtime, cfg *config.GenerationConfig, logger *slog.Logger) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	if cfg == nil {
-		cfg = &config.ServiceGenerationConfig{}
+		cfg = &config.GenerationConfig{}
 	}
 	return &Service{storage: storage, runtime: runtime, config: cfg, logger: logger, now: time.Now, newID: uuid.NewString}
 }

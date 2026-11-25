@@ -312,7 +312,7 @@ func testGenerationDeleteProtectionIsTenantScopedAndPreservesExpiry(t *testing.T
 		t.Fatal("SQL storage does not expose generation retention cleanup")
 	}
 	deleteStore := store.WithTenant(tenant).WithOwner(sameTenantUser)
-	service := generationservice.NewService(deleteStore, successfulGenerationCleanupRuntime{}, &config.ServiceGenerationConfig{}, nil)
+	service := generationservice.NewService(deleteStore, successfulGenerationCleanupRuntime{}, &config.GenerationConfig{}, nil)
 	if err := service.Delete(context.Background(), api.Tenant(common.GUID()), sameTenantUser, job.Resource.ID); err == nil {
 		t.Fatal("different tenant could delete a generation job")
 	}
@@ -365,7 +365,7 @@ func TestFailedDeleteKeepsExpiryAndEventuallySweepsRecord(t *testing.T) {
 	}
 	generationStore := store.WithTenant(tenant).WithOwner(owner).WithWorkloadType(workloads.CollectionGeneration)
 	runtime := &blockingGenerationCleanupRuntime{started: make(chan struct{}), release: make(chan struct{})}
-	service := generationservice.NewService(store, runtime, &config.ServiceGenerationConfig{}, nil)
+	service := generationservice.NewService(store, runtime, &config.GenerationConfig{}, nil)
 	deleteDone := make(chan error, 1)
 	go func() { deleteDone <- service.Delete(context.Background(), tenant, owner, job.Resource.ID) }()
 	select {
@@ -474,7 +474,7 @@ func testGenerationRetentionCannotDeleteRecordDuringRuntimeCleanup(t *testing.T,
 	var releaseOnce sync.Once
 	releaseRuntime := func() { releaseOnce.Do(func() { close(runtime.release) }) }
 	t.Cleanup(releaseRuntime)
-	service := generationservice.NewService(store, runtime, &config.ServiceGenerationConfig{}, nil)
+	service := generationservice.NewService(store, runtime, &config.GenerationConfig{}, nil)
 	deleteDone := make(chan error, 1)
 	go func() { deleteDone <- service.Delete(context.Background(), tenant, owner, job.Resource.ID) }()
 	select {

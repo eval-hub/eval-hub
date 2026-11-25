@@ -57,12 +57,11 @@ type CollectionGenerationProgressEvent struct {
 	LastCompletedAction string `json:"last_completed_action,omitempty" validate:"omitempty,oneof=guardrails_check search_benchmarks get_provider_details list_collections validate_proposal calibrate_proposal finalize_proposal"`
 }
 
-// CollectionGenerationProgress is durable server-timestamped progress exposed while a generation runs.
+// CollectionGenerationProgress stores the public progress fields alongside the
+// internal sequence used to reject stale worker events.
 type CollectionGenerationProgress struct {
-	Sequence            uint64                              `json:"sequence,omitempty"`
-	Phase               string                              `json:"phase"`
-	UpdatedAt           time.Time                           `json:"updated_at"`
-	LastCompletedAction *CollectionGenerationProgressAction `json:"last_completed_action,omitempty"`
+	Sequence uint64 `json:"sequence,omitempty"`
+	CollectionGenerationStatusProgress
 }
 
 // CollectionGenerationProgressAction identifies the last completed allowlisted runner action.

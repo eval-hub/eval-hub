@@ -55,6 +55,21 @@ Viper loads **`config/config.yaml`** with overrides from environment variables a
 
 ---
 
+## Resource maintenance (`internal/eval_hub/maintenance`)
+
+The EvalHub API process hosts `ResourceJanitor` temporarily. It runs the
+generation retention sweep on each replica. The SQL sweep is safe for
+concurrent replicas. A separate maintenance process is the planned home for
+cleanup and reconciliation tasks that need a single active owner.
+
+The janitor sweeps at startup and then every 24 hours by default, with ±20%
+jitter for recurring sweeps. Set `resource_janitor.interval` (or
+`EVALHUB_RESOURCE_JANITOR_INTERVAL`) to a whole number of minutes from `1m`
+through `24h`. The sweep removes expired generation jobs in transactions
+of up to 100 rows and stops after a partial batch, an error, or one minute.
+Generation GET stops returning the job at its retention deadline, even if
+physical removal happens later.
+
 ## Persistence (`internal/eval_hub/storage/sql`)
 
 - Single **SQL** implementation with **SQLite** and **PostgreSQL** dialects under `storage/sql/sqlite` and `storage/sql/postgres`; shared SQL building blocks live in **`storage/sql/shared`**.

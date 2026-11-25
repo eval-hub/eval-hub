@@ -7,17 +7,13 @@ import (
 	"github.com/eval-hub/eval-hub/internal/agent/loop"
 )
 
-// ServiceGenerationConfig contains trusted deployment controls for collection-generation jobs.
+// GenerationConfig contains trusted deployment controls for collection-generation jobs.
 // Generation remains disabled until a resolved runner image is supplied by deployment config.
-type ServiceGenerationConfig struct {
+type GenerationConfig struct {
 	// RunnerImage is the exact EvalHub image reference used for generation worker Jobs.
 	RunnerImage string `mapstructure:"runner_image,omitempty"`
 	// Retention is the terminal generation-record lifetime; zero selects the 24-hour default.
 	Retention time.Duration `mapstructure:"retention,omitempty"`
-	// CleanupInterval controls how often each service replica runs a bounded retention sweep.
-	CleanupInterval time.Duration `mapstructure:"cleanup_interval,omitempty"`
-	// CleanupBatchSize bounds rows deleted by one retention sweep.
-	CleanupBatchSize int `mapstructure:"cleanup_batch_size,omitempty"`
 	// EffortBudgets partially configure limits for each generation_effort level.
 	// Omitted fields retain library defaults; explicit zero values are rejected.
 	EffortBudgets map[string]GenerationEffortBudget `mapstructure:"effort_budget,omitempty"`
@@ -43,17 +39,10 @@ type GenerationReasoningCapability struct {
 	Efforts   map[string]string `mapstructure:"efforts,omitempty"`
 }
 
-const (
-	DefaultGenerationRetention       = 24 * time.Hour
-	DefaultGenerationCleanupInterval = time.Minute
-	MinGenerationCleanupInterval     = time.Second
-	MaxGenerationCleanupInterval     = 24 * time.Hour
-	DefaultGenerationCleanupBatch    = 100
-	MaxGenerationCleanupBatch        = 1000
-)
+const DefaultGenerationRetention = 24 * time.Hour
 
 // EffectiveEffortBudgets overlays explicit deployment values on the bounded library defaults.
-func (c *ServiceGenerationConfig) EffectiveEffortBudgets() (loop.Presets, error) {
+func (c *GenerationConfig) EffectiveEffortBudgets() (loop.Presets, error) {
 	presets := loop.DefaultPresets()
 	if c == nil {
 		return presets, presets.Validate(loop.DefaultHardLimits())
@@ -92,35 +81,20 @@ func (c *ServiceGenerationConfig) EffectiveEffortBudgets() (loop.Presets, error)
 
 // Validate rejects invalid retention settings, incomplete endpoint capability entries,
 // and invalid effort presets before the service accepts requests.
-func (c *ServiceGenerationConfig) Validate() error {
+func (c *GenerationConfig) Validate() error {
 	if c == nil {
 		return nil
 	}
 	if c.Retention < 0 {
-		return fmt.Errorf("service.generation.retention must not be negative")
-	}
-	if c.CleanupInterval < 0 {
-		return fmt.Errorf("service.generation.cleanup_interval must not be negative")
-	}
-	if c.CleanupInterval > 0 && c.CleanupInterval < MinGenerationCleanupInterval {
-		return fmt.Errorf("service.generation.cleanup_interval must be at least %s", MinGenerationCleanupInterval)
-	}
-	if c.CleanupInterval > MaxGenerationCleanupInterval {
-		return fmt.Errorf("service.generation.cleanup_interval must not exceed %s", MaxGenerationCleanupInterval)
-	}
-	if c.CleanupBatchSize < 0 {
-		return fmt.Errorf("service.generation.cleanup_batch_size must not be negative")
-	}
-	if c.CleanupBatchSize > MaxGenerationCleanupBatch {
-		return fmt.Errorf("service.generation.cleanup_batch_size must not exceed %d", MaxGenerationCleanupBatch)
+		return fmt.Errorf("generation.retention must not be negative")
 	}
 	if _, err := c.EffectiveEffortBudgets(); err != nil {
-		return fmt.Errorf("service.generation.effort_budget: %w", err)
+		return fmt.Errorf("generation.effort_budget: %w", err)
 	}
 	seen := make(map[string]struct{}, len(c.ReasoningCapabilities))
 	for i, capability := range c.ReasoningCapabilities {
 		if capability.ModelURL == "" || capability.ModelName == "" || len(capability.Efforts) == 0 {
-			return fmt.Errorf("service.generation.reasoning_capabilities[%d] requires model_url, model_name, and efforts", i)
+			return fmt.Errorf("generation.reasoning_capabilities[%d] requires model_url, model_name, and efforts", i)
 		}
 		key := capability.ModelURL + "\x00" + capability.ModelName
 		if _, ok := seen[key]; ok {
@@ -129,10 +103,10 @@ func (c *ServiceGenerationConfig) Validate() error {
 		seen[key] = struct{}{}
 		for effort, value := range capability.Efforts {
 			if effort != string(loop.EffortLow) && effort != string(loop.EffortStandard) && effort != string(loop.EffortHigh) {
-				return fmt.Errorf("service.generation.reasoning_capabilities[%d] has unknown effort %q", i, effort)
+				return fmt.Errorf("generation.reasoning_capabilities[%d] has unknown effort %q", i, effort)
 			}
 			if value == "" {
-				return fmt.Errorf("service.generation.reasoning_capabilities[%d].efforts.%s must not be empty", i, effort)
+				return fmt.Errorf("generation.reasoning_capabilities[%d].efforts.%s must not be empty", i, effort)
 			}
 		}
 	}
@@ -141,7 +115,7 @@ func (c *ServiceGenerationConfig) Validate() error {
 
 // ResolveReasoningEffort returns an explicitly configured provider value only for an exact
 // pre-sidecar URL and model-name match. Unknown or unmatched models omit the provider control.
-func (c *ServiceGenerationConfig) ResolveReasoningEffort(modelURL, modelName, effort string) string {
+func (c *GenerationConfig) ResolveReasoningEffort(modelURL, modelName, effort string) string {
 	if c == nil {
 		return ""
 	}
@@ -154,25 +128,9 @@ func (c *ServiceGenerationConfig) ResolveReasoningEffort(modelURL, modelName, ef
 }
 
 // EffectiveRetention returns the configured terminal-record retention duration.
-func (c *ServiceGenerationConfig) EffectiveRetention() time.Duration {
+func (c *GenerationConfig) EffectiveRetention() time.Duration {
 	if c == nil || c.Retention == 0 {
 		return DefaultGenerationRetention
 	}
 	return c.Retention
-}
-
-// EffectiveCleanupInterval returns the configured bounded-sweep interval.
-func (c *ServiceGenerationConfig) EffectiveCleanupInterval() time.Duration {
-	if c == nil || c.CleanupInterval == 0 {
-		return DefaultGenerationCleanupInterval
-	}
-	return c.CleanupInterval
-}
-
-// EffectiveCleanupBatchSize returns the maximum number of records removed in one sweep.
-func (c *ServiceGenerationConfig) EffectiveCleanupBatchSize() int {
-	if c == nil || c.CleanupBatchSize == 0 {
-		return DefaultGenerationCleanupBatch
-	}
-	return c.CleanupBatchSize
 }

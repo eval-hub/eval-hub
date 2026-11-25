@@ -48,7 +48,7 @@ Verify the selected deployment against this contract before enabling it.
 
 `loop.DefaultPresets` provides server-owned low, standard, and high defaults;
 the service may configure individual limits under
-`service.generation.effort_budget` (for example, `low.max_iterations`).
+`generation.effort_budget` (for example, `low.max_iterations`).
 Omitted fields retain their library defaults. The preset set's `Validate` method
 checks every effort budget against service hard caps, and `Presets.Resolve`
 returns a value snapshot for one admitted job. An empty effort selects standard.
@@ -78,13 +78,10 @@ invalid values fail service startup. The runner image is selected by
 `EVALHUB_COLLECTION_GENERATION_RUNNER_IMAGE`; it must be an exact image reference
 containing the worker binary. If it is unset, generation admission is disabled.
 
-Terminal generation records default to a 24-hour retention (`EVALHUB_COLLECTION_GENERATION_RETENTION`).
-The per-replica janitor sweeps every minute by default
-(`EVALHUB_COLLECTION_GENERATION_CLEANUP_INTERVAL`, accepted range 1 second to
-24 hours) and removes at most 100 records per sweep by default
-(`EVALHUB_COLLECTION_GENERATION_CLEANUP_BATCH_SIZE`, accepted range 1 to 1000).
-Sweep timing is jittered by ±20% so replicas do not all query the database at
-once. Invalid retention or cleanup settings fail service startup.
+Terminal generation records are visible for 24 hours by default. Set
+`generation.retention` or `EVALHUB_COLLECTION_GENERATION_RETENTION` to override
+that window. See [resource maintenance](../../ARCHITECTURE.md#resource-maintenance-internaleval_hubmaintenance)
+for the separate schedule that removes expired records from storage.
 
 The loop tells the model its remaining call, turn, tool, and token budget. This
 is guidance only: the loop enforces the immutable snapshot, caps each response,
