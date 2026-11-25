@@ -497,6 +497,25 @@ func TestRunnerHandlesTimeoutAndModelFailure(t *testing.T) {
 	}
 }
 
+func TestProposalRejectsPrimaryScoreWithoutAdvertisedDirection(t *testing.T) {
+	source := testCatalog()
+	source.providers[0].Benchmarks[0].Metrics = append(source.providers[0].Benchmarks[0].Metrics, "secondary")
+	snapshot := jobSnapshot(t)
+	options, err := collectiondesign.ParseOptions(snapshot.Request.EvaluationGoal, "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shortlist, issue := discover(source.providers, options)
+	checkEqual(t, "", issue)
+	proposal := testDraft("toxicity-a")
+	proposal.Collection.Benchmarks[0].PrimaryScore = &api.PrimaryScore{Metric: "secondary"}
+	_, findings, err := proposal.validate(context.Background(), source.catalogSnapshot, options, snapshot.Request, indexCandidates(shortlist))
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkEqual(t, []finding{{Code: "unverified_score_direction", Path: "collection.benchmarks"}}, findings)
+}
+
 func TestCatalogReadsAllBoundedPages(t *testing.T) {
 	source := testCatalog()
 	first := source.providers[0]

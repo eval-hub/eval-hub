@@ -59,8 +59,15 @@ func (d draft) validate(ctx context.Context, snapshot catalogSnapshot, options c
 		if !ok {
 			return api.CollectionConfig{}, []finding{{Code: "insufficient_catalog_evidence", Path: "collection.benchmarks"}}, nil
 		}
-		if selected.PrimaryScore != nil && !slices.Contains(entry.benchmark.Metrics, selected.PrimaryScore.Metric) {
-			return api.CollectionConfig{}, []finding{{Code: "metric_not_advertised", Path: "collection.benchmarks"}}, nil
+		if score := selected.PrimaryScore; score != nil {
+			if !slices.Contains(entry.benchmark.Metrics, score.Metric) {
+				return api.CollectionConfig{}, []finding{{Code: "metric_not_advertised", Path: "collection.benchmarks"}}, nil
+			}
+			// A metric name alone does not establish its score direction.
+			advertised := entry.benchmark.PrimaryScore
+			if advertised == nil || advertised.Metric != score.Metric {
+				return api.CollectionConfig{}, []finding{{Code: "unverified_score_direction", Path: "collection.benchmarks"}}, nil
+			}
 		}
 		// A stageable data source is environment-specific. Provider metadata
 		// never authorizes a model to choose a storage location.
