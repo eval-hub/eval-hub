@@ -3,8 +3,10 @@ package sql
 import (
 	"database/sql"
 	"encoding/json"
+	"slices"
 	"time"
 
+	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
@@ -158,11 +160,6 @@ func (s *sqlStorage) validateBenchmarkExists(job *api.EvaluationJobResource, run
 
 // GetOverallJobStatus returns overall state and message. getCollection is used to resolve job benchmark count when job has only a collection reference.
 func (s *sqlStorage) getOverallJobStatus(txn *sql.Tx, job *api.EvaluationJobResource) (api.OverallState, *api.MessageInfo, error) {
-	// to be safe - do an initial check to see if the job is finished
-	if job.Status.State.IsTerminalState() {
-		return job.Status.State, job.Status.Message, nil
-	}
-
 	// group all benchmarks by state
 	benchmarkStates := make(map[api.State]int)
 	failureMessage := ""
@@ -230,7 +227,15 @@ func setBenchmarkCompletionTime(benchmark *api.BenchmarkStatus, now time.Time) {
 	}
 }
 
-func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runStatus *api.StatusEvent, benchmarkStatus *api.BenchmarkStatus, receivedAt time.Time) error {
+const recoveryFailureMessageCode = "KUBERNETES_JOB_FAILURE"
+
+func isRecoveryFailure(benchmark api.BenchmarkStatus) bool {
+	return benchmark.Status == api.StateFailed && benchmark.ErrorMessage != nil &&
+		benchmark.ErrorMessage.MessageCode == recoveryFailureMessageCode &&
+		benchmark.ErrorMessage.MessageOrigin == api.MessageOriginServer
+}
+
+func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, benchmarkStatus *api.BenchmarkStatus, index int, receivedAt time.Time, replacesRecovery bool) {
 	// A pending benchmark can start on its first running event, or use an
 	// explicitly supplied start when an adapter skips running and reports terminal.
 	if benchmarkStatus.Status == api.StateRunning {
@@ -253,37 +258,29 @@ func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runSt
 	if job.Status.Benchmarks == nil {
 		job.Status.Benchmarks = make([]api.BenchmarkStatus, 0)
 	}
-	for index, benchmark := range job.Status.Benchmarks {
-		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID &&
-			benchmark.ProviderID == runStatus.BenchmarkStatusEvent.ProviderID &&
-			benchmark.BenchmarkIndex == runStatus.BenchmarkStatusEvent.BenchmarkIndex {
-			if benchmark.Status == api.StateCompleted && benchmarkStatus.Status == api.StateFailed {
-				// Reject a late failure before the caller can overwrite the saved results.
-				return se.NewServiceError(messages.BenchmarkCanNotBeUpdated, "Index", benchmark.BenchmarkIndex, "NewStatus", benchmarkStatus.Status, "Status", benchmark.Status)
-			}
-			if api.IsBenchmarkTerminalState(benchmark.Status) && !api.IsBenchmarkTerminalState(benchmarkStatus.Status) {
-				return nil
-			}
-			// Ignore late pending events once the benchmark is already running.
-			if benchmark.Status == api.StateRunning && benchmarkStatus.Status == api.StatePending {
-				return nil
-			}
-			// Only a transition out of pending may establish a start. Preserve
-			// even an absent start on later running or terminal status updates.
-			if benchmark.StartedAt != "" || benchmark.Status != api.StatePending {
-				benchmarkStatus.StartedAt = benchmark.StartedAt
-			}
-			if api.IsBenchmarkTerminalState(benchmark.Status) && benchmark.CompletedAt != "" {
-				benchmarkStatus.CompletedAt = benchmark.CompletedAt
-			}
-			setBenchmarkCompletionTime(benchmarkStatus, time.Now())
-			job.Status.Benchmarks[index] = *benchmarkStatus
-			return nil
-		}
+	if index < 0 {
+		setBenchmarkCompletionTime(benchmarkStatus, time.Now())
+		job.Status.Benchmarks = append(job.Status.Benchmarks, *benchmarkStatus)
+		return
+	}
+	benchmark := job.Status.Benchmarks[index]
+	if api.IsBenchmarkTerminalState(benchmark.Status) && !api.IsBenchmarkTerminalState(benchmarkStatus.Status) {
+		return
+	}
+	// Ignore late pending events once the benchmark is already running.
+	if benchmark.Status == api.StateRunning && benchmarkStatus.Status == api.StatePending {
+		return
+	}
+	// Only a transition out of pending may establish a start. Preserve
+	// even an absent start on later running or terminal status updates.
+	if benchmark.StartedAt != "" || benchmark.Status != api.StatePending {
+		benchmarkStatus.StartedAt = benchmark.StartedAt
+	}
+	if !replacesRecovery && api.IsBenchmarkTerminalState(benchmark.Status) && benchmark.CompletedAt != "" {
+		benchmarkStatus.CompletedAt = benchmark.CompletedAt
 	}
 	setBenchmarkCompletionTime(benchmarkStatus, time.Now())
-	job.Status.Benchmarks = append(job.Status.Benchmarks, *benchmarkStatus)
-	return nil
+	job.Status.Benchmarks[index] = *benchmarkStatus
 }
 
 // UpdateEvaluationJobWithRunStatus runs in a transaction: fetches the job, merges RunStatusInternal into the entity, and persists.
@@ -297,13 +294,28 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 		if err != nil {
 			return err
 		}
+		event := runStatus.BenchmarkStatusEvent
 		// Test hook: no-op unless a test installs a callback (see test_hooks.go).
-		invokeEvaluationJobUpdateAfterLockedReadHook(id, runStatus.BenchmarkStatusEvent.ID)
+		invokeEvaluationJobUpdateAfterLockedReadHook(id, event.ID)
 
-		// Guard: reject benchmark updates if job is already in a terminal state.
-		// We pass OverallStateRunning as the target to leverage checkEvaluationJobState's terminal-state check.
-		if _, err := s.checkEvaluationJobState(job.Resource.ID, job.Status.State, api.OverallStateRunning); err != nil {
-			return err
+		conditional := event.Precondition == api.BenchmarkStatusPreconditionNonterminal
+		overall := job.Status.State
+		index := slices.IndexFunc(job.Status.Benchmarks, func(benchmark api.BenchmarkStatus) bool {
+			return benchmark.ID == event.ID && benchmark.ProviderID == event.ProviderID &&
+				benchmark.BenchmarkIndex == event.BenchmarkIndex
+		})
+		var current api.BenchmarkStatus
+		if index >= 0 {
+			current = job.Status.Benchmarks[index]
+		}
+		recoveryFailure := isRecoveryFailure(current)
+		replacesRecovery := !conditional && recoveryFailure &&
+			(event.Status == api.StateCompleted || event.Status == api.StateFailed) &&
+			(!overall.IsTerminalState() || overall == api.OverallStateFailed || overall == api.OverallStatePartiallyFailed)
+		if !conditional && !replacesRecovery {
+			if _, err := s.checkEvaluationJobState(id, overall, api.OverallStateRunning); err != nil {
+				return err
+			}
 		}
 
 		var collection *api.CollectionResource
@@ -318,21 +330,49 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 			return err
 		}
 
-		// first we store the benchmark status
+		if conditional && (overall.IsTerminalState() || api.IsBenchmarkTerminalState(current.Status)) {
+			return abstractions.ErrBenchmarkAlreadyTerminal
+		}
+		if !replacesRecovery && ((current.Status == api.StateFailed && event.Status == api.StateCompleted) || recoveryFailure) {
+			return se.NewServiceError(messages.BenchmarkCanNotBeUpdated, "Index", event.BenchmarkIndex, "NewStatus", event.Status, "Status", current.Status)
+		}
+
 		benchmark := api.BenchmarkStatus{
-			ProviderID:     runStatus.BenchmarkStatusEvent.ProviderID,
-			ID:             runStatus.BenchmarkStatusEvent.ID,
-			Status:         runStatus.BenchmarkStatusEvent.Status,
-			Phase:          runStatus.BenchmarkStatusEvent.Phase,
-			ErrorMessage:   runStatus.BenchmarkStatusEvent.ErrorMessage,
-			WarningMessage: runStatus.BenchmarkStatusEvent.WarningMessage,
-			StartedAt:      runStatus.BenchmarkStatusEvent.StartedAt,
-			CompletedAt:    runStatus.BenchmarkStatusEvent.CompletedAt,
-			BenchmarkIndex: runStatus.BenchmarkStatusEvent.BenchmarkIndex,
+			ProviderID:     event.ProviderID,
+			ID:             event.ID,
+			Status:         event.Status,
+			Phase:          event.Phase,
+			ErrorMessage:   event.ErrorMessage,
+			WarningMessage: event.WarningMessage,
+			StartedAt:      event.StartedAt,
+			CompletedAt:    event.CompletedAt,
+			BenchmarkIndex: event.BenchmarkIndex,
 		}
-		if err := s.updateBenchmarkStatus(job, runStatus, &benchmark, receivedAt); err != nil {
-			return err
+		if conditional && event.Status == api.StateFailed {
+			message := "Kubernetes marked the evaluation Job as failed."
+			if event.ErrorMessage != nil {
+				message = event.ErrorMessage.Message
+			}
+			benchmark.ErrorMessage = &api.MessageInfo{
+				Message: message, MessageCode: recoveryFailureMessageCode, MessageOrigin: api.MessageOriginServer,
+			}
+			if benchmark.Phase == "" {
+				benchmark.Phase = current.Phase
+			}
+			if benchmark.WarningMessage == nil {
+				benchmark.WarningMessage = current.WarningMessage
+			}
+			if benchmark.CompletedAt == "" {
+				benchmark.CompletedAt = api.DateTimeToString(receivedAt.UTC())
+			}
+		} else if benchmark.ErrorMessage != nil && benchmark.ErrorMessage.MessageCode == recoveryFailureMessageCode &&
+			benchmark.ErrorMessage.MessageOrigin == api.MessageOriginServer {
+			// Only storage can mark a failure as a recoverable operator report.
+			message := *benchmark.ErrorMessage
+			message.MessageOrigin = api.MessageOriginRuntime
+			benchmark.ErrorMessage = &message
 		}
+		s.updateBenchmarkStatus(job, &benchmark, index, receivedAt, replacesRecovery)
 
 		outcome := s.computeBenchmarkTestResult(txn, job, runStatus.BenchmarkStatusEvent, collection)
 

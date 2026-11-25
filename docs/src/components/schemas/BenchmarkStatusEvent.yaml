@@ -74,3 +74,10 @@ properties:
     description: Path to logs
   job_meta:
     $ref: ./JobMeta.yaml
+  precondition:
+    type: string
+    enum:
+      - nonterminal
+    description: >-
+      Apply the event only while the evaluation and the selected benchmark are
+      both nonterminal.

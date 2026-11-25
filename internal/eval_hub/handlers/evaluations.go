@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -760,6 +761,11 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 			}
 
 			err = scoped.UpdateEvaluationJob(evaluationJobID, status)
+			conditional := status.BenchmarkStatusEvent.Precondition == api.BenchmarkStatusPreconditionNonterminal
+			if conditional && errors.Is(err, abstractions.ErrBenchmarkAlreadyTerminal) {
+				w.WriteJSON(api.BenchmarkStatusEventResponse{Outcome: api.BenchmarkStatusEventAlreadyTerminal}, constants.HTTPCodeOK)
+				return nil
+			}
 			if err != nil {
 				w.Error(err, ctx.RequestID)
 				return err
@@ -781,7 +787,11 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 			h.onEvaluationJobUpdated(runtimeCtx, scoped, func(readCtx context.Context) (*api.EvaluationJobResource, error) {
 				return scoped.WithContext(readCtx).GetEvaluationJob(evaluationJobID)
 			}, previousState, ctx.Logger)
-			w.WriteJSON(nil, 204)
+			if conditional {
+				w.WriteJSON(api.BenchmarkStatusEventResponse{Outcome: api.BenchmarkStatusEventApplied}, constants.HTTPCodeOK)
+			} else {
+				w.WriteJSON(nil, 204)
+			}
 			return nil
 		},
 		"storage",

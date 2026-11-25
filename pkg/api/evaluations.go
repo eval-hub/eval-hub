@@ -331,6 +331,23 @@ type JobMeta struct {
 	ResolvedSHA string `json:"resolved_sha,omitempty"`
 }
 
+// BenchmarkStatusPrecondition restricts which persisted benchmark state can accept an event.
+type BenchmarkStatusPrecondition string
+
+const BenchmarkStatusPreconditionNonterminal BenchmarkStatusPrecondition = "nonterminal"
+
+// BenchmarkStatusEventOutcome reports the result of an event with a precondition.
+type BenchmarkStatusEventOutcome string
+
+const (
+	BenchmarkStatusEventApplied         BenchmarkStatusEventOutcome = "applied"
+	BenchmarkStatusEventAlreadyTerminal BenchmarkStatusEventOutcome = "already_terminal"
+)
+
+type BenchmarkStatusEventResponse struct {
+	Outcome BenchmarkStatusEventOutcome `json:"outcome"`
+}
+
 // BenchmarkStatusEvent is used when the job runtime needs to update the status of a benchmark
 type BenchmarkStatusEvent struct {
 	ProviderID     string         `json:"provider_id" validate:"required"`
@@ -343,16 +360,17 @@ type BenchmarkStatusEvent struct {
 	// PrimaryScore is the adapter-reported primary metric for this completed run.
 	// Used when the job/catalog primary_score.metric is absent from Metrics
 	// (e.g. inspect/custom task-dependent scorers). Exact key match only.
-	PrimaryScore   *PrimaryScore  `json:"primary_score,omitempty"`
-	AdditionalInfo map[string]any `json:"additional_info,omitempty"`
-	Artifacts      map[string]any `json:"artifacts,omitempty"`
-	ErrorMessage   *MessageInfo   `json:"error_message,omitempty"`
-	WarningMessage *MessageInfo   `json:"warning_message,omitempty"`
-	StartedAt      DateTime       `json:"started_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
-	CompletedAt    DateTime       `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
-	MLFlowRunID    string         `json:"mlflow_run_id,omitempty"`
-	LogsPath       string         `json:"logs_path,omitempty"`
-	JobMeta        *JobMeta       `json:"job_meta,omitempty"`
+	PrimaryScore   *PrimaryScore               `json:"primary_score,omitempty"`
+	AdditionalInfo map[string]any              `json:"additional_info,omitempty"`
+	Artifacts      map[string]any              `json:"artifacts,omitempty"`
+	ErrorMessage   *MessageInfo                `json:"error_message,omitempty"`
+	WarningMessage *MessageInfo                `json:"warning_message,omitempty"`
+	StartedAt      DateTime                    `json:"started_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
+	CompletedAt    DateTime                    `json:"completed_at,omitempty" validate:"omitempty,datetime=2006-01-02T15:04:05Z07:00"`
+	MLFlowRunID    string                      `json:"mlflow_run_id,omitempty"`
+	LogsPath       string                      `json:"logs_path,omitempty"`
+	JobMeta        *JobMeta                    `json:"job_meta,omitempty"`
+	Precondition   BenchmarkStatusPrecondition `json:"precondition,omitempty" validate:"omitempty,oneof=nonterminal"`
 }
 
 type EvaluationJobState struct {

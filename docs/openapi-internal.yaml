@@ -672,8 +672,31 @@ paths:
                     started_at: '2026-01-12T10:45:32Z'
                     completed_at: '2026-01-12T10:47:12Z'
       responses:
+        '200':
+          description: Result of an event with the nonterminal precondition.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - outcome
+                properties:
+                  outcome:
+                    type: string
+                    enum:
+                      - applied
+                      - already_terminal
+              examples:
+                applied:
+                  summary: The event was committed.
+                  value:
+                    outcome: applied
+                alreadyTerminal:
+                  summary: The evaluation or benchmark was already terminal.
+                  value:
+                    outcome: already_terminal
         '204':
-          description: Successful Update
+          description: Successful update for an event without a precondition.
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -683,17 +706,11 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: The evaluation is already in a terminal state, or a failure report targets a benchmark that is already completed. A late failure report leaves the completed benchmark's status and results intact.
+          description: An ordinary event conflicts with the current evaluation or benchmark state.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              examples:
-                benchmarkAlreadyCompleted:
-                  summary: A late failure report for a completed benchmark
-                  value:
-                    message_code: benchmark_can_not_be_updated
-                    message: Benchmark 0 cannot be marked failed because its state is 'completed'.
   /api/v1/evaluations/jobs/{id}/logs:
     get:
       tags:
@@ -4345,6 +4362,11 @@ components:
           description: Path to logs
         job_meta:
           $ref: '#/components/schemas/JobMeta'
+        precondition:
+          type: string
+          enum:
+            - nonterminal
+          description: Apply the event only while the evaluation and the selected benchmark are both nonterminal.
     StatusEvent:
       type: object
       description: Status update event (e.g. for SSE)

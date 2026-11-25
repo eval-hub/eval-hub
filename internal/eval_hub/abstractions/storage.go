@@ -2,6 +2,7 @@ package abstractions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -62,6 +63,9 @@ func (filter *QueryFilter) HasParams(params ...string) bool {
 func (filter *QueryFilter) String() string {
 	return fmt.Sprintf(`{"limit":%d,"offset":%d,"params":%v,"sort_by":%q}`, filter.Limit, filter.Offset, filter.Params, filter.SortBy)
 }
+
+// ErrBenchmarkAlreadyTerminal signals that a conditional event did not change storage.
+var ErrBenchmarkAlreadyTerminal = errors.New("evaluation or benchmark already terminal")
 
 type Storage interface {
 	WithLogger(logger *slog.Logger) Storage
