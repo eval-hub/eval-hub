@@ -264,11 +264,62 @@ Feature: Evaluation Jobs for Benchmark Providers
     And the response should contain the value "{{env:MODEL_URL|http://test.com}}" at path "$.model.url"
     And the response should contain the value "test-evaluation-job-for-lm_evaluation_harness-benchmark" at path "$.name"
     And the response should contain "results"
-    And the array at path "results.benchmarks" in the response should have length 18
+    And the array at path "results.benchmarks" in the response should have length 19
     And all benchmarks in the response should have status "completed"
     And all benchmarks in the response should have metrics matching the provider config
     And all benchmarks in the response should have additional_info matching the expected fields
     And all benchmarks in the response should have a test block with pass criteria
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
+  @connected
+  Scenario: Verifying results returned for Evaluation job - ETHICS justice - connected
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_ethics_justice.json"
+    Then the response code should be 202
+    And the response should contain the value "pending" at path "$.status.state"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    And the array at path "results.benchmarks" in the response should have length 1
+    And the response should contain the value "completed" at path "$.status.benchmarks[0].status"
+    And the response should contain the value "ethics_justice" at path "$.results.benchmarks[0].id"
+    And the response should contain the value "lm_evaluation_harness" at path "$.results.benchmarks[0].provider_id"
+    And the response should contain "results.benchmarks[0].metrics.acc"
+    And the response should contain the value "0" at path "$.benchmarks[0].parameters.num_fewshot"
+    And the response should contain the value "1" at path "$.benchmarks[0].parameters.num_examples"
+    And the response should contain the value "true" at path "$.benchmarks[0].parameters.trust_remote_code"
+    And the response should contain the value "completions" at path "$.benchmarks[0].parameters.api_style"
+    And the response should contain the value "huggingface" at path "$.benchmarks[0].parameters.tokenizer_backend"
+    And the response should contain the value "{{env:FVT_BENCHMARK_TOKENIZER|google/flan-t5-small}}" at path "$.benchmarks[0].parameters.tokenizer"
+    And the response should contain the value "false" at path "$.benchmarks[0].parameters.hf_offline"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
+  @disconnected
+  Scenario: Verifying results returned for Evaluation job - ETHICS justice - disconnected
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_ethics_justice.json"
+    Then the response code should be 202
+    And the response should contain the value "pending" at path "$.status.state"
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    And the array at path "results.benchmarks" in the response should have length 1
+    And the response should contain the value "completed" at path "$.status.benchmarks[0].status"
+    And the response should contain the value "ethics_justice" at path "$.results.benchmarks[0].id"
+    And the response should contain the value "lm_evaluation_harness" at path "$.results.benchmarks[0].provider_id"
+    And the response should contain "results.benchmarks[0].metrics.acc"
+    And the response should contain the value "0" at path "$.benchmarks[0].parameters.num_fewshot"
+    And the response should contain the value "1" at path "$.benchmarks[0].parameters.num_examples"
+    And the response should contain the value "true" at path "$.benchmarks[0].parameters.trust_remote_code"
+    And the response should contain the value "completions" at path "$.benchmarks[0].parameters.api_style"
+    And the response should contain the value "huggingface" at path "$.benchmarks[0].parameters.tokenizer_backend"
+    And the response should contain the value "/test_data/tokenizer" at path "$.benchmarks[0].parameters.tokenizer"
+    And the response should contain the value "/test_data/hf-cache" at path "$.benchmarks[0].parameters.hf_datasets_cache"
+    And the response should contain the value "true" at path "$.benchmarks[0].parameters.hf_offline"
     When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
     Then the response code should be 204
 

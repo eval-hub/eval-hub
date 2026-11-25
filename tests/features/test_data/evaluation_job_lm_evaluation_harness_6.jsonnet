@@ -21,6 +21,11 @@ test.mergeOptional(
         test.benchmark('bbq', 'lm_evaluation_harness', { num_examples: 1 }),
         test.benchmark('crows_pairs_english', 'lm_evaluation_harness', { num_examples: 1 }),
         test.benchmark('ethics_cm', 'lm_evaluation_harness', { num_examples: 1 }),
+        test.benchmark('ethics_justice', 'lm_evaluation_harness', {
+          num_examples: 1,
+          num_fewshot: 0,
+          trust_remote_code: true,
+        }),
         test.benchmark('toxigen', 'lm_evaluation_harness', { num_examples: 1 }),
         test.benchmark('truthfulqa_mc1', 'lm_evaluation_harness', { num_examples: 1 }),
         test.benchmark('bigbench_hhh_alignment_multiple_choice', 'lm_evaluation_harness', { num_examples: 1 }),

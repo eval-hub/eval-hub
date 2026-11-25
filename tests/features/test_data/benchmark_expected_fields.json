@@ -3057,6 +3057,29 @@
         "zero_shot": {}
       }
     },
+    "ethics_justice": {
+      "additional_info": {
+        "batch_size": {},
+        "dataset": {},
+        "dataset_split": {},
+        "evaluation_date": {},
+        "hf_offline": {},
+        "limit": {},
+        "lmeval_version": {},
+        "num_concurrent": {},
+        "num_fewshot": {},
+        "num_samples_effective": {},
+        "num_samples_original": {},
+        "output_type": {},
+        "primary_metric": {},
+        "random_seed": {},
+        "tags": {},
+        "task_version": {},
+        "timeout_seconds": {},
+        "tokenizer": {},
+        "zero_shot": {}
+      }
+    },
     "truthfulqa_mc1": {
       "additional_info": {
         "batch_size": {},
