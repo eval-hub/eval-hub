@@ -555,13 +555,19 @@ func (h *Handlers) validateBenchmarkReferences(ctx *executioncontext.ExecutionCo
 				"ResourceID", benchmark.ProviderID,
 			)
 		}
-		if !slices.ContainsFunc(provider.Benchmarks, func(b api.BenchmarkResource) bool { return b.ID == benchmark.ID }) {
+		benchmarkIndex := slices.IndexFunc(provider.Benchmarks, func(b api.BenchmarkResource) bool { return b.ID == benchmark.ID })
+		if benchmarkIndex < 0 {
 			ctx.Logger.Debug("Benchmark does not exist in provider", "benchmark_id", benchmark.ID, "provider_id", benchmark.ProviderID)
 			return serviceerrors.NewServiceError(
 				messages.ResourceDoesNotExist,
 				"Type", "benchmark",
 				"ResourceID", benchmark.ID,
 			)
+		}
+		if ref := benchmark.TestDataRef; ref != nil && ref.Type == "pre_recorded_data" &&
+			!provider.Benchmarks[benchmarkIndex].SupportsPreRecordedData {
+			return serviceerrors.NewServiceError(messages.PreRecordedDataUnsupported,
+				"ProviderID", benchmark.ProviderID, "BenchmarkID", benchmark.ID)
 		}
 	}
 	return nil

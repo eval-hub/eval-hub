@@ -24,6 +24,7 @@ benchmarks:
     tasks: [error_analysis]
     modalities: [text]
     evaluation_targets: [agent]
+    supports_pre_recorded_data: true
     metrics:
       - total_interactions
       - total_issues

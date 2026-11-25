@@ -77,3 +77,10 @@ properties:
       CollectionConfig.evaluation_targets vocabulary. Used to auto-populate
       collection-level evaluation_targets when not explicitly set on the collection.
       Example values: model, agent.
+  supports_pre_recorded_data:
+    type: boolean
+    default: false
+    description: >
+      Whether this benchmark can score pre-recorded inputs. The job API requires
+      this capability when test_data_ref.type is pre_recorded_data. The same
+      test-data source validation applies as for other jobs.

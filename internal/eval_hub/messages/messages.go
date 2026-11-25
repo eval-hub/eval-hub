@@ -126,6 +126,13 @@ var (
 		"model_url_required",
 	)
 
+	// PreRecordedDataUnsupported identifies a benchmark that cannot score pre-recorded inputs.
+	PreRecordedDataUnsupported = createMessage(
+		constants.HTTPCodeBadRequest,
+		"Provider '{{.ProviderID}}' benchmark '{{.BenchmarkID}}' does not support pre-recorded data.",
+		"pre_recorded_data_unsupported",
+	)
+
 	// LocalRuntimeNotEnabled Local runtime is not enabled for provider '{{.ProviderID}}'. Please configure a local runtime command for this provider and try again.
 	LocalRuntimeNotEnabled = createMessage(
 		constants.HTTPCodeBadRequest,

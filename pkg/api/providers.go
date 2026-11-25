@@ -53,6 +53,9 @@ type BenchmarkResource struct {
 	// Used to auto-populate CollectionConfig.EvaluationTargets when the collection does not set it explicitly.
 	// Example values: model, agent.
 	EvaluationTargets []string `mapstructure:"evaluation_targets" yaml:"evaluation_targets" json:"evaluation_targets,omitempty"`
+
+	// SupportsPreRecordedData reports whether this benchmark can score pre-recorded inputs.
+	SupportsPreRecordedData bool `mapstructure:"supports_pre_recorded_data" yaml:"supports_pre_recorded_data,omitempty" json:"supports_pre_recorded_data"`
 }
 
 type ProviderConfig struct {

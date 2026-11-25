@@ -1681,36 +1681,49 @@ func TestHandleCreateEvaluationRejectsEmptyModelURL_WithRuntime(t *testing.T) {
 	}
 }
 
-func TestHandleCreateEvaluationAcceptsEmptyModelURL_AllPreRecordedData(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	providerConfigs := map[string]api.ProviderResource{
-		"garak": {
-			Resource: api.Resource{ID: "garak"},
-			ProviderConfig: api.ProviderConfig{
-				Benchmarks: []api.BenchmarkResource{
-					{ID: "bench-1"},
+func TestHandleCreateEvaluationPreRecordedData(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		supported bool
+		source    string
+		status    int
+		errorCode string
+	}{
+		{name: "accepts S3 with empty model URL", supported: true, source: `"s3":{"bucket":"b","key":"k","secret_ref":"s"}`, status: 202},
+		{name: "accepts PVC with empty model URL", supported: true, source: `"pvc":{"claim_name":"traces"}`, status: 202},
+		{name: "missing capability rejects submission", source: `"s3":{"bucket":"b","key":"k","secret_ref":"s"}`, status: 400, errorCode: "pre_recorded_data_unsupported"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			providerConfigs := map[string]api.ProviderResource{
+				"garak": {
+					Resource: api.Resource{ID: "garak"},
+					ProviderConfig: api.ProviderConfig{
+						Benchmarks: []api.BenchmarkResource{
+							{ID: "bench-1", SupportsPreRecordedData: tc.supported},
+						},
+					},
 				},
-			},
-		},
-	}
-	storage := &fakeStorage{providerConfigs: providerConfigs}
-	runtime := &fakeRuntime{}
-	validate := testhelpers.NewValidator(t)
-	h := handlers.New(storage, validate, runtime, nil, nil, nil, nil)
-	ctx := executioncontext.NewExecutionContext(context.Background(), "req-pre-recorded", logger, "test-user", "test-tenant")
+			}
+			storage := &fakeStorage{providerConfigs: providerConfigs}
+			runtime := &fakeRuntime{}
+			validate := testhelpers.NewValidator(t)
+			h := handlers.New(storage, validate, runtime, nil, nil, nil, nil)
+			ctx := executioncontext.NewExecutionContext(context.Background(), "req-pre-recorded", logger, "test-user", "test-tenant")
 
-	req := &bodyRequest{
-		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
-		body:        []byte(`{"name":"test-job","model":{"name":"model"},"benchmarks":[{"id":"bench-1","provider_id":"garak","test_data_ref":{"type":"pre_recorded_data","s3":{"bucket":"b","key":"k","secret_ref":"s"}}}]}`),
-	}
-	recorder := httptest.NewRecorder()
-	resp := MockResponseWrapper{recorder: recorder}
+			req := &bodyRequest{
+				MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
+				body:        []byte(`{"name":"test-job","model":{"name":"model"},"benchmarks":[{"id":"bench-1","provider_id":"garak","test_data_ref":{"type":"pre_recorded_data",` + tc.source + `}}]}`),
+			}
+			recorder := httptest.NewRecorder()
+			resp := MockResponseWrapper{recorder: recorder}
 
-	h.HandleCreateEvaluation(ctx, req, resp)
+			h.HandleCreateEvaluation(ctx, req, resp)
 
-	if recorder.Code != 202 {
-		t.Fatalf("expected 202 when all benchmarks have pre_recorded_data and model URL is empty, got %d: %s",
-			recorder.Code, recorder.Body.String())
+			if recorder.Code != tc.status || (tc.errorCode != "" && !strings.Contains(recorder.Body.String(), tc.errorCode)) {
+				t.Fatalf("expected status %d and error %q, got %d: %s", tc.status, tc.errorCode, recorder.Code, recorder.Body.String())
+			}
+		})
 	}
 }
 
@@ -1721,7 +1734,7 @@ func TestHandleCreateEvaluationRejectsEmptyModelURL_MixedBenchmarks(t *testing.T
 			Resource: api.Resource{ID: "garak"},
 			ProviderConfig: api.ProviderConfig{
 				Benchmarks: []api.BenchmarkResource{
-					{ID: "bench-1"},
+					{ID: "bench-1", SupportsPreRecordedData: true},
 					{ID: "bench-2"},
 				},
 			},
