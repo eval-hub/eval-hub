@@ -142,6 +142,9 @@ type Input struct {
 	UserPrompt      string
 	ReasoningEffort string
 	Budget          Budget
+	// ReviewFinal validates a draft during the same session. An empty message
+	// accepts it. A nonempty message requests another turn within this budget.
+	ReviewFinal func(context.Context, string) (correction string, err error)
 }
 
 // Result contains the final model response and accounting metadata. The caller

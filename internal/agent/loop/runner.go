@@ -148,6 +148,19 @@ func (r *Runner) Run(parent context.Context, input Input) (Result, error) {
 			if strings.TrimSpace(assistant.Content) == "" {
 				return Result{}, ErrInvalidModelResponse
 			}
+			if input.ReviewFinal != nil {
+				correction, err := input.ReviewFinal(ctx, assistant.Content)
+				if err != nil {
+					return Result{}, err
+				}
+				if correction != "" {
+					messages = append(messages, Message{Role: RoleUser, Content: correction})
+					if historySize(messages) > r.config.MaxHistoryBytes {
+						return Result{}, ErrInvalidModelResponse
+					}
+					continue
+				}
+			}
 			result.Final = assistant.Content
 			return result, nil
 		}

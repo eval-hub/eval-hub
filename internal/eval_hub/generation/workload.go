@@ -29,8 +29,9 @@ const (
 	legacyConfigParameter = "collection_generation_config"
 	RunnerEntrypoint      = "/app/eval-generation-worker"
 	maxConfigBytes        = 64 * 1024
-	maxResultBytes        = 512 * 1024
-	LaunchFailureMessage  = "The collection-generation worker could not be started."
+	// MaxResultBytes bounds the serialized proposal carried by a terminal event.
+	MaxResultBytes       = 512 * 1024
+	LaunchFailureMessage = "The collection-generation worker could not be started."
 )
 
 func init() {
@@ -329,7 +330,7 @@ func ResultFromAdditionalInfo(request api.CollectionGenerationRequest, info map[
 		return api.CollectionGenerationResult{}, errors.New("completed generation event has no proposal result")
 	}
 	raw, err := json.Marshal(rawValue)
-	if err != nil || len(raw) > maxResultBytes {
+	if err != nil || len(raw) > MaxResultBytes {
 		return api.CollectionGenerationResult{}, errors.New("generation proposal is malformed or exceeds the size limit")
 	}
 	var result api.CollectionGenerationResult
@@ -351,7 +352,7 @@ func ResultFromAdditionalInfo(request api.CollectionGenerationRequest, info map[
 		result.Actions[i].Summary = safeActionSummary(result.Actions[i].Name, result.Actions[i].Outcome)
 	}
 	normalized, err := json.Marshal(result)
-	if err != nil || len(normalized) > maxResultBytes {
+	if err != nil || len(normalized) > MaxResultBytes {
 		return api.CollectionGenerationResult{}, errors.New("generation proposal is malformed or exceeds the size limit")
 	}
 	return result, nil

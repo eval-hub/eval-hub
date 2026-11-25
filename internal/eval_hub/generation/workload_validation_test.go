@@ -71,8 +71,8 @@ func TestResultFromAdditionalInfoBoundsNormalizedSize(t *testing.T) {
 	raw := withPadding(1)
 	// Every byte of padding appears once in the structured config and once
 	// in the matching YAML. Leave at most two bytes for summary normalization.
-	raw = withPadding(1 + (maxResultBytes-len(raw)-1)/2)
-	if remaining := maxResultBytes - len(raw); remaining < 1 || remaining > 2 {
+	raw = withPadding(1 + (MaxResultBytes-len(raw)-1)/2)
+	if remaining := MaxResultBytes - len(raw); remaining < 1 || remaining > 2 {
 		t.Fatalf("fixture has %d bytes left under the proposal size limit", remaining)
 	}
 	if err := ValidateResult(request, proposal); err != nil {
@@ -243,7 +243,7 @@ func TestResultFromAdditionalInfoValidatesAndRedactsActionText(t *testing.T) {
 	if _, err := ResultFromAdditionalInfo(api.CollectionGenerationRequest{}, map[string]any{"collection_generation_result": make(chan int)}); err == nil {
 		t.Fatal("unmarshalable result was accepted")
 	}
-	if _, err := ResultFromAdditionalInfo(api.CollectionGenerationRequest{}, map[string]any{"collection_generation_result": strings.Repeat("x", maxResultBytes+1)}); err == nil {
+	if _, err := ResultFromAdditionalInfo(api.CollectionGenerationRequest{}, map[string]any{"collection_generation_result": strings.Repeat("x", MaxResultBytes+1)}); err == nil {
 		t.Fatal("oversized result was accepted")
 	}
 	if _, err := ResultFromAdditionalInfo(api.CollectionGenerationRequest{}, map[string]any{"collection_generation_result": json.RawMessage("{")}); err == nil {
