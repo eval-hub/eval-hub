@@ -21,9 +21,10 @@ const (
 	launchFailureCode = "launch_failed"
 )
 
-// ModelSecretValidator verifies a reference in the job's tenant namespace. Implementations
-// must not return or log Secret data.
-type ModelSecretValidator interface {
+// generationRuntime checks whether the runtime can start a generation worker.
+// Secret validation checks only for existence in the tenant namespace.
+type generationRuntime interface {
+	SupportsCollectionGeneration() bool
 	ValidateModelSecret(ctx context.Context, namespace, name string) error
 }
 
@@ -82,12 +83,12 @@ func (s *Service) Admit(ctx context.Context, tenant api.Tenant, owner api.User, 
 	if image == "" {
 		return nil, errors.New("collection-generation runner image is not configured")
 	}
+	runtime, ok := s.runtime.(generationRuntime)
+	if !ok || !runtime.SupportsCollectionGeneration() {
+		return nil, errors.New("runtime does not support collection generation")
+	}
 	if auth := normalized.Model.Auth; auth != nil {
-		validator, ok := s.runtime.(ModelSecretValidator)
-		if !ok {
-			return nil, errors.New("runtime cannot validate model Secret references")
-		}
-		if err := validator.ValidateModelSecret(ctx, tenant.String(), auth.SecretRef); err != nil {
+		if err := runtime.ValidateModelSecret(ctx, tenant.String(), auth.SecretRef); err != nil {
 			return nil, fmt.Errorf("model Secret reference %q is unavailable in tenant namespace %q", auth.SecretRef, tenant.String())
 		}
 	}

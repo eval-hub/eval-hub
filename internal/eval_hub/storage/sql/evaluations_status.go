@@ -557,6 +557,16 @@ func normalizeCollectionGenerationEvent(job *api.EvaluationJobResource, event *a
 		event.AdditionalInfo = map[string]any{"collection_generation_result": result}
 		return nil
 	}
+	if event.AdditionalInfo == nil && event.ErrorMessage != nil {
+		// The operator's pod and queue controllers report these failures using
+		// the generic status event. Discard their message before storing it.
+		switch event.ErrorMessage.MessageCode {
+		case "RUNTIME_FAILURE", "queue_error", "gpu_unavailable":
+			event.AdditionalInfo = map[string]any{
+				"collection_generation_error": api.CollectionGenerationError{Code: "workload_failed"},
+			}
+		}
+	}
 	failure, err := generation.FailureFromAdditionalInfo(event.AdditionalInfo)
 	if err != nil {
 		return fmt.Errorf("invalid generation failure: %w", err)

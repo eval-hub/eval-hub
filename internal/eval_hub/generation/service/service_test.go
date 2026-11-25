@@ -12,6 +12,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/generation"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/local"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -167,7 +168,8 @@ func (r *generationTestRuntime) WithContext(ctx context.Context) abstractions.Ru
 	r.ctx = ctx
 	return r
 }
-func (r *generationTestRuntime) Name() string { return "generation-test" }
+func (r *generationTestRuntime) Name() string                       { return "generation-test" }
+func (r *generationTestRuntime) SupportsCollectionGeneration() bool { return true }
 func (r *generationTestRuntime) RunEvaluationJob(job *api.EvaluationJobResource, _ []api.EvaluationBenchmarkConfig, _ abstractions.RuntimeStorage) error {
 	r.runCalls++
 	r.runJob = job
@@ -183,8 +185,6 @@ func (r *generationTestRuntime) ValidateModelSecret(_ context.Context, namespace
 	r.secretNamespace, r.secretName = namespace, name
 	return r.secretErr
 }
-
-type runtimeWithoutSecretValidator struct{ abstractions.Runtime }
 
 func newGenerationTestService(storage *generationTestStorage, runtime abstractions.Runtime) *Service {
 	return NewService(storage, runtime, &config.GenerationConfig{RunnerImage: "registry.example/evalhub:v1"}, nil)
@@ -233,10 +233,6 @@ func TestGenerationServiceAdmitSecretValidationAndSafeLaunchFailure(t *testing.T
 	if runtime.secretChecks != 1 || runtime.secretNamespace != "tenant-a" || runtime.secretName != "model-auth" {
 		t.Fatalf("Secret validation scope = %d %q %q", runtime.secretChecks, runtime.secretNamespace, runtime.secretName)
 	}
-	if _, err := newGenerationTestService(&generationTestStorage{}, &runtimeWithoutSecretValidator{}).Admit(context.Background(), "tenant-a", "user-a", request); err == nil {
-		t.Fatal("runtime without Secret validation capability was accepted")
-	}
-
 	storage = &generationTestStorage{}
 	runtime = &generationTestRuntime{runErr: errors.New("unsafe runtime detail")}
 	job, err := newGenerationTestService(storage, runtime).Admit(context.Background(), "tenant-a", "user-a", request)
@@ -249,6 +245,26 @@ func TestGenerationServiceAdmitSecretValidationAndSafeLaunchFailure(t *testing.T
 	storage = &generationTestStorage{updateErr: errors.New("status write failed")}
 	if _, err := newGenerationTestService(storage, runtime).Admit(context.Background(), "tenant-a", "user-a", request); err == nil {
 		t.Fatal("failure to persist launch error was ignored")
+	}
+}
+
+func TestGenerationServiceAdmitChecksRuntimeWithoutModelAuth(t *testing.T) {
+	request := validRequest()
+	request.Model.Auth = nil
+	storage := &generationTestStorage{}
+	service := newGenerationTestService(storage, &local.LocalRuntime{})
+	_, err := service.Admit(context.Background(), "tenant-a", "user-a", request)
+	if err == nil || err.Error() != "runtime does not support collection generation" || storage.created {
+		t.Fatalf("local runtime admission = %v, persisted = %v", err, storage.created)
+	}
+
+	runtime := &generationTestRuntime{}
+	service = newGenerationTestService(storage, runtime)
+	if _, err := service.Admit(context.Background(), "tenant-a", "user-a", request); err != nil {
+		t.Fatalf("supported runtime rejected an unauthenticated model endpoint: %v", err)
+	}
+	if runtime.secretChecks != 0 || runtime.runCalls != 1 {
+		t.Fatalf("admission checked %d Secrets and launched %d jobs", runtime.secretChecks, runtime.runCalls)
 	}
 }
 

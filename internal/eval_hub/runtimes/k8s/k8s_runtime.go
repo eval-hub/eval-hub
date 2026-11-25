@@ -103,10 +103,15 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 	}
 }
 
+// SupportsCollectionGeneration reports whether this runtime can launch generation Jobs.
+func (r *K8sRuntime) SupportsCollectionGeneration() bool {
+	return r != nil && r.helper != nil
+}
+
 // ValidateModelSecret verifies that a generation request's credential reference
 // exists in the tenant namespace without exposing or logging Secret contents.
 func (r *K8sRuntime) ValidateModelSecret(ctx context.Context, namespace, name string) error {
-	if r == nil || r.helper == nil {
+	if !r.SupportsCollectionGeneration() {
 		return errors.New("Kubernetes Secret lookup is unavailable")
 	}
 	if strings.TrimSpace(namespace) == "" || strings.TrimSpace(name) == "" {

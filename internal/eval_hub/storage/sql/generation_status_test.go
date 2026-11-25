@@ -44,6 +44,15 @@ func TestGenerationRejectsInvalidEventsWithoutChangingState(t *testing.T) {
 		}, messages.RequestValidationFailed},
 		{"unsupported state", func(e *api.BenchmarkStatusEvent) { e.Status = api.StateCancelled }, messages.RequestValidationFailed},
 		{"unstructured failure", func(e *api.BenchmarkStatusEvent) { e.Status = api.StateFailed }, messages.RequestValidationFailed},
+		{"unrecognized infrastructure failure", func(e *api.BenchmarkStatusEvent) {
+			e.Status = api.StateFailed
+			e.ErrorMessage = &api.MessageInfo{MessageCode: "unrecognized", Message: "unstructured failure"}
+		}, messages.RequestValidationFailed},
+		{"invalid typed failure with an infrastructure message", func(e *api.BenchmarkStatusEvent) {
+			e.Status = api.StateFailed
+			e.ErrorMessage = &api.MessageInfo{MessageCode: "RUNTIME_FAILURE", Message: "pod failure"}
+			e.AdditionalInfo = map[string]any{"collection_generation_error": api.CollectionGenerationError{Code: "guardrails_rejected"}}
+		}, messages.RequestValidationFailed},
 		{"guardrail rejection without category", func(e *api.BenchmarkStatusEvent) {
 			e.Status = api.StateFailed
 			e.AdditionalInfo = map[string]any{"collection_generation_error": api.CollectionGenerationError{Code: "guardrails_rejected"}}
@@ -175,6 +184,75 @@ func TestCollectionGenerationCompletionRequiresCallerVisibleCatalog(t *testing.T
 	testCollectionGenerationCompletionRequiresCallerVisibleCatalog(t, drivers[0], getDBName())
 }
 
+func TestGenerationInfrastructureFailuresBecomeTerminal(t *testing.T) {
+	testGenerationInfrastructureFailuresBecomeTerminal(t, drivers[0], getDBName())
+}
+
+func testGenerationInfrastructureFailuresBecomeTerminal(t *testing.T, driver, databaseName string) {
+	t.Helper()
+	store, err := getTestStorage(t, driver, databaseName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	tenant, owner := api.Tenant(common.GUID()), api.User("event-owner")
+	scoped := store.WithTenant(tenant).WithOwner(owner).WithWorkloadType(workloads.CollectionGeneration)
+	for _, tc := range []struct {
+		code    string
+		running bool
+	}{
+		{code: "RUNTIME_FAILURE", running: true},
+		{code: "queue_error"},
+		{code: "gpu_unavailable"},
+	} {
+		t.Run(tc.code, func(t *testing.T) {
+			var id string
+			if tc.running {
+				id = createRunningGenerationJob(t, scoped, tenant, owner)
+			} else {
+				id = common.GUID()
+				if err := scoped.CreateEvaluationJob(generationJobForRetention(t, id, tenant, owner, 24*time.Hour)); err != nil {
+					t.Fatal(err)
+				}
+				removeGenerationFixture(t, scoped, id)
+			}
+			event := &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+				ProviderID: generation.ProviderID, ID: generation.BenchmarkID, Status: api.StateFailed,
+				ErrorMessage: &api.MessageInfo{MessageCode: tc.code, Message: "private infrastructure details"},
+			}}
+			if err := scoped.UpdateEvaluationJob(id, event); err != nil {
+				t.Fatalf("persist infrastructure failure: %v", err)
+			}
+			job, err := scoped.GetEvaluationJob(id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resource, err := generation.ResourceFromJob(job)
+			if err != nil {
+				t.Fatal(err)
+			}
+			failure := resource.Status.Error
+			if resource.Status.State != api.OverallStateFailed || failure == nil || failure.Code != "workload_failed" ||
+				failure.Category != "" || resource.Status.Progress != nil || resource.Result != nil {
+				t.Fatalf("incorrect generation status: %+v", resource.Status)
+			}
+			if job.Status.Message.Message != "The collection-generation worker failed." ||
+				job.Status.Benchmarks[0].ErrorMessage.Message != job.Status.Message.Message ||
+				failure.Message != job.Status.Message.Message {
+				t.Fatalf("infrastructure diagnostic was not sanitized: %+v", job.Status)
+			}
+			cleaner := store.(generationRetentionCleaner)
+			removed, err := cleaner.DeleteExpiredCollectionGenerationJobs(time.Now().UTC().Add(25*time.Hour), 100)
+			if err != nil || removed == 0 {
+				t.Fatalf("no terminal retention expiry after infrastructure failure: deleted %d, err %v", removed, err)
+			}
+			if _, err := scoped.GetEvaluationJob(id); err == nil {
+				t.Fatal("expired infrastructure failure was not removed")
+			}
+		})
+	}
+}
+
 func testCollectionGenerationCompletionRequiresCallerVisibleCatalog(t *testing.T, driver, databaseName string) {
 	t.Helper()
 	store, err := getTestStorage(t, driver, databaseName)
@@ -239,6 +317,9 @@ func TestCollectionGenerationSQLPostgres(t *testing.T) {
 	t.Cleanup(func() { stopPostgres(t, databaseName, user, image) })
 	t.Run("status-results-catalog", func(t *testing.T) {
 		testCollectionGenerationCompletionRequiresCallerVisibleCatalog(t, drivers[1], databaseName)
+	})
+	t.Run("infrastructure-failure", func(t *testing.T) {
+		testGenerationInfrastructureFailuresBecomeTerminal(t, drivers[1], databaseName)
 	})
 	t.Run("retention-expiry-and-concurrency", func(t *testing.T) {
 		for _, tc := range []struct {
