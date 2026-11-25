@@ -620,32 +620,3 @@ func (tc *scenarioConfig) theOCIManifestShouldContainAnnotation(key, expectedVal
 	tc.logDebug("OCI manifest annotation %q = %q (verified)\n", key, actualStr)
 	return nil
 }
-
-// Evaluation completion precedes OCI completion, so wait for the saved workflow outcome.
-func (tc *scenarioConfig) iWaitForOCICompletion() error {
-	deadline := time.Now().Add(tc.waitDeadline)
-	for time.Now().Before(deadline) {
-		if err := tc.iSendARequestImpl(http.MethodGet, "/api/v1/evaluations/jobs/{id}", "", "wait for OCI completion"); err != nil {
-			return err
-		}
-		if tc.response.StatusCode != http.StatusOK {
-			return tc.logError(fmt.Errorf("job GET returned %d", tc.response.StatusCode))
-		}
-		state, _ := tc.getJsonPath("$.results.oci.status.state")
-		switch state {
-		case "completed":
-			for _, path := range []string{"$.results.oci.evaluation_card.oci_digest", "$.results.oci.evaluation_bundle.oci_digest"} {
-				value, err := tc.getJsonPath(path)
-				if err != nil || !strings.HasPrefix(value, "sha256:") {
-					return tc.logError(fmt.Errorf("missing published reference at %s", path))
-				}
-			}
-			return nil
-		case "failed":
-			message, _ := tc.getJsonPath("$.results.oci.status.message.message")
-			return tc.logError(fmt.Errorf("OCI processing failed: %s", message))
-		}
-		time.Sleep(tc.waitInterval)
-	}
-	return tc.logError(fmt.Errorf("timed out waiting for OCI completion"))
-}

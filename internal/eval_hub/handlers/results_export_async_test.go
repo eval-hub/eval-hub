@@ -110,6 +110,7 @@ func (f exportFunc) Export(ctx context.Context, job *api.EvaluationJobResource, 
 type statusWrite struct {
 	state   api.OCIProcessingState
 	card    *api.OCIArtifactReference
+	bundle  *api.OCIArtifactReference
 	ctx     context.Context
 	err     error
 	message string
@@ -170,7 +171,7 @@ func (s *detachedExportStorage) UpdateEvaluationJob(string, *api.StatusEvent) er
 	}
 	return nil
 }
-func (s *detachedExportStorage) UpdateEvaluationJobOCI(_ string, status *api.OCIProcessingStatus, card, _ *api.OCIArtifactReference) error {
+func (s *detachedExportStorage) UpdateEvaluationJobOCI(_ string, status *api.OCIProcessingStatus, card, bundle *api.OCIArtifactReference) error {
 	if status.State == api.OCIProcessingRunning && s.runningStarted != nil {
 		close(s.runningStarted)
 		<-s.releaseRunning
@@ -188,7 +189,7 @@ func (s *detachedExportStorage) UpdateEvaluationJobOCI(_ string, status *api.OCI
 	if status.State == api.OCIProcessingCompleted && s.failCompleted {
 		err = errors.New("completion write failed")
 	}
-	s.writes <- statusWrite{status.State, card, s.ctx, err, status.Message.Message}
+	s.writes <- statusWrite{state: status.State, card: card, bundle: bundle, ctx: s.ctx, err: err, message: status.Message.Message}
 	if s.panicCompleted && status.State == api.OCIProcessingCompleted {
 		panic("completion write panicked")
 	}
@@ -290,7 +291,7 @@ func TestExportAsyncSurvivesRequestCancellationDuringExport(t *testing.T) {
 	}
 }
 
-func TestExportAsyncPreservesPublishedCardOnCompletionFailure(t *testing.T) {
+func TestExportAsyncPreservesPublishedArtifactsOnCompletionFailure(t *testing.T) {
 	for _, panicCompleted := range []bool{false, true} {
 		t.Run(map[bool]string{false: "storage error", true: "storage panic"}[panicCompleted], func(t *testing.T) {
 			job := completedOCIJob()
@@ -304,7 +305,7 @@ func TestExportAsyncPreservesPublishedCardOnCompletionFailure(t *testing.T) {
 			cancel()
 			h.exportEvaluationResultsAsync(ctx, storage, job, nil)
 			running := nextStatusWrite(t, storage, api.OCIProcessingRunning)
-			if running.card != nil {
+			if running.card != nil || running.bundle != nil {
 				t.Fatal("running write recorded an unpublished artifact")
 			}
 			var completed statusWrite
@@ -319,6 +320,9 @@ func TestExportAsyncPreservesPublishedCardOnCompletionFailure(t *testing.T) {
 			failed := nextStatusWrite(t, storage, api.OCIProcessingFailed)
 			if !reflect.DeepEqual(failed.card, published) {
 				t.Fatalf("failure lost published reference: got %+v, want %+v", failed.card, published)
+			}
+			if !reflect.DeepEqual(completed.bundle, publishedBundle()) || !reflect.DeepEqual(failed.bundle, publishedBundle()) {
+				t.Fatalf("completion failure lost published bundle: completion=%+v failure=%+v", completed.bundle, failed.bundle)
 			}
 			if failed.ctx == completed.ctx || failed.ctx == running.ctx {
 				t.Fatal("failure reused a previous write context")
@@ -401,7 +405,7 @@ func TestExportWorkerRecoversPanic(t *testing.T) {
 			if !strings.Contains(logs.String(), "stack=") || !strings.Contains(logs.String(), "publisher panicked") {
 				t.Fatal("panic and stack missing from logs")
 			}
-			if strings.Contains(failed.message, "goroutine") || failed.message != "Evaluation-card OCI processing panicked" {
+			if strings.Contains(failed.message, "goroutine") || failed.message != "OCI results processing panicked" {
 				t.Fatalf("panic status message: %s", failed.message)
 			}
 			if nested && !strings.Contains(logs.String(), "failure write panicked") {

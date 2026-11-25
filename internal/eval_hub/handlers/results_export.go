@@ -81,12 +81,13 @@ func (h *Handlers) exportEvaluationResults(ctx context.Context, storage abstract
 		if card != nil && h.validate.Struct(card) != nil {
 			card = nil
 		}
-		logger.Error("OCI evaluation-card processing failed", "job_id", job.Resource.ID, "operation", code, "cause", message)
+		logger.Error("OCI results processing failed", "job_id", job.Resource.ID, "operation", code, "cause", message)
 		reportOCI(api.OCIProcessingFailed, code, message, card, bundle)
 	}
 	// OCI publishing proceeds only after its running status is saved successfully.
 	ociReady := false
 	var published *api.OCIArtifactReference
+	var publishedBundle *api.OCIArtifactReference
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			// Recovery itself invokes storage and logging; guard against another panic.
@@ -97,7 +98,7 @@ func (h *Handlers) exportEvaluationResults(ctx context.Context, storage abstract
 			}()
 			logger.Error("Panic during evaluation export", "job_id", job.Resource.ID, "panic", recovered, "stack", string(debug.Stack()))
 			if ociReady {
-				failOCI(constants.MessageCodeOCIProcessingFailed, "Evaluation-card OCI processing panicked", published, nil)
+				failOCI(constants.MessageCodeOCIProcessingFailed, "OCI results processing panicked", published, publishedBundle)
 			}
 		}
 	}()
@@ -162,6 +163,7 @@ func (h *Handlers) exportEvaluationResults(ctx context.Context, storage abstract
 		failOCI(constants.MessageCodeOCIProcessingFailed, err.Error(), result.OCIArtifact, nil)
 		return
 	}
+	publishedBundle = bundle
 	// Save both outputs and completion together, without an intermediate card write.
 	if !reportOCI(api.OCIProcessingCompleted, constants.MessageCodeOCIProcessingCompleted, "OCI processing completed", result.OCIArtifact, bundle) {
 		failOCI(constants.MessageCodeOCIProcessingFailed, "Persist OCI completion: storage update failed", result.OCIArtifact, bundle)
@@ -173,6 +175,8 @@ func (h *Handlers) publishEvaluationBundle(ctx context.Context, job *api.Evaluat
 	if h.bundlePublisherFactory == nil {
 		return nil, &oci.OperationError{Operation: "Initialize evaluation bundle publisher", Reason: "factory is unavailable"}
 	}
+	ctx, cancel := context.WithTimeout(ctx, h.serviceConfig.EffectiveOCIPushTimeout())
+	defer cancel()
 	publisher, err := h.bundlePublisherFactory.NewPublisher(ctx, job)
 	if err != nil {
 		return nil, &oci.OperationError{Operation: "Initialize evaluation bundle publisher", Err: err}

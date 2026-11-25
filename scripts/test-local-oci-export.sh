@@ -46,6 +46,13 @@ for tool in curl jq oras shasum; do
   command -v "$tool" >/dev/null || { printf 'Missing required tool: %s\n' "$tool" >&2; exit 1; }
 done
 
+# ORAS prettifies manifests, but blob contents and API responses need jq.
+pretty_print_json() {
+  local file="$1"
+  jq '.' "$file" > "$file.pretty"
+  mv "$file.pretty" "$file"
+}
+
 # Build a job request with anonymous OCI export over plain HTTP.
 # The local test adapter returns deterministic results without a model server.
 jq -n \
@@ -91,6 +98,7 @@ curl --fail-with-body -sS \
   -H 'Content-Type: application/json' \
   -d @"$output_dir/evaluation-job-request.json" \
   "$base_url/api/v1/evaluations/jobs" > "$output_dir/evaluation-job-create-response.json"
+pretty_print_json "$response_file"
 response_file=""
 
 job_id=$(jq -er '.resource.id' "$output_dir/evaluation-job-create-response.json")
@@ -101,6 +109,7 @@ for ((attempt = 0; attempt < 120; attempt++)); do
   response_file="$output_dir/evaluation-job-status-response.json"
   curl --fail-with-body -sS \
     "$base_url/api/v1/evaluations/jobs/$job_id" > "$output_dir/evaluation-job-status-response.json"
+  pretty_print_json "$response_file"
   response_file=""
 
   state=$(jq -r '.status.state' "$output_dir/evaluation-job-status-response.json")
@@ -145,8 +154,8 @@ jq -e --arg digest "$manifest_digest" --arg ref "$ref@$manifest_digest" --arg st
 
 # Retrieve the index by the API's saved digest and independently verify the tag.
 allowance=$((128 - 1 - ${#job_id}))
-bundle_tag="$job_id"
-if [[ -n "$oci_tag" ]]; then bundle_tag="${oci_tag:0:allowance}-$job_id"; fi
+bundle_prefix=${oci_tag:-evaluation-bundle}
+bundle_tag="${bundle_prefix:0:allowance}-$job_id"
 bundle_ref="$registry/$repository:$bundle_tag"
 bundle_digest=$(jq -er '.results.oci.evaluation_bundle.oci_digest' "$output_dir/evaluation-job-status-response.json")
 jq -e --arg ref "$bundle_ref@$bundle_digest" \
@@ -154,6 +163,8 @@ jq -e --arg ref "$bundle_ref@$bundle_digest" \
 oras manifest fetch --plain-http "$registry/$repository@$bundle_digest" > "$output_dir/evaluation-bundle-index.json"
 [[ "$bundle_digest" == "$(oras manifest fetch --plain-http --descriptor "$bundle_ref" | jq -er '.digest')" ]]
 [[ "$bundle_digest" == "sha256:$(shasum -a 256 "$output_dir/evaluation-bundle-index.json" | cut -d ' ' -f 1)" ]]
+# Fetch the readable representation only after verifying the original bytes.
+oras manifest fetch --plain-http --pretty "$registry/$repository@$bundle_digest" > "$output_dir/evaluation-bundle-index.json"
 
 # Derive membership from recorded results/statuses, preserving repeated runs and indices.
 jq -e --arg id "$job_id" --arg card "$manifest_digest" --arg state "$expected_state" \
@@ -188,12 +199,14 @@ while IFS= read -r descriptor; do
   child_media_type=$(jq -er '.mediaType' "$child_file")
   jq -e --argjson size "$child_size" --arg media "$child_media_type" \
     '.size == $size and .mediaType == $media' <<< "$descriptor" >/dev/null
+  oras manifest fetch --plain-http --pretty "$registry/$repository@$child_digest" > "$child_file"
 
   config_digest=$(jq -er '.config.digest' "$child_file")
   oras blob fetch --plain-http "$registry/$repository@$config_digest" --output "$config_file"
   [[ "$config_digest" == "sha256:$(shasum -a 256 "$config_file" | cut -d ' ' -f 1)" ]]
   config_size=$(wc -c < "$config_file" | tr -d ' ')
   jq -e --argjson size "$config_size" '.config.size == $size' "$child_file" >/dev/null
+  pretty_print_json "$config_file"
 
   if [[ "$(jq -er '.annotations.artifact_role' <<< "$descriptor")" == evaluation-card ]]; then
     card_manifest="$child_file"
@@ -204,6 +217,7 @@ while IFS= read -r descriptor; do
     [[ "$layer_digest" == "sha256:$(shasum -a 256 "$card" | cut -d ' ' -f 1)" ]]
     layer_size=$(wc -c < "$card" | tr -d ' ')
     jq -e --argjson size "$layer_size" '.layers[0].size == $size' "$child_file" >/dev/null
+    pretty_print_json "$card"
     printf 'Evaluation card downloaded by ORAS: %s\n' "$card"
   fi
   child_index=$((child_index + 1))
@@ -240,6 +254,7 @@ jq -e \
 
 # A subsequent GET must retain the saved references and evaluation outcome.
 curl --fail-with-body -sS "$base_url/api/v1/evaluations/jobs/$job_id" > "$output_dir/evaluation-job-retrieved-response.json"
+pretty_print_json "$output_dir/evaluation-job-retrieved-response.json"
 jq -e --slurpfile original "$output_dir/evaluation-job-status-response.json" \
   '.results.oci == $original[0].results.oci and .status.state == $original[0].status.state' "$output_dir/evaluation-job-retrieved-response.json" >/dev/null
 printf 'Verified OCI evaluation card and bundle for job %s in %s\n' "$job_id" "$output_dir"

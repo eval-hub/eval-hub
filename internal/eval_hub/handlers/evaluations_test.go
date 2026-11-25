@@ -1051,7 +1051,7 @@ func TestHandleUpdateEvaluationDoesNotStampStartAfterLookupFailure(t *testing.T)
 	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{getJobErr: errors.New("temporary lookup failure")}}
 	validate := testhelpers.NewValidator(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil, nil)
+	h := handlers.New(storage, validate, &fakeRuntime{}, nil, nil, nil, nil, nil)
 	body := []byte(`{"benchmark_status_event":{"provider_id":"collection-generation","id":"generate_collection","status":"running"}}`)
 	bodyReq := &bodyRequest{
 		MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs/job-generation/events"),
