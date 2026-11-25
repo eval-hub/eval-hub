@@ -5,6 +5,8 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	"go.yaml.in/yaml/v4"
 )
 
 func TestFileID(t *testing.T) {
@@ -17,6 +19,63 @@ func TestFileID(t *testing.T) {
 		t.Run(tc.id, func(t *testing.T) {
 			if got := fileID(tc.id); got != tc.want {
 				t.Fatalf("fileID(%q) = %q; want %q", tc.id, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestHLESmokeScorerMatchesCollection(t *testing.T) {
+	data, err := os.ReadFile("../../../config/collections/knowledge-reasoning-v1.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var collection struct {
+		Benchmarks []struct {
+			ID         string         `yaml:"id"`
+			Parameters map[string]any `yaml:"parameters"`
+		} `yaml:"benchmarks"`
+	}
+	if err := yaml.Unmarshal(data, &collection); err != nil {
+		t.Fatal(err)
+	}
+	var expected any
+	for _, benchmark := range collection.Benchmarks {
+		if benchmark.ID == "inspect/hle" {
+			expected = benchmark.Parameters["task_args"].(map[string]any)["scorer"]
+		}
+	}
+	if expected == nil {
+		t.Fatal("collection must define the supported HLE scorer configuration")
+	}
+	want, err := json.Marshal(expected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generated, err := minimalFixture("inspect", "inspect/hle")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err = os.ReadFile("../testdata/inspect/inspect%2Fhle.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var checkedIn map[string]any
+	if err := json.Unmarshal(data, &checkedIn); err != nil {
+		t.Fatal(err)
+	}
+	for name, fixture := range map[string]map[string]any{"generated": generated, "checked-in": checkedIn} {
+		t.Run(name, func(t *testing.T) {
+			parameters := fixture["parameters"].(map[string]any)
+			args, ok := parameters["task_args"].(map[string]any)
+			if !ok {
+				t.Fatal("HLE smoke must explicitly select the configured grader instead of task defaults")
+			}
+			got, err := json.Marshal(args["scorer"])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != string(want) {
+				t.Fatalf("HLE smoke scorer must match the single-grader collection configuration:\ngot  %s\nwant %s", got, want)
 			}
 		})
 	}
