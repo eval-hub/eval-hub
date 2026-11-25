@@ -230,7 +230,7 @@ func setBenchmarkCompletionTime(benchmark *api.BenchmarkStatus, now time.Time) {
 	}
 }
 
-func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runStatus *api.StatusEvent, benchmarkStatus *api.BenchmarkStatus, receivedAt time.Time) {
+func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runStatus *api.StatusEvent, benchmarkStatus *api.BenchmarkStatus, receivedAt time.Time) error {
 	// A pending benchmark can start on its first running event, or use an
 	// explicitly supplied start when an adapter skips running and reports terminal.
 	if benchmarkStatus.Status == api.StateRunning {
@@ -257,12 +257,16 @@ func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runSt
 		if benchmark.ID == runStatus.BenchmarkStatusEvent.ID &&
 			benchmark.ProviderID == runStatus.BenchmarkStatusEvent.ProviderID &&
 			benchmark.BenchmarkIndex == runStatus.BenchmarkStatusEvent.BenchmarkIndex {
+			if benchmark.Status == api.StateCompleted && benchmarkStatus.Status == api.StateFailed {
+				// Reject a late failure before the caller can overwrite the saved results.
+				return se.NewServiceError(messages.BenchmarkCanNotBeUpdated, "Index", benchmark.BenchmarkIndex, "NewStatus", benchmarkStatus.Status, "Status", benchmark.Status)
+			}
 			if api.IsBenchmarkTerminalState(benchmark.Status) && !api.IsBenchmarkTerminalState(benchmarkStatus.Status) {
-				return
+				return nil
 			}
 			// Ignore late pending events once the benchmark is already running.
 			if benchmark.Status == api.StateRunning && benchmarkStatus.Status == api.StatePending {
-				return
+				return nil
 			}
 			// Only a transition out of pending may establish a start. Preserve
 			// even an absent start on later running or terminal status updates.
@@ -274,11 +278,12 @@ func (s *sqlStorage) updateBenchmarkStatus(job *api.EvaluationJobResource, runSt
 			}
 			setBenchmarkCompletionTime(benchmarkStatus, time.Now())
 			job.Status.Benchmarks[index] = *benchmarkStatus
-			return
+			return nil
 		}
 	}
 	setBenchmarkCompletionTime(benchmarkStatus, time.Now())
 	job.Status.Benchmarks = append(job.Status.Benchmarks, *benchmarkStatus)
+	return nil
 }
 
 // UpdateEvaluationJobWithRunStatus runs in a transaction: fetches the job, merges RunStatusInternal into the entity, and persists.
@@ -325,7 +330,9 @@ func (s *sqlStorage) UpdateEvaluationJob(id string, runStatus *api.StatusEvent) 
 			CompletedAt:    runStatus.BenchmarkStatusEvent.CompletedAt,
 			BenchmarkIndex: runStatus.BenchmarkStatusEvent.BenchmarkIndex,
 		}
-		s.updateBenchmarkStatus(job, runStatus, &benchmark, receivedAt)
+		if err := s.updateBenchmarkStatus(job, runStatus, &benchmark, receivedAt); err != nil {
+			return err
+		}
 
 		outcome := s.computeBenchmarkTestResult(txn, job, runStatus.BenchmarkStatusEvent, collection)
 

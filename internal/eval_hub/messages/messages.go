@@ -70,6 +70,12 @@ var (
 		"job_can_not_be_updated",
 	)
 
+	BenchmarkCanNotBeUpdated = createMessage(
+		constants.HTTPCodeConflict,
+		"Benchmark {{.Index}} cannot be marked {{.NewStatus}} because its state is '{{.Status}}'.",
+		"benchmark_can_not_be_updated",
+	)
+
 	// PostProcessingSourceNotCompleted The source evaluation job must be completed.
 	PostProcessingSourceNotCompleted = createMessage(
 		constants.HTTPCodeConflict,
