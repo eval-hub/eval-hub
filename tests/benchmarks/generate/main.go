@@ -146,8 +146,16 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 			f["notes"] = "Requires KFP_ENDPOINT, KFP_NAMESPACE, and KFP_S3_SECRET_NAME for a working Data Science Pipelines deployment and Data Connection Secret. Configure KFP authentication through the model auth Secret. One example per probe; broad groups still invoke multiple probes."
 		}
 		if benchmark == "intents" {
-			p["intents_models"] = map[string]any{"judge": map[string]any{"name": "${JUDGE_MODEL_NAME}", "url": "${JUDGE_BASE_URL}"}}
-			p["sdg_model"], p["sdg_api_base"] = "openai/${MODEL_NAME}", "${MODEL_URL}"
+			judge := map[string]any{"name": "${JUDGE_MODEL_NAME}"}
+			p["intents_models"] = map[string]any{"judge": judge}
+			p["sdg_model"] = "openai/${MODEL_NAME}"
+			if provider == "garak-kfp" {
+				judge["url"] = "${JUDGE_BASE_URL}"
+				p["sdg_api_base"] = "${MODEL_URL}"
+			} else {
+				p["sdg_max_concurrency"] = 1
+				f["notes"] = "Configure sdg_url/sdg_api-key and judge_url/judge_api-key in MODEL_AUTH_SECRET_REF. One example per probe; SDG generates prompts serially."
+			}
 		}
 	case "guidellm":
 		p["num_examples"], p["max_requests"], p["max_seconds"] = 1, 1, 10
@@ -226,6 +234,26 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 			f["notes"] = fmt.Sprintf("One example from representative task inspect_evals/%s. Agent/code tasks still require their sandbox and external services; GPQA requires dataset access.", task)
 		}
 		switch benchmark {
+		case "inspect/hle":
+			// HLE defaults to two graders; smoke uses only the configured role.
+			p["task_args"] = map[string]any{
+				"scorer": map[string]any{
+					"scorer":  "inspect_evals/hle/regex_judge",
+					"graders": []string{"grader"},
+					"metrics": []string{
+						"inspect_evals/hle/accuracy",
+						"inspect_evals/hle/stderr",
+						"inspect_evals/hle/cerr",
+						"inspect_evals/hle/unscored",
+					},
+					"args": map[string]any{
+						"template":            "regex_judge_template",
+						"instructions":        "regex_judge_instructions",
+						"max_grader_attempts": 3,
+					},
+				},
+			}
+			f["notes"] = "One sample with a single configured grader. Requires JUDGE_MODEL_NAME and judge_api-key/judge_url in MODEL_AUTH_SECRET_REF. Scorer prompts and metrics match knowledge-reasoning-v1."
 		case "inspect/mask":
 			p["task_args"] = map[string]any{"binary_judge_model": "openai/${MODEL_NAME}", "numeric_judge_model": "openai/${MODEL_NAME}"}
 			f["notes"] = "One smoke sample, using the target model and its endpoint/credentials for both judges instead of unavailable task-default models. Not an independent accuracy assessment."

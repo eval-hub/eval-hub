@@ -16,6 +16,9 @@ local harness = std.parseJson(std.extVar('harness'));
   mlflow(name)::
     if harness.mlflow_enabled then name else '',
 
+  disconnected()::
+    harness.disconnected,
+
   // Connected runs may select the serving model's tokenizer; offline runs use staged data.
   defaultTokenizer()::
     if harness.disconnected then '/test_data/tokenizer'
