@@ -76,6 +76,21 @@ type referenceSummary struct {
 	Benchmarks []benchmarkSummary `json:"benchmarks,omitempty"`
 }
 
+func (benchmark benchmarkSummary) compact() benchmarkSummary {
+	return benchmarkSummary{
+		ProviderID: benchmark.ProviderID, ID: benchmark.ID,
+		Name: benchmark.Name, PrimaryScore: benchmark.PrimaryScore,
+	}
+}
+
+func (benchmark benchmarkSummary) identity() benchmarkSummary {
+	return benchmarkSummary{ProviderID: benchmark.ProviderID, ID: benchmark.ID}
+}
+
+func (reference referenceSummary) identity() referenceSummary {
+	return referenceSummary{ID: reference.ID, System: reference.System}
+}
+
 func (tools catalogTools) registry() (*loop.Registry, error) {
 	const page = `"offset":{"type":"integer","minimum":0,"maximum":10000},"limit":{"type":"integer","minimum":1,"maximum":5}`
 	const provider = `"provider_id":{"type":"string","pattern":"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"}`
@@ -132,7 +147,7 @@ func (tools catalogTools) search(ctx context.Context, raw json.RawMessage) (json
 	slices.SortFunc(candidates, compareCandidates)
 	return boundedPage(args.toolPage, len(candidates), func(i int) benchmarkSummary {
 		return candidates[i].summary(false)
-	}, "")
+	}, "", benchmarkSummary.compact, benchmarkSummary.identity)
 }
 
 func matchesFilters(benchmark api.BenchmarkResource, args searchArgs) bool {
@@ -163,7 +178,7 @@ func (tools catalogTools) provider(ctx context.Context, raw json.RawMessage) (js
 	return boundedPage(args.toolPage, len(provider.Benchmarks), func(i int) benchmarkSummary {
 		benchmark := provider.Benchmarks[i]
 		return (candidate{key: benchmarkKey{args.ProviderID, benchmark.ID}, benchmark: benchmark}).summary(true)
-	}, overview)
+	}, overview, benchmarkSummary.compact, benchmarkSummary.identity)
 }
 
 func (tools catalogTools) collections(ctx context.Context, raw json.RawMessage) (json.RawMessage, error) {
@@ -195,31 +210,51 @@ func (tools catalogTools) collections(ctx context.Context, raw json.RawMessage) 
 			}
 		}
 		return entry
-	}, "")
+	}, "", referenceSummary.identity)
 }
 
-func boundedPage[T any](page toolPage, total int, project func(int) T, overview string) (json.RawMessage, error) {
+func boundedPage[T any](page toolPage, total int, project func(int) T, overview string, reduce ...func(T) T) (json.RawMessage, error) {
 	result := struct {
 		Items      []T    `json:"items"`
 		NextOffset int    `json:"next_offset,omitempty"`
 		Overview   string `json:"overview,omitempty"`
 	}{Items: []T{}, Overview: overview}
+	var lastPage json.RawMessage
 	for i := page.Offset; i < min(total, page.Offset+page.limit()); i++ {
 		result.Items = append(result.Items, project(i))
-		result.NextOffset = i + 1
-		if data, err := json.Marshal(result); err != nil || len(data) > toolResultBytes {
-			result.Items = result.Items[:len(result.Items)-1]
-			if len(result.Items) == 0 {
-				return nil, errors.New("catalog item exceeds the tool result limit")
-			}
-			break
+		if i+1 < total {
+			result.NextOffset = i + 1
+		} else {
+			result.NextOffset = 0
 		}
+		data, err := json.Marshal(result)
+		if err != nil {
+			return nil, err
+		}
+		if len(data) <= toolResultBytes {
+			lastPage = data
+			continue
+		}
+		if lastPage != nil {
+			return lastPage, nil
+		}
+		// A first item must fit on its own page for pagination to advance.
+		// Sacrifice optional metadata before dropping the item.
+		result.Overview = ""
+		for _, shrink := range reduce {
+			result.Items[0] = shrink(result.Items[0])
+			data, err := json.Marshal(result)
+			if err != nil {
+				return nil, err
+			}
+			if len(data) <= toolResultBytes {
+				return data, nil
+			}
+		}
+		return nil, errors.New("catalog item exceeds the tool result limit")
 	}
-	next := page.Offset + len(result.Items)
-	if next < total {
-		result.NextOffset = next
-	} else {
-		result.NextOffset = 0
+	if lastPage != nil {
+		return lastPage, nil
 	}
 	return json.Marshal(result)
 }

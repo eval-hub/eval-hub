@@ -181,7 +181,7 @@ func (s *session) input(shortlist []candidate, reasoning string, budget loop.Bud
 	// tool response. Additional pages are available only through fixed tools.
 	evidence, err := boundedPage(toolPage{Limit: min(s.request.MaxBenchmarks, 5)}, len(shortlist), func(i int) benchmarkSummary {
 		return shortlist[i].summary(false)
-	}, "")
+	}, "", benchmarkSummary.compact, benchmarkSummary.identity)
 	if err != nil {
 		return loop.Input{}, err
 	}

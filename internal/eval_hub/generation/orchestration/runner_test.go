@@ -145,6 +145,7 @@ func toolResponse(name, args string) loop.ModelResponse {
 func passGuardrail(context.Context, string) (string, error) { return "", nil }
 
 func TestRunnerCompletesPostableProposalWithoutModelToolCalls(t *testing.T) {
+	t.Parallel()
 	snapshot := jobSnapshot(t)
 	snapshot.Request.CollectionName = "Requested title"
 	snapshot.Request.CollectionDescription = "Requested description"
@@ -218,6 +219,7 @@ func TestRunnerCompletesPostableProposalWithoutModelToolCalls(t *testing.T) {
 }
 
 func TestRunnerCallsCatalogToolsAndCorrectsUnverifiedDraft(t *testing.T) {
+	t.Parallel()
 	source := testCatalog()
 	snapshot := jobSnapshot(t)
 	snapshot.Request.ProviderFilter = "safety"
@@ -287,6 +289,7 @@ func TestRunnerCallsCatalogToolsAndCorrectsUnverifiedDraft(t *testing.T) {
 }
 
 func TestRunnerStopsBeforeModelWhenGateOrCatalogCannotAdmit(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name, code, category string
 		configure            func(*Runner, *fakeCatalog, *generation.JobConfig)
@@ -351,6 +354,7 @@ func TestRunnerStopsBeforeModelWhenGateOrCatalogCannotAdmit(t *testing.T) {
 }
 
 func TestRunnerDiscardsUnsafeToolBatchesBeforeLookup(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, args string }{
 		{"browse_web", `{"query":"toxicity"}`},
 		{searchBenchmarks, `{"query":"https://example.invalid"}`},
@@ -379,6 +383,7 @@ func TestRunnerDiscardsUnsafeToolBatchesBeforeLookup(t *testing.T) {
 }
 
 func TestRunnerBoundsCorrectionsAndChecksCurrentCatalog(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name      string
 		limit     int
@@ -475,6 +480,7 @@ func checkEqual(t *testing.T, want, got any) {
 }
 
 func TestRunnerHandlesTimeoutAndModelFailure(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		code string
 		fail func(context.Context) error
@@ -498,6 +504,7 @@ func TestRunnerHandlesTimeoutAndModelFailure(t *testing.T) {
 }
 
 func TestProposalRejectsPrimaryScoreWithoutAdvertisedDirection(t *testing.T) {
+	t.Parallel()
 	source := testCatalog()
 	source.providers[0].Benchmarks[0].Metrics = append(source.providers[0].Benchmarks[0].Metrics, "secondary")
 	snapshot := jobSnapshot(t)
@@ -517,6 +524,7 @@ func TestProposalRejectsPrimaryScoreWithoutAdvertisedDirection(t *testing.T) {
 }
 
 func TestCatalogReadsAllBoundedPages(t *testing.T) {
+	t.Parallel()
 	source := testCatalog()
 	first := source.providers[0]
 	source.providers = nil
