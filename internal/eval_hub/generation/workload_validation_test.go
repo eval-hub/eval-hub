@@ -354,7 +354,7 @@ func TestResourceFromJobMapsOnlyPublicGenerationFields(t *testing.T) {
 }
 
 func TestSafeFailureAndFailureFromAdditionalInfo(t *testing.T) {
-	for _, code := range []string{"guardrails_rejected", "guardrails_unavailable", "model_failed", "tool_failed", "validation_failed", "no_relevant_benchmarks", "timeout", "launch_failed", "workload_failed"} {
+	for _, code := range []string{"guardrails_unavailable", "model_failed", "tool_failed", "validation_failed", "no_relevant_benchmarks", "timeout", "launch_failed", "workload_failed"} {
 		failure, err := SafeFailure(code, "")
 		if err != nil || failure.Code != code || failure.Message == "" {
 			t.Errorf("SafeFailure(%q) = (%+v, %v)", code, failure, err)
@@ -363,7 +363,7 @@ func TestSafeFailureAndFailureFromAdditionalInfo(t *testing.T) {
 	if _, err := SafeFailure("unknown", ""); err == nil {
 		t.Fatal("unknown failure code was accepted")
 	}
-	if _, err := SafeFailure("model_failed", "unknown"); err == nil {
+	if _, err := SafeFailure("guardrails_rejected", "unknown"); err == nil {
 		t.Fatal("unknown failure category was accepted")
 	}
 	for _, category := range []string{"prompt_injection", "exfiltration", "topic_relevance", "unsupported_capability"} {
@@ -372,9 +372,9 @@ func TestSafeFailureAndFailureFromAdditionalInfo(t *testing.T) {
 		}
 	}
 	got, err := FailureFromAdditionalInfo(map[string]any{"collection_generation_error": map[string]any{
-		"code": "model_failed", "message": "do not expose model text", "category": "topic_relevance",
+		"code": "guardrails_rejected", "message": "do not expose model text", "category": "topic_relevance",
 	}})
-	if err != nil || got.Message != "The generation model request failed." || got.Category != "topic_relevance" {
+	if err != nil || got.Message != "The request was rejected by generation safety checks." || got.Category != "topic_relevance" {
 		t.Fatalf("FailureFromAdditionalInfo() = (%+v, %v)", got, err)
 	}
 	for _, info := range []map[string]any{
@@ -383,6 +383,8 @@ func TestSafeFailureAndFailureFromAdditionalInfo(t *testing.T) {
 		{"collection_generation_error": strings.Repeat("x", 4097)},
 		{"collection_generation_error": json.RawMessage("{")},
 		{"collection_generation_error": map[string]any{"code": "untrusted"}},
+		{"collection_generation_error": map[string]any{"code": "guardrails_rejected"}},
+		{"collection_generation_error": map[string]any{"code": "model_failed", "category": "topic_relevance"}},
 	} {
 		if _, err := FailureFromAdditionalInfo(info); err == nil {
 			t.Errorf("FailureFromAdditionalInfo(%v) succeeded", info)

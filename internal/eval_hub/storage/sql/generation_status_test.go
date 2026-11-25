@@ -44,6 +44,14 @@ func TestGenerationRejectsInvalidEventsWithoutChangingState(t *testing.T) {
 		}, messages.RequestValidationFailed},
 		{"unsupported state", func(e *api.BenchmarkStatusEvent) { e.Status = api.StateCancelled }, messages.RequestValidationFailed},
 		{"unstructured failure", func(e *api.BenchmarkStatusEvent) { e.Status = api.StateFailed }, messages.RequestValidationFailed},
+		{"guardrail rejection without category", func(e *api.BenchmarkStatusEvent) {
+			e.Status = api.StateFailed
+			e.AdditionalInfo = map[string]any{"collection_generation_error": api.CollectionGenerationError{Code: "guardrails_rejected"}}
+		}, messages.RequestValidationFailed},
+		{"non-guardrail failure with category", func(e *api.BenchmarkStatusEvent) {
+			e.Status = api.StateFailed
+			e.AdditionalInfo = map[string]any{"collection_generation_error": api.CollectionGenerationError{Code: "model_failed", Category: "topic_relevance"}}
+		}, messages.RequestValidationFailed},
 		{"completion with error", func(e *api.BenchmarkStatusEvent) {
 			e.Status = api.StateCompleted
 			e.ErrorMessage = &api.MessageInfo{Message: "incompatible with completion"}
@@ -64,7 +72,27 @@ func TestGenerationRejectsInvalidEventsWithoutChangingState(t *testing.T) {
 			}
 		})
 	}
-	failGenerationJob(t, scoped, id)
+	failure := &api.BenchmarkStatusEvent{
+		ProviderID: generation.ProviderID, ID: generation.BenchmarkID, Status: api.StateFailed,
+		AdditionalInfo: map[string]any{"collection_generation_error": api.CollectionGenerationError{
+			Code: "guardrails_rejected", Category: "topic_relevance", Message: "upstream detector details",
+		}},
+	}
+	if err := scoped.UpdateEvaluationJob(id, &api.StatusEvent{BenchmarkStatusEvent: failure}); err != nil {
+		t.Fatalf("persist guardrail rejection: %v", err)
+	}
+	job, err := scoped.GetEvaluationJob(id)
+	if err != nil {
+		t.Fatalf("read failed job: %v", err)
+	}
+	resource, err := generation.ResourceFromJob(job)
+	if err != nil {
+		t.Fatalf("map failed job: %v", err)
+	}
+	got := resource.Status.Error
+	if got == nil || got.Code != "guardrails_rejected" || got.Category != "topic_relevance" || got.Message != "The request was rejected by generation safety checks." {
+		t.Fatalf("mapped guardrail rejection = %+v", got)
+	}
 	event := api.BenchmarkStatusEvent{ProviderID: generation.ProviderID, ID: generation.BenchmarkID, Status: api.StateRunning}
 	err = scoped.UpdateEvaluationJob(id, &api.StatusEvent{BenchmarkStatusEvent: &event})
 	var serviceErr abstractions.ServiceError

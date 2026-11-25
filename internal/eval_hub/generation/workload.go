@@ -309,6 +309,12 @@ func SafeFailure(code, category string) (api.CollectionGenerationError, error) {
 	if !ok {
 		return api.CollectionGenerationError{}, fmt.Errorf("unsupported collection-generation failure code %q", code)
 	}
+	if code == "guardrails_rejected" && category == "" {
+		return api.CollectionGenerationError{}, errors.New("guardrail rejections require a failure category")
+	}
+	if code != "guardrails_rejected" && category != "" {
+		return api.CollectionGenerationError{}, errors.New("only guardrail rejections can include a failure category")
+	}
 	if category != "" && category != "prompt_injection" && category != "exfiltration" && category != "topic_relevance" && category != "unsupported_capability" {
 		return api.CollectionGenerationError{}, errors.New("unsupported collection-generation failure category")
 	}
