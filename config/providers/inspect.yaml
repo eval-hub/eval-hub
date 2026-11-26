@@ -798,17 +798,6 @@ benchmarks:
     metrics: [accuracy/accuracy]
     tags: [coding, software-engineering, inspect-evals]
 
-  - id: inspect/bigcodebench
-    name: BigCodeBench
-    description: Complex programming tasks requiring library usage and API calls.
-    category: coding
-    domains: [software]
-    tasks: [code_generation]
-    modalities: [text]
-    evaluation_targets: [model]
-    metrics: [accuracy/accuracy]
-    tags: [coding, inspect-evals]
-
   - id: inspect/mbpp
     name: MBPP
     description: Mostly Basic Python Programming — 374 entry-level programming tasks.

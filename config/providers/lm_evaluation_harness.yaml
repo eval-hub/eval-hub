@@ -3307,49 +3307,9 @@ benchmarks:
     lower_is_better: false
   pass_criteria:
     threshold: 0.25
-- id: humaneval
-  name: Python function generation
-  description: Writes correct Python functions from docstring specifications (164 problems).
-  category: code
-  domains: [software]
-  tasks: [code_generation]
-  modalities: [text]
-  evaluation_targets: [model]
-  metrics:
-  - pass@1
-  num_few_shot: 0
-  dataset_size: 164
-  tags:
-  - code
-  - lm_eval
-  primary_score:
-    metric: pass@1
-    lower_is_better: false
-  pass_criteria:
-    threshold: 0.25
 - id: humaneval_instruct
   name: Python function generation (chat format)
   description: Writes Python functions from natural language instructions in chat format.
-  category: code
-  domains: [software]
-  tasks: [code_generation]
-  modalities: [text]
-  evaluation_targets: [model]
-  metrics:
-  - acc
-  num_few_shot: 0
-  dataset_size: 1000
-  tags:
-  - code
-  - lm_eval
-  primary_score:
-    metric: acc
-    lower_is_better: false
-  pass_criteria:
-    threshold: 0.25
-- id: mbpp
-  name: Basic Python problem solving
-  description: Solves 974 entry-level Python programming tasks from crowd-sourced descriptions.
   category: code
   domains: [software]
   tasks: [code_generation]
@@ -3868,25 +3828,3 @@ benchmarks:
   primary_score:
     metric: schema_compliance
     lower_is_better: false
-
-- id: cruxeval_output
-  name: "CRUXEval (Output Prediction)"
-  description: |-
-    Tests code output prediction — given a Python function and input, predict the output.
-    Measures program comprehension without requiring code generation.
-  category: coding
-  domains: [software]
-  tasks: [code_understanding]
-  modalities: [text]
-  evaluation_targets: [model]
-  metrics:
-  - pass@1
-  tags:
-  - code
-  - comprehension
-  - lm_eval
-  primary_score:
-    metric: pass@1
-    lower_is_better: false
-  pass_criteria:
-    threshold: 0.15
