@@ -898,6 +898,56 @@ func TestRunnerHandlesModelErrorsAndRetryCancellation(t *testing.T) {
 	})
 }
 
+func TestRunnerReviewsFinalResponses(t *testing.T) {
+	const retryPrompt = "Return a corrected answer."
+	reviewErr := errors.New("proposal was rejected")
+	for _, tc := range []struct {
+		name       string
+		correction string
+		reviewErr  error
+		wantErr    error
+		wantFinal  string
+		wantCalls  int
+	}{
+		{name: "accept final response", wantFinal: "first draft", wantCalls: 1},
+		{name: "correct then accept", correction: retryPrompt, wantFinal: "corrected answer", wantCalls: 2},
+		{name: "propagate review failure", reviewErr: reviewErr, wantErr: reviewErr, wantCalls: 1},
+		{name: "reject correction exceeding history limit", correction: strings.Repeat("x", 2_000), wantErr: ErrInvalidModelResponse, wantCalls: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := testInput()
+			config := DefaultConfig()
+			config.MaxHistoryBytes = 2_000
+			model := &fakeModel{responses: []ModelResponse{finalResponse("first draft"), finalResponse("corrected answer")}}
+			var reviewed []string
+			input.ReviewFinal = func(_ context.Context, draft string) (string, error) {
+				reviewed = append(reviewed, draft)
+				if draft == "first draft" {
+					return tc.correction, tc.reviewErr
+				}
+				return "", nil
+			}
+			registry := newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) {
+				t.Fatal("final review should not call tools")
+				return nil, nil
+			})
+			result, err := newTestRunner(t, model, registry, config).Run(context.Background(), input)
+			if !errors.Is(err, tc.wantErr) || result.Final != tc.wantFinal {
+				t.Fatalf("Run() = %+v, %v, want final %q and error %v", result, err, tc.wantFinal, tc.wantErr)
+			}
+			if len(model.requests) != tc.wantCalls || len(reviewed) != tc.wantCalls {
+				t.Fatalf("model calls = %d, reviews = %v, want %d of each", len(model.requests), reviewed, tc.wantCalls)
+			}
+			if tc.wantCalls == 2 {
+				messages := model.requests[1].Messages
+				if got := messages[len(messages)-1]; got.Role != RoleUser || got.Content != retryPrompt || result.ModelCalls != 2 {
+					t.Fatalf("correction was not passed to the model or charged to the budget: %+v, %+v", got, result)
+				}
+			}
+		})
+	}
+}
+
 func TestRunnerEnforcesHistoryLimitsAfterResponseAndTool(t *testing.T) {
 	t.Run("assistant response", func(t *testing.T) {
 		config := DefaultConfig()

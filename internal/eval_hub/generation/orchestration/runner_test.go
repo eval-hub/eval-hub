@@ -25,11 +25,12 @@ func (f modelFunc) Complete(ctx context.Context, request loop.ModelRequest) (loo
 
 type fakeCatalog struct {
 	catalogSnapshot
-	providerReads   int
-	collectionReads int
-	details         int
-	providersError  error
-	beforeRead      func(*fakeCatalog)
+	providerReads    int
+	collectionReads  int
+	details          int
+	providersError   error
+	collectionsError error
+	beforeRead       func(*fakeCatalog)
 }
 
 func (f *fakeCatalog) ListProviders(ctx context.Context, offset, limit int) (collectiondesign.Page[api.ProviderResource], error) {
@@ -45,6 +46,9 @@ func (f *fakeCatalog) ListProviders(ctx context.Context, offset, limit int) (col
 
 func (f *fakeCatalog) ListCollections(ctx context.Context, offset, limit int) (collectiondesign.Page[api.CollectionResource], error) {
 	f.collectionReads++
+	if f.collectionsError != nil {
+		return collectiondesign.Page[api.CollectionResource]{}, f.collectionsError
+	}
 	return f.catalogSnapshot.ListCollections(ctx, offset, limit)
 }
 
@@ -298,6 +302,18 @@ func TestRunnerStopsBeforeModelWhenGateOrCatalogCannotAdmit(t *testing.T) {
 		{"guardrails blocked", "guardrails_rejected", "topic_relevance", func(r *Runner, _ *fakeCatalog, _ *generation.JobConfig) {
 			r.Guardrail = func(context.Context, string) (string, error) { return "topic_relevance", nil }
 		}, true},
+		{"guardrails missing", "guardrails_unavailable", "", func(r *Runner, _ *fakeCatalog, _ *generation.JobConfig) {
+			r.Guardrail = nil
+		}, true},
+		{"catalog missing", "workload_failed", "", func(r *Runner, _ *fakeCatalog, _ *generation.JobConfig) {
+			r.Catalog = nil
+		}, true},
+		{"invalid effort budget", "workload_failed", "", func(_ *Runner, _ *fakeCatalog, s *generation.JobConfig) {
+			s.Limits.MaxIterations = 0
+		}, true},
+		{"invalid generation options", "validation_failed", "", func(_ *Runner, _ *fakeCatalog, s *generation.JobConfig) {
+			s.Request.MaxBenchmarks = -1
+		}, true},
 		{"guardrails unavailable", "guardrails_unavailable", "", func(r *Runner, _ *fakeCatalog, _ *generation.JobConfig) {
 			r.Guardrail = func(context.Context, string) (string, error) { return "", errors.New("private upstream response") }
 		}, true},
@@ -351,6 +367,130 @@ func TestRunnerStopsBeforeModelWhenGateOrCatalogCannotAdmit(t *testing.T) {
 			checkEqual(t, 0, source.collectionReads)
 		})
 	}
+}
+
+func TestRunnerStopsAfterProgressReportingFailures(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		phase  string
+		action string
+		calls  int
+	}{
+		{phase: "guardrails"},
+		{phase: "catalog_discovery", action: "guardrails_check"},
+		{phase: "catalog_discovery", action: searchBenchmarks},
+		{phase: "model_generation", calls: 1},
+		{phase: "validation", calls: 1},
+		{phase: "validation", action: "validate_proposal", calls: 1},
+		{phase: "validation", action: "calibrate_proposal", calls: 1},
+		{phase: "finalization", action: "finalize_proposal", calls: 1},
+	} {
+		t.Run(tc.phase+"/"+tc.action, func(t *testing.T) {
+			calls, failures := 0, 0
+			runner := Runner{
+				Catalog: testCatalog(), Guardrail: passGuardrail,
+				Model: modelFunc(func(ctx context.Context, _ loop.ModelRequest) (loop.ModelResponse, error) {
+					calls++
+					if tc.phase == "model_generation" {
+						if !errors.Is(ctx.Err(), context.Canceled) {
+							t.Fatalf("model call received an active context after progress reporting failed")
+						}
+						return loop.ModelResponse{}, ctx.Err()
+					}
+					return finalResponse(t, testDraft("toxicity-a")), nil
+				}),
+				Progress: func(_ context.Context, phase, action string) error {
+					if phase == tc.phase && action == tc.action {
+						failures++
+						return errors.New("private progress callback error")
+					}
+					return nil
+				},
+			}
+			result, failure := runner.Run(context.Background(), jobSnapshot(t))
+			if failure == nil || failure.Code != "workload_failed" || strings.Contains(failure.Message, "private progress") {
+				t.Fatalf("unexpected generation failure: %+v", failure)
+			}
+			checkEqual(t, 0, len(result.Collection.Benchmarks))
+			checkEqual(t, tc.calls, calls)
+			checkEqual(t, 1, failures)
+		})
+	}
+}
+
+func TestRunnerFailsIfCatalogCannotBeRechecked(t *testing.T) {
+	t.Parallel()
+	for _, stage := range []string{"providers", "collections"} {
+		t.Run(stage, func(t *testing.T) {
+			catalog := testCatalog()
+			modelCalls := 0
+			runner := Runner{
+				Catalog: catalog, Guardrail: passGuardrail,
+				Model: modelFunc(func(context.Context, loop.ModelRequest) (loop.ModelResponse, error) {
+					modelCalls++
+					failure := errors.New("private catalog service error")
+					if stage == "providers" {
+						catalog.providersError = failure
+					} else {
+						catalog.collectionsError = failure
+					}
+					return finalResponse(t, testDraft("toxicity-a")), nil
+				}),
+			}
+			result, failure := runner.Run(context.Background(), jobSnapshot(t))
+			if failure == nil || failure.Code != "tool_failed" || strings.Contains(failure.Message, "private catalog") {
+				t.Fatalf("unexpected failure after catalog read error: %+v", failure)
+			}
+			checkEqual(t, 0, len(result.Collection.Benchmarks))
+			checkEqual(t, 1, modelCalls)
+		})
+	}
+}
+
+func TestRunnerCorrectsMalformedDraft(t *testing.T) {
+	t.Parallel()
+	modelCalls := 0
+	runner := Runner{
+		Catalog: testCatalog(), Guardrail: passGuardrail,
+		Model: modelFunc(func(_ context.Context, request loop.ModelRequest) (loop.ModelResponse, error) {
+			modelCalls++
+			if modelCalls == 1 {
+				return loop.ModelResponse{Message: loop.Message{Content: "private model draft, not JSON"}}, nil
+			}
+			correction := request.Messages[len(request.Messages)-1].Content
+			if !strings.Contains(correction, "invalid_draft_json") || strings.Contains(correction, "private model draft") {
+				t.Fatalf("unexpected correction: %s", correction)
+			}
+			return finalResponse(t, testDraft("toxicity-a")), nil
+		}),
+	}
+	result, failure := runner.Run(context.Background(), jobSnapshot(t))
+	if failure != nil || len(result.Collection.Benchmarks) != 1 || modelCalls != 2 {
+		t.Fatalf("corrected proposal = %+v, failure = %+v, model calls = %d", result, failure, modelCalls)
+	}
+}
+
+func TestProgressCapsRecordedActionsWithoutSkippingUpdates(t *testing.T) {
+	t.Parallel()
+	updates := 0
+	job := session{runner: Runner{Progress: func(context.Context, string, string) error {
+		updates++
+		return nil
+	}}}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for range 51 {
+		if err := job.progress(ctx, "model_generation", searchBenchmarks, "success"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cancel()
+	if err := job.progress(ctx, "validation", "validate_proposal", "success"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("progress after cancellation = %v", err)
+	}
+	checkEqual(t, 50, len(job.actions))
+	checkEqual(t, true, job.truncated)
+	checkEqual(t, 51, updates)
 }
 
 func TestRunnerDiscardsUnsafeToolBatchesBeforeLookup(t *testing.T) {
@@ -539,4 +679,70 @@ func TestCatalogReadsAllBoundedPages(t *testing.T) {
 	}
 	checkEqual(t, 2, source.providerReads)
 	checkEqual(t, catalogPageSize+1, len(providers))
+}
+
+func TestCatalogRejectsInconsistentAndUnboundedPages(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		page collectiondesign.Page[int]
+		want string
+	}{
+		{"overfull page", collectiondesign.Page[int]{Items: make([]int, catalogPageSize+1), TotalCount: catalogPageSize + 1}, "inconsistent pagination"},
+		{"understated total", collectiondesign.Page[int]{Items: []int{1}, TotalCount: 0}, "inconsistent pagination"},
+		{"premature empty page", collectiondesign.Page[int]{TotalCount: 2}, "ended before the last entry"},
+		{"too many pages", collectiondesign.Page[int]{Items: []int{1}, TotalCount: maxCatalogPages + 1}, "discovery page limit"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			items, err := readCatalog(context.Background(), func(context.Context, int, int) (collectiondesign.Page[int], error) {
+				return tc.page, nil
+			})
+			if items != nil || err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("readCatalog() = %v, %v, want no partial results and %q", items, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestReadProvidersRejectsDuplicateIDs(t *testing.T) {
+	t.Parallel()
+	source := testCatalog()
+	source.providers = append(source.providers, source.providers[0])
+	if providers, err := readProviders(context.Background(), source); err == nil || providers != nil {
+		t.Fatalf("duplicate provider was accepted: %v, %v", providers, err)
+	}
+}
+
+func TestApplyCatalogDefaultsOmitsConflictingAndEnvironmentSpecificValues(t *testing.T) {
+	t.Parallel()
+	source := testCatalog()
+	system := &source.collections[0]
+	example := &system.Benchmarks[0]
+	example.Parameters["disable_cache"] = true
+	example.Parameters["tokenizer"] = "deployment-specific-tokenizer"
+	example.TestDataRef = &api.TestDataRef{}
+	other := *system
+	other.Resource.ID = "another-system-collection"
+	other.Benchmarks = []api.CollectionBenchmarkConfig{{
+		Ref: example.Ref, ProviderID: example.ProviderID,
+		Parameters: map[string]any{"num_examples": float64(2)},
+	}}
+	source.collections = append(source.collections, other)
+
+	proposal := testDraft("toxicity-a").Collection
+	notes, ok := applyCatalogDefaults(&proposal, source.catalogSnapshot)
+	if !ok {
+		t.Fatal("expected the safe subset of defaults to be accepted")
+	}
+	benchmark := proposal.Benchmarks[0]
+	checkEqual(t, map[string]any{"judge_model": "", "disable_cache": true}, benchmark.Parameters)
+	if benchmark.TestDataRef != nil {
+		t.Fatal("the curated collection's data location must not be copied")
+	}
+	guidance := strings.Join(notes, " ")
+	for _, requirement := range []string{"judge model", "compatible tokenizer", "reachable data source"} {
+		if !strings.Contains(guidance, requirement) {
+			t.Fatalf("missing guidance for %q in %v", requirement, notes)
+		}
+	}
 }

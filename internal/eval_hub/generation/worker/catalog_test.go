@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -195,6 +196,53 @@ func TestSidecarCatalogEnforcesReadScopeAndDoesNotFollowRedirects(t *testing.T) 
 			}
 			if _, err := source.GetProvider(context.Background(), "../jobs"); err == nil || calls != 1 {
 				t.Fatalf("unsupported path reached the sidecar transport: %v", err)
+			}
+		})
+	}
+}
+
+func TestSidecarCatalogRejectsInvalidListResponses(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		resource  string
+		body      string
+		transport error
+		want      string
+	}{
+		{"cross-tenant provider", "providers", `{"items":[{"resource":{"id":"private-provider","tenant":"tenant-b"}}],"total_count":1}`, nil, "provider response is outside the catalog scope"},
+		{"cross-tenant collection", "collections", `{"items":[{"resource":{"id":"private-collection","tenant":"tenant-b"}}],"total_count":1}`, nil, "collection response is outside the catalog scope"},
+		{"malformed provider response", "providers", "private upstream JSON", nil, "catalog response is malformed or exceeds the size limit"},
+		{"oversized collection response", "collections", strings.Repeat(" ", maxCatalogReply+1), nil, "catalog response is malformed or exceeds the size limit"},
+		{"sidecar transport failure", "collections", "", errors.New("private transport detail"), "send catalog request through the local sidecar"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			base, err := url.Parse("http://localhost:8080")
+			if err != nil {
+				t.Fatal(err)
+			}
+			client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				if r.Method != http.MethodGet || r.URL.Path != catalogPath+tc.resource ||
+					r.URL.RawQuery != "limit=5&offset=10" || r.Header.Get("X-Tenant") != "tenant-a" {
+					t.Fatalf("unexpected catalog request: %s %s", r.Method, r.URL)
+				}
+				if tc.transport != nil {
+					return nil, tc.transport
+				}
+				res := response(http.StatusOK)
+				res.Body = io.NopCloser(strings.NewReader(tc.body))
+				return res, nil
+			})}
+			source := sidecarCatalog{client: localClient(client), base: *base, tenant: "tenant-a"}
+			if tc.resource == "providers" {
+				page, err := source.ListProviders(context.Background(), 10, 5)
+				if len(page.Items) != 0 || err == nil || err.Error() != tc.want {
+					t.Fatalf("ListProviders() = %+v, %v, want no items and %q", page, err, tc.want)
+				}
+			} else {
+				page, err := source.ListCollections(context.Background(), 10, 5)
+				if len(page.Items) != 0 || err == nil || err.Error() != tc.want {
+					t.Fatalf("ListCollections() = %+v, %v, want no items and %q", page, err, tc.want)
+				}
 			}
 		})
 	}
