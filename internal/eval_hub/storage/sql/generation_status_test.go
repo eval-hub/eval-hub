@@ -137,10 +137,11 @@ func proposalEvent(t *testing.T, selectedProvider, selectedID string, rejected [
 	}}
 }
 
-func createCatalogProvider(t *testing.T, store abstractions.Storage, tenant api.Tenant, owner api.User) {
+func createCatalogProvider(t *testing.T, store abstractions.Storage, tenant api.Tenant, owner api.User) string {
 	t.Helper()
+	id := common.GUID()
 	provider := &api.ProviderResource{
-		Resource: api.Resource{ID: "provider-a", Tenant: tenant, Owner: owner},
+		Resource: api.Resource{ID: id, Tenant: tenant, Owner: owner},
 		ProviderConfig: api.ProviderConfig{
 			Name: "Provider A", Title: "Provider A",
 			Benchmarks: []api.BenchmarkResource{{ID: "bench-a", Name: "Benchmark A"}},
@@ -149,6 +150,12 @@ func createCatalogProvider(t *testing.T, store abstractions.Storage, tenant api.
 	if err := store.CreateProvider(provider); err != nil {
 		t.Fatalf("create caller-visible provider: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := store.DeleteProvider(id); err != nil {
+			t.Errorf("delete caller-visible provider: %v", err)
+		}
+	})
+	return id
 }
 
 func createRunningGenerationJob(t *testing.T, store abstractions.Storage, tenant api.Tenant, owner api.User) string {
@@ -198,12 +205,13 @@ func testGenerationInfrastructureFailuresBecomeTerminal(t *testing.T, driver, da
 	tenant, owner := api.Tenant(common.GUID()), api.User("event-owner")
 	scoped := store.WithTenant(tenant).WithOwner(owner).WithWorkloadType(workloads.CollectionGeneration)
 	for _, tc := range []struct {
-		code    string
-		running bool
+		code           string
+		running        bool
+		additionalInfo map[string]any
 	}{
 		{code: "RUNTIME_FAILURE", running: true},
-		{code: "queue_error"},
-		{code: "gpu_unavailable"},
+		{code: "queue_error", additionalInfo: map[string]any{}},
+		{code: "gpu_unavailable", additionalInfo: map[string]any{"reason": "private queue details"}},
 	} {
 		t.Run(tc.code, func(t *testing.T) {
 			var id string
@@ -218,7 +226,8 @@ func testGenerationInfrastructureFailuresBecomeTerminal(t *testing.T, driver, da
 			}
 			event := &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 				ProviderID: generation.ProviderID, ID: generation.BenchmarkID, Status: api.StateFailed,
-				ErrorMessage: &api.MessageInfo{MessageCode: tc.code, Message: "private infrastructure details"},
+				ErrorMessage:   &api.MessageInfo{MessageCode: tc.code, Message: "private infrastructure details"},
+				AdditionalInfo: tc.additionalInfo,
 			}}
 			if err := scoped.UpdateEvaluationJob(id, event); err != nil {
 				t.Fatalf("persist infrastructure failure: %v", err)
@@ -240,6 +249,9 @@ func testGenerationInfrastructureFailuresBecomeTerminal(t *testing.T, driver, da
 				job.Status.Benchmarks[0].ErrorMessage.Message != job.Status.Message.Message ||
 				failure.Message != job.Status.Message.Message {
 				t.Fatalf("infrastructure diagnostic was not sanitized: %+v", job.Status)
+			}
+			if info := job.Results.Benchmarks[0].AdditionalInfo; len(info) != 1 || info["collection_generation_error"] == nil {
+				t.Fatalf("unexpected persisted infrastructure metadata: %v", info)
 			}
 			cleaner := store.(generationRetentionCleaner)
 			removed, err := cleaner.DeleteExpiredCollectionGenerationJobs(time.Now().UTC().Add(25*time.Hour), 100)
@@ -263,10 +275,10 @@ func testCollectionGenerationCompletionRequiresCallerVisibleCatalog(t *testing.T
 	tenant := api.Tenant(common.GUID())
 	owner := api.User("catalog-owner")
 	scoped := store.WithTenant(tenant).WithOwner(owner).WithWorkloadType(workloads.CollectionGeneration)
-	createCatalogProvider(t, scoped, tenant, owner)
+	providerID := createCatalogProvider(t, scoped, tenant, owner)
 
 	validID := createRunningGenerationJob(t, scoped, tenant, owner)
-	if err := scoped.UpdateEvaluationJob(validID, proposalEvent(t, "provider-a", "bench-a", nil)); err != nil {
+	if err := scoped.UpdateEvaluationJob(validID, proposalEvent(t, providerID, "bench-a", nil)); err != nil {
 		t.Fatalf("complete proposal using visible catalog benchmark: %v", err)
 	}
 	completed, err := scoped.WithWorkloadType(workloads.CollectionGeneration).GetEvaluationJob(validID)
@@ -282,9 +294,9 @@ func testCollectionGenerationCompletionRequiresCallerVisibleCatalog(t *testing.T
 		rejected []api.CollectionGenerationBenchmarkReason
 	}{
 		{name: "provider outside tenant catalog", provider: "not-visible", id: "bench-a"},
-		{name: "benchmark outside provider catalog", provider: "provider-a", id: "not-in-provider"},
-		{name: "rejected benchmark outside provider catalog", provider: "provider-a", id: "bench-a", rejected: []api.CollectionGenerationBenchmarkReason{{
-			ProviderID: "provider-a", ID: "not-in-provider", Reason: "It does not match the evaluation goal.",
+		{name: "benchmark outside provider catalog", provider: providerID, id: "not-in-provider"},
+		{name: "rejected benchmark outside provider catalog", provider: providerID, id: "bench-a", rejected: []api.CollectionGenerationBenchmarkReason{{
+			ProviderID: providerID, ID: "not-in-provider", Reason: "It does not match the evaluation goal.",
 		}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

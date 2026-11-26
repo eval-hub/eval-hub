@@ -12,6 +12,8 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/generation"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/google/uuid"
@@ -89,7 +91,11 @@ func (s *Service) Admit(ctx context.Context, tenant api.Tenant, owner api.User, 
 	}
 	if auth := normalized.Model.Auth; auth != nil {
 		if err := runtime.ValidateModelSecret(ctx, tenant.String(), auth.SecretRef); err != nil {
-			return nil, fmt.Errorf("model Secret reference %q is unavailable in tenant namespace %q", auth.SecretRef, tenant.String())
+			var serviceErr *serviceerrors.ServiceError
+			if errors.As(err, &serviceErr) {
+				return nil, serviceErr
+			}
+			return nil, serviceerrors.NewServiceError(messages.GenerationModelSecretLookupUnavailable).WithCause(err)
 		}
 	}
 	presets, err := s.config.EffectiveEffortBudgets()

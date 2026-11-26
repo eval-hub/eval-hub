@@ -112,13 +112,22 @@ func (r *K8sRuntime) SupportsCollectionGeneration() bool {
 // exists in the tenant namespace without exposing or logging Secret contents.
 func (r *K8sRuntime) ValidateModelSecret(ctx context.Context, namespace, name string) error {
 	if !r.SupportsCollectionGeneration() {
-		return errors.New("Kubernetes Secret lookup is unavailable")
+		return serviceerrors.NewServiceError(messages.GenerationModelSecretLookupUnavailable)
 	}
 	if strings.TrimSpace(namespace) == "" || strings.TrimSpace(name) == "" {
-		return errors.New("Secret namespace and name are required")
+		return serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error", "model.auth.secret_ref requires a Secret name and tenant namespace")
 	}
 	if _, err := r.helper.GetSecret(ctx, namespace, name); err != nil {
-		return fmt.Errorf("Secret reference is unavailable in namespace %q", namespace)
+		switch {
+		case apierrors.IsNotFound(err):
+			return serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error", "model.auth.secret_ref does not reference a Secret in the tenant namespace").WithCause(err)
+		case apierrors.IsInvalid(err), apierrors.IsBadRequest(err):
+			return serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error", "model.auth.secret_ref is not a valid Secret reference").WithCause(err)
+		case apierrors.IsForbidden(err), apierrors.IsUnauthorized(err):
+			return serviceerrors.NewServiceError(messages.GenerationModelSecretAccessDenied).WithCause(err)
+		default:
+			return serviceerrors.NewServiceError(messages.GenerationModelSecretLookupUnavailable).WithCause(err)
+		}
 	}
 	return nil
 }
@@ -538,9 +547,10 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 				logger.Error("kubernetes model secret inspect error", "benchmark_id", benchmarkID, "error", err)
 				return fmt.Errorf("job %s benchmark %s: reading model auth secret: %w", evaluation.Resource.ID, benchmarkID, err)
 			}
-			if secretInfo.hasCredentialKeys {
+			// Generation workers use the sidecar proxy without mounting the adapter's derived Secret.
+			if secretInfo.hasCredentialKeys && !jobConfig.generationWorkload {
 				jobConfig.modelInternalRefSecretName = buildK8sName(jobConfig.jobID, jobConfig.resourceGUID, "-model-ref")
-			} else {
+			} else if !secretInfo.hasCredentialKeys {
 				logger.Info("model credential secret has no proxy-injectable keys; sidecar proxy active for SA token")
 			}
 		}

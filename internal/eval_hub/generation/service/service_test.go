@@ -12,7 +12,9 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/generation"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/local"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -227,11 +229,18 @@ func TestGenerationServiceAdmitSecretValidationAndSafeLaunchFailure(t *testing.T
 	storage := &generationTestStorage{}
 	runtime := &generationTestRuntime{secretErr: errors.New("secret contents must remain private")}
 	service := newGenerationTestService(storage, runtime)
-	if _, err := service.Admit(context.Background(), "tenant-a", "user-a", request); err == nil || strings.Contains(err.Error(), "secret contents") || storage.created {
+	_, err := service.Admit(context.Background(), "tenant-a", "user-a", request)
+	var serviceErr *serviceerrors.ServiceError
+	if !errors.As(err, &serviceErr) || serviceErr.MessageCode() != messages.GenerationModelSecretLookupUnavailable ||
+		!errors.Is(err, runtime.secretErr) || strings.Contains(err.Error(), "secret contents") || storage.created {
 		t.Fatalf("Secret validation leaked details or created job: err=%v created=%v", err, storage.created)
 	}
 	if runtime.secretChecks != 1 || runtime.secretNamespace != "tenant-a" || runtime.secretName != "model-auth" {
 		t.Fatalf("Secret validation scope = %d %q %q", runtime.secretChecks, runtime.secretNamespace, runtime.secretName)
+	}
+	runtime.secretErr = serviceerrors.NewServiceError(messages.GenerationModelSecretAccessDenied)
+	if _, err := service.Admit(context.Background(), "tenant-a", "user-a", request); err != runtime.secretErr || storage.created {
+		t.Fatalf("admission failed to preserve the runtime's classified error: err=%v created=%v", err, storage.created)
 	}
 	storage = &generationTestStorage{}
 	runtime = &generationTestRuntime{runErr: errors.New("unsafe runtime detail")}

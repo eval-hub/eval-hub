@@ -1,6 +1,13 @@
 # ATIF Provider Configuration
 # Judge-based scoring of pre-recorded ATIF (Agent Trajectory Interchange Format) trajectories
 # Reference: https://github.com/eval-hub/eval-hub-contrib (adapters/atif)
+#
+# Input joining precedence (HLR-1): a top-level manifest.jsonl written by the
+# producer is authoritative -- it fixes which trajectories are evaluated and
+# in which order. Extension-scan (recursive .json discovery) is the
+# no-manifest fallback only. The rule is producer-independent: adding a
+# producer changes neither eval-hub core nor eval-runtime-init, and there is
+# no per-producer branch or fallback in this configuration.
 
 id: atif
 name: ATIF Trajectory Adapter
@@ -14,6 +21,17 @@ description: >
   steps; and MLflow artifacts through a required job experiment_name. Never
   reruns an agent or executes trajectory tools.
 type: community
+
+agent:
+  target_type: agent
+  summary: "Judge-score recorded agent trajectories against ATIF, with manifest-driven input joining"
+  hints:
+    - "trajectory_path must hold an ATIF export; rerun the agent elsewhere and score the traces here"
+    - "A top-level manifest.jsonl is authoritative and fixes evaluation order; without one, recursive discovery applies"
+    - "The job fails without experiment_name: the adapter requires MLflow artifact persistence before it loads trajectories"
+  result_interpretation:
+    - "atif_overall_score is present only when at least one trajectory scored; an unscored run reports its counts instead"
+    - "atif_complete is false when any input was unscored, invalid, or withheld for a digest mismatch"
 
 runtime:
   k8s:
@@ -44,6 +62,8 @@ benchmarks:
     evaluation_targets: [agent]
     metrics:
       - atif_overall_score
+      - atif_trajectory_count
+      - atif_manifest_entry_count
       - atif_failure_categorization_rate
     primary_score:
       metric: atif_overall_score
@@ -58,7 +78,7 @@ parameters:
   - name: trajectory_path
     type: string
     default: /test_data
-    description: Path to an ATIF file or mixed producer directory. Requires job experiment_name for durable MLflow artifacts.
+    description: Path to an ATIF file or mixed producer directory. A top-level manifest.jsonl (NeMo Gym export) is authoritative and fixes evaluation order; without one, recursive discovery applies. Requires job experiment_name for durable MLflow artifacts.
   - name: scoring_mode
     type: string
     default: auto
@@ -109,7 +129,7 @@ parameters:
   - name: invalid_input_policy
     type: string
     default: skip_invalid
-    description: skip_invalid records invalid candidates and continues; fail_fast aborts. No valid inputs always fails.
+    description: skip_invalid records invalid candidates and continues; fail_fast aborts. Manifest rows follow the same policy, including empty manifests and absent entries, but fatal manifest errors such as unsafe paths, symlinks, or an unreadable or oversized manifest abort under either policy. Without a manifest, no valid inputs always fails. With a manifest and skip_invalid, a manifest that has no fatal errors but no valid entries completes unscored and reports its invalid counts.
   - name: max_steps_per_trajectory
     type: integer
     default: 500
@@ -155,4 +175,4 @@ parameters:
   - name: partial_result_policy
     type: string
     default: fail_fast
-    description: Use fail_fast or skip_failed_trajectory when a trajectory cannot be scored
+    description: Use fail_fast or skip_failed_trajectory when a trajectory cannot be scored. fail_fast also aborts when a manifest SHA-256 does not match the file, naming it; skip_failed_trajectory withholds that entry's score and counts it in atif_failed_trajectory_count.

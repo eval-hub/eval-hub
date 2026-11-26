@@ -557,7 +557,7 @@ func normalizeCollectionGenerationEvent(job *api.EvaluationJobResource, event *a
 		event.AdditionalInfo = map[string]any{"collection_generation_result": result}
 		return nil
 	}
-	if event.AdditionalInfo == nil && event.ErrorMessage != nil {
+	if _, hasTypedFailure := event.AdditionalInfo["collection_generation_error"]; !hasTypedFailure && event.ErrorMessage != nil {
 		// The operator's pod and queue controllers report these failures using
 		// the generic status event. Discard their message before storing it.
 		switch event.ErrorMessage.MessageCode {
