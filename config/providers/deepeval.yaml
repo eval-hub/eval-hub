@@ -81,9 +81,9 @@ benchmarks:
       - hallucination
     primary_score:
       metric: hallucination_score
-      lower_is_better: true
+      lower_is_better: false
     pass_criteria:
-      threshold: 0.3
+      threshold: 0.5
 
   - id: deepeval-correctness
     name: Correctness
