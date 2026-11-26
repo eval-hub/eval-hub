@@ -415,6 +415,12 @@ func LoadConfig(logger *slog.Logger, version string, build string, buildDate str
 			return nil, err
 		}
 	}
+	if err := conf.Generation.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid collection-generation configuration: %w", err)
+	}
+	if err := conf.ResourceJanitor.Validate(); err != nil {
+		return nil, err
+	}
 
 	// set the version, build, and build date
 	conf.Service.Version = version

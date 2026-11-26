@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
+
+const sqliteExpiryTimestampFormat = "2006-01-02T15:04:05.000000000Z"
 
 const (
 	insertEvaluationStatement = `INSERT INTO evaluations (id, tenant_id, owner, status, experiment_id, workload_type, entity) VALUES (?, ?, ?, ?, ?, ?, ?);`
@@ -29,6 +32,8 @@ CREATE TABLE IF NOT EXISTS evaluations (
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
     experiment_id VARCHAR(255) NOT NULL,
     workload_type TEXT NOT NULL DEFAULT 'evaluation',
+	expires_at TIMESTAMP NULL,
+	cleanup_protected_until TIMESTAMP NULL,
     entity TEXT NOT NULL,
     PRIMARY KEY (id)
 );
@@ -102,8 +107,12 @@ func (s *sqliteStatementsFactory) CreateEvaluationAddEntityStatement(evaluation 
 func (s *sqliteStatementsFactory) CreateEvaluationGetEntityStatement(query *shared.EntityQuery) (string, []any, []any) {
 	where, whereArgs := s.getWhereStatement(query.Resource.Tenant, query.Resource.ID)
 	if query.WorkloadType != "" {
-		where += " AND workload_type = ?"
-		whereArgs = append(whereArgs, string(query.WorkloadType))
+		if query.WorkloadType == workloads.CollectionGeneration {
+			where += " AND workload_type = 'collection-generation' AND (expires_at IS NULL OR expires_at > strftime('%Y-%m-%dT%H:%M:%f000000Z', 'now'))"
+		} else {
+			where += " AND workload_type = ?"
+			whereArgs = append(whereArgs, string(query.WorkloadType))
+		}
 	}
 	return fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE %s;`, where), whereArgs, []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
 }
@@ -232,6 +241,43 @@ func (s *sqliteStatementsFactory) CreateUpdateEntityStatement(tenant api.Tenant,
 		}
 		return fmt.Sprintf(`UPDATE %s SET entity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;`, tableName), []any{entityJSON, id}
 	}
+}
+
+func (s *sqliteStatementsFactory) CreateUpdateEvaluationEntityStatement(tenant api.Tenant, id, entityJSON string, status api.OverallState, expiresAt *time.Time) (string, []any) {
+	query := `UPDATE evaluations SET status = ?, entity = ?, updated_at = CURRENT_TIMESTAMP`
+	args := []any{status, entityJSON}
+	if expiresAt != nil {
+		query += `, expires_at = COALESCE(expires_at, ?)`
+		// Fixed-width UTC text is lexically sortable, allowing expiry predicates to
+		// use the partial index without wrapping expires_at in a SQL function.
+		args = append(args, expiresAt.UTC().Format(sqliteExpiryTimestampFormat))
+	}
+	query += ` WHERE id = ?`
+	args = append(args, id)
+	if !tenant.IsEmpty() {
+		query += ` AND tenant_id = ?`
+		args = append(args, tenant.String())
+	}
+	return query + `;`, args
+}
+
+func (s *sqliteStatementsFactory) CreateSetCollectionGenerationCleanupProtectionStatement(tenant api.Tenant, id string, protectedUntil time.Time) (string, []any) {
+	return `UPDATE evaluations SET cleanup_protected_until = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ? AND tenant_id = ? AND workload_type = 'collection-generation';`,
+		[]any{protectedUntil.UTC().Format(sqliteExpiryTimestampFormat), id, tenant.String()}
+}
+
+func (s *sqliteStatementsFactory) CreateDeleteCleanedCollectionGenerationJobStatement(tenant api.Tenant, id string) (string, []any) {
+	return `DELETE FROM evaluations WHERE id = ? AND tenant_id = ? AND workload_type = ?;`, []any{id, tenant.String(), string(workloads.CollectionGeneration)}
+}
+
+func (s *sqliteStatementsFactory) CreateDeleteExpiredGenerationJobsStatement(now time.Time, limit int) (string, []any) {
+	return `DELETE FROM evaluations WHERE id IN (
+		SELECT id FROM evaluations
+		WHERE workload_type = 'collection-generation' AND status IN (?, ?, ?) AND expires_at <= ?
+		  AND (cleanup_protected_until IS NULL OR cleanup_protected_until <= ?)
+		ORDER BY expires_at LIMIT ?
+	);`, []any{api.OverallStateCompleted, api.OverallStateFailed, api.OverallStateCancelled, now.UTC().Format(sqliteExpiryTimestampFormat), now.UTC().Format(sqliteExpiryTimestampFormat), limit}
 }
 
 func (s *sqliteStatementsFactory) CreateProviderAddEntityStatement(provider *api.ProviderResource, entity string) (string, []any) {

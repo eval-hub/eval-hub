@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,8 +12,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eval-hub/eval-hub/internal/agent/loop"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/generation"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/handlers"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
@@ -398,6 +401,19 @@ func TestBuildInternalModelRefSecretInvalidURL(t *testing.T) {
 	_, err := buildInternalModelRefSecret(context.Background(), "default", "bad-url-ref", data, "http://localhost:8080", nil, helper)
 	if err == nil {
 		t.Fatal("expected error for invalid *_url value")
+	}
+}
+
+func TestBuildInternalModelRefSecretInvalidURLDoesNotLeakSecret(t *testing.T) {
+	secretURL := "https://user:secret-value@host%GG/v1"
+	data := map[string][]byte{
+		"judge_api-key": []byte("token"),
+		"judge_url":     []byte(secretURL),
+	}
+	helper := &KubernetesHelper{clientset: fake.NewClientset()}
+	_, err := buildInternalModelRefSecret(context.Background(), "default", "bad-url-ref", data, "http://localhost:8080", nil, helper)
+	if err == nil || strings.Contains(err.Error(), "secret-value") || strings.Contains(err.Error(), secretURL) {
+		t.Fatalf("malformed Secret URL leaked through error: %v", err)
 	}
 }
 
@@ -1349,6 +1365,166 @@ func TestRunEvaluationJobMarksBenchmarkFailedOnCreateError(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("expected UpdateEvaluationJob to be called")
+	}
+}
+
+func TestValidateGenerationModelSecretIsScopedToTenant(t *testing.T) {
+	const secretName = "generator-auth"
+	client := fake.NewSimpleClientset(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "tenant-a"},
+	})
+	runtime := &K8sRuntime{helper: &KubernetesHelper{clientset: client}}
+	ctx := context.Background()
+	if err := runtime.ValidateModelSecret(ctx, "tenant-a", secretName); err != nil {
+		t.Fatalf("valid tenant secret: %v", err)
+	}
+	if err := runtime.ValidateModelSecret(ctx, "tenant-b", secretName); !apierrors.IsNotFound(err) {
+		t.Fatalf("expected a tenant-scoped not-found error, got %v", err)
+	}
+	if err := runtime.ValidateModelSecret(ctx, "", secretName); err == nil {
+		t.Fatal("accepted an empty Secret namespace")
+	}
+	if err := (&K8sRuntime{}).ValidateModelSecret(ctx, "tenant-a", secretName); err == nil {
+		t.Fatal("accepted a Secret reference with no Kubernetes client")
+	}
+}
+
+func TestValidateGenerationModelSecretClassifiesLookupErrors(t *testing.T) {
+	const secretName = "generator-auth"
+	const tenant = "tenant-a"
+	const privateDetail = "private Kubernetes details"
+	resource := schema.GroupResource{Resource: "secrets"}
+	for _, tc := range []struct {
+		name   string
+		cause  error
+		code   *messages.MessageCode
+		status int
+	}{
+		{"missing", apierrors.NewNotFound(resource, secretName), messages.RequestValidationFailed, 400},
+		{"invalid", apierrors.NewBadRequest(privateDetail), messages.RequestValidationFailed, 400},
+		{"forbidden", apierrors.NewForbidden(resource, secretName, errors.New(privateDetail)), messages.GenerationModelSecretAccessDenied, 503},
+		{"transient", apierrors.NewServiceUnavailable(privateDetail), messages.GenerationModelSecretLookupUnavailable, 503},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := fake.NewSimpleClientset()
+			client.PrependReactor("get", "secrets", func(k8stesting.Action) (bool, k8sruntime.Object, error) {
+				return true, nil, tc.cause
+			})
+			runtime := &K8sRuntime{helper: &KubernetesHelper{clientset: client}}
+			err := runtime.ValidateModelSecret(context.Background(), tenant, secretName)
+			var serviceErr *serviceerrors.ServiceError
+			if !errors.As(err, &serviceErr) || serviceErr.MessageCode() != tc.code ||
+				serviceErr.MessageCode().GetStatusCode() != tc.status || !errors.Is(err, tc.cause) {
+				t.Fatalf("lookup error = %v, want code %s, status %d, and original cause", err, tc.code.GetCode(), tc.status)
+			}
+			for _, value := range []string{secretName, tenant, privateDetail} {
+				if strings.Contains(err.Error(), value) {
+					t.Fatalf("lookup error exposes %q: %v", value, err)
+				}
+			}
+		})
+	}
+}
+
+func TestCreateGenerationJobUsesOnlyOriginalModelSecret(t *testing.T) {
+	const tenant = "tenant-a"
+	const secretName = "generator-auth"
+	budget := loop.DefaultPresets()[loop.EffortStandard]
+	evaluation, err := generation.NewJob("generation-job", tenant, "user-a", api.CollectionGenerationRequest{
+		EvaluationGoal: "Assess safe tool use",
+		Model: api.ModelRef{
+			URL: "http://model.example/v1", Name: "generator",
+			Auth: &api.ModelAuth{SecretRef: secretName},
+		},
+	}, "runner:v1", budget, "", 24*time.Hour, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := fake.NewSimpleClientset(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: tenant},
+		Data:       map[string][]byte{"generator_api-key": []byte("fixture-key")},
+	})
+	runtime := &K8sRuntime{
+		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		helper:        &KubernetesHelper{clientset: client},
+		serviceConfig: &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+	}
+	ctx := context.Background()
+	storage := &fakeStorage{evaluationJob: evaluation}
+	if err := runtime.createBenchmarkResources(ctx, runtime.logger, evaluation, &evaluation.Benchmarks[0], 0, storage); err != nil {
+		t.Fatalf("create generation job: %v", err)
+	}
+	secrets, err := client.CoreV1().Secrets(tenant).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(secrets.Items) != 1 || secrets.Items[0].Name != secretName || len(secrets.Items[0].OwnerReferences) != 0 {
+		t.Fatal("generation should leave only the caller's Secret, with no Job owner")
+	}
+	jobs, err := client.BatchV1().Jobs(tenant).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs.Items) != 1 || jobs.Items[0].Spec.TTLSecondsAfterFinished == nil {
+		t.Fatalf("expected one generation Job with TTL, got %d Jobs", len(jobs.Items))
+	}
+	spec := jobs.Items[0].Spec.Template.Spec
+	sidecar := findContainer(spec.InitContainers, sidecarContainerName)
+	if sidecar == nil || findVolumeMount(sidecar.VolumeMounts, modelAuthVolumeName) == nil {
+		t.Fatal("generation sidecar must retain the model Secret mount")
+	}
+	worker := spec.Containers[0]
+	if findVolumeMount(worker.VolumeMounts, modelAuthVolumeName) != nil || findVolumeMount(worker.VolumeMounts, modelInternalAuthVolumeName) != nil {
+		t.Fatal("generation worker must not mount any model Secret")
+	}
+}
+
+func TestRunGenerationJobReportsStructuredFailureOnCreateError(t *testing.T) {
+	budget, err := loop.DefaultPresets().Resolve(loop.EffortStandard, loop.DefaultHardLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := generation.NewJob("generation-job", "tenant-a", "user-a", api.CollectionGenerationRequest{
+		EvaluationGoal: "Assess safe tool use",
+		Model:          api.ModelRef{URL: "http://model.example/v1", Name: "generator"},
+	}, "runner:v1", budget, "", 24*time.Hour, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientset := fake.NewSimpleClientset()
+	clientset.PrependReactor("create", "configmaps", func(action k8stesting.Action) (bool, k8sruntime.Object, error) {
+		return true, nil, fmt.Errorf("configmap create failed")
+	})
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	runtime := &K8sRuntime{
+		logger: logger,
+		helper: &KubernetesHelper{clientset: clientset},
+		ctx:    context.Background(),
+		serviceConfig: &config.Config{
+			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
+		},
+	}
+	statusCh := make(chan *api.StatusEvent, 1)
+	storage := &fakeStorage{logger: logger, ctx: context.Background(), runStatusChan: statusCh, evaluationJob: job}
+	benchmarks, err := handlers.GetJobBenchmarks(job, nil)
+	if err != nil {
+		t.Fatalf("GetJobBenchmarks(): %v", err)
+	}
+	if err := runtime.RunEvaluationJob(job, benchmarks, storage); err != nil {
+		t.Fatalf("RunEvaluationJob(): %v", err)
+	}
+	select {
+	case event := <-statusCh:
+		status := event.BenchmarkStatusEvent
+		if status == nil || status.Status != api.StateFailed || status.ProviderID != generation.ProviderID || status.ID != generation.BenchmarkID {
+			t.Fatalf("generation create failure event = %+v", event)
+		}
+		failure, err := generation.FailureFromAdditionalInfo(status.AdditionalInfo)
+		if err != nil || failure.Code != "launch_failed" || status.ErrorMessage == nil || status.ErrorMessage.MessageOrigin != api.MessageOriginServer {
+			t.Fatalf("generation launch failure is not structured and safe: status=%+v failure=%+v err=%v", status, failure, err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for generation launch-failure event")
 	}
 }
 

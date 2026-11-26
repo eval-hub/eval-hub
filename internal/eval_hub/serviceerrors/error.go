@@ -8,6 +8,7 @@ type ServiceError struct {
 	messageCode   *messages.MessageCode
 	messageParams []any
 	rollback      bool
+	cause         error
 }
 
 func (e *ServiceError) Error() string {
@@ -35,11 +36,20 @@ func NewServiceError(messageCode *messages.MessageCode, messageParams ...any) *S
 }
 
 func (e *ServiceError) WithRollback() *ServiceError {
-	return &ServiceError{
-		messageCode:   e.messageCode,
-		messageParams: e.messageParams,
-		rollback:      true,
-	}
+	result := *e
+	result.rollback = true
+	return &result
+}
+
+// WithCause retains the original error without changing the public message.
+func (e *ServiceError) WithCause(cause error) *ServiceError {
+	result := *e
+	result.cause = cause
+	return &result
+}
+
+func (e *ServiceError) Unwrap() error {
+	return e.cause
 }
 
 func WithRollback(err error) *ServiceError {

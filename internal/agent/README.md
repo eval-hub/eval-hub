@@ -47,8 +47,10 @@ Verify the selected deployment against this contract before enabling it.
 ## Budgets and progress
 
 `loop.DefaultPresets` provides server-owned low, standard, and high defaults;
-the service may replace them from trusted configuration. `Presets.Validate`
-checks every configured preset against service hard caps, and `Presets.Resolve`
+the service may configure individual limits under
+`generation.effort_budget` (for example, `low.max_iterations`).
+Omitted fields retain their library defaults. The preset set's `Validate` method
+checks every effort budget against service hard caps, and `Presets.Resolve`
 returns a value snapshot for one admitted job. An empty effort selects standard.
 The request cannot override raw limits, and `strictness` is independent of the
 loop budget.
@@ -63,6 +65,23 @@ The shipped defaults are:
 
 These are library defaults; the service can replace them with validated,
 trusted deployment configuration, subject to the shipped hard ceilings.
+
+The operator supplies these trusted settings through the EvalHub service config.
+Budget fields are partial: omitted fields retain the table's default values.
+The environment mappings are `EVALHUB_GENERATION_<EFFORT>_<LIMIT>`, where
+`<EFFORT>` is `LOW`, `STANDARD`, or `HIGH`, and `<LIMIT>` is one of
+`MAX_ITERATIONS`, `MAX_MODEL_CALLS`, `MAX_TOOL_CALLS`, `MAX_TOTAL_TOKENS`,
+`MAX_OUTPUT_TOKENS`, or `MAX_DURATION`. Counts must be positive integers;
+durations use Go duration strings such as `3m`. The effective three budgets
+must remain monotonic and within the shipped hard ceilings;
+invalid values fail service startup. The runner image is selected by
+`EVALHUB_COLLECTION_GENERATION_RUNNER_IMAGE`; it must be an exact image reference
+containing the worker binary. If it is unset, generation admission is disabled.
+
+Terminal generation records are visible for 24 hours by default. Set
+`generation.retention` or `EVALHUB_COLLECTION_GENERATION_RETENTION` to override
+that window. See [resource maintenance](../../ARCHITECTURE.md#resource-maintenance-internaleval_hubmaintenance)
+for the separate schedule that removes expired records from storage.
 
 The loop tells the model its remaining call, turn, tool, and token budget. This
 is guidance only: the loop enforces the immutable snapshot, caps each response,

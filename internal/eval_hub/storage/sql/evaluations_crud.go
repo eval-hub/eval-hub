@@ -3,8 +3,11 @@ package sql
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/generation"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	se "github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/shared"
@@ -155,6 +158,98 @@ func (s *sqlStorage) DeleteEvaluationJob(id string) error {
 		}
 		return s.evaluationJobDeleteResultError(id, result)
 	})
+}
+
+// ProtectCollectionGenerationJobForCleanup cancels an active generation job, if
+// necessary, and installs a bounded cleanup lease in one transaction. The lease
+// protects an in-flight runtime cleanup from the retention sweep without changing
+// the job's first-terminal expires_at deadline.
+func (s *sqlStorage) ProtectCollectionGenerationJobForCleanup(id string, message *api.MessageInfo) (*api.EvaluationJobResource, error) {
+	api.WithMessageOrigin(message, api.MessageOriginServer)
+	var protected *api.EvaluationJobResource
+	err := s.withTransaction("protect collection-generation job for cleanup", id, func(txn *sql.Tx) error {
+		job, err := s.getEvaluationJobTransactionalForUpdateWithType(txn, id, workloads.CollectionGeneration)
+		if err != nil {
+			return err
+		}
+		if job.Status == nil {
+			return fmt.Errorf("collection-generation job %q has no status", id)
+		}
+
+		if !job.Status.State.IsTerminalState() {
+			benchmarks := job.Status.Benchmarks
+			now := time.Now()
+			for i := range benchmarks {
+				if !api.IsBenchmarkTerminalState(benchmarks[i].Status) {
+					benchmarks[i].Status = api.StateCancelled
+					benchmarks[i].ErrorMessage = message
+					setBenchmarkCompletionTime(&benchmarks[i], now)
+				}
+			}
+			entity := EvaluationJobEntity{
+				Config: &job.EvaluationJobConfig,
+				Status: &api.EvaluationJobStatus{
+					EvaluationJobState: api.EvaluationJobState{
+						State: api.OverallStateCancelled, Message: message,
+					},
+					Benchmarks:                   benchmarks,
+					CollectionGenerationProgress: job.Status.CollectionGenerationProgress,
+				},
+				Results: job.Results,
+			}
+			if err := s.updateEvaluationJobTxn(txn, id, api.OverallStateCancelled, &entity); err != nil {
+				return err
+			}
+			job.Status = entity.Status
+		}
+
+		protectedUntil := time.Now().UTC().Add(generation.CleanupProtectionLease)
+		query, args := s.statementsFactory.CreateSetCollectionGenerationCleanupProtectionStatement(s.tenant, id, protectedUntil)
+		result, err := s.exec(txn, query, args...)
+		if err != nil {
+			return err
+		}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return se.WithRollback(se.NewServiceError(messages.DatabaseOperationFailed, "Type", "evaluation job", "ResourceId", id, "Error", err.Error()))
+		}
+		if rows == 0 {
+			return se.WithRollback(se.NewServiceError(messages.ResourceNotFound, "Type", "evaluation job", "ResourceId", id))
+		}
+		protected = job
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return protected, nil
+}
+
+// DeleteCleanedCollectionGenerationJob finalizes a DELETE that has already
+// cleaned runtime resources. The row may have expired or been removed by then.
+func (s *sqlStorage) DeleteCleanedCollectionGenerationJob(id string) error {
+	query, args := s.statementsFactory.CreateDeleteCleanedCollectionGenerationJobStatement(s.tenant, id)
+	_, err := s.exec(nil, query, args...)
+	return err
+}
+
+// DeleteExpiredCollectionGenerationJobs removes a bounded batch of terminal generation
+// records whose server-assigned retention deadline has passed. The operation is global
+// across tenants by design and is safe for concurrent service replicas.
+func (s *sqlStorage) DeleteExpiredCollectionGenerationJobs(now time.Time, limit int) (int, error) {
+	if limit < 1 {
+		return 0, fmt.Errorf("cleanup batch limit must be positive")
+	}
+	query, args := s.statementsFactory.CreateDeleteExpiredGenerationJobsStatement(now.UTC(), limit)
+	result, err := s.pool.ExecContext(s.ctx, query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("delete expired collection-generation jobs: %w", err)
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("count deleted collection-generation jobs: %w", err)
+	}
+	return int(count), nil
 }
 
 func (s *sqlStorage) evaluationJobDeleteResultError(id string, result sql.Result) error {

@@ -32,6 +32,16 @@ var (
 		"Collection generation is not configured.",
 		"collection_generation_not_configured",
 	)
+	GenerationModelSecretAccessDenied = createMessage(
+		constants.HTTPCodeServiceUnavailable,
+		"EvalHub does not have permission to verify the generation model Secret.",
+		"generation_model_secret_access_denied",
+	)
+	GenerationModelSecretLookupUnavailable = createMessage(
+		constants.HTTPCodeServiceUnavailable,
+		"EvalHub could not verify the generation model Secret.",
+		"generation_model_secret_lookup_unavailable",
+	)
 	// QueryParameterRequired The query parameter '{{.ParameterName}}' is required.
 	QueryParameterRequired = createMessage(
 		constants.HTTPCodeBadRequest,

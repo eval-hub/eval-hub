@@ -3,6 +3,7 @@ package shared
 import (
 	"database/sql"
 	"log/slog"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
@@ -38,4 +39,8 @@ type SQLStatementsFactory interface {
 	// CreateDeleteSystemEntitiesStatement deletes all owner=system rows in tableName.
 	CreateDeleteSystemEntitiesStatement(tableName string) (string, []any)
 	CreateUpdateEntityStatement(tenant api.Tenant, tableName, id string, entityJSON string, status *api.OverallState) (string, []any)
+	CreateUpdateEvaluationEntityStatement(tenant api.Tenant, id, entityJSON string, status api.OverallState, expiresAt *time.Time) (string, []any)
+	CreateSetCollectionGenerationCleanupProtectionStatement(tenant api.Tenant, id string, protectedUntil time.Time) (string, []any)
+	CreateDeleteCleanedCollectionGenerationJobStatement(tenant api.Tenant, id string) (string, []any)
+	CreateDeleteExpiredGenerationJobsStatement(now time.Time, limit int) (string, []any)
 }

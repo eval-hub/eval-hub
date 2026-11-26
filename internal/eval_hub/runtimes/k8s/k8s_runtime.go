@@ -14,6 +14,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/constants"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/generation"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
@@ -102,6 +103,35 @@ func (r *K8sRuntime) WithContext(ctx context.Context) abstractions.Runtime {
 	}
 }
 
+// SupportsCollectionGeneration reports whether this runtime can launch generation Jobs.
+func (r *K8sRuntime) SupportsCollectionGeneration() bool {
+	return r != nil && r.helper != nil
+}
+
+// ValidateModelSecret verifies that a generation request's credential reference
+// exists in the tenant namespace without exposing or logging Secret contents.
+func (r *K8sRuntime) ValidateModelSecret(ctx context.Context, namespace, name string) error {
+	if !r.SupportsCollectionGeneration() {
+		return serviceerrors.NewServiceError(messages.GenerationModelSecretLookupUnavailable)
+	}
+	if strings.TrimSpace(namespace) == "" || strings.TrimSpace(name) == "" {
+		return serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error", "model.auth.secret_ref requires a Secret name and tenant namespace")
+	}
+	if _, err := r.helper.GetSecret(ctx, namespace, name); err != nil {
+		switch {
+		case apierrors.IsNotFound(err):
+			return serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error", "model.auth.secret_ref does not reference a Secret in the tenant namespace").WithCause(err)
+		case apierrors.IsInvalid(err), apierrors.IsBadRequest(err):
+			return serviceerrors.NewServiceError(messages.RequestValidationFailed, "Error", "model.auth.secret_ref is not a valid Secret reference").WithCause(err)
+		case apierrors.IsForbidden(err), apierrors.IsUnauthorized(err):
+			return serviceerrors.NewServiceError(messages.GenerationModelSecretAccessDenied).WithCause(err)
+		default:
+			return serviceerrors.NewServiceError(messages.GenerationModelSecretLookupUnavailable).WithCause(err)
+		}
+	}
+	return nil
+}
+
 // Close cancels in-flight abort waits and stops the Kubernetes EventBroadcaster
 // background goroutines started by NewKubernetesHelper.
 // WithLogger/WithContext copies share the same helper and shutdown cancel, so
@@ -160,7 +190,7 @@ func (r *K8sRuntime) RunEvaluationJob(
 					"benchmark_id", bench.ID,
 				)
 				if storage != nil {
-					runStatus := buildBenchmarkFailureStatus(&bench, idx, err)
+					runStatus := buildBenchmarkFailureStatus(evaluation, &bench, idx, err)
 					if updateErr := storage.UpdateEvaluationJob(jobID, runStatus); updateErr != nil {
 						r.logger.Error(
 							"failed to update benchmark status",
@@ -380,7 +410,12 @@ func (r *K8sRuntime) DeleteEvaluationJobResources(evaluation *api.EvaluationJobR
 	// Creator rollback covers confirmed-failed creates; uncertain leftovers need
 	// separate coordination (out of scope for the delete path).
 	cleanupSweep := func() error {
-		cleanupCtx, cancelCleanup := orphanCleanupContext()
+		parent := context.Background()
+		if generation.IsJob(&evaluation.EvaluationJobConfig) && r.ctx != nil {
+			// Generation DELETE owns a deadline shorter than its storage lease.
+			parent = r.ctx
+		}
+		cleanupCtx, cancelCleanup := context.WithTimeout(parent, orphanCleanupTimeout)
 		defer cancelCleanup()
 		return r.deleteLabeledJobsAndRefSecrets(cleanupCtx, jobID, namespace, labelSelector, deleteOptions)
 	}
@@ -512,9 +547,10 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 				logger.Error("kubernetes model secret inspect error", "benchmark_id", benchmarkID, "error", err)
 				return fmt.Errorf("job %s benchmark %s: reading model auth secret: %w", evaluation.Resource.ID, benchmarkID, err)
 			}
-			if secretInfo.hasCredentialKeys {
+			// Generation workers use the sidecar proxy without mounting the adapter's derived Secret.
+			if secretInfo.hasCredentialKeys && !jobConfig.generationWorkload {
 				jobConfig.modelInternalRefSecretName = buildK8sName(jobConfig.jobID, jobConfig.resourceGUID, "-model-ref")
-			} else {
+			} else if !secretInfo.hasCredentialKeys {
 				logger.Info("model credential secret has no proxy-injectable keys; sidecar proxy active for SA token")
 			}
 		}
@@ -734,7 +770,18 @@ func (r *K8sRuntime) createBenchmarkResources(ctx context.Context,
 	return nil
 }
 
-func buildBenchmarkFailureStatus(benchmark *api.EvaluationBenchmarkConfig, benchmarkIndex int, runErr error) *api.StatusEvent {
+func buildBenchmarkFailureStatus(evaluation *api.EvaluationJobResource, benchmark *api.EvaluationBenchmarkConfig, benchmarkIndex int, runErr error) *api.StatusEvent {
+	if evaluation != nil && generation.IsJob(&evaluation.EvaluationJobConfig) {
+		failure, _ := generation.SafeFailure("launch_failed", "")
+		return &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+			ProviderID: generation.ProviderID, ID: generation.BenchmarkID, BenchmarkIndex: 0,
+			Status: api.StateFailed,
+			ErrorMessage: api.WithMessageOrigin(&api.MessageInfo{
+				Message: failure.Message, MessageCode: "collection_generation_" + failure.Code,
+			}, api.MessageOriginServer),
+			AdditionalInfo: map[string]any{"collection_generation_error": failure},
+		}}
+	}
 	return &api.StatusEvent{
 		BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 			ProviderID:     benchmark.ProviderID,
@@ -906,7 +953,7 @@ func rewriteModelURLForSidecar(sidecarBaseURL, modelURL string) (string, error) 
 	}
 	model, err := url.Parse(strings.TrimSuffix(modelURL, "/"))
 	if err != nil {
-		return "", fmt.Errorf("invalid model URL %q: %w", modelURL, err)
+		return "", errors.New("invalid model URL")
 	}
 	out := &url.URL{
 		Scheme:   sidecar.Scheme,

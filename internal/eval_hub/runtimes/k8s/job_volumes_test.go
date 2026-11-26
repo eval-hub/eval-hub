@@ -562,6 +562,27 @@ func TestBuildJobWithModelAuthSecret(t *testing.T) {
 	}
 }
 
+func TestBuildGenerationJobDoesNotProjectModelSecretToWorker(t *testing.T) {
+	cfg := &jobConfig{
+		jobID: "generation-job", resourceGUID: "generation-guid", namespace: "default",
+		providerID: "evalhub-collection-generation", benchmarkID: "collection-generation",
+		adapterImage: "generation:latest", defaultEnv: []api.EnvVar{},
+		modelAuthSecretRef: "generator-secret", generationWorkload: true,
+	}
+	job, err := buildJob(cfg, nil)
+	if err != nil {
+		t.Fatalf("buildJob(): %v", err)
+	}
+	adapter := job.Spec.Template.Spec.Containers[0]
+	if findVolumeMount(adapter.VolumeMounts, modelInternalAuthVolumeName) != nil || findVolumeMount(adapter.VolumeMounts, modelAuthVolumeName) != nil {
+		t.Fatal("generation worker must not mount the real or projected model Secret")
+	}
+	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
+	if sidecar == nil || findVolumeMount(sidecar.VolumeMounts, modelAuthVolumeName) == nil {
+		t.Fatal("sidecar must retain the real model Secret mount")
+	}
+}
+
 func TestBuildJobWithoutModelAuthSecret(t *testing.T) {
 	cfg := &jobConfig{
 		jobID:          "job-no-auth",
