@@ -3,7 +3,8 @@ name: ok-to-test label
 # Mirrors the `/ok-to-test` admission of a pull request as labels. A new pull request starts with
 # `needs-ok-to-test`. When a user with write access comments `/ok-to-test` on it, this workflow
 # adds `ok-to-test` and clears `needs-ok-to-test`, and the k8s-tests suite starts from the same
-# comment. A comment from anyone else changes nothing.
+# comment. A comment from anyone else changes nothing. Admission is for one head: a push, or a
+# reopen, drops `ok-to-test` and restores `needs-ok-to-test` until `/ok-to-test` is commented again.
 #
 # The labels are for reading only: admission is the comment, checked in k8s-tests.yml, so a label
 # added by hand does not start the suite.
@@ -13,7 +14,7 @@ name: ok-to-test label
 # permission APIs, and it comes from this repository's default branch. Keep it that way.
 on:
   pull_request_target:
-    types: [opened, reopened]
+    types: [opened, reopened, synchronize]
   issue_comment:
     types: [created]
 
@@ -66,8 +67,18 @@ jobs:
               return;
             }
 
-            // A new or reopened pull request starts without admission, unless it already has the label.
+            // A new head is not admitted. A push, or a reopen that may follow one, drops ok-to-test
+            // until /ok-to-test is commented again; a new pull request starts with needs-ok-to-test.
             const issue_number = payload.pull_request.number;
+            if (payload.action === 'synchronize' || payload.action === 'reopened') {
+              try {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number, name: OK });
+                core.info(`removed ${OK} from #${issue_number}: ${payload.action} needs a new /ok-to-test`);
+              } catch (error) {
+                // Not labelled; that is the state we want.
+                if (error.status !== 404) throw error;
+              }
+            }
             const { data } = await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number, per_page: 100 });
             const names = new Set(data.map((label) => label.name));
             if (!names.has(OK) && !names.has(NEEDS)) {
