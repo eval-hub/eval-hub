@@ -58,7 +58,7 @@ Feature: MCP Tools
     And the MCP response should contain "model"
     And the MCP response should contain "accuracy"
 
-  Scenario: Discover providers filtered by target_type agent returns empty when no matches
+  Scenario: Discover providers filtered by target_type agent returns the agent-target providers
     When I call MCP tool "discover_providers" with arguments:
       """
       {
@@ -67,7 +67,9 @@ Feature: MCP Tools
       """
     Then the MCP tool call should succeed
     And the MCP response should contain "providers"
-    And the MCP response array at path "providers" should have length 0
+    And the MCP response array at path "providers" should have length at least 1
+    And the MCP response should contain "atif"
+    And the MCP response at JSONPath "$.providers[?(@.id==\"atif\")].target_type" should equal "agent"
 
   Scenario: Discover providers filtered by non-matching evaluates returns empty
     When I call MCP tool "discover_providers" with arguments:

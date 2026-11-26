@@ -1,7 +1,10 @@
 package sqlite
 
 import (
+	"database/sql"
+	"fmt"
 	"log/slog"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -11,6 +14,7 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/shared"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
+	_ "modernc.org/sqlite"
 )
 
 func TestCreateDeleteSystemEntitiesStatement(t *testing.T) {
@@ -24,6 +28,201 @@ func TestCreateDeleteSystemEntitiesStatement(t *testing.T) {
 	}
 	if len(args) != 1 || args[0] != abstractions.OwnerSystem {
 		t.Fatalf("unexpected args: %#v", args)
+	}
+}
+
+func TestExpiredGenerationCleanupUsesExpiryIndex(t *testing.T) {
+	db, err := sql.Open("sqlite", "file:generation-expiry-plan?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("close test database: %v", err)
+		}
+	})
+	db.SetMaxOpenConns(1)
+	factory := NewStatementsFactory(slog.Default())
+	if _, err := db.Exec(factory.GetTablesSchema()); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureEvaluationExpiryColumn(db); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureEvaluationCleanupProtectionColumn(db); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	insert, err := tx.Prepare(`INSERT INTO evaluations (id, tenant_id, owner, status, experiment_id, workload_type, expires_at, entity) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range 20_000 {
+		workloadType := string(workloads.Evaluation)
+		if i%2 == 0 {
+			workloadType = string(workloads.CollectionGeneration)
+		}
+		if _, err := insert.Exec(fmt.Sprintf("job-%05d", i), "tenant", "owner", string(api.OverallStateCompleted), "", workloadType, "2026-01-01T00:00:00.000000000Z", "{}"); err != nil {
+			t.Fatalf("insert fixture row %d: %v", i, err)
+		}
+	}
+	if err := insert.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("ANALYZE"); err != nil {
+		t.Fatal(err)
+	}
+	deleteQuery, args := factory.CreateDeleteExpiredGenerationJobsStatement(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), 100)
+	rows, err := db.Query("EXPLAIN QUERY PLAN "+deleteQuery, args...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := rows.Close(); err != nil {
+			t.Errorf("close query plan rows: %v", err)
+		}
+	})
+	var plan []string
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+			t.Fatal(err)
+		}
+		plan = append(plan, detail)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(plan, " | ")
+	if !strings.Contains(joined, "idx_evaluations_generation_expiry") || strings.Contains(joined, "USE TEMP B-TREE") {
+		t.Fatalf("expiry cleanup query plan does not use the ordered partial index: %s", joined)
+	}
+}
+
+func TestEnsureEvaluationCleanupProtectionColumnMigratesExistingDatabase(t *testing.T) {
+	db, err := sql.Open("sqlite", "file:generation-cleanup-migration?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.Exec("CREATE TABLE evaluations (id TEXT PRIMARY KEY)"); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureEvaluationCleanupProtectionColumn(db); err != nil {
+		t.Fatalf("EnsureEvaluationCleanupProtectionColumn(): %v", err)
+	}
+	if err := EnsureEvaluationCleanupProtectionColumn(db); err != nil {
+		t.Fatalf("EnsureEvaluationCleanupProtectionColumn() on an already migrated database: %v", err)
+	}
+	var columns int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('evaluations') WHERE name = 'cleanup_protected_until'`).Scan(&columns); err != nil {
+		t.Fatal(err)
+	}
+	if columns != 1 {
+		t.Fatalf("cleanup protection columns = %d, want 1", columns)
+	}
+}
+
+func TestEnsureEvaluationCleanupProtectionColumnReturnsSchemaError(t *testing.T) {
+	db, err := sql.Open("sqlite", "file:generation-cleanup-missing-table?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureEvaluationCleanupProtectionColumn(db); err == nil {
+		t.Fatal("EnsureEvaluationCleanupProtectionColumn() on a closed database returned nil")
+	}
+}
+
+func TestEnsureEvaluationCleanupProtectionColumnReportsMigrationFailure(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "generation-cleanup-readonly.db")
+	setup, err := sql.Open("sqlite", databasePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := setup.Exec("CREATE TABLE evaluations (id TEXT PRIMARY KEY)"); err != nil {
+		_ = setup.Close()
+		t.Fatal(err)
+	}
+	if err := setup.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	readOnly, err := sql.Open("sqlite", "file:"+databasePath+"?mode=ro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = readOnly.Close() })
+	if err := EnsureEvaluationCleanupProtectionColumn(readOnly); err == nil {
+		t.Fatal("EnsureEvaluationCleanupProtectionColumn() on a read-only database returned nil")
+	}
+}
+
+func TestSetCollectionGenerationCleanupProtectionIsTenantScopedAndPreservesExpiry(t *testing.T) {
+	factory := NewStatementsFactory(slog.Default())
+	protectedUntil := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+	statement, args := factory.CreateSetCollectionGenerationCleanupProtectionStatement("tenant-a", "job-1", protectedUntil)
+	if !strings.Contains(statement, "cleanup_protected_until = ?") || !strings.Contains(statement, "tenant_id = ?") || strings.Contains(statement, "owner =") || strings.Contains(statement, "expires_at =") {
+		t.Fatalf("unexpected cleanup protection statement: %s", statement)
+	}
+	if got := args[0]; got != protectedUntil.Format(sqliteExpiryTimestampFormat) {
+		t.Fatalf("protected-until argument = %#v", got)
+	}
+	if !slices.Equal(args[1:], []any{"job-1", "tenant-a"}) {
+		t.Fatalf("cleanup protection args = %#v", args)
+	}
+}
+
+func TestGenerationStatementsKeepExpiryOnSubsequentUpdates(t *testing.T) {
+	db, err := sql.Open("sqlite", "file:generation-expiry-statement?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	factory := NewStatementsFactory(slog.Default())
+	if _, err := db.Exec(factory.GetTablesSchema()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO evaluations (id, tenant_id, owner, status, experiment_id, workload_type, entity)
+		VALUES ('job', 'tenant', 'owner', 'running', '', 'collection-generation', '{}')`); err != nil {
+		t.Fatal(err)
+	}
+	firstExpiry := time.Now().UTC().Add(time.Hour)
+	laterExpiry := firstExpiry.Add(time.Hour)
+	for _, expires := range []*time.Time{nil, &firstExpiry, &laterExpiry} {
+		statement, args := factory.CreateUpdateEvaluationEntityStatement("tenant", "job", "{}", api.OverallStateFailed, expires)
+		if _, err := db.Exec(statement, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var preserved string
+	if err := db.QueryRow("SELECT CAST(expires_at AS TEXT) FROM evaluations WHERE id = 'job'").Scan(&preserved); err != nil {
+		t.Fatal(err)
+	}
+	if want := firstExpiry.Format(sqliteExpiryTimestampFormat); preserved != want {
+		t.Fatalf("expiry = %q, want %q", preserved, want)
+	}
+	query := shared.EntityQuery{Resource: api.Resource{ID: "job", Tenant: "tenant"}, WorkloadType: workloads.CollectionGeneration}
+	statement, args, scan := factory.CreateEvaluationGetEntityForUpdateStatement(&query)
+	if err := db.QueryRow(statement, args...).Scan(scan...); err != nil {
+		t.Fatalf("unexpired job is unavailable: %v", err)
+	}
+	statement, args = factory.CreateDeleteCleanedCollectionGenerationJobStatement("different-tenant", "job")
+	deletion, err := db.Exec(statement, args...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if affected, err := deletion.RowsAffected(); err != nil || affected != 0 {
+		t.Fatalf("cleanup removed another tenant's job: rows=%d err=%v", affected, err)
 	}
 }
 

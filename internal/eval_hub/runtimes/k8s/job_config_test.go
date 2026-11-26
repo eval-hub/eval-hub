@@ -1307,6 +1307,14 @@ func TestRewriteModelURLForSidecar(t *testing.T) {
 	}
 }
 
+func TestRewriteModelURLForSidecarDoesNotLeakMalformedModelURL(t *testing.T) {
+	secretURL := "https://user:secret-value@host%GG/v1"
+	_, err := rewriteModelURLForSidecar("http://localhost:8080", secretURL)
+	if err == nil || strings.Contains(err.Error(), "secret-value") || strings.Contains(err.Error(), secretURL) {
+		t.Fatalf("malformed model URL leaked through error: %v", err)
+	}
+}
+
 func TestBuildJobConfigModelURLPreservesRealURLAndTargetURL(t *testing.T) {
 	// buildJobConfig does NOT rewrite model.url — that happens in k8s_runtime.go
 	// via rewriteModelURLForSidecar. Verify modelTargetURL holds the real upstream URL

@@ -10,6 +10,7 @@ import (
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes/shared"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
@@ -78,6 +79,7 @@ type jobConfig struct {
 	mlflowWorkspace            string
 	ociCredentialsSecret       string
 	modelAuthSecretRef         string // user's real credentials secret mounted only in sidecar
+	generationWorkload         bool   // generation runner receives no real model Secret projection
 	modelInternalRefSecretName string // ephemeral internalModelRef secret mounted in adapter; empty when credential injection is not active
 	modelTargetURL             string // real model URL forwarded by the sidecar model proxy; empty for pre-recorded-data jobs
 	sidecarResources           corev1.ResourceRequirements
@@ -368,6 +370,7 @@ func buildJobConfig(evaluation *api.EvaluationJobResource, provider *api.Provide
 		mlflowWorkspace:            mlflowWorkspace,
 		ociCredentialsSecret:       ociCredentialsSecret,
 		modelAuthSecretRef:         modelAuthSecretRef,
+		generationWorkload:         workloads.TypeForJob(&evaluation.EvaluationJobConfig) == workloads.CollectionGeneration,
 		modelInternalRefSecretName: modelInternalRefSecretName,
 		modelTargetURL:             modelTargetURL,
 		sidecarResources:           sidecarResources,

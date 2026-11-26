@@ -51,3 +51,46 @@ func EnsureEvaluationWorkloadTypeColumn(pool *sql.DB) error {
 	}
 	return nil
 }
+
+// EnsureEvaluationExpiryColumn upgrades databases created before generation retention.
+func EnsureEvaluationExpiryColumn(pool *sql.DB) error {
+	var columns int
+	const columnQuery = `SELECT COUNT(*) FROM pragma_table_info('evaluations') WHERE name = 'expires_at'`
+	if err := pool.QueryRow(columnQuery).Scan(&columns); err != nil {
+		return fmt.Errorf("check evaluations expires_at column: %w", err)
+	}
+	if columns == 0 {
+		const migration = `ALTER TABLE evaluations ADD COLUMN expires_at TIMESTAMP NULL`
+		if _, err := pool.Exec(migration); err != nil {
+			// Another service replica may have completed the migration after the check.
+			if checkErr := pool.QueryRow(columnQuery).Scan(&columns); checkErr != nil || columns == 0 {
+				return fmt.Errorf("add evaluations expires_at column: %w", err)
+			}
+		}
+	}
+	const index = `CREATE INDEX IF NOT EXISTS idx_evaluations_generation_expiry ON evaluations (expires_at) WHERE workload_type = 'collection-generation' AND expires_at IS NOT NULL`
+	if _, err := pool.Exec(index); err != nil {
+		return fmt.Errorf("create evaluations generation expiry index: %w", err)
+	}
+	return nil
+}
+
+// EnsureEvaluationCleanupProtectionColumn upgrades databases created before
+// generation DELETE gained a bounded retention-protection lease.
+func EnsureEvaluationCleanupProtectionColumn(pool *sql.DB) error {
+	var columns int
+	const columnQuery = `SELECT COUNT(*) FROM pragma_table_info('evaluations') WHERE name = 'cleanup_protected_until'`
+	if err := pool.QueryRow(columnQuery).Scan(&columns); err != nil {
+		return fmt.Errorf("check evaluations cleanup_protected_until column: %w", err)
+	}
+	if columns == 0 {
+		const migration = `ALTER TABLE evaluations ADD COLUMN cleanup_protected_until TIMESTAMP NULL`
+		if _, err := pool.Exec(migration); err != nil {
+			// Another service replica may have completed the migration after the check.
+			if checkErr := pool.QueryRow(columnQuery).Scan(&columns); checkErr != nil || columns == 0 {
+				return fmt.Errorf("add evaluations cleanup_protected_until column: %w", err)
+			}
+		}
+	}
+	return nil
+}

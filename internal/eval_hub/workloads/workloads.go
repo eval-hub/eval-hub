@@ -14,8 +14,9 @@ import (
 type Type string
 
 const (
-	Evaluation     Type = "evaluation"
-	PostProcessing Type = "post-processing"
+	Evaluation           Type = "evaluation"
+	PostProcessing       Type = "post-processing"
+	CollectionGeneration Type = "collection-generation"
 )
 
 type workloadTypeContextKey struct{}
@@ -42,6 +43,8 @@ type Workload struct {
 	Internal        bool
 	MatchesJob      func(*api.EvaluationJobConfig) bool
 	RuntimeProvider func() *api.ProviderResource
+	// RuntimeProviderForJob may derive a runtime provider from trusted persisted job config.
+	RuntimeProviderForJob func(*api.EvaluationJobConfig) *api.ProviderResource
 }
 
 var (
@@ -58,7 +61,7 @@ func Register(workload Workload) {
 		return
 	}
 	if workload.Type == "" || workload.ProviderID == "" || workload.BenchmarkID == "" ||
-		workload.MatchesJob == nil || workload.RuntimeProvider == nil {
+		workload.MatchesJob == nil || (workload.RuntimeProvider == nil && workload.RuntimeProviderForJob == nil) {
 		slog.Error("Incomplete workload registration", "type", workload.Type, "provider_id", workload.ProviderID, "benchmark_id", workload.BenchmarkID)
 		return
 	}

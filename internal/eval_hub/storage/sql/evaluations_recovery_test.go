@@ -12,11 +12,15 @@ import (
 )
 
 func TestUpdateEvaluationJobConditionalFailure(t *testing.T) {
+	testUpdateEvaluationJobConditionalFailure(t, drivers[0], getDBName())
+}
+
+func testUpdateEvaluationJobConditionalFailure(t *testing.T, driver, databaseName string) {
 	const recoveryCode = "KUBERNETES_JOB_FAILURE"
 
 	createJob := func(t *testing.T, benchmarks ...string) (abstractions.Storage, string) {
 		t.Helper()
-		store, err := getTestStorage(t, drivers[0], getDBName())
+		store, err := getTestStorage(t, driver, databaseName)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -127,6 +131,7 @@ func TestUpdateEvaluationJobConditionalFailure(t *testing.T) {
 		store, id := createJob(t, "b1", "b2")
 		final := api.BenchmarkStatusEvent{
 			Status: api.StateFailed, LogsPath: "/data/logs/adapter.log",
+			Artifacts:    map[string]any{"report": "file:///tmp/adapter-report.json"},
 			ErrorMessage: &api.MessageInfo{Message: "Adapter failure.", MessageCode: recoveryCode, MessageOrigin: api.MessageOriginServer},
 		}
 		if err := update(store, id, final); err != nil {
@@ -136,6 +141,11 @@ func TestUpdateEvaluationJobConditionalFailure(t *testing.T) {
 		if before.Status.State != api.OverallStateRunning || before.Status.Benchmarks[0].ErrorMessage == nil ||
 			before.Status.Benchmarks[0].ErrorMessage.MessageOrigin != api.MessageOriginRuntime {
 			t.Fatalf("expected an ordinary adapter failure with an active sibling: %+v", before.Status)
+		}
+		if before.Results == nil || len(before.Results.Benchmarks) != 1 ||
+			before.Results.Benchmarks[0].LogsPath != final.LogsPath ||
+			!reflect.DeepEqual(before.Results.Benchmarks[0].Artifacts, final.Artifacts) {
+			t.Fatalf("expected the adapter's logs and artifacts to be saved: %+v", before.Results)
 		}
 
 		report := api.BenchmarkStatusEvent{Status: api.StateFailed, Precondition: api.BenchmarkStatusPreconditionNonterminal}

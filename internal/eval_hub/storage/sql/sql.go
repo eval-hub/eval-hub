@@ -19,6 +19,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
+	_ "github.com/eval-hub/eval-hub/internal/eval_hub/generation" // Register the collection-generation workload for SQL persistence.
 	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
 	se "github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/postgres"
@@ -322,7 +323,13 @@ func (s *sqlStorage) ensureSchema() error {
 	if s.sqlConfig.Driver == SQLiteDriver {
 		// CREATE TABLE IF NOT EXISTS does not add columns to an existing table,
 		// and SQLite has no ADD COLUMN IF NOT EXISTS syntax.
-		return sqlite.EnsureEvaluationWorkloadTypeColumn(s.pool)
+		if err := sqlite.EnsureEvaluationWorkloadTypeColumn(s.pool); err != nil {
+			return err
+		}
+		if err := sqlite.EnsureEvaluationExpiryColumn(s.pool); err != nil {
+			return err
+		}
+		return sqlite.EnsureEvaluationCleanupProtectionColumn(s.pool)
 	}
 
 	return nil
@@ -385,6 +392,14 @@ func (s *sqlStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 }
 
 func (s *sqlStorage) WithContext(ctx context.Context) abstractions.Storage {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if workloads.TypeFromContext(ctx) == "" && s.ctx != nil {
+		if workloadType := workloads.TypeFromContext(s.ctx); workloadType != "" {
+			ctx = workloads.WithType(ctx, workloadType)
+		}
+	}
 	return &sqlStorage{
 		sqlConfig:         s.sqlConfig,
 		statementsFactory: s.statementsFactory,
