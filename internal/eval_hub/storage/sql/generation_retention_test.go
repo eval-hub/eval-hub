@@ -14,6 +14,8 @@ import (
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/generation"
 	generationservice "github.com/eval-hub/eval-hub/internal/eval_hub/generation/service"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/messages"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/serviceerrors"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/workloads"
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
@@ -297,10 +299,11 @@ func testGenerationDeleteProtectionIsTenantScopedAndPreservesExpiry(t *testing.T
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	tenant := api.Tenant(common.GUID())
+	otherTenant := api.Tenant(common.GUID())
 	owner := api.User("generation-owner")
 	sameTenantUser := api.User("same-tenant-caller")
 	scoped := store.WithTenant(tenant).WithOwner(owner)
-	job := generationJobForRetention(t, common.GUID(), tenant, owner, time.Second)
+	job := generationJobForRetention(t, common.GUID(), tenant, owner, time.Minute)
 	if err := scoped.CreateEvaluationJob(job); err != nil {
 		t.Fatal(err)
 	}
@@ -311,12 +314,24 @@ func testGenerationDeleteProtectionIsTenantScopedAndPreservesExpiry(t *testing.T
 	if !ok {
 		t.Fatal("SQL storage does not expose generation retention cleanup")
 	}
-	deleteStore := store.WithTenant(tenant).WithOwner(sameTenantUser)
-	service := generationservice.NewService(deleteStore, successfulGenerationCleanupRuntime{}, &config.GenerationConfig{}, nil)
-	if err := service.Delete(context.Background(), api.Tenant(common.GUID()), sameTenantUser, job.Resource.ID); err == nil {
-		t.Fatal("different tenant could delete a generation job")
+	callerStore := store.WithTenant(tenant).WithOwner(sameTenantUser)
+	service := generationservice.NewService(callerStore, successfulGenerationCleanupRuntime{}, &config.GenerationConfig{}, nil)
+	ctx := context.Background()
+	var notFound *serviceerrors.ServiceError
+	if result, err := service.Get(ctx, otherTenant, sameTenantUser, job.Resource.ID); result != nil ||
+		!errors.As(err, &notFound) || notFound.MessageCode() != messages.ResourceNotFound {
+		t.Fatalf("cross-tenant GET = (%+v, %v), want resource not found", result, err)
 	}
-	if err := service.Delete(context.Background(), tenant, sameTenantUser, job.Resource.ID); err != nil {
+	if err := service.Delete(ctx, otherTenant, sameTenantUser, job.Resource.ID); !errors.As(err, &notFound) ||
+		notFound.MessageCode() != messages.ResourceNotFound {
+		t.Fatalf("cross-tenant DELETE = %v, want resource not found", err)
+	}
+	result, err := service.Get(ctx, tenant, sameTenantUser, job.Resource.ID)
+	if err != nil || result == nil || result.Resource.ID != job.Resource.ID ||
+		result.Resource.Tenant != tenant || result.Resource.Owner != owner {
+		t.Fatalf("same-tenant GET did not return the original generation: (%+v, %v)", result, err)
+	}
+	if err := service.Delete(ctx, tenant, sameTenantUser, job.Resource.ID); err != nil {
 		t.Fatalf("same-tenant user could not delete generation job: %v", err)
 	}
 	if _, err := generationStore.GetEvaluationJob(job.Resource.ID); err == nil {

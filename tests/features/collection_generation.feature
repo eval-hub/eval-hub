@@ -82,11 +82,9 @@ Feature: Collection generation
       And the generated proposal should match the collection creation contract
       And the rejected generation benchmarks should be ordered as "{{env:FVT_GENERATION_REJECTED_IDS}}"
 
-    # Provide a second same-tenant caller and a caller authorized in a different tenant.
-    # Set FVT_GENERATION_READER_TOKEN, FVT_GENERATION_OTHER_TENANT and
-    # FVT_GENERATION_OTHER_TENANT_TOKEN.
+    # Set FVT_GENERATION_READER_TOKEN for a second authorized caller in the same tenant.
     @positive
-    Scenario: Generate across two providers at the upper cap and enforce tenant visibility
+    Scenario: Generate across two providers at the upper cap and allow same-tenant reads
       When I submit a collection generation request with:
         """
         {
@@ -109,12 +107,6 @@ Feature: Collection generation
       Then the response code should be 200
       And the response should equal the value "completed" at path "status.state"
       And the response should equal the value "{{value:id}}" at path "resource.id"
-      When I send a GET generation request as "other tenant"
-      Then the response code should be 404
-      When I send a DELETE generation request as "other tenant"
-      Then the response code should be 404
-      When I send a GET request to "/api/v1/evaluations/collections/generation/{id}"
-      Then the response code should be 200
       When I send a DELETE request to "/api/v1/evaluations/collections/generation/{id}"
       Then the response code should be 204
       When I send a GET request to "/api/v1/evaluations/collections/generation/{id}"

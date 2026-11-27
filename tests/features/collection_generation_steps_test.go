@@ -489,13 +489,6 @@ func (sc *collectionGenerationScenario) requestAs(ctx context.Context, method, i
 	switch identity {
 	case "same-tenant reader":
 		tokenKey = "FVT_GENERATION_READER_TOKEN"
-	case "other tenant":
-		tokenKey = "FVT_GENERATION_OTHER_TENANT_TOKEN"
-		other := os.Getenv("FVT_GENERATION_OTHER_TENANT")
-		if other == "" || other == headers["X-Tenant"] {
-			return fmt.Errorf("FVT_GENERATION_OTHER_TENANT must name a different tenant")
-		}
-		sc.reqHeaders["X-Tenant"] = other
 	case "forbidden caller":
 		tokenKey = "FVT_GENERATION_FORBIDDEN_TOKEN"
 	case "unauthenticated caller":
