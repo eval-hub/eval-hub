@@ -472,9 +472,9 @@ func (sc *collectionGenerationScenario) requestAs(ctx context.Context, method, i
 	var tokenKey string
 	switch identity {
 	case "same-tenant reader":
-		tokenKey = "FVT_GENERATION_READER_TOKEN"
+		tokenKey = "PROV_TOKEN_PROJECT_VIEWER"
 	case "forbidden caller":
-		tokenKey = "FVT_GENERATION_FORBIDDEN_TOKEN"
+		tokenKey = "PROV_TOKEN_NO_RBAC"
 	case "unauthenticated caller":
 		sc.reqHeaders["Authorization"] = ""
 	default:

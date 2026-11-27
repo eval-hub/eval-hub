@@ -78,7 +78,7 @@ Feature: Collection generation
       And the response should equal the value "Evaluate math and general reasoning." at path "result.collection.description"
       And the generated proposal should match the collection creation contract
 
-    # Set FVT_GENERATION_READER_TOKEN for a second authorized caller in the same tenant.
+    # Set PROV_TOKEN_PROJECT_VIEWER for a second authorized caller in the same tenant.
     @positive
     Scenario: Generate across two providers at the upper cap and allow same-tenant reads
       When I submit a collection generation request with:
@@ -191,7 +191,7 @@ Feature: Collection generation
       When I send a GET generation request as "unauthenticated caller"
       Then the response code should be 401
 
-    # Set FVT_GENERATION_FORBIDDEN_TOKEN to a caller without generation access in X_TENANT.
+    # Set PROV_TOKEN_NO_RBAC for a caller without generation access in X_TENANT.
     @negative @collection_generation_forbidden
     Scenario: The proxy rejects generation requests without tenant authorization
       When I send a GET generation request as "forbidden caller"
