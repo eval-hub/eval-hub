@@ -205,15 +205,22 @@ func testGenerationInfrastructureFailuresBecomeTerminal(t *testing.T, driver, da
 	tenant, owner := api.Tenant(common.GUID()), api.User("event-owner")
 	scoped := store.WithTenant(tenant).WithOwner(owner).WithWorkloadType(workloads.CollectionGeneration)
 	for _, tc := range []struct {
+		name           string
 		code           string
 		running        bool
+		conditional    bool
 		additionalInfo map[string]any
 	}{
+		{name: "conditional terminal job failure", code: "RUNTIME_FAILURE", running: true, conditional: true},
 		{code: "RUNTIME_FAILURE", running: true},
 		{code: "queue_error", additionalInfo: map[string]any{}},
 		{code: "gpu_unavailable", additionalInfo: map[string]any{"reason": "private queue details"}},
 	} {
-		t.Run(tc.code, func(t *testing.T) {
+		name := tc.name
+		if name == "" {
+			name = tc.code
+		}
+		t.Run(name, func(t *testing.T) {
 			var id string
 			if tc.running {
 				id = createRunningGenerationJob(t, scoped, tenant, owner)
@@ -229,8 +236,17 @@ func testGenerationInfrastructureFailuresBecomeTerminal(t *testing.T, driver, da
 				ErrorMessage:   &api.MessageInfo{MessageCode: tc.code, Message: "private infrastructure details"},
 				AdditionalInfo: tc.additionalInfo,
 			}}
+			if tc.conditional {
+				event.BenchmarkStatusEvent.Precondition = api.BenchmarkStatusPreconditionNonterminal
+				event.BenchmarkStatusEvent.CompletedAt = "2026-11-24T12:00:00Z"
+			}
 			if err := scoped.UpdateEvaluationJob(id, event); err != nil {
 				t.Fatalf("persist infrastructure failure: %v", err)
+			}
+			if tc.conditional {
+				if err := scoped.UpdateEvaluationJob(id, event); !errors.Is(err, abstractions.ErrBenchmarkAlreadyTerminal) {
+					t.Fatalf("duplicate infrastructure failure = %v, want already-terminal outcome", err)
+				}
 			}
 			job, err := scoped.GetEvaluationJob(id)
 			if err != nil {

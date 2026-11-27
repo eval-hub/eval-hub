@@ -1046,6 +1046,60 @@ func TestHandleUpdateEvaluationStartTime(t *testing.T) {
 	}
 }
 
+func TestHandleUpdateEvaluationConditionalFailureOutcome(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		updateErr error
+		outcome   api.BenchmarkStatusEventOutcome
+	}{
+		{"applied", nil, api.BenchmarkStatusEventApplied},
+		{"already terminal", abstractions.ErrBenchmarkAlreadyTerminal, api.BenchmarkStatusEventAlreadyTerminal},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			job := &api.EvaluationJobResource{
+				Resource: api.EvaluationResource{Resource: api.Resource{ID: "job-1"}},
+			}
+			storage := &updateEvaluationStorage{
+				fakeStorage: &fakeStorage{job: job},
+				updateErr:   tt.updateErr,
+			}
+			runtime := &fakeRuntime{}
+			h := handlers.New(storage, testhelpers.NewValidator(t), runtime, nil, nil, nil, nil, nil)
+			req := &updateEvaluationRequest{
+				bodyRequest: &bodyRequest{
+					MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs/job-1/events"),
+					body:        []byte(`{"benchmark_status_event":{"provider_id":"p1","id":"b1","status":"failed","precondition":"nonterminal"}}`),
+				},
+				pathValues: map[string]string{"job_id": "job-1"},
+			}
+			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			ctx := executioncontext.NewExecutionContext(context.Background(), "req-conditional", logger, "test-user", "test-tenant")
+			recorder := httptest.NewRecorder()
+
+			h.HandleUpdateEvaluation(ctx, req, MockResponseWrapper{recorder: recorder})
+
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200: %s", recorder.Code, recorder.Body)
+			}
+			var response api.BenchmarkStatusEventResponse
+			if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+				t.Fatalf("decode conditional outcome: %v", err)
+			}
+			if response.Outcome != tt.outcome {
+				t.Errorf("outcome = %q, want %q", response.Outcome, tt.outcome)
+			}
+			event := storage.lastStatusEvent
+			if event == nil || event.BenchmarkStatusEvent == nil ||
+				event.BenchmarkStatusEvent.Precondition != api.BenchmarkStatusPreconditionNonterminal {
+				t.Errorf("storage did not receive the conditional event: %+v", event)
+			}
+			if notified := runtime.notifiedJob != nil; notified != (tt.updateErr == nil) {
+				t.Errorf("phase notification sent = %t for %q", notified, tt.outcome)
+			}
+		})
+	}
+}
+
 func TestHandleUpdateEvaluationDoesNotStampStartAfterLookupFailure(t *testing.T) {
 	t.Parallel()
 	storage := &updateEvaluationStorage{fakeStorage: &fakeStorage{getJobErr: errors.New("temporary lookup failure")}}
