@@ -88,6 +88,13 @@ func readProviders(ctx context.Context, source Catalog) ([]api.ProviderResource,
 			return nil, errors.New("provider catalog exceeds limits or contains duplicate IDs")
 		}
 		ids[provider.Resource.ID] = true
+		benchmarkIDs := make(map[string]bool, len(provider.Benchmarks))
+		for _, benchmark := range provider.Benchmarks {
+			if benchmarkIDs[benchmark.ID] {
+				return nil, errors.New("provider catalog contains duplicate benchmark IDs")
+			}
+			benchmarkIDs[benchmark.ID] = true
+		}
 	}
 	return providers, nil
 }
@@ -98,15 +105,27 @@ func discover(providers []api.ProviderResource, options collectiondesign.Options
 	var eligible []candidate
 	unavailable, otherTarget := false, false
 	target := explicitTarget(options.Goal)
+	// Target words constrain the kind of system under test. On their own
+	// they provide no evidence for a specific capability requested in the goal.
+	switch target {
+	case "agent":
+		goal = slices.DeleteFunc(goal, func(term string) bool { return term == "agent" })
+	case "inference_server":
+		goal = slices.DeleteFunc(goal, func(term string) bool { return term == "inference" || term == "server" })
+	}
+	explicitEvaluation := hasEvaluationIntent(options.Goal)
 	for _, provider := range providers {
 		id := provider.Resource.ID
 		if !allowedProvider(options, id) {
 			continue
 		}
 		delete(requested, id)
+		if len(goal) == 0 && !explicitEvaluation {
+			continue
+		}
 		for _, benchmark := range provider.Benchmarks {
-			score := relevance(goal, benchmark)
-			if score == 0 || benchmark.ID == "" {
+			score, matchesTopic := relevance(goal, benchmark)
+			if score == 0 || benchmark.ID == "" || (!explicitEvaluation && !matchesTopic) {
 				continue
 			}
 			if target != "" && len(benchmark.EvaluationTargets) > 0 && !slices.Contains(benchmark.EvaluationTargets, target) {
@@ -158,9 +177,7 @@ func compareCandidates(a, b candidate) int {
 }
 
 func explicitTarget(goal string) string {
-	terms := " " + strings.Join(strings.FieldsFunc(strings.ToLower(goal), func(r rune) bool {
-		return !unicode.IsLetter(r)
-	}), " ") + " "
+	terms := " " + strings.Join(textWords(goal), " ") + " "
 	switch {
 	case strings.Contains(terms, " inference server "):
 		return "inference_server"
@@ -171,18 +188,35 @@ func explicitTarget(goal string) string {
 	}
 }
 
+// A generic collection request can match every word in the stop list. Allow
+// the broad fallback only when the goal still signals an evaluation task.
+func hasEvaluationIntent(goal string) bool {
+	for _, word := range textWords(goal) {
+		switch word {
+		case "assess", "assessment", "benchmark", "benchmarks", "eval", "evals",
+			"evaluate", "evaluating", "evaluation", "evaluations", "measure", "sanity", "test", "tests", "testing":
+			return true
+		}
+	}
+	return false
+}
+
+func textWords(text string) []string {
+	return strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsNumber(r)
+	})
+}
+
 // The generation prompt and model reasons are not evidence. Match meaningful
 // goal terms against documented benchmark metadata, with a small set of
 // common synonyms. Generic evaluation language cannot match every benchmark.
 func normalizedTerms(text string) []string {
 	var terms []string
-	for _, word := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsNumber(r)
-	}) {
+	for _, word := range textWords(text) {
 		switch word {
 		case "a", "an", "and", "are", "as", "at", "be", "by", "can", "for", "from", "how", "i", "in", "is", "it", "me", "my", "of", "on", "or", "our", "that", "the", "to", "we", "what", "with", "would", "you",
 			"ai", "llm", "llms", "model", "models", "benchmark", "benchmarks", "eval", "evals", "evaluation", "evaluations", "evaluate", "evaluating", "assess", "assessment", "test", "tests", "testing", "measure",
-			"add", "assemble", "build", "check", "collection", "collections", "compare", "compact", "create", "curate", "design", "find", "generate", "give", "make", "need", "pick", "please", "select", "suite", "using", "want",
+			"add", "assemble", "build", "check", "collection", "collections", "compare", "compact", "create", "curate", "design", "find", "generate", "give", "make", "need", "pick", "please", "sanity", "select", "suite", "using", "want",
 			"baseline", "balanced", "broad", "everyday", "general", "generalist", "purpose", "quality", "new", "starter", "small", "short", "help", "use", "assistant", "assistants", "chat", "quick", "support":
 			continue
 		case "safe", "safety", "unsafe":
@@ -213,30 +247,37 @@ func normalizedTerms(text string) []string {
 	return terms
 }
 
-func relevance(goal []string, benchmark api.BenchmarkResource) int {
+// relevance returns a ranking and whether all non-generic terms are grounded
+// in the benchmark's name, ID, or classification. A terse topic such as
+// "toxicity" can be a goal by itself. An incidental description match is
+// insufficient without an explicit evaluation request.
+func relevance(goal []string, benchmark api.BenchmarkResource) (score int, matchesTopic bool) {
 	if len(goal) == 0 {
 		// Broad goals can use a catalog-described benchmark. The guardrail
 		// gate must pass even for a terse goal.
 		if benchmark.Name != "" || len(benchmark.Domains) > 0 || len(benchmark.Tags) > 0 {
-			return 1
+			return 1, false
 		}
-		return 0
+		return 0, false
 	}
 	identity := normalizedTerms(benchmark.ID + " " + benchmark.Name)
 	classification := normalizedTerms(strings.Join(slices.Concat(benchmark.Domains,
 		benchmark.Tasks, benchmark.Tags, benchmark.Modalities, benchmark.EvaluationTargets,
 		[]string{benchmark.Category}), " "))
 	description := normalizedTerms(benchmark.Description)
-	score := 0
+	matchesTopic = true
 	for _, term := range goal {
 		switch {
 		case slices.Contains(identity, term):
 			score += 4
 		case slices.Contains(classification, term):
 			score += 3
-		case slices.Contains(description, term):
-			score++
+		default:
+			matchesTopic = false
+			if slices.Contains(description, term) {
+				score++
+			}
 		}
 	}
-	return score
+	return score, matchesTopic
 }

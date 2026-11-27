@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -28,13 +29,13 @@ func TestWorkerRunsGenerationThroughSidecar(t *testing.T) {
 	system := api.ProviderResource{
 		Resource: api.Resource{ID: "system-provider", Owner: "system"},
 		ProviderConfig: api.ProviderConfig{Benchmarks: []api.BenchmarkResource{{
-			ID: "tool-check", Name: "Tool use", Domains: []string{"tool_use"}, Metrics: []string{"pass"},
+			ID: "tool-check", Name: "Safe tool use", Domains: []string{"tool_use", "safety"}, Metrics: []string{"pass"},
 		}}},
 	}
 	tenant := api.ProviderResource{
 		Resource: api.Resource{ID: "tenant-provider", Owner: "different-owner", Tenant: "tenant-test"},
 		ProviderConfig: api.ProviderConfig{Benchmarks: []api.BenchmarkResource{{
-			ID: "tool-use", Name: "Tool use", Domains: []string{"tool_use"}, Metrics: []string{"pass"},
+			ID: "tool-use", Name: "Safe tool use", Domains: []string{"tool_use", "safety"}, Metrics: []string{"pass"},
 		}}},
 	}
 	sidecar := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -84,21 +85,39 @@ func TestWorkerRunsGenerationThroughSidecar(t *testing.T) {
 			}
 			message := loop.Message{Role: loop.RoleAssistant}
 			finish := "stop"
-			if modelCalls == 1 {
+			switch modelCalls {
+			case 1:
 				if len(request.Messages) != 3 || !strings.Contains(request.Messages[2].Content, "system-provider") ||
 					!strings.Contains(request.Messages[2].Content, "tenant-provider") || strings.Contains(request.Messages[2].Content, "generator-auth") {
 					t.Errorf("unexpected model context")
 				}
+				message.ToolCalls = []loop.ToolCall{{
+					ID: "search", Type: "function", Function: loop.FunctionCall{
+						Name: "search_benchmarks", Arguments: `{"query":"tool","limit":1}`,
+					},
+				}, {
+					ID: "collections", Type: "function", Function: loop.FunctionCall{
+						Name: "list_collections", Arguments: `{}`,
+					},
+				}}
+				finish = "tool_calls"
+			case 2:
 				message.ToolCalls = []loop.ToolCall{{
 					ID: "details", Type: "function", Function: loop.FunctionCall{
 						Name: "get_provider_details", Arguments: `{"provider_id":"tenant-provider"}`,
 					},
 				}}
 				finish = "tool_calls"
-			} else {
+			case 3:
+				message.Content = `{"collection":{"name":"Draft","domains":["tool_use"]}}`
+			case 4:
+				correction := request.Messages[len(request.Messages)-1].Content
+				if !strings.Contains(correction, "invalid_draft_json") {
+					t.Errorf("expected validation feedback before revised draft")
+				}
 				encoded, _ := json.Marshal(map[string]any{
 					"collection": api.CollectionConfig{
-						Name: "Tool use evaluation", Domains: []string{"tool_use"},
+						Name: "Tool use evaluation", Description: "Evaluates model tool use.", Domains: []string{"tool_use"},
 						Benchmarks: []api.CollectionBenchmarkConfig{{Ref: api.Ref{ID: "tool-use"}, ProviderID: "tenant-provider"}},
 					},
 					"rationale": strings.Repeat("The benchmark measures tool use. ", 155),
@@ -107,6 +126,10 @@ func TestWorkerRunsGenerationThroughSidecar(t *testing.T) {
 					}}},
 				})
 				message.Content = string(encoded)
+			default:
+				t.Errorf("unexpected extra model turn")
+				w.WriteHeader(http.StatusBadRequest)
+				return
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"choices": []map[string]any{{"message": message, "finish_reason": finish}},
@@ -131,7 +154,11 @@ func TestWorkerRunsGenerationThroughSidecar(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if guardrailsCalls != 1 || modelCalls != 2 || len(reads) != 4 {
+	wantReads := []string{
+		catalogPath + "providers", catalogPath + "providers", catalogPath + "collections",
+		catalogPath + "providers/tenant-provider", catalogPath + "providers", catalogPath + "collections",
+	}
+	if guardrailsCalls != 1 || modelCalls != 4 || !slices.Equal(reads, wantReads) {
 		t.Fatalf("unexpected call counts: safety=%d model=%d reads=%v", guardrailsCalls, modelCalls, reads)
 	}
 	if len(events) < 3 {

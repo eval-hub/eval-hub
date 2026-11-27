@@ -372,6 +372,9 @@ func (r *Runner) completeTurn(ctx context.Context, input Input, iteration int, d
 		}
 		result.ModelCalls++
 		r.emit(EventModelCallStarted, result.ModelCalls, "", "started", "Model request started")
+		if err := ctx.Err(); err != nil {
+			return ModelResponse{}, 0, err
+		}
 		response, callErr := r.model.Complete(ctx, request)
 		if callErr == nil {
 			r.emit(EventModelCallCompleted, result.ModelCalls, "", "completed", "Model response received")

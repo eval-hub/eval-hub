@@ -156,6 +156,7 @@ func TestRunnerCompletesPostableProposalWithoutModelToolCalls(t *testing.T) {
 	snapshot.Request.MaxBenchmarks = 2
 	source := testCatalog()
 	proposal := testDraft("toxicity-b", "toxicity-a")
+	proposal.Explanation.SelectedBenchmarks[0].Reason = strings.Repeat("測", api.MaxCollectionGenerationReasonLength)
 	slices.Reverse(proposal.Explanation.SelectedBenchmarks)
 	for _, suffix := range []string{"h", "g", "f", "e", "d", "c"} {
 		proposal.Explanation.RejectedBenchmarks = append(proposal.Explanation.RejectedBenchmarks, reason("toxicity-"+suffix))
@@ -196,6 +197,7 @@ func TestRunnerCompletesPostableProposalWithoutModelToolCalls(t *testing.T) {
 	checkEqual(t, "Requested title", result.Collection.Name)
 	checkEqual(t, "Requested description", result.Collection.Description)
 	checkEqual(t, "toxicity-b", result.Explanation.SelectedBenchmarks[0].ID)
+	checkEqual(t, strings.Repeat("測", api.MaxCollectionGenerationReasonLength), result.Explanation.SelectedBenchmarks[0].Reason)
 	checkEqual(t, 5, len(result.Explanation.RejectedBenchmarks))
 	checkEqual(t, "toxicity-c", result.Explanation.RejectedBenchmarks[0].ID)
 	checkEqual(t, "toxicity-g", result.Explanation.RejectedBenchmarks[4].ID)
@@ -323,6 +325,18 @@ func TestRunnerStopsBeforeModelWhenGateOrCatalogCannotAdmit(t *testing.T) {
 		{"off topic", "no_relevant_benchmarks", "", func(_ *Runner, _ *fakeCatalog, s *generation.JobConfig) {
 			s.Request.EvaluationGoal = "Organize my favorite recipes into a searchable collection"
 		}, false},
+		{"generic collection with no evaluation intent", "no_relevant_benchmarks", "", func(_ *Runner, _ *fakeCatalog, s *generation.JobConfig) {
+			s.Request.EvaluationGoal = "Make a new collection"
+		}, false},
+		{"off-topic request with an incidental catalog match", "no_relevant_benchmarks", "", func(_ *Runner, _ *fakeCatalog, s *generation.JobConfig) {
+			s.Request.EvaluationGoal = "Write a story about toxicity"
+		}, false},
+		{"target type alone does not establish relevance", "no_relevant_benchmarks", "", func(_ *Runner, c *fakeCatalog, s *generation.JobConfig) {
+			s.Request.EvaluationGoal = "Evaluate an AI agent for legal contract review"
+			for i := range c.providers[0].Benchmarks {
+				c.providers[0].Benchmarks[i].EvaluationTargets = []string{"agent"}
+			}
+		}, false},
 		{"invalid provider filter", "validation_failed", "", func(_ *Runner, _ *fakeCatalog, s *generation.JobConfig) {
 			s.Request.ProviderFilter = "not-visible"
 		}, false},
@@ -379,7 +393,7 @@ func TestRunnerStopsAfterProgressReportingFailures(t *testing.T) {
 		{phase: "guardrails"},
 		{phase: "catalog_discovery", action: "guardrails_check"},
 		{phase: "catalog_discovery", action: searchBenchmarks},
-		{phase: "model_generation", calls: 1},
+		{phase: "model_generation"},
 		{phase: "validation", calls: 1},
 		{phase: "validation", action: "validate_proposal", calls: 1},
 		{phase: "validation", action: "calibrate_proposal", calls: 1},
@@ -389,14 +403,8 @@ func TestRunnerStopsAfterProgressReportingFailures(t *testing.T) {
 			calls, failures := 0, 0
 			runner := Runner{
 				Catalog: testCatalog(), Guardrail: passGuardrail,
-				Model: modelFunc(func(ctx context.Context, _ loop.ModelRequest) (loop.ModelResponse, error) {
+				Model: modelFunc(func(context.Context, loop.ModelRequest) (loop.ModelResponse, error) {
 					calls++
-					if tc.phase == "model_generation" {
-						if !errors.Is(ctx.Err(), context.Canceled) {
-							t.Fatalf("model call received an active context after progress reporting failed")
-						}
-						return loop.ModelResponse{}, ctx.Err()
-					}
 					return finalResponse(t, testDraft("toxicity-a")), nil
 				}),
 				Progress: func(_ context.Context, phase, action string) error {
@@ -540,6 +548,14 @@ func TestRunnerBoundsCorrectionsAndChecksCurrentCatalog(t *testing.T) {
 			}
 			return testDraft("toxicity-b")
 		}, true, 2, ""},
+		{"refuses missing generated description", 8, func(int) draft {
+			bad := testDraft("toxicity-a")
+			bad.Collection.Description = " "
+			return bad
+		}, false, 3, "validation_failed"},
+		{"refuses proposal exceeding the requested cap", 8, func(int) draft {
+			return testDraft("toxicity-a", "toxicity-b")
+		}, false, 3, "validation_failed"},
 		{"refuses missing explanation", 8, func(int) draft {
 			bad := testDraft("toxicity-a")
 			bad.Explanation.SelectedBenchmarks = nil
@@ -553,7 +569,7 @@ func TestRunnerBoundsCorrectionsAndChecksCurrentCatalog(t *testing.T) {
 			case 2:
 				bad.Explanation.RejectedBenchmarks = []api.CollectionGenerationBenchmarkReason{reason("toxicity-b"), reason("toxicity-b")}
 			case 3:
-				bad.Explanation.SelectedBenchmarks[0].Reason = strings.Repeat("x", 301)
+				bad.Explanation.SelectedBenchmarks[0].Reason = strings.Repeat("測", api.MaxCollectionGenerationReasonLength+1)
 			}
 			return bad
 		}, false, 3, "validation_failed"},
@@ -570,6 +586,7 @@ func TestRunnerBoundsCorrectionsAndChecksCurrentCatalog(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			source, snapshot := testCatalog(), jobSnapshot(t)
+			snapshot.Request.MaxBenchmarks = 1
 			snapshot.Limits.MaxModelCalls = tc.limit
 			snapshot.Limits.MaxIterations = min(snapshot.Limits.MaxIterations, tc.limit)
 			if tc.changed {
@@ -706,20 +723,30 @@ func TestCatalogRejectsInconsistentAndUnboundedPages(t *testing.T) {
 
 func TestReadProvidersRejectsDuplicateIDs(t *testing.T) {
 	t.Parallel()
-	source := testCatalog()
-	source.providers = append(source.providers, source.providers[0])
-	if providers, err := readProviders(context.Background(), source); err == nil || providers != nil {
-		t.Fatalf("duplicate provider was accepted: %v, %v", providers, err)
+	for _, resource := range []string{"provider", "benchmark"} {
+		t.Run(resource, func(t *testing.T) {
+			source := testCatalog()
+			if resource == "provider" {
+				source.providers = append(source.providers, source.providers[0])
+			} else {
+				provider := &source.providers[0]
+				provider.Benchmarks = append(provider.Benchmarks, provider.Benchmarks[0])
+			}
+			if providers, err := readProviders(context.Background(), source); err == nil || providers != nil {
+				t.Fatalf("duplicate %s was accepted: %v, %v", resource, providers, err)
+			}
+		})
 	}
 }
 
 func TestApplyCatalogDefaultsOmitsConflictingAndEnvironmentSpecificValues(t *testing.T) {
 	t.Parallel()
 	source := testCatalog()
+	source.providers[0].Runtime.K8s.GPU = &api.GPUConfig{Count: 1}
 	system := &source.collections[0]
 	example := &system.Benchmarks[0]
 	example.Parameters["disable_cache"] = true
-	example.Parameters["tokenizer"] = "deployment-specific-tokenizer"
+	example.Parameters["tokenizer_path"] = "deployment-specific-tokenizer"
 	example.TestDataRef = &api.TestDataRef{}
 	other := *system
 	other.Resource.ID = "another-system-collection"
@@ -740,9 +767,62 @@ func TestApplyCatalogDefaultsOmitsConflictingAndEnvironmentSpecificValues(t *tes
 		t.Fatal("the curated collection's data location must not be copied")
 	}
 	guidance := strings.Join(notes, " ")
-	for _, requirement := range []string{"judge model", "compatible tokenizer", "reachable data source"} {
+	for _, requirement := range []string{"judge model", "compatible tokenizer", "reachable data source", "required GPU resources"} {
 		if !strings.Contains(guidance, requirement) {
 			t.Fatalf("missing guidance for %q in %v", requirement, notes)
 		}
+	}
+}
+
+func TestRunnerKeepsKnownInputsWhenRationaleNeedsTrimming(t *testing.T) {
+	t.Parallel()
+	runner := Runner{Catalog: testCatalog(), Guardrail: passGuardrail,
+		Model: modelFunc(func(context.Context, loop.ModelRequest) (loop.ModelResponse, error) {
+			proposal := testDraft("toxicity-a")
+			proposal.Rationale = strings.Repeat("評価", generation.MaxRationaleBytes/6+1)
+			return finalResponse(t, proposal), nil
+		}),
+	}
+	snapshot := jobSnapshot(t)
+	snapshot.Limits = loop.DefaultPresets()[loop.EffortHigh].Limits
+	result, failure := runner.Run(context.Background(), snapshot)
+	if failure != nil {
+		t.Fatalf("proposal failed with a lengthy rationale: %+v", failure)
+	}
+	if err := generation.ValidateResult(snapshot.Request, result); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(result.Rationale, "評価") || !strings.Contains(result.Rationale, "safety/toxicity-a: supply a judge") {
+		t.Fatalf("rationale lost the explanation or runtime guidance: %.60q", result.Rationale)
+	}
+}
+
+func TestDiscoverySupportsBroadAndTerseEvaluationGoals(t *testing.T) {
+	t.Parallel()
+	for _, goal := range []string{"Pick a starter benchmark collection for a general chat assistant", "Toxicity"} {
+		t.Run(goal, func(t *testing.T) {
+			options, err := collectiondesign.ParseOptions(goal, "", "", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			eligible, issue := discover(testCatalog().providers, options)
+			if issue != "" || len(eligible) == 0 {
+				t.Fatalf("evaluation produced no candidates: issue=%q", issue)
+			}
+		})
+	}
+}
+
+func TestBoundedRationaleReportsOmittedRuntimeNotes(t *testing.T) {
+	t.Parallel()
+	var notes []string
+	for i := range api.MaxCollectionGenerationBenchmarks {
+		notes = append(notes, fmt.Sprintf("provider/benchmark-%02d: %s", i, strings.Repeat("required input ", 20)))
+	}
+	modelRationale := "The benchmark selection follows the stated goal."
+	rationale := boundedRationale(modelRationale, notes)
+	if len(rationale) > generation.MaxRationaleBytes || !strings.HasPrefix(rationale, modelRationale) ||
+		!strings.Contains(rationale, notes[0]) || !strings.Contains(rationale, "Additional runtime guidance exceeded the size limit") {
+		t.Fatal("runtime notes must be bounded with complete entries and an omission notice")
 	}
 }

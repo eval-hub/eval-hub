@@ -139,7 +139,7 @@ func (tools catalogTools) search(ctx context.Context, raw json.RawMessage) (json
 			if !matchesFilters(benchmark, args) {
 				continue
 			}
-			if score := relevance(query, benchmark); score > 0 {
+			if score, _ := relevance(query, benchmark); score > 0 {
 				candidates = append(candidates, candidate{benchmarkKey{id, benchmark.ID}, benchmark, score})
 			}
 		}

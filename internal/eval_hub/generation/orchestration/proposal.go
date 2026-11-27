@@ -7,8 +7,10 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/eval-hub/eval-hub/internal/collectiondesign"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/generation"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"sigs.k8s.io/yaml"
 )
@@ -43,6 +45,9 @@ func (d draft) validate(ctx context.Context, snapshot catalogSnapshot, options c
 	}
 	if request.CollectionDescription != "" {
 		c.Description = request.CollectionDescription
+	}
+	if strings.TrimSpace(c.Description) == "" {
+		return api.CollectionConfig{}, []finding{{Code: "required_field", Path: "collection.description"}}, nil
 	}
 	if c.Custom != nil || c.Agent != nil || c.PassCriteria != nil {
 		return api.CollectionConfig{}, []finding{{Code: "unsupported_collection_fields", Path: "collection"}}, nil
@@ -132,13 +137,19 @@ func (d draft) explanations(c api.CollectionConfig, eligible map[benchmarkKey]ca
 func validReason(reason api.CollectionGenerationBenchmarkReason, eligible map[benchmarkKey]candidate, seen map[benchmarkKey]bool) bool {
 	key := benchmarkKey{reason.ProviderID, reason.ID}
 	_, ok := eligible[key]
-	return ok && !seen[key] && strings.TrimSpace(reason.Reason) != "" && len(reason.Reason) <= 300
+	return ok && !seen[key] && strings.TrimSpace(reason.Reason) != "" && utf8.RuneCountInString(reason.Reason) <= api.MaxCollectionGenerationReasonLength
 }
 
 // applyCatalogDefaults admits only safe values with unambiguous provenance.
 // Runtime credentials and environment-specific inputs are never copied.
 func applyCatalogDefaults(proposal *api.CollectionConfig, snapshot catalogSnapshot) ([]string, bool) {
 	var notes []string
+	runtimes := make(map[string]*api.K8sRuntime, len(snapshot.providers))
+	for _, provider := range snapshot.providers {
+		if provider.Runtime != nil {
+			runtimes[provider.Resource.ID] = provider.Runtime.K8s
+		}
+	}
 	for i := range proposal.Benchmarks {
 		benchmark := &proposal.Benchmarks[i]
 		reference := systemDefaults(*benchmark, snapshot.collections)
@@ -168,6 +179,14 @@ func applyCatalogDefaults(proposal *api.CollectionConfig, snapshot catalogSnapsh
 		if reference.inputs["test_data_ref"] {
 			notes = append(notes, id+": check the referenced dataset requirements and configure a reachable data source if needed.")
 		}
+		if runtime := runtimes[benchmark.ProviderID]; runtime != nil {
+			if runtime.GPU != nil && runtime.GPU.Count > 0 {
+				notes = append(notes, id+": verify that the cluster can schedule the adapter's required GPU resources.")
+			}
+			if runtime.DRA != nil {
+				notes = append(notes, id+": configure the adapter's required resource claim template in the execution namespace.")
+			}
+		}
 	}
 	return notes, true
 }
@@ -196,6 +215,8 @@ func systemDefaults(selected api.CollectionBenchmarkConfig, collections []api.Co
 				switch name {
 				case "judge_model", "scorer_model", "tokenizer":
 					out.inputs[name] = true
+				case "tokenizer_path":
+					out.inputs["tokenizer"] = true
 				}
 				if !safeDefault(name, value) {
 					conflicts[name] = true
@@ -239,12 +260,30 @@ func (d draft) result(proposal api.CollectionConfig, explanation api.CollectionG
 	if err != nil {
 		return api.CollectionGenerationResult{}, err
 	}
-	rationale := strings.TrimSpace(d.Rationale) + "\n\nExecution readiness depends on the target model and deployment. The catalog does not establish all runtime prerequisites."
-	if len(notes) > 0 {
-		rationale += "\n\nRuntime inputs to check:\n- " + strings.Join(notes, "\n- ")
-	}
 	return api.CollectionGenerationResult{
-		Collection: proposal, YAML: string(data), Rationale: rationale,
+		Collection: proposal, YAML: string(data), Rationale: boundedRationale(d.Rationale, notes),
 		Explanation: explanation, Actions: []api.CollectionGenerationAction{},
 	}, nil
+}
+
+func boundedRationale(modelRationale string, notes []string) string {
+	const readiness = "\n\nExecution readiness depends on the target model and deployment. The catalog does not establish all runtime prerequisites."
+	const moreNotes = "\n- Additional runtime guidance exceeded the size limit. Check the benchmark and provider configurations before running."
+	const minModelSpace = 1024
+	var guidance strings.Builder
+	guidance.WriteString(readiness)
+	if len(notes) > 0 {
+		guidance.WriteString("\n\nRuntime inputs to check:")
+	}
+	// Keep complete runtime notes and reserve space for model rationale. Report
+	// truncation only when the notes themselves exceed the available space.
+	for _, note := range notes {
+		if guidance.Len()+len("\n- ")+len(note)+len(moreNotes)+minModelSpace > generation.MaxRationaleBytes {
+			guidance.WriteString(moreNotes)
+			break
+		}
+		guidance.WriteString("\n- ")
+		guidance.WriteString(note)
+	}
+	return clip(modelRationale, generation.MaxRationaleBytes-guidance.Len()) + guidance.String()
 }
