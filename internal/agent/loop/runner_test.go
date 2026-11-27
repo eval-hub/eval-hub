@@ -948,6 +948,43 @@ func TestRunnerReviewsFinalResponses(t *testing.T) {
 	}
 }
 
+func TestRunnerRejectsDraftWhenContextEndsDuringFinalReview(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		cancelParent bool
+		want         error
+	}{
+		{name: "budget deadline", want: ErrBudgetExceeded},
+		{name: "caller cancellation", cancelParent: true, want: context.Canceled},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			parent, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			model := &fakeModel{responses: []ModelResponse{finalResponse("draft")}}
+			registry := newTestRegistry(t, func(context.Context, json.RawMessage) (json.RawMessage, error) {
+				t.Fatal("final review should not call tools")
+				return nil, nil
+			})
+			input := testInput()
+			input.Budget.MaxDuration = 250 * time.Millisecond
+			reviewed := false
+			input.ReviewFinal = func(ctx context.Context, _ string) (string, error) {
+				reviewed = true
+				if tc.cancelParent {
+					cancel()
+				}
+				<-ctx.Done()
+				return "", nil
+			}
+
+			result, err := newTestRunner(t, model, registry, DefaultConfig()).Run(parent, input)
+			if !reviewed || result.Final != "" || !errors.Is(err, tc.want) {
+				t.Fatalf("Run() = %+v, %v, reviewed = %t, want no draft and %v", result, err, reviewed, tc.want)
+			}
+		})
+	}
+}
+
 func TestRunnerEnforcesHistoryLimitsAfterResponseAndTool(t *testing.T) {
 	t.Run("assistant response", func(t *testing.T) {
 		config := DefaultConfig()

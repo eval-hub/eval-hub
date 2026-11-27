@@ -153,6 +153,9 @@ func (r *Runner) Run(parent context.Context, input Input) (Result, error) {
 				if err != nil {
 					return Result{}, err
 				}
+				if err := ctx.Err(); err != nil {
+					return Result{}, budgetOrContextError(parent, err)
+				}
 				if correction != "" {
 					messages = append(messages, Message{Role: RoleUser, Content: correction})
 					if historySize(messages) > r.config.MaxHistoryBytes {
