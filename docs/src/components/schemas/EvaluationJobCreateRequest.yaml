@@ -1,0 +1,21 @@
+title: EvaluationJobCreateRequest
+description: Evaluation job creation configuration with OCI export prefix validation.
+allOf:
+  - $ref: ./EvaluationJobConfig.yaml
+  - type: object
+    properties:
+      exports:
+        type: object
+        properties:
+          oci:
+            type: object
+            properties:
+              coordinates:
+                type: object
+                properties:
+                  oci_tag:
+                    type: string
+                    pattern: '^$|^[a-zA-Z0-9_][a-zA-Z0-9._-]*$'
+                    not:
+                      enum:
+                        - evaluation-card

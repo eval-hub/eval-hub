@@ -353,6 +353,9 @@ type BenchmarkStatusEvent struct {
 	MLFlowRunID    string         `json:"mlflow_run_id,omitempty"`
 	LogsPath       string         `json:"logs_path,omitempty"`
 	JobMeta        *JobMeta       `json:"job_meta,omitempty"`
+	// CollectionGenerationProgress carries bounded runner progress for the internal generation workload.
+	// Storage replaces timestamps with service time and accepts only increasing sequence numbers.
+	CollectionGenerationProgress *CollectionGenerationProgressEvent `json:"collection_generation_progress,omitempty"`
 }
 
 type EvaluationJobState struct {
@@ -407,7 +410,11 @@ type OCIConnectionConfig struct {
 	Connection string `json:"connection" validate:"required"`
 }
 
-// EvaluationExportsOCI represents OCI export configuration
+// EvaluationExportsOCI represents OCI export configuration. Coordinates.OCITag is
+// the optional evaluation-bundle tag prefix; the final tag is <prefix>-<job-id>,
+// or evaluation-bundle-<job-id> when empty. Nonempty prefixes must match
+// ^[a-zA-Z0-9_][a-zA-Z0-9._-]*$. Long prefixes are truncated when publishing
+// to fit the 128-character final tag limit while preserving the full job ID.
 type EvaluationExportsOCI struct {
 	Coordinates OCICoordinates       `json:"coordinates" validate:"required"`
 	K8s         *OCIConnectionConfig `json:"k8s,omitempty"`
@@ -484,7 +491,8 @@ type EvaluationResource struct {
 
 type EvaluationJobStatus struct {
 	EvaluationJobState
-	Benchmarks []BenchmarkStatus `json:"benchmarks,omitempty"`
+	Benchmarks                   []BenchmarkStatus             `json:"benchmarks,omitempty"`
+	CollectionGenerationProgress *CollectionGenerationProgress `json:"collection_generation_progress,omitempty"`
 }
 
 // EvaluationJobResource represents evaluation job resource response

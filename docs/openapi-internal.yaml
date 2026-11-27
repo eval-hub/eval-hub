@@ -168,7 +168,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/EvaluationJobConfig'
+              $ref: '#/components/schemas/EvaluationJobCreateRequest'
             examples:
               CreateEvaluationWithBenchmarks:
                 summary: Evaluate a model with inline benchmarks
@@ -3191,7 +3191,7 @@ components:
             - running
             - failed
             - completed
-          description: running means OCI processing has started and remains in progress throughout all applicable phases. Workflow reporting normally uses running followed by completed or failed. Status may remain absent or running if the service is interrupted or persistence fails. failed means a required stage failed, with the stage and cause described in the message. completed means all applicable stages succeeded; card-only completion does not require bundle or signing outputs. No state is defaulted when status is absent.
+          description: running means OCI processing has started and remains in progress throughout all applicable phases. Workflow reporting normally uses running followed by completed or failed. Status may remain absent or running if the service is interrupted or persistence fails. failed means a required stage failed, with the stage and cause described in the message. For completed or partially_failed OCI-enabled evaluations, completed confirms that both the evaluation card and bundle were published and their references saved. Signing is pending implementation and is not currently executed. Historical card-only results remain readable. No state is defaulted when status is absent.
         message:
           $ref: '#/components/schemas/MessageInfo'
     OCIArtifactReference:
@@ -3218,29 +3218,29 @@ components:
       additionalProperties: false
     OCISigningResult:
       type: object
-      description: Signing information associated with the evaluation bundle digest. Omit until an actual signing outcome is available. Processing status is reported separately in results.oci.status; it does not change the evaluation job status.
+      description: Signing information associated with the evaluation bundle digest. Signing is pending implementation, so this object is currently omitted. Omit until an actual signing outcome is available. Processing status is reported separately in results.oci.status; it does not change the evaluation job status.
       properties:
         type:
           type: string
           enum:
             - key-pair
-          description: Signing method. Only key-pair is currently supported.
+          description: Signing method. Only key-pair is accepted by the schema; signing is pending implementation.
       required:
         - type
       additionalProperties: false
     EvaluationOCIResults:
       type: object
-      description: Optional job-level OCI processing status, artifact references, and signing information. Unavailable objects are omitted, including on completed jobs. Status, artifacts, and signing are independently optional. Artifact references identify published outputs and are returned by the publisher. The digest in each reference is authoritative; a reference may include its publication tag as registry/repository:tag@digest, but that tag is informational and may move independently of the digest. Changing the tag does not change or invalidate the digest-qualified reference. A failed status may still include evaluation_card when publication succeeded but recording completion failed; the reference is valid and its digest is authoritative. OCI workflows report running once at the start and save available outputs together with the final completed or failed status, without intermediate phase writes.
+      description: Optional job-level OCI processing status, artifact references, and signing information. Unavailable objects are omitted, including on completed jobs. Status, artifact references, and signing information may be independently absent. When OCI export is configured, completed and partially_failed evaluations automatically generate and publish the evaluation card and bundle; an absent reference does not indicate that generation is optional. Artifact references identify published outputs and are returned by the publisher. The digest in each reference is authoritative; a reference may include its publication tag as registry/repository:tag@digest, but that tag is informational and may move independently of the digest. Changing the tag does not change or invalidate the digest-qualified reference. Successful publication of evaluation_card and evaluation_bundle normally results in a completed status; a failed status may still retain valid published references if recording completion fails. OCI workflows report running once at the start and save available outputs together with the final completed or failed status, without intermediate phase writes. Completed and partially_failed evaluations use the same OCI workflow. A bundle failure retains the published card and leaves the evaluation outcome unchanged.
       properties:
         status:
           $ref: '#/components/schemas/OCIProcessingStatus'
           description: Optional common OCI workflow status; omit until actual workflow information is available.
         evaluation_card:
           $ref: '#/components/schemas/OCIArtifactReference'
-          description: Optional evaluation card artifact; omit until available.
+          description: Published evaluation card reference; omitted until available.
         evaluation_bundle:
           $ref: '#/components/schemas/OCIArtifactReference'
-          description: Optional OCI index grouping the evaluation card and benchmark artifacts; omit until available.
+          description: Published evaluation bundle reference. The bundle is an OCI index grouping the evaluation card and benchmark artifacts, generated automatically for completed and partially_failed evaluations when OCI export is configured. The reference is omitted until available, including when publication fails.
         signing:
           $ref: '#/components/schemas/OCISigningResult'
           description: Optional signing information; omitted when no outcome is available.
@@ -4066,13 +4066,13 @@ components:
       title: OCIConnectionConfig
     OCISigningConfig:
       type: object
-      description: Optional signing configuration for the evaluation bundle, in local and Kubernetes modes. For key-pair signing, secret_ref can reference a tenant namespace Kubernetes Secret expected to contain private.key; the request never contains key material. This configuration does not perform secret lookup, key loading, or signing execution.
+      description: Optional signing configuration for the evaluation bundle, in local and Kubernetes modes. Signing is pending implementation. Settings are currently accepted and saved with the job, but no secret lookup, key loading, or signing is performed. For key-pair signing, secret_ref identifies a tenant namespace Kubernetes Secret expected to contain private.key; the request never contains key material.
       properties:
         type:
           type: string
           enum:
             - key-pair
-          description: Signing method. Only key-pair is currently supported.
+          description: Requested signing method. Only key-pair is accepted; signing is pending implementation.
         secret_ref:
           type:
             - string
@@ -4085,7 +4085,7 @@ components:
       additionalProperties: false
     EvaluationExportsOCI:
       type: object
-      description: OCI export configuration for local and Kubernetes evaluation jobs. Signing configuration is retained only; accepting it does not perform or schedule signing.
+      description: OCI export configuration for local and Kubernetes evaluation jobs. Signing is pending implementation. Signing settings are currently accepted and saved with the job, but no signing is performed. When OCI export is configured, completed and partially_failed jobs automatically generate and publish an evaluation card and an evaluation bundle containing the card and recorded completed benchmark artifacts. Adapters use their own fallback tags; the job-level prefix is reserved for the evaluation bundle.
       examples:
         - coordinates:
             oci_host: quay.io
@@ -4093,7 +4093,7 @@ components:
         - coordinates:
             oci_host: quay.io
             oci_repository: my-org/eval-results
-            oci_tag: final
+            oci_tag: ev-bundle
           k8s:
             connection: my-oci-secret
           signing:
@@ -4102,13 +4102,19 @@ components:
       properties:
         coordinates:
           $ref: '#/components/schemas/OCICoordinates'
-          description: Coordinates where the OCI artifact should be stored
+          description: 'OCI export destination. The optional oci_tag reserves the evaluation-bundle prefix: the evaluation bundle tag is <oci_tag>-<job-id>, or evaluation-bundle-<job-id> when omitted or empty. Evaluation cards use evaluation-card-<job-id> independently. Invalid prefix characters are rejected before job creation. Long prefixes are truncated during publication to preserve the full job ID within 128 characters.'
+          properties:
+            oci_tag:
+              type: string
+              description: Optional prefix for the bundle tag <oci_tag>-<job-id>; omitted or empty uses evaluation-bundle-<job-id>. The value evaluation-card is reserved and rejected with HTTP 400 on evaluation-job creation. Post-processing preserves literal and inherited input tags without export-prefix validation. We recommend 60 characters or fewer (not a validation limit). Longer prefixes may be truncated to fit the 128-character tag limit while preserving the full job ID.
+              examples:
+                - ev-bundle
         k8s:
           $ref: '#/components/schemas/OCIConnectionConfig'
           description: Optional Kubernetes connection for OCI registry authentication
         signing:
           $ref: '#/components/schemas/OCISigningConfig'
-          description: Optional signing configuration. Signing is disabled when omitted.
+          description: Optional signing settings, accepted and saved with the job. Signing is pending implementation; no signing is performed.
       required:
         - coordinates
       additionalProperties: false
@@ -4251,6 +4257,28 @@ components:
               items:
                 type: string
               description: Non-fatal errors (e.g. partial list)
+    EvaluationJobCreateRequest:
+      title: EvaluationJobCreateRequest
+      description: Evaluation job creation configuration with OCI export prefix validation.
+      allOf:
+        - $ref: '#/components/schemas/EvaluationJobConfig'
+        - type: object
+          properties:
+            exports:
+              type: object
+              properties:
+                oci:
+                  type: object
+                  properties:
+                    coordinates:
+                      type: object
+                      properties:
+                        oci_tag:
+                          type: string
+                          pattern: ^$|^[a-zA-Z0-9_][a-zA-Z0-9._-]*$
+                          not:
+                            enum:
+                              - evaluation-card
     JobMeta:
       type: object
       description: |
@@ -4634,7 +4662,7 @@ components:
           properties:
             coordinates:
               $ref: '#/components/schemas/OCICoordinates'
-              description: OCI registry and repository coordinates.
+              description: OCI input coordinates. oci_tag is a literal tag; export-prefix rules, including the evaluation-card reservation, do not apply.
             digest:
               type: string
               pattern: ^sha256:[a-f0-9]{64}$

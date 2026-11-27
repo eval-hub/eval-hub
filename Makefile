@@ -1,4 +1,4 @@
-.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint validate-configs test test-e2e test-fuzz test-fvt-server test-fvt-server-local test-fvt-server-local-mlflow test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build clean-container-storage clean-container-storage-help
+.PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-generation-worker build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint validate-configs test test-e2e test-fuzz test-fvt-server test-fvt-server-local test-fvt-server-local-mlflow test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build clean-container-storage clean-container-storage-help
 .PHONY: help autoupdate-precommit pre-commit clean build build-coverage build-service build-init build-sidecar build-mcp build-all-platforms cross-compile-mcp build-all-platforms-mcp cross-compile-sidecar build-all-platforms-sidecar start-service stop-service start-sidecar stop-sidecar lint golangci-lint govulncheck validate-configs test test-fuzz test-fvt-server test-fvt-server-local test-fvt-server-local-mlflow test-all test-coverage test-fvt-coverage test-fvt-server-coverage test-all-coverage install-deps update-deps get-deps fmt vet generate-public-docs verify-api-docs generate-ignore-file documentation check-unused-components docker-image-local docker-mcp-version test-mcp-build-all test-mcp-binary-info test-mcp-binary-naming test-mcp-version test-mcp-no-runtime-deps test-mcp-container-build test-mcp-container-http test-mcp-checksums test-mcp-formula-syntax test-mcp-native-smoke test-mcp-brew-install test-mcp-brew-test test-mcp-brew-uninstall test-mcp-cross-platform test-mcp-fvt test-mcp-e2e test-mcp test-mcp-vscode test-help clean-mcp-wheels build-mcp-wheel build-all-mcp-wheels show-local-api-docs doc-build clean-container-storage clean-container-storage-help
 
 GOPATH := $(shell go env GOPATH)
@@ -28,6 +28,8 @@ SIDECAR_BINARY_NAME = eval-runtime-sidecar
 SIDECAR_CMD_PATH = ./cmd/eval_runtime_sidecar
 MCP_BINARY_NAME = evalhub-mcp
 MCP_CMD_PATH = ./cmd/evalhub_mcp
+GENERATION_WORKER_BINARY_NAME = eval-generation-worker
+GENERATION_WORKER_CMD_PATH = ./cmd/eval_generation_worker
 BIN_DIR = bin
 PORT ?= 8080
 
@@ -309,7 +311,12 @@ build-init: $(BIN_DIR) ## Build the eval-runtime-init binary only
 	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(INIT_BINARY_NAME) $(INIT_CMD_PATH)
 	@echo "Build complete: $(BIN_DIR)/$(INIT_BINARY_NAME)"
 
-build: build-service build-init build-sidecar build-mcp ## Build the binaries
+build-generation-worker: $(BIN_DIR) ## Build the collection-generation worker binary
+	@echo "Building $(GENERATION_WORKER_BINARY_NAME) with ${LDFLAGS}"
+	@go build -race -ldflags "${LDFLAGS}" -o $(BIN_DIR)/$(GENERATION_WORKER_BINARY_NAME) $(GENERATION_WORKER_CMD_PATH)
+	@echo "Build complete: $(BIN_DIR)/$(GENERATION_WORKER_BINARY_NAME)"
+
+build: build-service build-init build-sidecar build-mcp build-generation-worker ## Build the binaries
 
 build-coverage: $(BIN_DIR) ## Build the binaries with coverage
 	@echo "Building $(BINARY_NAME)-cov with -cover -covermode=atomic -ldflags ${LDFLAGS} "
@@ -503,6 +510,8 @@ FUZZ_PACKAGES ?= ./internal/eval_hub/runtimes/k8s ./pkg/ociclient ./pkg/mlflowcl
 test: ## Run unit tests (including fuzz seed corpora and a short fuzzing pass)
 	@echo "Running unit tests..."
 	@bash -c 'set -o pipefail; go test -timeout=$(GO_TEST_TIMEOUT) -v ./internal/... ./cmd/... ./pkg/... | ${PWD}/scripts/grcat ${PWD}/.conf.go-test'
+	# An explicit test filter runs feature helper unit tests instead of the Godog suite.
+	@bash -c 'set -o pipefail; go test -timeout=$(GO_TEST_TIMEOUT) -v ./tests/features/... -run "^Test" | ${PWD}/scripts/grcat ${PWD}/.conf.go-test'
 	@$(MAKE) test-fuzz
 	@echo "Unit tests complete"
 
@@ -716,12 +725,14 @@ test-benchmarks-kind: test-benchmarks-kind-deploy ## Run benchmark smoke tests o
 		'  annotations:' '    $(KIND_BENCHMARK_OWNERSHIP_ANNOTATION): $(KIND_CLUSTER_NAME)' \
 		'type: Opaque' 'stringData:' \
 		'  api-key: target-test-token' \
+		'  sdg_api-key: target-test-token' \
+		'  sdg_url: $(KIND_BENCHMARK_MODEL_URL)' \
 		'  judge_api-key: $(KIND_BENCHMARK_JUDGE_API_KEY)' \
 		'  judge_url: $(KIND_BENCHMARK_JUDGE_URL)' \
 		'  grader_api-key: $(KIND_BENCHMARK_JUDGE_API_KEY)' \
 		'  grader_url: $(KIND_BENCHMARK_JUDGE_URL)' \
 		| kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" apply -f - >/dev/null; \
-	echo "Applied the dev-deploy-owned mock-auth Secret $(KIND_BENCHMARK_MODEL_SECRET) with the mock target, judge, and grader keys."; \
+	echo "Applied the dev-deploy-owned mock-auth Secret $(KIND_BENCHMARK_MODEL_SECRET) with the mock target, SDG, judge, and grader keys."; \
 	token_duration="$(KIND_BENCHMARK_TOKEN_DURATION)"; \
 	token="$$(kubectl --kubeconfig "$(KIND_KUBECONFIG)" -n "$(KIND_BENCHMARK_TENANT)" create token evalhub-local-service --duration="$$token_duration")"; \
 	echo "Running benchmark smoke tests against $(KIND_BENCHMARK_SERVER_URL) with model $(KIND_BENCHMARK_MODEL_NAME) and a $$token_duration token for the $(KIND_BENCHMARK_TIMEOUT) deadline."; \

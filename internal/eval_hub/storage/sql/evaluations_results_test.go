@@ -47,8 +47,9 @@ func TestCollectionLiveCodeBench_AdapterMetric(t *testing.T) {
 					// Use the emitted adapter key independently of the configured selector.
 					metricName, score = metric, 0.4
 				}
-				result := s.computeBenchmarkTestResult(nil, job, statusEvent(row.ID, row.ProviderID,
-					map[string]any{metricName: score}), &collection)
+				event := statusEvent(row.ID, row.ProviderID, map[string]any{metricName: score})
+				event.BenchmarkIndex = i
+				result := s.computeBenchmarkTestResult(nil, job, event, &collection)
 				if result == nil || result.PrimaryScoreMetric != metricName || result.PrimaryScore != score || !result.Pass {
 					t.Fatalf("unexpected result for %s: %+v", row.ID, result)
 				}
@@ -107,6 +108,7 @@ func TestCollectionThresholds_AtAndAroundRowTargets(t *testing.T) {
 							score = *row.PassCriteria.Threshold - tc.improvement
 						}
 						event := statusEvent(row.ID, row.ProviderID, map[string]any{row.PrimaryScore.Metric: score})
+						event.BenchmarkIndex = i
 						rowResult := s.computeBenchmarkTestResult(nil, job, event, &collection)
 						if rowResult == nil || rowResult.Pass != tc.wantPass {
 							t.Fatalf("unexpected row result for %s: %+v", row.ID, rowResult)
@@ -558,5 +560,53 @@ func TestComputeBenchmarkTestResult_SkipsNonNumericJobPrimary(t *testing.T) {
 	}
 	if result.PrimaryScore != 0.2 {
 		t.Errorf("PrimaryScore = %v, want 0.2", result.PrimaryScore)
+	}
+}
+
+func TestComputeBenchmarkTestResult_GlobalIndexAndIdentity(t *testing.T) {
+	t.Parallel()
+	job := jobWithBenchmark("repeated", "p1",
+		&api.PrimaryScore{Metric: "acc"}, &api.PassCriteria{Threshold: threshold32(0.4)})
+	for _, row := range []struct {
+		id, provider string
+		threshold    float32
+	}{
+		{"other", "p1", 0.5},
+		{"repeated", "p2", 0.5},
+		{"repeated", "p1", 0.9},
+	} {
+		job.Benchmarks = append(job.Benchmarks, api.EvaluationBenchmarkConfig{
+			Ref: api.Ref{ID: row.id}, ProviderID: row.provider,
+			PrimaryScore: &api.PrimaryScore{Metric: "acc"}, PassCriteria: &api.PassCriteria{Threshold: threshold32(row.threshold)},
+		})
+	}
+	for _, tc := range []struct {
+		name          string
+		index         int
+		id, provider  string
+		wantThreshold *float32
+	}{
+		{"first occurrence", 0, "repeated", "p1", threshold32(0.4)},
+		{"interleaved second occurrence", 3, "repeated", "p1", threshold32(0.9)},
+		{"other provider", 2, "repeated", "p2", threshold32(0.5)},
+		{"negative index", -1, "repeated", "p1", nil},
+		{"index out of range", 4, "repeated", "p1", nil},
+		{"index has another benchmark", 1, "repeated", "p1", nil},
+		{"index has another provider", 2, "repeated", "p1", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			event := statusEvent(tc.id, tc.provider, map[string]any{"acc": float64(0.7)})
+			event.BenchmarkIndex = tc.index
+			got := testResultsStorage().computeBenchmarkTestResult(nil, job, event, nil)
+			if tc.wantThreshold == nil {
+				if got != nil {
+					t.Fatalf("invalid index/identity returned a score: %+v", got)
+				}
+				return
+			}
+			if got == nil || got.Threshold != *tc.wantThreshold || got.Pass != (float32(0.7) >= *tc.wantThreshold) {
+				t.Fatalf("index %d selected wrong row: got %+v, want threshold %v", tc.index, got, *tc.wantThreshold)
+			}
+		})
 	}
 }

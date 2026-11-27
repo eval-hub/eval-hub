@@ -52,7 +52,7 @@ func TestExportAsyncLinksRequestAndParentsDownstreamSpans(t *testing.T) {
 
 	job := completedOCIJob()
 	storage := newDetachedExportStorage(job)
-	h := &Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exportFunc(func(ctx context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (evalcards.ExportResult, error) {
+	h := &Handlers{bundlePublisherFactory: &stubBundleFactory{ref: publishedBundle()}, validate: newOCIWorkflowValidator(t), resultsExporter: exportFunc(func(ctx context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (evalcards.ExportResult, error) {
 		if ctx.Err() != nil {
 			t.Error("export inherited request cancellation")
 		}
@@ -110,6 +110,7 @@ func (f exportFunc) Export(ctx context.Context, job *api.EvaluationJobResource, 
 type statusWrite struct {
 	state   api.OCIProcessingState
 	card    *api.OCIArtifactReference
+	bundle  *api.OCIArtifactReference
 	ctx     context.Context
 	err     error
 	message string
@@ -170,7 +171,7 @@ func (s *detachedExportStorage) UpdateEvaluationJob(string, *api.StatusEvent) er
 	}
 	return nil
 }
-func (s *detachedExportStorage) UpdateEvaluationJobOCI(_ string, status *api.OCIProcessingStatus, card *api.OCIArtifactReference) error {
+func (s *detachedExportStorage) UpdateEvaluationJobOCI(_ string, status *api.OCIProcessingStatus, card, bundle *api.OCIArtifactReference) error {
 	if status.State == api.OCIProcessingRunning && s.runningStarted != nil {
 		close(s.runningStarted)
 		<-s.releaseRunning
@@ -188,7 +189,7 @@ func (s *detachedExportStorage) UpdateEvaluationJobOCI(_ string, status *api.OCI
 	if status.State == api.OCIProcessingCompleted && s.failCompleted {
 		err = errors.New("completion write failed")
 	}
-	s.writes <- statusWrite{status.State, card, s.ctx, err, status.Message.Message}
+	s.writes <- statusWrite{state: status.State, card: card, bundle: bundle, ctx: s.ctx, err: err, message: status.Message.Message}
 	if s.panicCompleted && status.State == api.OCIProcessingCompleted {
 		panic("completion write panicked")
 	}
@@ -222,7 +223,7 @@ func TestExportAsyncDoesNotWaitForRunningWrite(t *testing.T) {
 	storage.runningStarted, storage.releaseRunning = make(chan struct{}), make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	h := &Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exportFunc(func(ctx context.Context, snapshot *api.EvaluationJobResource, _ *cards.EvaluationCard) (evalcards.ExportResult, error) {
+	h := &Handlers{bundlePublisherFactory: &stubBundleFactory{ref: publishedBundle()}, validate: newOCIWorkflowValidator(t), resultsExporter: exportFunc(func(ctx context.Context, snapshot *api.EvaluationJobResource, _ *cards.EvaluationCard) (evalcards.ExportResult, error) {
 		if err := ctx.Err(); err != nil {
 			return evalcards.ExportResult{OCIError: err}, err
 		}
@@ -272,7 +273,7 @@ func TestExportAsyncSurvivesRequestCancellationDuringExport(t *testing.T) {
 	started, release, checked := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	h := &Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exportFunc(func(ctx context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (evalcards.ExportResult, error) {
+	h := &Handlers{bundlePublisherFactory: &stubBundleFactory{ref: publishedBundle()}, validate: newOCIWorkflowValidator(t), resultsExporter: exportFunc(func(ctx context.Context, _ *api.EvaluationJobResource, _ *cards.EvaluationCard) (evalcards.ExportResult, error) {
 		close(started)
 		<-release
 		err := ctx.Err()
@@ -290,7 +291,7 @@ func TestExportAsyncSurvivesRequestCancellationDuringExport(t *testing.T) {
 	}
 }
 
-func TestExportAsyncPreservesPublishedCardOnCompletionFailure(t *testing.T) {
+func TestExportAsyncPreservesPublishedArtifactsOnCompletionFailure(t *testing.T) {
 	for _, panicCompleted := range []bool{false, true} {
 		t.Run(map[bool]string{false: "storage error", true: "storage panic"}[panicCompleted], func(t *testing.T) {
 			job := completedOCIJob()
@@ -299,12 +300,12 @@ func TestExportAsyncPreservesPublishedCardOnCompletionFailure(t *testing.T) {
 			storage.panicCompleted = panicCompleted
 			published := publishedCard()
 			exporter := &ociOutcomeExporter{result: evalcards.ExportResult{OCIArtifact: published}}
-			h := &Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exporter}
+			h := &Handlers{bundlePublisherFactory: &stubBundleFactory{ref: publishedBundle()}, validate: newOCIWorkflowValidator(t), resultsExporter: exporter}
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 			h.exportEvaluationResultsAsync(ctx, storage, job, nil)
 			running := nextStatusWrite(t, storage, api.OCIProcessingRunning)
-			if running.card != nil {
+			if running.card != nil || running.bundle != nil {
 				t.Fatal("running write recorded an unpublished artifact")
 			}
 			var completed statusWrite
@@ -319,6 +320,9 @@ func TestExportAsyncPreservesPublishedCardOnCompletionFailure(t *testing.T) {
 			failed := nextStatusWrite(t, storage, api.OCIProcessingFailed)
 			if !reflect.DeepEqual(failed.card, published) {
 				t.Fatalf("failure lost published reference: got %+v, want %+v", failed.card, published)
+			}
+			if !reflect.DeepEqual(completed.bundle, publishedBundle()) || !reflect.DeepEqual(failed.bundle, publishedBundle()) {
+				t.Fatalf("completion failure lost published bundle: completion=%+v failure=%+v", completed.bundle, failed.bundle)
 			}
 			if failed.ctx == completed.ctx || failed.ctx == running.ctx {
 				t.Fatal("failure reused a previous write context")
@@ -340,7 +344,7 @@ func TestDetachedHandoffAfterCommittedRuntimeUpdate(t *testing.T) {
 	defer cancel()
 	storage := newDetachedExportStorage(job)
 	storage.updated = cancel // Cancel at the commit boundary, before the handoff read.
-	h := &Handlers{storage: storage, validate: newOCIWorkflowValidator(t), resultsExporter: &ociOutcomeExporter{result: evalcards.ExportResult{OCIArtifact: publishedCard()}}}
+	h := &Handlers{bundlePublisherFactory: &stubBundleFactory{ref: publishedBundle()}, storage: storage, validate: newOCIWorkflowValidator(t), resultsExporter: &ociOutcomeExporter{result: evalcards.ExportResult{OCIArtifact: publishedCard()}}}
 	runtime := &runtimeStorage{ctx: ctx, logger: slog.New(slog.DiscardHandler), handlers: h, tenant: "tenant-a", owner: "owner-a", validate: h.validate}
 	if err := runtime.UpdateEvaluationJob("job-1", &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{ProviderID: "p1", ID: "b1", Status: api.StateCompleted}}); err != nil {
 		t.Fatal(err)
@@ -354,7 +358,7 @@ func TestExportInitialWriteFailureKeepsIndependentExports(t *testing.T) {
 	storage := newDetachedExportStorage(job)
 	storage.failRunning = true
 	exported := make(chan struct{})
-	h := &Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exportFunc(func(ctx context.Context, snapshot *api.EvaluationJobResource, _ *cards.EvaluationCard) (evalcards.ExportResult, error) {
+	h := &Handlers{bundlePublisherFactory: &stubBundleFactory{ref: publishedBundle()}, validate: newOCIWorkflowValidator(t), resultsExporter: exportFunc(func(ctx context.Context, snapshot *api.EvaluationJobResource, _ *cards.EvaluationCard) (evalcards.ExportResult, error) {
 		defer close(exported)
 		if api.IsOCIExportEnabled(snapshot) || ctx.Err() != nil {
 			t.Error("independent export got OCI or canceled context")
@@ -386,7 +390,7 @@ func TestExportWorkerRecoversPanic(t *testing.T) {
 			storage.panicFailure = nested
 			done := make(chan struct{})
 			var logs bytes.Buffer
-			h := &Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: exportFunc(func(context.Context, *api.EvaluationJobResource, *cards.EvaluationCard) (evalcards.ExportResult, error) {
+			h := &Handlers{bundlePublisherFactory: &stubBundleFactory{ref: publishedBundle()}, validate: newOCIWorkflowValidator(t), resultsExporter: exportFunc(func(context.Context, *api.EvaluationJobResource, *cards.EvaluationCard) (evalcards.ExportResult, error) {
 				panic("publisher panicked")
 			})}
 			// Run the worker directly with an owned job so completion is observable even
@@ -401,7 +405,7 @@ func TestExportWorkerRecoversPanic(t *testing.T) {
 			if !strings.Contains(logs.String(), "stack=") || !strings.Contains(logs.String(), "publisher panicked") {
 				t.Fatal("panic and stack missing from logs")
 			}
-			if strings.Contains(failed.message, "goroutine") || failed.message != "Evaluation-card OCI processing panicked" {
+			if strings.Contains(failed.message, "goroutine") || failed.message != "OCI results processing panicked" {
 				t.Fatalf("panic status message: %s", failed.message)
 			}
 			if nested && !strings.Contains(logs.String(), "failure write panicked") {
@@ -434,7 +438,7 @@ func TestExportPushTimeoutUsesFreshFailureContext(t *testing.T) {
 		close(expired)
 		return nil, ctx.Err()
 	})}
-	h := &Handlers{validate: newOCIWorkflowValidator(t), resultsExporter: evalcards.NewManager(nil, evalcards.ManagerConfig{OCIPublisherFactory: factory, OCIPushTimeout: time.Millisecond})}
+	h := &Handlers{bundlePublisherFactory: &stubBundleFactory{ref: publishedBundle()}, validate: newOCIWorkflowValidator(t), resultsExporter: evalcards.NewManager(nil, evalcards.ManagerConfig{OCIPublisherFactory: factory, OCIPushTimeout: time.Millisecond})}
 	h.exportEvaluationResultsAsync(context.Background(), storage, storage.job, nil)
 	awaitExportSignal(t, pushStarted)
 	awaitExportSignal(t, expired)
@@ -476,7 +480,7 @@ func TestHandleTerminalEventReturns204BeforeRunningWrite(t *testing.T) {
 			if cancelAtCommit {
 				storage.updated = cancel
 			}
-			h := &Handlers{storage: storage, validate: newOCIWorkflowValidator(t), resultsExporter: &ociOutcomeExporter{result: evalcards.ExportResult{OCIArtifact: publishedCard()}}}
+			h := &Handlers{bundlePublisherFactory: &stubBundleFactory{ref: publishedBundle()}, storage: storage, validate: newOCIWorkflowValidator(t), resultsExporter: &ociOutcomeExporter{result: evalcards.ExportResult{OCIArtifact: publishedCard()}}}
 			response := &asyncEventResponse{}
 			returned := make(chan struct{})
 			go func() {

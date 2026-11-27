@@ -451,6 +451,10 @@ func checkModelEndpoint() {
 				return
 			}
 			logDebug("WARNING: Model endpoint %s is not reachable: %v\n", modelURL, err)
+			if os.Getenv("MODEL_ENDPOINT_PREFLIGHT_WARN_ONLY") == "true" {
+				logDebug("WARNING: MODEL_ENDPOINT_PREFLIGHT_WARN_ONLY=true; proceeding with evaluation scenarios\n")
+				return
+			}
 			logDebug("Evaluation job scenarios will be skipped.\n")
 			modelEndpointConnectivity = modelEndpointUnreachable
 			return
@@ -686,8 +690,11 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I wait for the evaluation job status to match "([^"]*)"$`, tc.iWaitForEvaluationJobStatusToMatch)
 
 	// OCI artifact steps
+	ctx.Step(`^the OCI bundle should match the completed job$`, tc.theOCIBundleShouldMatchCompletedJob)
+	ctx.Step(`^the OCI bundle child (\d+) should match the job "([^"]*)" artifact$`, tc.theOCIBundleChildShouldMatchJob)
 	ctx.Step(`^I wait for the OCI export status to be "([^"]*)"$`, tc.iWaitForOCIExportStatus)
 	ctx.Step(`^I fetch the OCI manifest for repository "([^"]*)" and tag "([^"]*)"$`, tc.iFetchOCIManifestByRepoAndTag)
+	ctx.Step(`^I fetch the evaluation card OCI manifest for repository "([^"]*)" and tag "([^"]*)"$`, tc.iFetchOCIEvaluationCardManifestByRepoAndTag)
 	ctx.Step(`^the OCI manifest should not exist$`, tc.theOCIManifestShouldNotExist)
 	ctx.Step(`^the OCI manifest should contain annotation "([^"]*)" with value "([^"]*)"$`, tc.theOCIManifestShouldContainAnnotation)
 	ctx.Step(`^the OCI artifact should exist$`, tc.theOCIArtifactShouldExist)

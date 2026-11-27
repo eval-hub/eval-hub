@@ -55,7 +55,7 @@ func TestPostProcessorSourceCombinations(t *testing.T) {
 		for calibrationName, calibration := range calibrations {
 			t.Run(resultName+"/"+calibrationName, func(t *testing.T) {
 				evaluation := sourceTestJob(result, []api.CalibrationDataRef{calibration})
-				cfg, err := buildJobConfig(evaluation, postprocessing.RuntimeProvider(), &evaluation.Benchmarks[0], 0, nil, nil)
+				cfg, err := buildJobConfig(evaluation, testPostProcessingProvider(t), &evaluation.Benchmarks[0], 0, testJobServiceConfig(), nil)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -112,7 +112,7 @@ func TestPostProcessorSourceCombinations(t *testing.T) {
 // TestPostProcessorSecretProjection confines deduplicated credentials to init and preserves the read-only data-path contract.
 func TestPostProcessorSecretProjection(t *testing.T) {
 	evaluation := sourceTestJob(&api.PostProcessingResultsDataRef{Git: &api.GitTestDataRef{URL: "https://example.org/data", Ref: "main", SecretRef: "shared"}}, []api.CalibrationDataRef{{S3: &api.S3TestDataRef{Bucket: "data", Key: "labels", SecretRef: "shared"}}, {HF: &api.HFTestDataRef{RepoID: "org/data", SecretRef: "hf-auth"}}})
-	cfg, err := buildJobConfig(evaluation, postprocessing.RuntimeProvider(), &evaluation.Benchmarks[0], 0, nil, nil)
+	cfg, err := buildJobConfig(evaluation, testPostProcessingProvider(t), &evaluation.Benchmarks[0], 0, testJobServiceConfig(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ func TestPostProcessorResultsPVCMounts(t *testing.T) {
 				calibration = []api.CalibrationDataRef{{PVC: &api.PVCTestDataRef{ClaimName: calibrationClaim, SubPath: "labels"}}}
 			}
 			evaluation := sourceTestJob(&api.PostProcessingResultsDataRef{PVC: &api.PVCTestDataRef{ClaimName: "results", SubPath: "predictions"}}, calibration)
-			cfg, err := buildJobConfig(evaluation, postprocessing.RuntimeProvider(), &evaluation.Benchmarks[0], 0, nil, nil)
+			cfg, err := buildJobConfig(evaluation, testPostProcessingProvider(t), &evaluation.Benchmarks[0], 0, testJobServiceConfig(), nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -308,7 +308,7 @@ func TestPostProcessorExternalOCIConfiguresSidecar(t *testing.T) {
 				source.K8s = &api.OCIConnectionConfig{Connection: "registry-auth"}
 			}
 			evaluation := sourceTestJob(&api.PostProcessingResultsDataRef{OCI: source}, nil)
-			cfg, err := buildJobConfig(evaluation, postprocessing.RuntimeProvider(), &evaluation.Benchmarks[0], 0, nil, nil)
+			cfg, err := buildJobConfig(evaluation, testPostProcessingProvider(t), &evaluation.Benchmarks[0], 0, testJobServiceConfig(), nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -360,7 +360,7 @@ func TestPostProcessorSourceErrorsReachPodBuilders(t *testing.T) {
 		})
 	}
 	job = sourceTestJob(&api.PostProcessingResultsDataRef{S3: &api.S3TestDataRef{Bucket: "data", SecretRef: "../unsafe"}}, nil)
-	if _, err := buildJobConfig(job, postprocessing.RuntimeProvider(), &job.Benchmarks[0], 0, nil, nil); err == nil || !strings.Contains(err.Error(), "Secret") {
+	if _, err := buildJobConfig(job, testPostProcessingProvider(t), &job.Benchmarks[0], 0, testJobServiceConfig(), nil); err == nil || !strings.Contains(err.Error(), "Secret") {
 		t.Fatalf("unsafe credential projection was accepted: %v", err)
 	}
 }

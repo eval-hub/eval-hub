@@ -10,6 +10,15 @@ local parameters = {
   num_examples: 1,
   embedding_model: requiredEmbeddingEnv('RAGAS_EMBEDDING_MODEL'),
 };
+local connectedTestDataRef = if test.disconnected() then {} else {
+  test_data_ref: {
+    s3: {
+      bucket: test.env('TEST_DATA_S3_BUCKET', 'mlpipeline'),
+      key: 'datasets/ragas/dataset.jsonl',
+      secret_ref: 's3-ragas-credentials',
+    },
+  },
+};
 
 test.mergeOptional(
   test.mergeOptional(
@@ -18,24 +27,8 @@ test.mergeOptional(
       name: 'test-evaluation-job-for-ragas-benchmark',
     } + if collectionId == '' then {
       benchmarks: [
-        test.benchmark('ragas_rag_default', 'ragas', parameters) + {
-          test_data_ref: {
-            s3: {
-              bucket: 'ai-eng-canada',
-              key: 'datasets/ragas/dataset.jsonl',
-              secret_ref: 's3-ragas-credentials',
-            },
-          },
-        },
-        test.benchmark('ragas_rag_full', 'ragas', parameters) + {
-          test_data_ref: {
-            s3: {
-              bucket: 'ai-eng-canada',
-              key: 'datasets/ragas/dataset.jsonl',
-              secret_ref: 's3-ragas-credentials',
-            },
-          },
-        },
+        test.benchmark('ragas_rag_default', 'ragas', parameters) + connectedTestDataRef,
+        test.benchmark('ragas_rag_full', 'ragas', parameters) + connectedTestDataRef,
       ],
       tags: ['benchmark-providers', 'ragas'],
     } else {},

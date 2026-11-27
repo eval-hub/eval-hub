@@ -231,6 +231,11 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 // createEvaluationJob validates, persists, and launches an already decoded job.
 // HTTP decoding and response formatting belong to the calling API handler.
 func (h *Handlers) createEvaluationJob(ctx *executioncontext.ExecutionContext, evaluation *api.EvaluationJobConfig) (*api.EvaluationJobResource, error) {
+	// Only caller-supplied evaluation exports are bundle prefixes. Post-processing
+	// reuses exports.oci for input access and must preserve its literal/stored tag.
+	if err := validation.ValidateEvaluationOCITag(evaluation); err != nil {
+		return nil, err
+	}
 	id := common.GUID()
 	collection, benchmarks, err := h.prepareEvaluationJob(ctx, evaluation, id)
 	if err != nil {
@@ -417,6 +422,12 @@ func (h *Handlers) createPreparedEvaluationJob(
 					MLFlowExperimentURL: mlflowExperimentURL,
 				},
 				EvaluationJobConfig: *evaluation,
+			}
+			for index, benchmark := range benchmarks {
+				job.Status.Benchmarks = append(job.Status.Benchmarks, api.BenchmarkStatus{
+					ID: benchmark.ID, ProviderID: benchmark.ProviderID, BenchmarkIndex: index,
+					Status: api.StatePending,
+				})
 			}
 			if collection != nil {
 				return storage.WithContext(runtimeCtx).CreateEvaluationJobAndUpdateCollection(job)
@@ -714,11 +725,17 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 		return
 	}
 
-	if status.BenchmarkStatusEvent != nil {
-		status.BenchmarkStatusEvent.StampRuntimeMessageOrigins()
+	if event := status.BenchmarkStatusEvent; event != nil {
+		event.StampRuntimeMessageOrigins()
 	}
 
-	ctx.Logger.Debug("Updating evaluation job", "id", evaluationJobID, "state", status.BenchmarkStatusEvent.Status, "status", status)
+	if event := status.BenchmarkStatusEvent; event != nil {
+		ctx.Logger.Debug("Updating evaluation job", "id", evaluationJobID, "state", event.Status,
+			"provider_id", event.ProviderID, "benchmark_id", event.ID,
+			"benchmark_index", event.BenchmarkIndex)
+	} else {
+		ctx.Logger.Debug("Updating evaluation job", "id", evaluationJobID, "state", "missing")
+	}
 
 	var previousState api.OverallState
 
@@ -729,6 +746,16 @@ func (h *Handlers) HandleUpdateEvaluation(ctx *executioncontext.ExecutionContext
 			job, jobErr := scoped.GetEvaluationJob(evaluationJobID)
 			if jobErr == nil && job != nil && job.Status != nil {
 				previousState = job.Status.State
+			}
+			if event := status.BenchmarkStatusEvent; event != nil && event.Status == api.StateRunning && event.StartedAt == "" &&
+				jobErr == nil && job != nil && workloads.TypeForJob(&job.EvaluationJobConfig) != workloads.CollectionGeneration {
+				// Generation progress timestamps are managed by storage and must not be
+				// confused with the conventional evaluation benchmark start timestamp.
+				receivedAt := ctx.StartedAt
+				if receivedAt.IsZero() {
+					receivedAt = time.Now()
+				}
+				event.StartedAt = api.DateTimeToString(receivedAt.UTC())
 			}
 			if status.BenchmarkStatusEvent != nil {
 				h.rewriteSidecarURLsInBenchmarkStatus(status.BenchmarkStatusEvent, job, ctx.Logger)

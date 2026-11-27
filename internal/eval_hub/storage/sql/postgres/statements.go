@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/abstractions"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/storage/sql/shared"
@@ -29,11 +30,19 @@ CREATE TABLE IF NOT EXISTS evaluations (
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
     experiment_id VARCHAR(255) NOT NULL,
     workload_type TEXT NOT NULL DEFAULT 'evaluation',
+    expires_at TIMESTAMPTZ NULL,
+    cleanup_protected_until TIMESTAMPTZ NULL,
     entity JSONB NOT NULL,
     PRIMARY KEY (id)
 );
 
 ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS workload_type TEXT NOT NULL DEFAULT 'evaluation';
+ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NULL;
+ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS cleanup_protected_until TIMESTAMPTZ NULL;
+
+CREATE INDEX IF NOT EXISTS idx_evaluations_generation_expiry
+ON evaluations (expires_at)
+WHERE workload_type = 'collection-generation' AND expires_at IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS collections (
     id VARCHAR(36) NOT NULL,
@@ -90,6 +99,9 @@ func (s *postgresStatementsFactory) CreateEvaluationGetEntityStatement(query *sh
 	if query.WorkloadType != "" {
 		where += fmt.Sprintf(" AND workload_type = $%d", len(args)+1)
 		args = append(args, string(query.WorkloadType))
+		if query.WorkloadType == workloads.CollectionGeneration {
+			where += " AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)"
+		}
 	}
 	statement := fmt.Sprintf(`SELECT id, created_at, updated_at, tenant_id, owner, status, experiment_id, entity FROM evaluations WHERE %s;`, where)
 	scanArgs := []any{&query.Resource.ID, &query.Resource.CreatedAt, &query.Resource.UpdatedAt, &query.Resource.Tenant, &query.Resource.Owner, &query.Status, &query.MLFlowExperimentID, &query.EntityJSON}
@@ -236,6 +248,41 @@ func (s *postgresStatementsFactory) CreateUpdateEntityStatement(tenant api.Tenan
 		}
 		return fmt.Sprintf(`UPDATE %s SET entity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2;`, tableName), []any{entityJSON, id}
 	}
+}
+
+func (s *postgresStatementsFactory) CreateUpdateEvaluationEntityStatement(tenant api.Tenant, id, entityJSON string, status api.OverallState, expiresAt *time.Time) (string, []any) {
+	args := []any{status, entityJSON}
+	query := `UPDATE evaluations SET status = $1, entity = $2, updated_at = CURRENT_TIMESTAMP`
+	if expiresAt != nil {
+		args = append(args, *expiresAt)
+		query += fmt.Sprintf(`, expires_at = COALESCE(expires_at, $%d)`, len(args))
+	}
+	args = append(args, id)
+	query += fmt.Sprintf(` WHERE id = $%d`, len(args))
+	if !tenant.IsEmpty() {
+		args = append(args, tenant.String())
+		query += fmt.Sprintf(` AND tenant_id = $%d`, len(args))
+	}
+	return query + `;`, args
+}
+
+func (s *postgresStatementsFactory) CreateSetCollectionGenerationCleanupProtectionStatement(tenant api.Tenant, id string, protectedUntil time.Time) (string, []any) {
+	return `UPDATE evaluations SET cleanup_protected_until = $1, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2 AND tenant_id = $3 AND workload_type = $4;`,
+		[]any{protectedUntil, id, tenant.String(), string(workloads.CollectionGeneration)}
+}
+
+func (s *postgresStatementsFactory) CreateDeleteCleanedCollectionGenerationJobStatement(tenant api.Tenant, id string) (string, []any) {
+	return `DELETE FROM evaluations WHERE id = $1 AND tenant_id = $2 AND workload_type = $3;`, []any{id, tenant.String(), string(workloads.CollectionGeneration)}
+}
+
+func (s *postgresStatementsFactory) CreateDeleteExpiredGenerationJobsStatement(now time.Time, limit int) (string, []any) {
+	return `DELETE FROM evaluations WHERE id IN (
+		SELECT id FROM evaluations
+		WHERE workload_type = $1 AND status IN ($2, $3, $4) AND expires_at <= $5
+		  AND (cleanup_protected_until IS NULL OR cleanup_protected_until <= $5)
+		ORDER BY expires_at LIMIT $6 FOR UPDATE SKIP LOCKED
+	);`, []any{string(workloads.CollectionGeneration), api.OverallStateCompleted, api.OverallStateFailed, api.OverallStateCancelled, now, limit}
 }
 
 func (s *postgresStatementsFactory) CreateProviderAddEntityStatement(provider *api.ProviderResource, entity string) (string, []any) {

@@ -1,10 +1,29 @@
 {
-  "notes": "One sample per task. Agent/code benchmarks may require sandbox and external services. Model IDs remain job parameters; configure independent judge, auditor, scenarios, and realism connections with <role>_api-key/<role>_url in MODEL_AUTH_SECRET_REF. StrongREJECT uses the judge Secret pair for grader_model.",
+  "notes": "One sample with a single configured grader. Requires JUDGE_MODEL_NAME and judge_api-key/judge_url in MODEL_AUTH_SECRET_REF. Scorer prompts and metrics match knowledge-reasoning-v1.",
   "parameters": {
     "epochs": 1,
     "judge_model": "${JUDGE_MODEL_NAME}",
     "max_tasks": 1,
-    "num_examples": 1
+    "num_examples": 1,
+    "task_args": {
+      "scorer": {
+        "args": {
+          "instructions": "regex_judge_instructions",
+          "max_grader_attempts": 3,
+          "template": "regex_judge_template"
+        },
+        "graders": [
+          "grader"
+        ],
+        "metrics": [
+          "inspect_evals/hle/accuracy",
+          "inspect_evals/hle/stderr",
+          "inspect_evals/hle/cerr",
+          "inspect_evals/hle/unscored"
+        ],
+        "scorer": "inspect_evals/hle/regex_judge"
+      }
+    }
   },
   "timeout": "5m"
 }

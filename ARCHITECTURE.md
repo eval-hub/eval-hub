@@ -55,10 +55,33 @@ Viper loads **`config/config.yaml`** with overrides from environment variables a
 
 ---
 
+## Resource maintenance (`internal/eval_hub/maintenance`)
+
+The EvalHub API process hosts `ResourceJanitor` temporarily. It runs the
+generation retention sweep on each replica. The SQL sweep is safe for
+concurrent replicas. A separate maintenance process is the planned home for
+cleanup and reconciliation tasks that need a single active owner.
+
+The janitor sweeps at startup and then every 24 hours by default, with ±20%
+jitter for recurring sweeps. Set `resource_janitor.interval` (or
+`EVALHUB_RESOURCE_JANITOR_INTERVAL`) to a whole number of minutes from `1m`
+through `24h`. The sweep removes expired generation jobs in transactions
+of up to 100 rows and stops after a partial batch, an error, or one minute.
+Generation GET stops returning the job at its retention deadline, even if
+physical removal happens later.
+
 ## Persistence (`internal/eval_hub/storage/sql`)
 
 - Single **SQL** implementation with **SQLite** and **PostgreSQL** dialects under `storage/sql/sqlite` and `storage/sql/postgres`; shared SQL building blocks live in **`storage/sql/shared`**.
 - Evaluation job entities are JSON documents in tables, updated transactionally (status, per-benchmark progress, results, overall scoring when complete).
+
+---
+
+## OCI export
+
+`internal/eval_hub/oci` owns shared registry access: `http_client.go` constructs the HTTP client with timeout, TLS/CA, and optional OpenTelemetry settings; `registry_client.go` constructs job-scoped registry clients using tenant-scoped credential resolution. It also owns the evaluation-bundle publisher and factory. `internal/eval_hub/evalcards` owns card generation, the export manager, MLflow export, the OCI target adapter, and the concrete card publisher and factory.
+
+`internal/eval_hub/server/oci_export.go` initializes one HTTP client and credential resolver for both publisher factories in local and Kubernetes modes, reports initialization failures through the factories, and owns Kubernetes helper cleanup. Card and bundle publication each create a separate registry client and resolve credentials per operation. Handlers sequence publication and persist OCI status and outputs.
 
 ---
 
@@ -185,3 +208,4 @@ Logging uses **slog** with **`internal/logging`** enriching logs from the incomi
 | Platform & components | [Architecture overview](https://eval-hub.github.io/#architecture-overview) |
 | End-user / SDK docs | [eval-hub.github.io](https://eval-hub.github.io/) |
 | Build, DB, sidecar dev notes | **`CLAUDE.md`** (this repo) |
+| OCI exports and service workflow | [OCI exports](OCI.md#service-export-workflow) |
