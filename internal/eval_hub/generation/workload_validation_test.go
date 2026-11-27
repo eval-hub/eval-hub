@@ -45,6 +45,85 @@ func TestValidateResultAcceptsCompleteDryRunProposal(t *testing.T) {
 	}
 }
 
+func TestUnresolvedRuntimeRequirementsValidateAndRoundTrip(t *testing.T) {
+	request := api.CollectionGenerationRequest{MaxBenchmarks: 1}
+	result := validResult(t)
+	requirement := api.CollectionGenerationRuntimeRequirement{
+		ProviderID: "provider-a", ID: "bench-a", Kind: "gpu", Action: "verify",
+		Message: "verify that the cluster can schedule the adapter's required GPU resources.",
+	}
+	encodeResult := func(t *testing.T, proposal api.CollectionGenerationResult) []byte {
+		t.Helper()
+		raw, err := json.Marshal(proposal)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	for _, tc := range []struct {
+		name         string
+		requirements []api.CollectionGenerationRuntimeRequirement
+	}{
+		{name: "legacy or unknown requirements"},
+		{name: "known requirement", requirements: []api.CollectionGenerationRuntimeRequirement{requirement}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			proposal := result
+			proposal.Explanation.UnresolvedRequirements = tc.requirements
+			raw := encodeResult(t, proposal)
+			if present := strings.Contains(string(raw), `"unresolved_requirements"`); present != (len(tc.requirements) != 0) {
+				t.Fatalf("unexpected field presence: %s", raw)
+			}
+			got, err := ResultFromAdditionalInfo(request, map[string]any{"collection_generation_result": json.RawMessage(raw)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.YAML != result.YAML || len(got.Explanation.UnresolvedRequirements) != len(tc.requirements) ||
+				(len(tc.requirements) != 0 && got.Explanation.UnresolvedRequirements[0] != requirement) {
+				t.Fatalf("unexpected decoded proposal: %+v", got)
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		name   string
+		mutate func(*api.CollectionGenerationResult)
+	}{
+		{"wrong provider", func(p *api.CollectionGenerationResult) { p.Explanation.UnresolvedRequirements[0].ProviderID = "other" }},
+		{"unselected pair", func(p *api.CollectionGenerationResult) { p.Explanation.UnresolvedRequirements[0].ID = "unselected" }},
+		{"duplicate", func(p *api.CollectionGenerationResult) {
+			p.Explanation.UnresolvedRequirements = append(p.Explanation.UnresolvedRequirements, requirement)
+		}},
+		{"unsupported kind", func(p *api.CollectionGenerationResult) { p.Explanation.UnresolvedRequirements[0].Kind = "other" }},
+		{"unsupported action", func(p *api.CollectionGenerationResult) { p.Explanation.UnresolvedRequirements[0].Action = "other" }},
+		{"invalid parameter", func(p *api.CollectionGenerationResult) {
+			p.Explanation.UnresolvedRequirements[0].Parameter = "judge_model"
+		}},
+		{"unsafe message", func(p *api.CollectionGenerationResult) {
+			p.Explanation.UnresolvedRequirements[0].Message = "use private-token"
+		}},
+		{"over cap", func(p *api.CollectionGenerationResult) {
+			p.Explanation.UnresolvedRequirements = make([]api.CollectionGenerationRuntimeRequirement, api.MaxCollectionGenerationUnresolvedRequirements+1)
+		}},
+		{"configure without placeholder", func(p *api.CollectionGenerationResult) {
+			p.Explanation.UnresolvedRequirements[0] = api.CollectionGenerationRuntimeRequirement{
+				ProviderID: "provider-a", ID: "bench-a", Kind: "judge_model", Action: "configure", Parameter: "judge_model",
+				Message: "supply a judge model name and configure its connection before running.",
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			proposal := result
+			proposal.Explanation.UnresolvedRequirements = []api.CollectionGenerationRuntimeRequirement{requirement}
+			tc.mutate(&proposal)
+			_, err := ResultFromAdditionalInfo(request, map[string]any{"collection_generation_result": json.RawMessage(encodeResult(t, proposal))})
+			if err == nil || strings.Contains(err.Error(), "private-token") {
+				t.Fatalf("invalid requirement accepted or unsafe message exposed: %v", err)
+			}
+		})
+	}
+}
+
 func TestResultFromAdditionalInfoBoundsNormalizedSize(t *testing.T) {
 	const key = "collection_generation_result"
 	request := api.CollectionGenerationRequest{MaxBenchmarks: 1}

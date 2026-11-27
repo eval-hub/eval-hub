@@ -1,0 +1,35 @@
+type: object
+title: CollectionGenerationRuntimeRequirement
+description: Server-derived guidance about a known runtime input for a selected benchmark.
+required: [provider_id, id, kind, action, message]
+properties:
+  provider_id:
+    type: string
+    minLength: 1
+    description: Provider ID of the selected benchmark.
+  id:
+    type: string
+    minLength: 1
+    description: Benchmark ID within the provider.
+  kind:
+    type: string
+    enum: [judge_model, scorer_model, tokenizer, test_data, gpu, resource_claim_template]
+    description: Category of the runtime input or deployment requirement.
+  action:
+    type: string
+    enum: [configure, verify]
+    description: >
+      Configure a known missing input or verify a requirement that may already be
+      satisfied. In this version configure is used for a declared blank judge_model.
+  parameter:
+    type: string
+    enum: [judge_model, scorer_model, tokenizer, tokenizer_path]
+    description: >
+      Name of the affected benchmark parameter when applicable. Omitted for dataset
+      and deployment requirements.
+  message:
+    type: string
+    minLength: 1
+    maxLength: 300
+    description: Short server-authored guidance without environment-specific values or credentials.
+additionalProperties: false

@@ -110,7 +110,7 @@ func TestGenerationRejectsInvalidEventsWithoutChangingState(t *testing.T) {
 	}
 }
 
-func proposalEvent(t *testing.T, selectedProvider, selectedID string, rejected []api.CollectionGenerationBenchmarkReason) *api.StatusEvent {
+func proposalEvent(t *testing.T, selectedProvider, selectedID string, rejected []api.CollectionGenerationBenchmarkReason, requirements ...api.CollectionGenerationRuntimeRequirement) *api.StatusEvent {
 	t.Helper()
 	collection := api.CollectionConfig{
 		Name:    "Generated collection",
@@ -129,7 +129,7 @@ func proposalEvent(t *testing.T, selectedProvider, selectedID string, rejected [
 		Rationale:  "The selected benchmark provides evidence relevant to the goal.",
 		Explanation: api.CollectionGenerationExplanation{SelectedBenchmarks: []api.CollectionGenerationBenchmarkReason{{
 			ProviderID: selectedProvider, ID: selectedID, Reason: "It measures the requested behavior.",
-		}}, RejectedBenchmarks: rejected},
+		}}, RejectedBenchmarks: rejected, UnresolvedRequirements: requirements},
 	}
 	return &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
 		ProviderID: generation.ProviderID, ID: generation.BenchmarkID, BenchmarkIndex: 0,
@@ -276,9 +276,13 @@ func testCollectionGenerationCompletionRequiresCallerVisibleCatalog(t *testing.T
 	owner := api.User("catalog-owner")
 	scoped := store.WithTenant(tenant).WithOwner(owner).WithWorkloadType(workloads.CollectionGeneration)
 	providerID := createCatalogProvider(t, scoped, tenant, owner)
+	requirement := api.CollectionGenerationRuntimeRequirement{
+		ProviderID: providerID, ID: "bench-a", Kind: "gpu", Action: "verify",
+		Message: "verify that the cluster can schedule the adapter's required GPU resources.",
+	}
 
 	validID := createRunningGenerationJob(t, scoped, tenant, owner)
-	if err := scoped.UpdateEvaluationJob(validID, proposalEvent(t, providerID, "bench-a", nil)); err != nil {
+	if err := scoped.UpdateEvaluationJob(validID, proposalEvent(t, providerID, "bench-a", nil, requirement)); err != nil {
 		t.Fatalf("complete proposal using visible catalog benchmark: %v", err)
 	}
 	completed, err := scoped.WithWorkloadType(workloads.CollectionGeneration).GetEvaluationJob(validID)
@@ -286,22 +290,34 @@ func testCollectionGenerationCompletionRequiresCallerVisibleCatalog(t *testing.T
 		completed.Status.CollectionGenerationProgress == nil || completed.Status.CollectionGenerationProgress.Phase != "catalog_discovery" {
 		t.Fatalf("completed proposal = (%+v, %v)", completed, err)
 	}
+	resource, err := generation.ResourceFromJob(completed)
+	if err != nil || resource.Result == nil {
+		t.Fatalf("read completed typed proposal: result=%+v err=%v", resource, err)
+	}
+	if got := resource.Result.Explanation.UnresolvedRequirements; len(got) != 1 || got[0] != requirement {
+		t.Fatalf("persisted runtime requirements = %+v, want %+v", got, requirement)
+	}
 
+	unselectedRequirement := requirement
+	unselectedRequirement.ID = "not-in-provider"
 	for _, tc := range []struct {
-		name     string
-		provider string
-		id       string
-		rejected []api.CollectionGenerationBenchmarkReason
+		name         string
+		provider     string
+		id           string
+		rejected     []api.CollectionGenerationBenchmarkReason
+		requirements []api.CollectionGenerationRuntimeRequirement
 	}{
 		{name: "provider outside tenant catalog", provider: "not-visible", id: "bench-a"},
 		{name: "benchmark outside provider catalog", provider: providerID, id: "not-in-provider"},
 		{name: "rejected benchmark outside provider catalog", provider: providerID, id: "bench-a", rejected: []api.CollectionGenerationBenchmarkReason{{
 			ProviderID: providerID, ID: "not-in-provider", Reason: "It does not match the evaluation goal.",
 		}}},
+		{name: "runtime requirement for unselected benchmark", provider: providerID, id: "bench-a",
+			requirements: []api.CollectionGenerationRuntimeRequirement{unselectedRequirement}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			id := createRunningGenerationJob(t, scoped, tenant, owner)
-			if err := scoped.UpdateEvaluationJob(id, proposalEvent(t, tc.provider, tc.id, tc.rejected)); err != nil {
+			if err := scoped.UpdateEvaluationJob(id, proposalEvent(t, tc.provider, tc.id, tc.rejected, tc.requirements...)); err != nil {
 				t.Fatalf("invalid completed proposal was not durably converted to a failure: %v", err)
 			}
 			failed, err := scoped.WithWorkloadType(workloads.CollectionGeneration).GetEvaluationJob(id)

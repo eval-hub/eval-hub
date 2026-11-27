@@ -253,7 +253,7 @@ func (s *session) review(ctx context.Context, text string) (string, error) {
 	if err != nil {
 		return "", generationFailure{code: "tool_failed"}
 	}
-	notes, ok := applyCatalogDefaults(&proposal, snapshot)
+	requirements, ok := applyCatalogDefaults(&proposal, snapshot)
 	if !ok {
 		return s.correct(ctx, []finding{{Code: "unverified_runtime_default", Path: "collection.benchmarks"}})
 	}
@@ -264,7 +264,7 @@ func (s *session) review(ctx context.Context, text string) (string, error) {
 	if err := s.progress(ctx, "validation", "calibrate_proposal", "success"); err != nil {
 		return "", err
 	}
-	result, err := draft.result(proposal, explanation, notes)
+	result, err := draft.result(proposal, explanation, requirements)
 	if err != nil {
 		return "", generationFailure{code: "validation_failed"}
 	}

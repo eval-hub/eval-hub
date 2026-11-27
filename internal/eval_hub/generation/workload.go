@@ -242,7 +242,7 @@ func ValidateResult(request api.CollectionGenerationRequest, result api.Collecti
 			return errors.New("proposal contains an invalid action summary")
 		}
 	}
-	return nil
+	return validateRuntimeRequirements(result.Collection.Benchmarks, result.Explanation.UnresolvedRequirements)
 }
 
 func providerAllowed(filter, providerID string) bool {

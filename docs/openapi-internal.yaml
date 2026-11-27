@@ -2305,6 +2305,10 @@ paths:
                         benchmarks:
                           - provider_id: inspect
                             id: inspect/agentharm
+                          - provider_id: inspect
+                            id: inspect/cyberseceval-2-pi
+                            parameters:
+                              judge_model: ''
                       yaml: |
                         name: Agent safety checks
                         description: Evaluate agent safety and tool-use risks.
@@ -2313,16 +2317,30 @@ paths:
                         benchmarks:
                           - provider_id: inspect
                             id: inspect/agentharm
-                      rationale: The chosen benchmark addresses the requested agent safety goal.
+                          - provider_id: inspect
+                            id: inspect/cyberseceval-2-pi
+                            parameters:
+                              judge_model: ""
+                      rationale: The benchmarks address agent safety and prompt injection. Supply a judge name and configure its connection for the prompt-injection benchmark.
                       explanation:
                         selected_benchmarks:
                           - provider_id: inspect
                             id: inspect/agentharm
                             reason: Exercises agent behavior under harmful tool-use requests.
-                        rejected_benchmarks:
                           - provider_id: inspect
                             id: inspect/cyberseceval-2-pi
-                            reason: Focuses on prompt injection rather than broad agent harm.
+                            reason: Measures susceptibility to prompt injection in tool-use settings.
+                        rejected_benchmarks:
+                          - provider_id: inspect
+                            id: inspect/gaia
+                            reason: Focuses on general tool use and reasoning.
+                        unresolved_requirements:
+                          - provider_id: inspect
+                            id: inspect/cyberseceval-2-pi
+                            kind: judge_model
+                            action: configure
+                            parameter: judge_model
+                            message: supply a judge model name and configure its connection before running.
                       actions:
                         - name: search_benchmarks
                           outcome: success
@@ -5732,6 +5750,57 @@ components:
           maxLength: 300
           description: Concise reason for selecting or rejecting this benchmark.
       additionalProperties: false
+    CollectionGenerationRuntimeRequirement:
+      type: object
+      title: CollectionGenerationRuntimeRequirement
+      description: Server-derived guidance about a known runtime input for a selected benchmark.
+      required:
+        - provider_id
+        - id
+        - kind
+        - action
+        - message
+      properties:
+        provider_id:
+          type: string
+          minLength: 1
+          description: Provider ID of the selected benchmark.
+        id:
+          type: string
+          minLength: 1
+          description: Benchmark ID within the provider.
+        kind:
+          type: string
+          enum:
+            - judge_model
+            - scorer_model
+            - tokenizer
+            - test_data
+            - gpu
+            - resource_claim_template
+          description: Category of the runtime input or deployment requirement.
+        action:
+          type: string
+          enum:
+            - configure
+            - verify
+          description: |
+            Configure a known missing input or verify a requirement that may already be satisfied. In this version configure is used for a declared blank judge_model.
+        parameter:
+          type: string
+          enum:
+            - judge_model
+            - scorer_model
+            - tokenizer
+            - tokenizer_path
+          description: |
+            Name of the affected benchmark parameter when applicable. Omitted for dataset and deployment requirements.
+        message:
+          type: string
+          minLength: 1
+          maxLength: 300
+          description: Short server-authored guidance without environment-specific values or credentials.
+      additionalProperties: false
     CollectionGenerationExplanation:
       type: object
       title: CollectionGenerationExplanation
@@ -5759,6 +5828,15 @@ components:
             No pair may also appear in selected_benchmarks.
           items:
             $ref: '#/components/schemas/CollectionGenerationBenchmarkReason'
+        unresolved_requirements:
+          type: array
+          maxItems: 100
+          description: |
+            Known runtime inputs for selected benchmarks, in collection order. These entries
+            are advisory and do not configure the benchmark. Older results may omit the field.
+            An absent entry does not establish readiness. See the rationale for additional guidance.
+          items:
+            $ref: '#/components/schemas/CollectionGenerationRuntimeRequirement'
       additionalProperties: false
     CollectionGenerationAction:
       type: object
