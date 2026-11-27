@@ -47,7 +47,7 @@ func newOCIPublisherFactory(logger *slog.Logger, serviceConfig *config.Config) (
 		return evalcards.NewNoopOCIPublisherFactory(), noop
 	}
 	if serviceConfig.Service.LocalMode {
-		httpClient, err := evalcards.NewOCIHTTPClient(serviceConfig, serviceConfig.IsOTELEnabled(), logger)
+		httpClient, err := oci.NewHTTPClient(serviceConfig, serviceConfig.IsOTELEnabled(), logger)
 		if err != nil {
 			return newUnavailableOCIPublisherFactory(fmt.Errorf("oci export unavailable: http client: %w", err)), noop
 		}
@@ -61,7 +61,7 @@ func newOCIPublisherFactory(logger *slog.Logger, serviceConfig *config.Config) (
 		}
 		return newUnavailableOCIPublisherFactory(fmt.Errorf("oci export unavailable: kubernetes client: %w", err)), noop
 	}
-	httpClient, err := evalcards.NewOCIHTTPClient(serviceConfig, serviceConfig.IsOTELEnabled(), logger)
+	httpClient, err := oci.NewHTTPClient(serviceConfig, serviceConfig.IsOTELEnabled(), logger)
 	if err != nil {
 		_ = helper.Close()
 		if logger != nil {

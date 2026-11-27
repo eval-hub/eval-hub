@@ -1,12 +1,44 @@
 package api
 
+import (
+	"fmt"
+	"regexp"
+)
+
 // IsOCIExportEnabled reports whether a job has OCI exports configured.
 func IsOCIExportEnabled(job *EvaluationJobResource) bool {
 	return job != nil && job.Exports != nil && job.Exports.OCI != nil
 }
 
+var ociTagPattern = regexp.MustCompile(`^[a-zA-Z0-9_][a-zA-Z0-9._-]*$`)
+
+// ValidateOCIExportPrefix checks the complete export prefix before any truncation.
+// Empty prefixes are allowed. Length is limited only when constructing the final tag.
+// The exact prefix "evaluation-card" is reserved for evaluation card artifacts.
+func ValidateOCIExportPrefix(prefix string) error {
+	if prefix == "evaluation-card" {
+		return fmt.Errorf("%q is reserved for evaluation card artifacts", prefix)
+	}
+	if prefix != "" && !ociTagPattern.MatchString(prefix) {
+		return fmt.Errorf("OCI export prefix must match %s", ociTagPattern.String())
+	}
+	return nil
+}
+
+// ValidateOCIManifestTag checks the length and syntax of a complete OCI tag.
+func ValidateOCIManifestTag(tag string) error {
+	if tag == "" || len(tag) > 128 {
+		return fmt.Errorf("OCI manifest tag must contain 1 to 128 characters")
+	}
+	if !ociTagPattern.MatchString(tag) {
+		return fmt.Errorf("OCI manifest tag must match %s", ociTagPattern.String())
+	}
+	return nil
+}
+
 // OCISigningConfig selects the signing method and optionally references a key Secret.
-// It retains configuration only; it does not resolve keys or schedule signing.
+// Signing is pending implementation. Settings are accepted and saved with the job,
+// but no secret lookup, key loading, or signing is performed.
 type OCISigningConfig struct {
 	Type      string  `json:"type" validate:"required,oneof=key-pair"`
 	SecretRef *string `json:"secret_ref,omitempty" validate:"omitempty,rfc1123_dns_label"`
@@ -53,6 +85,12 @@ type EvaluationOCIResults struct {
 	EvaluationCard   *OCIArtifactReference `json:"evaluation_card,omitempty"`
 	EvaluationBundle *OCIArtifactReference `json:"evaluation_bundle,omitempty"`
 	Signing          *OCISigningResult     `json:"signing,omitempty"`
+}
+
+// EligibleForOCIProcessing reports whether a job has OCI exports configured and
+// a completed or partially failed outcome.
+func EligibleForOCIProcessing(job *EvaluationJobResource) bool {
+	return IsResultsExportEligible(job) && IsOCIExportEnabled(job)
 }
 
 // UpdateOCIResults partially merges OCI workflow status and the card reference in memory.

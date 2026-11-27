@@ -1,7 +1,12 @@
 type: object
 description: >-
-  OCI export configuration for local and Kubernetes evaluation jobs. Signing
-  configuration is retained only; accepting it does not perform or schedule signing.
+  OCI export configuration for local and Kubernetes evaluation jobs.
+  Signing is pending implementation. Signing settings are currently accepted and
+  saved with the job, but no signing is performed.
+  When OCI export is configured, completed and partially_failed jobs automatically
+  generate and publish an evaluation card and an evaluation
+  bundle containing the card and recorded completed benchmark artifacts. Adapters
+  use their own fallback tags; the job-level prefix is reserved for the evaluation bundle.
 examples:
   - coordinates:
       oci_host: quay.io
@@ -9,7 +14,7 @@ examples:
   - coordinates:
       oci_host: quay.io
       oci_repository: my-org/eval-results
-      oci_tag: final
+      oci_tag: ev-bundle
     k8s:
       connection: my-oci-secret
     signing:
@@ -18,13 +23,31 @@ examples:
 properties:
   coordinates:
     $ref: ./OCICoordinates.yaml
-    description: Coordinates where the OCI artifact should be stored
+    description: >-
+      OCI export destination. The optional oci_tag reserves the evaluation-bundle
+      prefix: the evaluation bundle tag is <oci_tag>-<job-id>, or evaluation-bundle-<job-id> when omitted
+      or empty. Evaluation cards use evaluation-card-<job-id> independently.
+      Invalid prefix characters are rejected before job creation. Long prefixes are
+      truncated during publication to preserve the full job ID within 128 characters.
+    properties:
+      oci_tag:
+        type: string
+        description: >-
+          Optional prefix for the bundle tag <oci_tag>-<job-id>; omitted or empty
+          uses evaluation-bundle-<job-id>. The value evaluation-card
+          is reserved and rejected with HTTP 400 on evaluation-job creation.
+          Post-processing preserves literal and inherited input tags without export-prefix validation.
+          We recommend 60 characters or
+          fewer (not a validation limit). Longer prefixes may be truncated to fit
+          the 128-character tag limit while preserving the full job ID.
+        examples:
+          - ev-bundle
   k8s:
     $ref: ./OCIConnectionConfig.yaml
     description: Optional Kubernetes connection for OCI registry authentication
   signing:
     $ref: ./OCISigningConfig.yaml
-    description: Optional signing configuration. Signing is disabled when omitted.
+    description: Optional signing settings, accepted and saved with the job. Signing is pending implementation; no signing is performed.
 required:
   - coordinates
 additionalProperties: false

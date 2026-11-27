@@ -9,7 +9,7 @@ properties:
     properties:
       coordinates:
         $ref: ./OCICoordinates.yaml
-        description: OCI registry and repository coordinates.
+        description: OCI input coordinates. oci_tag is a literal tag; export-prefix rules, including the evaluation-card reservation, do not apply.
       digest:
         type: string
         pattern: '^sha256:[a-f0-9]{64}$'
