@@ -1,0 +1,371 @@
+name: k8s-tests on Kind
+
+# Builds the EvalHub service image from the pull request, deploys the TrustyAI operators on a
+# Kind cluster beside it, and runs the checks from https://github.com/trustyai-explainability/k8s-tests
+# against that EvalHub.
+#
+# The suite runs when a user with write access comments `/ok-to-test` on a pull request, and
+# only then: pushes do not start it, so to run it again after a push the command is repeated.
+# A comment from anyone else is ignored, and the pull request's code is never built for it.
+# `workflow_dispatch` is the other way in and always runs.
+#
+# A comment event checks out the default branch and cannot report a check on the pull request,
+# so the authorize job looks up the pull request's head, and the gate job publishes its result
+# as the commit status "k8s-tests gate" on that head. To gate merges on it, require that status
+# in the branch protection rules: it is published only for an authorized run, and it succeeds
+# only when the suite succeeded.
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      k8s_tests_ref:
+        description: k8s-tests branch, tag or commit to run
+        required: false
+        default: v0.1.0
+      trustyai_service_operator_ref:
+        description: trustyai-service-operator branch, tag or commit to deploy
+        required: false
+        default: 5c8fade22739ceb2efd15897768965677ae7705f
+
+permissions:
+  contents: read
+
+env:
+  K8S_TESTS_REPO_URL: https://github.com/trustyai-explainability/k8s-tests.git
+  # Pinned to the k8s-tests release rather than to `main`, so a change in the suite does not
+  # change what this repository's pull requests run without a bump here.
+  K8S_TESTS_REF: ${{ github.event.inputs.k8s_tests_ref || 'v0.1.0' }}
+  OPERATOR_REPO_URL: https://github.com/trustyai-explainability/trustyai-service-operator.git
+  # Pinned to commits rather than `main`: a merge in either repository would otherwise change this
+  # repository's check results with no change here. Bump them deliberately, and check that the
+  # operator still has the layout `check-operator-repo` expects.
+  OPERATOR_REF: ${{ github.event.inputs.trustyai_service_operator_ref || '5c8fade22739ceb2efd15897768965677ae7705f' }}
+  # The registry flow builds one adapter image from this checkout; see ADAPTERS below.
+  EVALHUB_CONTRIB_REPO_URL: https://github.com/eval-hub/eval-hub-contrib.git
+  EVALHUB_CONTRIB_REF: 137cda3f9b1d0401b4b7581c45f9d17994815396
+
+jobs:
+  authorize:
+    name: Check the commenter and the pull request head
+    # Only a user with write access may start the suite, and only with a `/ok-to-test` comment on
+    # a pull request (or a manual dispatch). Any other comment never gets past this job.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request &&
+        startsWith(github.event.comment.body, '/ok-to-test'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      allowed: ${{ steps.check.outputs.allowed }}
+      head_sha: ${{ steps.check.outputs.head_sha }}
+    steps:
+      - name: Check write access and find the pull request head
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          ACTOR: ${{ github.event.comment.user.login || github.actor }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          COMMENT: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          permission=$(gh api "repos/${REPO}/collaborators/${ACTOR}/permission" --jq '.permission')
+          case "${permission}" in
+            admin | maintain | write) ;;
+            *)
+              echo "::notice::${ACTOR} has ${permission} access; only a user with write access can run the suite"
+              echo "allowed=false" >> "${GITHUB_OUTPUT}"
+              exit 0
+              ;;
+          esac
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            head_sha="${GITHUB_SHA}"
+          else
+            # The command is the first line of the comment, and nothing else on that line.
+            first_line=$(printf '%s\n' "${COMMENT}" | head -n 1 | tr -d '\r' | sed 's/[[:space:]]*$//')
+            if [ "${first_line}" != "/ok-to-test" ]; then
+              echo "allowed=false" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+            head_sha=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.head.sha')
+          fi
+          echo "${ACTOR} has ${permission} access; running the suite for ${head_sha}"
+          echo "allowed=true" >> "${GITHUB_OUTPUT}"
+          echo "head_sha=${head_sha}" >> "${GITHUB_OUTPUT}"
+
+  k8s-tests:
+    name: k8s-tests on Kind
+    # Runs only for an authorized `/ok-to-test` comment or a manual dispatch, which covers forks as
+    # well as same-repository branches.
+    needs: [authorize]
+    if: needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    # One suite run per pull request; a new `/ok-to-test` or dispatch cancels the run it supersedes.
+    concurrency:
+      group: k8s-tests-${{ github.workflow }}-${{ github.event.issue.number || github.ref }}
+      cancel-in-progress: true
+    # Two operator images and the EvalHub and adapter images are builds, the node image is a
+    # pull, and the checks wait for service operands; this is the ceiling for a hang, not an
+    # estimate of the run.
+    timeout-minutes: 150
+    env:
+      # The pull request's own checkout is the EvalHub service under test: the harness builds
+      # its image from this Containerfile. The other checkouts sit under RUNNER_TEMP, outside
+      # the workspace, so they stay out of the EvalHub image's build context.
+      EVALHUB_REPO: ${{ github.workspace }}
+      # The registry flow (`up-registry`) is the only route that gets an EvalHub image to the
+      # cluster: the operator pulls EvalHub with PullAlways, so a locally loaded image is never
+      # used. The flow builds the adapter named here as well; this one is small, and the
+      # operator's own image pins are used for every adapter the suite runs.
+      ADAPTERS: evalhub-post-processor
+      # One engine for every build, the registry and the cluster, so the image the registry
+      # receives is the one the Kind nodes pull.
+      ENGINE: docker
+      KIND_PROVIDER: docker
+      KIND_CLUSTER: trustyai
+      EVALHUB_SHA: ${{ needs.authorize.outputs.head_sha }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
+        with:
+          egress-policy: audit
+
+      - name: Check out the EvalHub pull request
+        # The pull request's head, which the authorize job looked up: a comment event checks out the
+        # default branch by default. The image is built from this checkout and the summary names
+        # EVALHUB_SHA, so both have to be the same commit.
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.authorize.outputs.head_sha }}
+          persist-credentials: false
+
+      - name: Free the disk the build does not need
+        # The runner's preinstalled toolchains are several gigabytes, and what fills up first is
+        # the disk the image builds and the Kind node share.
+        run: sudo rm -rf /usr/share/dotnet /usr/share/swift /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      - name: Check out the operator, k8s-tests and the adapter sources
+        # Cloned rather than checked out with actions/checkout: each is a public repository, and
+        # a checkout under RUNNER_TEMP keeps it out of the EvalHub image's build context.
+        run: |
+          set -euo pipefail
+
+          # A ref is data, not a command: only the shape of a branch, tag or commit name is
+          # accepted, so it cannot be read as a git option, and unmerged pull request refs are
+          # refused. `case` matches the whole value, newlines included.
+          check_ref() {
+            case "$1" in
+              refs/pull/* | pull/*)
+                echo "::error::$1 is an unmerged pull request; name a branch, tag or commit"
+                exit 1
+                ;;
+              "" | -* | *[!A-Za-z0-9._/-]*)
+                echo "::error::ref '$1' is not a branch, tag or commit name"
+                exit 1
+                ;;
+            esac
+          }
+
+          fetch_at() {
+            # fetch_at <url> <ref> <directory>
+            check_ref "$2"
+            git init --quiet "$3"
+            git -C "$3" fetch --quiet --depth 1 "$1" "$2"
+            git -C "$3" checkout --quiet --detach FETCH_HEAD
+            echo "$3 is at $(git -C "$3" rev-parse HEAD)"
+          }
+
+          operator_repo="${RUNNER_TEMP}/trustyai-service-operator"
+          k8s_tests_dir="${RUNNER_TEMP}/k8s-tests"
+          contrib_repo="${RUNNER_TEMP}/eval-hub-contrib"
+          fetch_at "${OPERATOR_REPO_URL}" "${OPERATOR_REF}" "${operator_repo}"
+          fetch_at "${K8S_TESTS_REPO_URL}" "${K8S_TESTS_REF}" "${k8s_tests_dir}"
+          fetch_at "${EVALHUB_CONTRIB_REPO_URL}" "${EVALHUB_CONTRIB_REF}" "${contrib_repo}"
+
+          # Later steps read these; the harness reads OPERATOR_REPO and EVALHUB_CONTRIB_REPO.
+          {
+            echo "OPERATOR_REPO=${operator_repo}"
+            echo "EVALHUB_CONTRIB_REPO=${contrib_repo}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Let Docker push to the local registry over plain HTTP
+        # The registry the harness deploys from is on localhost:5005 and speaks plain HTTP.
+        # Docker only pushes to such a registry when the daemon lists it as insecure; the
+        # k8s-tests README says so under "Building every image locally".
+        run: |
+          set -euo pipefail
+          sudo mkdir -p /etc/docker
+          if [ ! -s /etc/docker/daemon.json ]; then
+            echo '{}' | sudo tee /etc/docker/daemon.json >/dev/null
+          fi
+          sudo jq '."insecure-registries" = ((."insecure-registries" // []) + ["localhost:5005"] | unique)' \
+            /etc/docker/daemon.json | sudo tee /tmp/daemon.json >/dev/null
+          sudo install -m 0644 /tmp/daemon.json /etc/docker/daemon.json
+          sudo systemctl restart docker
+          docker info --format '{{json .RegistryConfig}}'
+
+      - name: Install kind and kubectl
+        env:
+          KIND_VERSION: v0.33.0
+          # The checks mint bearer tokens with `kubectl create token`, so 1.24 or newer.
+          KUBECTL_VERSION: v1.37.2
+          # A release version does not pin the bytes it names: these are the digests of the two
+          # assets, so a replaced or corrupted download stops here instead of being installed
+          # with sudo. Bump them together with the versions above.
+          KIND_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
+          KUBECTL_SHA256: c04487523e7aa7d1493f7808174c899db93d7a9cf57531420cd76b9bd415f8f4
+        run: |
+          set -euo pipefail
+          curl -fsSLo /tmp/kind "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+          curl -fsSLo /tmp/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          echo "${KIND_SHA256}  /tmp/kind" | sha256sum --check --strict -
+          echo "${KUBECTL_SHA256}  /tmp/kubectl" | sha256sum --check --strict -
+          chmod +x /tmp/kind /tmp/kubectl
+          sudo install -m 0755 /tmp/kind /tmp/kubectl /usr/local/bin/
+          kind version
+          kubectl version --client
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+
+      - name: Install the Python environment
+        working-directory: ${{ runner.temp }}/k8s-tests
+        run: uv sync --frozen
+
+      - name: Confirm the operator checkout
+        working-directory: ${{ runner.temp }}/k8s-tests
+        # Fails early, with a readable reason, when OPERATOR_REPO is not an operator checkout.
+        run: uv run k8s-tests check-operator-repo
+
+      - name: Create the Kind cluster, build and push the images, deploy
+        working-directory: ${{ runner.temp }}/k8s-tests
+        # `up-registry` is the cluster, then `images-all` (the operator images, the EvalHub image
+        # from EVALHUB_REPO and the adapter image, pushed to the local registry), then
+        # `deploy-registry` (the operators, pointed at those images).
+        run: uv run k8s-tests up-registry
+
+      - name: Run the checks
+        working-directory: ${{ runner.temp }}/k8s-tests
+        # The evalhub section: the EvalHub checks against the instance the operator deploys. It
+        # writes reports/report.html, which is self-contained, and reports/junit.xml, which the
+        # summary below is rendered from.
+        # --keep-resources leaves the EvalHub instance, its tenant namespaces and the job pods on
+        # the cluster after the checks finish, so the diagnostics step below can read them. The flag
+        # is used rather than the KEEP_RESOURCES variable: the CLI resets that variable before the
+        # subcommand reads it. The Kind cluster is discarded with the run, so nothing outlives it.
+        run: |
+          mkdir -p reports
+          uv run k8s-tests test --section evalhub --keep-resources --pytest-args "--junitxml=reports/junit.xml"
+
+      - name: Collect what the cluster looked like
+        if: failure()
+        working-directory: ${{ runner.temp }}/k8s-tests
+        # The report says which check failed; this says what the cluster was doing.
+        run: |
+          set +e
+          mkdir -p reports
+          {
+            echo "## pods"
+            kubectl get pods --all-namespaces -o wide
+            echo
+            echo "## recent events"
+            kubectl get events --all-namespaces --sort-by=.lastTimestamp | tail -n 100
+            echo
+            echo "## module resource"
+            kubectl get trustyais.components.platform.opendatahub.io default-trustyai -o yaml
+            echo
+            echo "## EvalHub instances"
+            kubectl get evalhubs --all-namespaces -o yaml
+            echo
+            echo "## EvalHub logs"
+            for ns in $(kubectl get pods --all-namespaces -l app=eval-hub \
+                -o jsonpath='{.items[*].metadata.namespace}' | tr ' ' '\n' | sort -u); do
+              kubectl logs -n "${ns}" -l app=eval-hub --all-containers --tail=200 --prefix
+            done
+            echo
+            echo "## module operator logs"
+            kubectl logs -l control-plane=controller-manager -n system --tail=200
+            echo
+            echo "## workload operator logs"
+            kubectl logs -l control-plane=trustyai-service-operator -n system --tail=200
+          } > reports/diagnostics.txt 2>&1 || true
+
+      - name: Upload the report
+        # Always, because a failing run is the one worth opening.
+        id: upload-report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: k8s-tests-report-${{ github.event.issue.number || github.run_id }}
+          path: ${{ runner.temp }}/k8s-tests/reports/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Say what the run tested, and list every check it ran
+        # Always: the run page is what a reviewer reads first, and a failed run is the one worth
+        # reading. The table is the same list report.html holds, rendered from the JUnit report
+        # so nothing has to be downloaded to see which checks passed.
+        if: always()
+        working-directory: ${{ runner.temp }}/k8s-tests
+        env:
+          # Empty when the upload failed; the summary then says where the report would have been.
+          REPORT_URL: ${{ steps.upload-report.outputs.artifact-url }}
+        run: |
+          operator_sha=$(git -C "${OPERATOR_REPO}" rev-parse HEAD 2>/dev/null || echo unknown)
+          {
+            echo "### k8s-tests on Kind (k8s-tests at \`${K8S_TESTS_REF}\`)"
+            echo
+            echo "Tested [eval-hub at \`${EVALHUB_SHA}\`](https://github.com/${GITHUB_REPOSITORY}/commit/${EVALHUB_SHA}) with [trustyai-service-operator at \`${operator_sha}\`](https://github.com/trustyai-explainability/trustyai-service-operator/commit/${operator_sha})."
+            echo
+            uv run k8s-tests summary reports/junit.xml ||
+              echo "_The summary could not be rendered; \`report.html\` in the artifact is the record._"
+            echo
+            if [ -n "${REPORT_URL}" ]; then
+              echo "The self-contained HTML report is \`report.html\`: [download the report artifact](${REPORT_URL}),"
+              echo "extract it and open \`report.html\` in a browser. A failed run also carries \`diagnostics.txt\`."
+            else
+              echo "The self-contained report is \`report.html\` in the \`k8s-tests-report-*\` artifact;"
+              echo "the artifact upload failed, so this run has no downloadable copy."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  k8s-tests-gate:
+    # The status to require in branch protection: "k8s-tests gate" on the pull request head. It is
+    # published only for an authorized `/ok-to-test` comment, so an unrelated comment or an
+    # unauthorized one changes nothing, and a required status with no result waits until a run.
+    name: k8s-tests gate
+    if: >-
+      always() && github.event_name == 'issue_comment' &&
+      needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true'
+    needs: [authorize, k8s-tests]
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+    env:
+      SUITE_RESULT: ${{ needs.k8s-tests.result }}
+      HEAD_SHA: ${{ needs.authorize.outputs.head_sha }}
+      REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Publish the gate result on the pull request head
+        run: |
+          set -euo pipefail
+          if [ "${SUITE_RESULT}" = "success" ]; then
+            state=success
+            description="The k8s-tests suite passed."
+          else
+            state=failure
+            description="The k8s-tests suite did not pass (${SUITE_RESULT})."
+          fi
+          gh api "repos/${REPO}/statuses/${HEAD_SHA}" \
+            -f state="${state}" \
+            -f context="k8s-tests gate" \
+            -f description="${description}" \
+            -f target_url="${RUN_URL}" >/dev/null
+          echo "published ${state} for ${HEAD_SHA}"
+          [ "${state}" = "success" ]
