@@ -255,6 +255,7 @@ func TestCreateBenchmarkResourcesSetsConfigMapOwner(t *testing.T) {
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper: &KubernetesHelper{clientset: clientset},
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{
 				EvalInitImage: "eval-init-image",
 			},
@@ -300,6 +301,7 @@ func TestCreateBenchmarkResourcesSetsAnnotations(t *testing.T) {
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper: &KubernetesHelper{clientset: clientset},
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{
 				EvalInitImage: "eval-init-image",
 			},
@@ -509,6 +511,7 @@ func TestCreateBenchmarkResourcesAddsInitContainerForS3TestData(t *testing.T) {
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper: &KubernetesHelper{clientset: clientset},
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{
 				EvalInitImage: "eval-init-image",
 			},
@@ -605,6 +608,7 @@ func TestCreateBenchmarkResourcesMountsPVCTestData(t *testing.T) {
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper: &KubernetesHelper{clientset: clientset},
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{},
 		},
 	}
@@ -678,6 +682,7 @@ func TestCreateBenchmarkResourcesMountsPVCTestDataNoSubPath(t *testing.T) {
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper: &KubernetesHelper{clientset: clientset},
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{},
 		},
 	}
@@ -719,6 +724,7 @@ func TestCreateBenchmarkResourcesDeletesConfigMapOnJobFailure(t *testing.T) {
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper: &KubernetesHelper{clientset: clientset},
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{
 				EvalInitImage: "eval-init-image",
 			},
@@ -778,6 +784,7 @@ func TestCreateBenchmarkResourcesAppliesHardwareProfile(t *testing.T) {
 			dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme(), profile),
 		},
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 		},
 	}
@@ -828,6 +835,7 @@ func TestCreateBenchmarkResourcesAppliesDirectHardwareConfig(t *testing.T) {
 			dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme()),
 		},
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 		},
 	}
@@ -883,6 +891,7 @@ func TestCreateBenchmarkResourcesHardwareProfileNotFound(t *testing.T) {
 			dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme()),
 		},
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 		},
 	}
@@ -924,6 +933,7 @@ func TestCreateBenchmarkResourcesInvalidHardwareProfileSpec(t *testing.T) {
 			dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme(), profile),
 		},
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 		},
 	}
@@ -953,6 +963,7 @@ func TestCreateBenchmarkResourcesIgnoresEmptyHardwareProfileName(t *testing.T) {
 			dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme()),
 		},
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 		},
 	}
@@ -979,6 +990,7 @@ func TestCreateBenchmarkResourcesRequiresHardwareProfilesNamespace(t *testing.T)
 			dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme()),
 		},
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 		},
 	}
@@ -1026,6 +1038,7 @@ func TestCreateBenchmarkResourcesAppliesNodeAndQueueScheduling(t *testing.T) {
 				dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme(), profile),
 			},
 			serviceConfig: &config.Config{
+				Sidecar: testSidecarConfig(),
 				Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 			},
 		}
@@ -1069,6 +1082,7 @@ func TestCreateBenchmarkResourcesAppliesNodeAndQueueScheduling(t *testing.T) {
 				dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme(), profile),
 			},
 			serviceConfig: &config.Config{
+				Sidecar: testSidecarConfig(),
 				Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 			},
 		}
@@ -1108,6 +1122,7 @@ func TestCreateBenchmarkResourcesAppliesNodeAndQueueScheduling(t *testing.T) {
 				dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme()),
 			},
 			serviceConfig: &config.Config{
+				Sidecar: testSidecarConfig(),
 				Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 			},
 		}
@@ -1146,6 +1161,7 @@ func TestCreateBenchmarkResourcesAppliesNodeAndQueueScheduling(t *testing.T) {
 				dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme(), profile),
 			},
 			serviceConfig: &config.Config{
+				Sidecar: testSidecarConfig(),
 				Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 			},
 		}
@@ -1173,6 +1189,7 @@ func TestCreateBenchmarkResourcesAppliesNodeAndQueueScheduling(t *testing.T) {
 				dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme()),
 			},
 			serviceConfig: &config.Config{
+				Sidecar: testSidecarConfig(),
 				Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 			},
 		}
@@ -1204,6 +1221,7 @@ func TestCreateBenchmarkResourcesAppliesNodeAndQueueScheduling(t *testing.T) {
 				dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme()),
 			},
 			serviceConfig: &config.Config{
+				Sidecar: testSidecarConfig(),
 				Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 			},
 		}
@@ -1244,6 +1262,7 @@ func TestCreateBenchmarkResourcesAppliesNodeAndQueueScheduling(t *testing.T) {
 				dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme()),
 			},
 			serviceConfig: &config.Config{
+				Sidecar: testSidecarConfig(),
 				Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 			},
 		}
@@ -1283,6 +1302,7 @@ func TestCreateBenchmarkResourcesAppliesNodeAndQueueScheduling(t *testing.T) {
 				dynamicClient: dynamicfake.NewSimpleDynamicClient(k8sruntime.NewScheme(), profile),
 			},
 			serviceConfig: &config.Config{
+				Sidecar: testSidecarConfig(),
 				Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 			},
 		}
@@ -1324,6 +1344,7 @@ func TestRunEvaluationJobMarksBenchmarkFailedOnCreateError(t *testing.T) {
 		helper: &KubernetesHelper{clientset: clientset},
 		ctx:    context.Background(),
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{
 				EvalInitImage: "eval-init-image",
 			},
@@ -1447,7 +1468,7 @@ func TestCreateGenerationJobUsesOnlyOriginalModelSecret(t *testing.T) {
 	runtime := &K8sRuntime{
 		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper:        &KubernetesHelper{clientset: client},
-		serviceConfig: &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		serviceConfig: &config.Config{Sidecar: testSidecarConfig(), Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
 	}
 	ctx := context.Background()
 	storage := &fakeStorage{evaluationJob: evaluation}
@@ -1501,6 +1522,7 @@ func TestRunGenerationJobReportsStructuredFailureOnCreateError(t *testing.T) {
 		helper: &KubernetesHelper{clientset: clientset},
 		ctx:    context.Background(),
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 		},
 	}
@@ -1543,6 +1565,7 @@ func TestRunEvaluationJobHandlesUpdateFailure(t *testing.T) {
 		helper: &KubernetesHelper{clientset: clientset},
 		ctx:    context.Background(),
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{
 				EvalInitImage: "eval-init-image",
 			},
@@ -1624,6 +1647,7 @@ func TestCreateBenchmarkResourcesDeletesOrphanedJobWhenConfigMapDeletedMidCreati
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper: &KubernetesHelper{clientset: clientset},
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{
 				EvalInitImage: "eval-init-image",
 			},
@@ -1659,6 +1683,7 @@ func TestCreateBenchmarkResourcesReturnsErrorWhenOrphanedJobDeletionFails(t *tes
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper: &KubernetesHelper{clientset: clientset},
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{
 				EvalInitImage: "eval-init-image",
 			},
@@ -1882,6 +1907,7 @@ func TestRunEvaluationJobStopsCreateLoopWhenJobDeleted(t *testing.T) {
 		helper: &KubernetesHelper{clientset: clientset},
 		ctx:    context.Background(),
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 		},
 		afterCreateLoop: func() { close(createLoopDone) },
@@ -1993,7 +2019,7 @@ func TestDeleteEvaluationJobResourcesRetainsConfigMapWhileCreatePausedBeforeJob(
 		logger:                        slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper:                        &KubernetesHelper{clientset: clientset},
 		ctx:                           context.Background(),
-		serviceConfig:                 &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		serviceConfig:                 &config.Config{Sidecar: testSidecarConfig(), Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
 		beforeCreateJob:               beforeCreateJob,
 		afterCreateBenchmarkResources: func(err error) { createErrCh <- err },
 		beforeSweepAfterAbort:         func() { <-allowAbortSweep },
@@ -2049,7 +2075,7 @@ func TestRunEvaluationJobSweepsSuccessfulCreateAfterDeleteRace(t *testing.T) {
 		logger:                         slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper:                         &KubernetesHelper{clientset: clientset},
 		ctx:                            context.Background(),
-		serviceConfig:                  &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		serviceConfig:                  &config.Config{Sidecar: testSidecarConfig(), Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
 		beforeCreateBenchmarkResources: beforeCreate,
 		afterCreateBenchmarkResources:  func(err error) { createErrCh <- err },
 		beforeSweepAfterAbort:          func() { <-allowAbortSweep },
@@ -2137,7 +2163,7 @@ func TestRunEvaluationJobSweepsFailedCreateAfterDeleteRace(t *testing.T) {
 		logger:                         slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper:                         &KubernetesHelper{clientset: clientset},
 		ctx:                            context.Background(),
-		serviceConfig:                  &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		serviceConfig:                  &config.Config{Sidecar: testSidecarConfig(), Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
 		beforeCreateBenchmarkResources: beforeCreate,
 	}
 	if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
@@ -2249,7 +2275,7 @@ func TestRunEvaluationJobPostCreateTransientThenDeletedSweeps(t *testing.T) {
 		logger:                         slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper:                         &KubernetesHelper{clientset: clientset},
 		ctx:                            context.Background(),
-		serviceConfig:                  &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		serviceConfig:                  &config.Config{Sidecar: testSidecarConfig(), Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
 		beforeCreateBenchmarkResources: beforeCreate,
 		afterCreateBenchmarkResources: func(err error) {
 			storage.setGetJobFn(func(id string) (*api.EvaluationJobResource, error) {
@@ -2300,7 +2326,7 @@ func TestRunEvaluationJobResumeCreatesAfterLongOutageThenActive(t *testing.T) {
 		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper:        &KubernetesHelper{clientset: clientset},
 		ctx:           context.Background(),
-		serviceConfig: &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		serviceConfig: &config.Config{Sidecar: testSidecarConfig(), Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
 		afterCreateBenchmarkResources: func(err error) {
 			if !postCreateArmed.CompareAndSwap(false, true) {
 				return
@@ -2347,7 +2373,7 @@ func TestRunEvaluationJobSweepsAfterLongOutageThenDeleted(t *testing.T) {
 		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper:        &KubernetesHelper{clientset: clientset},
 		ctx:           context.Background(),
-		serviceConfig: &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		serviceConfig: &config.Config{Sidecar: testSidecarConfig(), Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
 		afterCreateBenchmarkResources: func(err error) {
 			storage.setGetJobFn(func(id string) (*api.EvaluationJobResource, error) {
 				n := probes.Add(1)
@@ -2386,7 +2412,7 @@ func TestRunEvaluationJobAbortWaitStopsOnShutdown(t *testing.T) {
 		ctx:            context.Background(),
 		shutdownCtx:    shutdownCtx,
 		shutdownCancel: shutdownCancel,
-		serviceConfig:  &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		serviceConfig:  &config.Config{Sidecar: testSidecarConfig(), Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
 		afterCreateBenchmarkResources: func(err error) {
 			storage.setGetJobFn(func(id string) (*api.EvaluationJobResource, error) {
 				enteredWaitOnce.Do(func() { close(enteredWait) })
@@ -2426,7 +2452,7 @@ func TestRunEvaluationJobPreCheckAbortSweepsLeftovers(t *testing.T) {
 		logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper:        &KubernetesHelper{clientset: clientset},
 		ctx:           context.Background(),
-		serviceConfig: &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		serviceConfig: &config.Config{Sidecar: testSidecarConfig(), Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
 	}
 	if err := runtime.RunEvaluationJob(evaluation, evaluation.Benchmarks, storage); err != nil {
 		t.Fatalf("RunEvaluationJob: %v", err)
@@ -2448,7 +2474,7 @@ func TestRunEvaluationJobStopsCreateLoopWhenJobCancelled(t *testing.T) {
 		logger:                         slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper:                         &KubernetesHelper{clientset: clientset},
 		ctx:                            context.Background(),
-		serviceConfig:                  &config.Config{Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
+		serviceConfig:                  &config.Config{Sidecar: testSidecarConfig(), Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"}},
 		beforeCreateBenchmarkResources: beforeCreate,
 		afterCreateBenchmarkResources:  func(err error) { createErrCh <- err },
 		afterCreateLoop:                func() { close(createLoopDone) },
@@ -2534,6 +2560,7 @@ func TestCreateBenchmarkResourcesCleansUpWhenCreateContextCancelled(t *testing.T
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper: &KubernetesHelper{clientset: clientset},
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 		},
 	}
@@ -2574,6 +2601,7 @@ func TestCreateBenchmarkResourcesDeletesRefSecretWhenConfigMapDeletedMidCreation
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper: &KubernetesHelper{clientset: clientset},
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{
 				EvalInitImage: "eval-init-image",
 			},
@@ -2930,6 +2958,7 @@ func TestModelAuthCombinations(t *testing.T) {
 				logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 				helper: &KubernetesHelper{clientset: clientset},
 				serviceConfig: &config.Config{
+					Sidecar: testSidecarConfig(),
 					Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 				},
 			}

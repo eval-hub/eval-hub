@@ -108,6 +108,9 @@ sidecar:
     # http_timeout: 30s  # per registry HTTP request; also bounds API-service credential lookup
     # ca_cert_path: /etc/pki/ca-trust/source/anchors/registry-ca.crt  # optional
   sidecar_container:
+    # Required for Kubernetes jobs; set to the deployed EvalHub runtime image.
+    # The TrustyAI operator injects this field for managed deployments.
+    # image: registry.example.com/evalhub/evalhub:<tag>
     resources:
       requests:
         cpu: 100m

@@ -16,7 +16,6 @@ const (
 	ProviderID          = "evalhub-internal"
 	BenchmarkID         = "evaluation-post-processor"
 	workloadType        = workloads.PostProcessing
-	defaultAdapterImage = "quay.io/evalhub/evalhub-post-processor:latest"
 	adapterImageEnv     = "EVALHUB_POST_PROCESSING_IMAGE"
 	localAdapterDir     = "../eval-hub-contrib/adapters/evalhub-post-processor"
 	defaultLocalCommand = localAdapterDir + "/.venv/bin/python " + localAdapterDir + "/main.py"
@@ -35,15 +34,12 @@ func init() {
 }
 
 // RuntimeProvider builds the in-memory execution descriptor used by runtimes
-// for post-processing. The image comes from the environment or the built-in
-// latest image; Kubernetes job creation supplies default resource values. The
+// for post-processing. Kubernetes requires an image supplied through
+// EVALHUB_POST_PROCESSING_IMAGE and supplies default resource values. The
 // local command runs the adapter from a sibling eval-hub-contrib checkout unless
 // overridden for a different local layout.
 func RuntimeProvider() *api.ProviderResource {
 	image := strings.TrimSpace(os.Getenv(adapterImageEnv))
-	if image == "" {
-		image = defaultAdapterImage
-	}
 	pullPolicy := ""
 	if strings.HasSuffix(image, ":latest") {
 		pullPolicy = "always"
