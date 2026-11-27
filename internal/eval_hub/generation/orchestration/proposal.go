@@ -18,9 +18,15 @@ import (
 const maxConsideredBenchmarks = 20
 
 type draft struct {
-	Collection  api.CollectionConfig                `json:"collection"`
-	Rationale   string                              `json:"rationale"`
-	Explanation api.CollectionGenerationExplanation `json:"explanation"`
+	Collection  api.CollectionConfig `json:"collection"`
+	Rationale   string               `json:"rationale"`
+	Explanation draftExplanation     `json:"explanation"`
+}
+
+// Runtime requirements are derived by the runner and cannot be authored by the model.
+type draftExplanation struct {
+	SelectedBenchmarks []api.CollectionGenerationBenchmarkReason `json:"selected_benchmarks"`
+	RejectedBenchmarks []api.CollectionGenerationBenchmarkReason `json:"rejected_benchmarks"`
 }
 
 type finding struct {
@@ -142,8 +148,8 @@ func validReason(reason api.CollectionGenerationBenchmarkReason, eligible map[be
 
 // applyCatalogDefaults admits only safe values with unambiguous provenance.
 // Runtime credentials and environment-specific inputs are never copied.
-func applyCatalogDefaults(proposal *api.CollectionConfig, snapshot catalogSnapshot) ([]string, bool) {
-	var notes []string
+func applyCatalogDefaults(proposal *api.CollectionConfig, snapshot catalogSnapshot) ([]api.CollectionGenerationRuntimeRequirement, bool) {
+	var requirements []api.CollectionGenerationRuntimeRequirement
 	runtimes := make(map[string]*api.K8sRuntime, len(snapshot.providers))
 	for _, provider := range snapshot.providers {
 		if provider.Runtime != nil {
@@ -166,29 +172,41 @@ func applyCatalogDefaults(proposal *api.CollectionConfig, snapshot catalogSnapsh
 		// All thresholds and weights come from deterministic calibration.
 		benchmark.Weight = 0
 		benchmark.PassCriteria = nil
-		id := benchmark.ProviderID + "/" + benchmark.ID
-		for _, need := range []struct{ parameter, guidance string }{
-			{"judge_model", "supply a judge model name and configure its connection before running"},
-			{"scorer_model", "supply a scorer model name and configure its connection before running"},
-			{"tokenizer", "verify the default tokenizer and supply a compatible tokenizer if needed"},
+		addRequirement := func(kind, parameter, action string) {
+			requirement := api.CollectionGenerationRuntimeRequirement{
+				ProviderID: benchmark.ProviderID, ID: benchmark.ID,
+				Kind: kind, Action: action, Parameter: parameter,
+			}
+			requirement.Message = generation.RuntimeRequirementMessage(requirement)
+			requirements = append(requirements, requirement)
+		}
+		for _, need := range []struct{ parameter, kind string }{
+			{"judge_model", api.GenerationRequirementJudgeModel},
+			{"scorer_model", api.GenerationRequirementScorerModel},
+			{"tokenizer", api.GenerationRequirementTokenizer},
+			{"tokenizer_path", api.GenerationRequirementTokenizer},
 		} {
 			if reference.inputs[need.parameter] {
-				notes = append(notes, id+": "+need.guidance+".")
+				action := api.GenerationRequirementVerify
+				if need.kind == api.GenerationRequirementJudgeModel && benchmark.Parameters[need.parameter] == "" {
+					action = api.GenerationRequirementConfigure
+				}
+				addRequirement(need.kind, need.parameter, action)
 			}
 		}
 		if reference.inputs["test_data_ref"] {
-			notes = append(notes, id+": check the referenced dataset requirements and configure a reachable data source if needed.")
+			addRequirement(api.GenerationRequirementTestData, "", api.GenerationRequirementVerify)
 		}
 		if runtime := runtimes[benchmark.ProviderID]; runtime != nil {
 			if runtime.GPU != nil && runtime.GPU.Count > 0 {
-				notes = append(notes, id+": verify that the cluster can schedule the adapter's required GPU resources.")
+				addRequirement(api.GenerationRequirementGPU, "", api.GenerationRequirementVerify)
 			}
 			if runtime.DRA != nil {
-				notes = append(notes, id+": configure the adapter's required resource claim template in the execution namespace.")
+				addRequirement(api.GenerationRequirementResourceClaimTemplate, "", api.GenerationRequirementVerify)
 			}
 		}
 	}
-	return notes, true
+	return requirements, true
 }
 
 type defaults struct {
@@ -213,10 +231,8 @@ func systemDefaults(selected api.CollectionBenchmarkConfig, collections []api.Co
 			}
 			for name, value := range example.Parameters {
 				switch name {
-				case "judge_model", "scorer_model", "tokenizer":
+				case "judge_model", "scorer_model", "tokenizer", "tokenizer_path":
 					out.inputs[name] = true
-				case "tokenizer_path":
-					out.inputs["tokenizer"] = true
 				}
 				if !safeDefault(name, value) {
 					conflicts[name] = true
@@ -255,11 +271,16 @@ func safeDefault(name string, value any) bool {
 	return false
 }
 
-func (d draft) result(proposal api.CollectionConfig, explanation api.CollectionGenerationExplanation, notes []string) (api.CollectionGenerationResult, error) {
+func (d draft) result(proposal api.CollectionConfig, explanation api.CollectionGenerationExplanation, requirements []api.CollectionGenerationRuntimeRequirement) (api.CollectionGenerationResult, error) {
 	data, err := yaml.Marshal(proposal)
 	if err != nil {
 		return api.CollectionGenerationResult{}, err
 	}
+	notes := make([]string, 0, len(requirements))
+	for _, requirement := range requirements {
+		notes = append(notes, requirement.ProviderID+"/"+requirement.ID+": "+requirement.Message)
+	}
+	explanation.UnresolvedRequirements = requirements[:min(len(requirements), api.MaxCollectionGenerationUnresolvedRequirements)]
 	return api.CollectionGenerationResult{
 		Collection: proposal, YAML: string(data), Rationale: boundedRationale(d.Rationale, notes),
 		Explanation: explanation, Actions: []api.CollectionGenerationAction{},

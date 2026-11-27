@@ -9,6 +9,8 @@ const (
 	MaxCollectionGenerationBenchmarks = 100
 	// MaxCollectionGenerationReasonLength bounds each benchmark explanation in characters.
 	MaxCollectionGenerationReasonLength = 300
+	// MaxCollectionGenerationUnresolvedRequirements bounds the structured runtime guidance.
+	MaxCollectionGenerationUnresolvedRequirements = 100
 	// DefaultCollectionGenerationBenchmarks is used when max_benchmarks is omitted.
 	DefaultCollectionGenerationBenchmarks = 12
 )
@@ -86,10 +88,35 @@ type CollectionGenerationBenchmarkReason struct {
 	Reason     string `json:"reason" validate:"required,min=1,max=300"`
 }
 
-// CollectionGenerationExplanation explains selected and rejected catalog candidates.
+const (
+	GenerationRequirementJudgeModel            = "judge_model"
+	GenerationRequirementScorerModel           = "scorer_model"
+	GenerationRequirementTokenizer             = "tokenizer"
+	GenerationRequirementTestData              = "test_data"
+	GenerationRequirementGPU                   = "gpu"
+	GenerationRequirementResourceClaimTemplate = "resource_claim_template"
+
+	GenerationRequirementConfigure = "configure"
+	GenerationRequirementVerify    = "verify"
+)
+
+// CollectionGenerationRuntimeRequirement describes a known runtime input
+// that the caller may need to supply or verify before running a benchmark.
+type CollectionGenerationRuntimeRequirement struct {
+	ProviderID string `json:"provider_id"`
+	ID         string `json:"id"`
+	Kind       string `json:"kind"`
+	Action     string `json:"action"`
+	Parameter  string `json:"parameter,omitempty"`
+	Message    string `json:"message"`
+}
+
+// CollectionGenerationExplanation explains selected and rejected catalog candidates
+// and lists known unresolved runtime requirements for selected benchmarks.
 type CollectionGenerationExplanation struct {
-	SelectedBenchmarks []CollectionGenerationBenchmarkReason `json:"selected_benchmarks" validate:"required,min=1,dive"`
-	RejectedBenchmarks []CollectionGenerationBenchmarkReason `json:"rejected_benchmarks" validate:"max=5,dive"`
+	SelectedBenchmarks     []CollectionGenerationBenchmarkReason    `json:"selected_benchmarks" validate:"required,min=1,dive"`
+	RejectedBenchmarks     []CollectionGenerationBenchmarkReason    `json:"rejected_benchmarks" validate:"max=5,dive"`
+	UnresolvedRequirements []CollectionGenerationRuntimeRequirement `json:"unresolved_requirements,omitempty"`
 }
 
 // CollectionGenerationResult is a dry-run collection proposal; it never creates the collection.

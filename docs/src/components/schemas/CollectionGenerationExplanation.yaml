@@ -24,4 +24,13 @@ properties:
       No pair may also appear in selected_benchmarks.
     items:
       $ref: ./CollectionGenerationBenchmarkReason.yaml
+  unresolved_requirements:
+    type: array
+    maxItems: 100
+    description: |
+      Known runtime inputs for selected benchmarks, in collection order. These entries
+      are advisory and do not configure the benchmark. Older results may omit the field.
+      An absent entry does not establish readiness. See the rationale for additional guidance.
+    items:
+      $ref: ./CollectionGenerationRuntimeRequirement.yaml
 additionalProperties: false

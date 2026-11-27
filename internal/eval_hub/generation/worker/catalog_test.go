@@ -34,9 +34,11 @@ func TestWorkerRunsGenerationThroughSidecar(t *testing.T) {
 	}
 	tenant := api.ProviderResource{
 		Resource: api.Resource{ID: "tenant-provider", Owner: "different-owner", Tenant: "tenant-test"},
-		ProviderConfig: api.ProviderConfig{Benchmarks: []api.BenchmarkResource{{
-			ID: "tool-use", Name: "Safe tool use", Domains: []string{"tool_use", "safety"}, Metrics: []string{"pass"},
-		}}},
+		ProviderConfig: api.ProviderConfig{
+			Runtime: &api.Runtime{K8s: &api.K8sRuntime{Image: "fixture:latest", GPU: &api.GPUConfig{Count: 1}}},
+			Benchmarks: []api.BenchmarkResource{{
+				ID: "tool-use", Name: "Safe tool use", Domains: []string{"tool_use", "safety"}, Metrics: []string{"pass"},
+			}}},
 	}
 	sidecar := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
@@ -183,6 +185,11 @@ func TestWorkerRunsGenerationThroughSidecar(t *testing.T) {
 	result, err := generation.ResultFromAdditionalInfo(api.CollectionGenerationRequest{MaxBenchmarks: 12}, last.AdditionalInfo)
 	if err != nil || len(result.Rationale) < 4096 || result.Collection.Benchmarks[0].ProviderID != "tenant-provider" {
 		t.Fatalf("unexpected result or error: %.120q, %v", result.Rationale, err)
+	}
+	requirements := result.Explanation.UnresolvedRequirements
+	if len(requirements) != 1 || requirements[0].ProviderID != "tenant-provider" || requirements[0].ID != "tool-use" ||
+		requirements[0].Kind != api.GenerationRequirementGPU || requirements[0].Action != api.GenerationRequirementVerify {
+		t.Fatalf("terminal event lost the trusted runtime requirements: %+v", requirements)
 	}
 }
 

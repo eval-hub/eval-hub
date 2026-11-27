@@ -213,6 +213,11 @@ func TestRunnerCompletesPostableProposalWithoutModelToolCalls(t *testing.T) {
 	if !strings.Contains(result.Rationale, "safety/toxicity-a: supply a judge") {
 		t.Fatalf("unexpected contents: %+v", result.Rationale)
 	}
+	checkEqual(t, []api.CollectionGenerationRuntimeRequirement{{
+		ProviderID: "safety", ID: "toxicity-a", Kind: "judge_model",
+		Action: "configure", Parameter: "judge_model",
+		Message: "supply a judge model name and configure its connection before running.",
+	}}, result.Explanation.UnresolvedRequirements)
 	if !strings.Contains(result.Rationale, "does not establish all runtime prerequisites") {
 		t.Fatalf("unexpected contents: %+v", result.Rationale)
 	}
@@ -746,18 +751,20 @@ func TestApplyCatalogDefaultsOmitsConflictingAndEnvironmentSpecificValues(t *tes
 	system := &source.collections[0]
 	example := &system.Benchmarks[0]
 	example.Parameters["disable_cache"] = true
+	example.Parameters["scorer_model"] = "deployment-specific-scorer"
+	example.Parameters["tokenizer"] = "deployment-specific-tokenizer"
 	example.Parameters["tokenizer_path"] = "deployment-specific-tokenizer"
 	example.TestDataRef = &api.TestDataRef{}
 	other := *system
 	other.Resource.ID = "another-system-collection"
 	other.Benchmarks = []api.CollectionBenchmarkConfig{{
 		Ref: example.Ref, ProviderID: example.ProviderID,
-		Parameters: map[string]any{"num_examples": float64(2)},
+		Parameters: map[string]any{"num_examples": float64(2), "tokenizer_path": "another-tokenizer"},
 	}}
 	source.collections = append(source.collections, other)
 
 	proposal := testDraft("toxicity-a").Collection
-	notes, ok := applyCatalogDefaults(&proposal, source.catalogSnapshot)
+	requirements, ok := applyCatalogDefaults(&proposal, source.catalogSnapshot)
 	if !ok {
 		t.Fatal("expected the safe subset of defaults to be accepted")
 	}
@@ -766,12 +773,78 @@ func TestApplyCatalogDefaultsOmitsConflictingAndEnvironmentSpecificValues(t *tes
 	if benchmark.TestDataRef != nil {
 		t.Fatal("the curated collection's data location must not be copied")
 	}
-	guidance := strings.Join(notes, " ")
-	for _, requirement := range []string{"judge model", "compatible tokenizer", "reachable data source", "required GPU resources"} {
-		if !strings.Contains(guidance, requirement) {
-			t.Fatalf("missing guidance for %q in %v", requirement, notes)
-		}
+	checkEqual(t, []api.CollectionGenerationRuntimeRequirement{
+		{ProviderID: "safety", ID: "toxicity-a", Kind: "judge_model", Action: "configure", Parameter: "judge_model",
+			Message: "supply a judge model name and configure its connection before running."},
+		{ProviderID: "safety", ID: "toxicity-a", Kind: "scorer_model", Action: "verify", Parameter: "scorer_model",
+			Message: "verify the scorer configuration and supply a scorer model name if needed."},
+		{ProviderID: "safety", ID: "toxicity-a", Kind: "tokenizer", Action: "verify", Parameter: "tokenizer",
+			Message: "verify the default tokenizer and supply a compatible tokenizer if needed."},
+		{ProviderID: "safety", ID: "toxicity-a", Kind: "tokenizer", Action: "verify", Parameter: "tokenizer_path",
+			Message: "verify the default tokenizer and supply a compatible tokenizer if needed."},
+		{ProviderID: "safety", ID: "toxicity-a", Kind: "test_data", Action: "verify",
+			Message: "check the referenced dataset requirements and configure a reachable data source if needed."},
+		{ProviderID: "safety", ID: "toxicity-a", Kind: "gpu", Action: "verify",
+			Message: "verify that the cluster can schedule the adapter's required GPU resources."},
+	}, requirements)
+}
+
+func TestRuntimeRequirementsFollowCollectionOrderAndDoNotDiscloseConfiguredValues(t *testing.T) {
+	t.Parallel()
+	source := testCatalog()
+	source.providers[0].Runtime.K8s.DRA = &api.DRAConfig{ResourceClaimTemplate: "local-claim-template"}
+	example := &source.collections[0].Benchmarks[0]
+	example.Parameters["judge_model"] = "local-judge"
+	draft := testDraft("toxicity-b", "toxicity-a")
+	requirements, ok := applyCatalogDefaults(&draft.Collection, source.catalogSnapshot)
+	if !ok {
+		t.Fatal("expected catalog defaults to be accepted")
 	}
+	checkEqual(t, 3, len(requirements))
+	checkEqual(t, "toxicity-b", requirements[0].ID)
+	checkEqual(t, "resource_claim_template", requirements[0].Kind)
+	checkEqual(t, "toxicity-a", requirements[1].ID)
+	checkEqual(t, "judge_model", requirements[1].Kind)
+	checkEqual(t, "verify", requirements[1].Action)
+	checkEqual(t, "resource_claim_template", requirements[2].Kind)
+	result, err := draft.result(draft.Collection, api.CollectionGenerationExplanation{}, requirements)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wire, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(wire), "local-judge") || strings.Contains(string(wire), "local-claim-template") {
+		t.Fatal("result exposes environment-specific values")
+	}
+}
+
+func TestParseDraftRejectsModelAuthoredRuntimeRequirements(t *testing.T) {
+	t.Parallel()
+	raw := `{"collection":{},"rationale":"draft","explanation":{"selected_benchmarks":[],"rejected_benchmarks":[],"unresolved_requirements":[]}}`
+	if _, ok := parseDraft(raw); ok {
+		t.Fatal("model authored a runner-owned field")
+	}
+}
+
+func TestStructuredRuntimeRequirementsAreBounded(t *testing.T) {
+	t.Parallel()
+	draft := testDraft("toxicity-a")
+	var requirements []api.CollectionGenerationRuntimeRequirement
+	for i := range api.MaxCollectionGenerationUnresolvedRequirements + 1 {
+		requirement := api.CollectionGenerationRuntimeRequirement{
+			ProviderID: "safety", ID: fmt.Sprintf("bench-%d", i), Kind: "gpu", Action: "verify",
+		}
+		requirement.Message = generation.RuntimeRequirementMessage(requirement)
+		requirements = append(requirements, requirement)
+	}
+	result, err := draft.result(draft.Collection, api.CollectionGenerationExplanation{}, requirements)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkEqual(t, requirements[:api.MaxCollectionGenerationUnresolvedRequirements], result.Explanation.UnresolvedRequirements)
+	checkEqual(t, false, strings.Contains(result.YAML, "unresolved_requirements"))
 }
 
 func TestRunnerKeepsKnownInputsWhenRationaleNeedsTrimming(t *testing.T) {

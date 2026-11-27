@@ -135,6 +135,10 @@ get:
                     benchmarks:
                       - provider_id: inspect
                         id: inspect/agentharm
+                      - provider_id: inspect
+                        id: inspect/cyberseceval-2-pi
+                        parameters:
+                          judge_model: ''
                   yaml: |
                     name: Agent safety checks
                     description: Evaluate agent safety and tool-use risks.
@@ -143,16 +147,30 @@ get:
                     benchmarks:
                       - provider_id: inspect
                         id: inspect/agentharm
-                  rationale: The chosen benchmark addresses the requested agent safety goal.
+                      - provider_id: inspect
+                        id: inspect/cyberseceval-2-pi
+                        parameters:
+                          judge_model: ""
+                  rationale: The benchmarks address agent safety and prompt injection. Supply a judge name and configure its connection for the prompt-injection benchmark.
                   explanation:
                     selected_benchmarks:
                       - provider_id: inspect
                         id: inspect/agentharm
                         reason: Exercises agent behavior under harmful tool-use requests.
-                    rejected_benchmarks:
                       - provider_id: inspect
                         id: inspect/cyberseceval-2-pi
-                        reason: Focuses on prompt injection rather than broad agent harm.
+                        reason: Measures susceptibility to prompt injection in tool-use settings.
+                    rejected_benchmarks:
+                      - provider_id: inspect
+                        id: inspect/gaia
+                        reason: Focuses on general tool use and reasoning.
+                    unresolved_requirements:
+                      - provider_id: inspect
+                        id: inspect/cyberseceval-2-pi
+                        kind: judge_model
+                        action: configure
+                        parameter: judge_model
+                        message: supply a judge model name and configure its connection before running.
                   actions:
                     - name: search_benchmarks
                       outcome: success
