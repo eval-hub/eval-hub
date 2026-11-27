@@ -58,6 +58,13 @@ benchmarks:
       - curated
 
 parameters:
+  - name: save_sample_results
+    type: boolean
+    default: true
+    description: >
+      Persist per-sample results when OCI exports or an MLflow experiment are configured.
+      Set false to disable sample export while preserving MLflow metrics.
+
   - name: scoring_mode
     type: string
     default: loose
