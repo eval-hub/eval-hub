@@ -7,6 +7,23 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+func TestRuntimeProviderUsesOnlyConfiguredImage(t *testing.T) {
+	t.Setenv(adapterImageEnv, " \t ")
+	provider := RuntimeProvider()
+	if got := provider.Runtime.K8s.Image; got != "" {
+		t.Fatalf("unexpected built-in image %q", got)
+	}
+	if provider.Runtime.Local.Command == "" {
+		t.Fatal("local runtime should not require an image")
+	}
+
+	const image = "registry.example.com/evalhub/post-processor:v1"
+	t.Setenv(adapterImageEnv, " "+image+" ")
+	if got := RuntimeProvider().Runtime.K8s.Image; got != image {
+		t.Fatalf("got image %q, want %q", got, image)
+	}
+}
+
 func TestIsPostProcessingJob(t *testing.T) {
 	valid := api.EvaluationJobConfig{Benchmarks: []api.EvaluationBenchmarkConfig{{
 		ProviderID: ProviderID,

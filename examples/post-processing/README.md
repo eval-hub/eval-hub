@@ -2,6 +2,11 @@
 
 ## Data preparation in Kubernetes
 
+Set `EVALHUB_POST_PROCESSING_IMAGE` on the EvalHub service to the image for the
+post-processing adapter. Kubernetes jobs have no built-in fallback image. The
+local runtime continues to use `EVALHUB_POST_PROCESSING_LOCAL_COMMAND` or its
+default local command.
+
 Post-processing reuses the same `/app/eval-runtime-init` executable and configured
 init image as evaluation jobs. Set `service.eval_init_image` to a build containing
 this staging support; Kubernetes S3/Git/HF post-processing now requires it. For S3, Git and Hugging Face references, eval-hub
