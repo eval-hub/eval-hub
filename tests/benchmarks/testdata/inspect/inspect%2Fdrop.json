@@ -1,0 +1,7 @@
+{
+  "notes": "DROP evaluates three reading-comprehension samples with the default three-shot prompting.",
+  "parameters": {
+    "num_examples": 3
+  },
+  "timeout": "15m"
+}

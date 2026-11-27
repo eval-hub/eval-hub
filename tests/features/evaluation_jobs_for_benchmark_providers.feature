@@ -319,3 +319,46 @@ Feature: Evaluation Jobs for Benchmark Providers
   @ignore
   Scenario: Verifying results returned for Evaluation job - MTEB
     Given the service is running
+
+  @connected
+  Scenario: Verifying results returned for Evaluation job - Inspect DROP - connected
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_inspect_drop.json"
+    Then the response code should be 202
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    And the array at path "results.benchmarks" in the response should have length 1
+    And the response should contain the value "completed" at path "$.status.benchmarks[0].status"
+    And the response should contain the value "inspect/drop" at path "$.results.benchmarks[0].id"
+    And the response should contain the value "inspect" at path "$.results.benchmarks[0].provider_id"
+    And the response should contain the value "inspect_evals/drop" at path "$.results.benchmarks[0].additional_info.task"
+    And the response should contain the value "3" at path "$.results.benchmarks[0].additional_info.num_samples_effective"
+    And the benchmark "inspect/drop" in the response should have metric "f1/mean"
+    And the benchmark "inspect/drop" in the response should have metric "f1/stderr"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204
+
+  @disconnected
+  Scenario: Verifying results returned for Evaluation job - Inspect DROP - disconnected
+    Given the service is running
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_inspect_drop.json"
+    Then the response code should be 202
+    And I wait for the evaluation job status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    And the response should contain the value "completed" at path "$.status.state"
+    And the array at path "results.benchmarks" in the response should have length 1
+    And the response should contain the value "completed" at path "$.status.benchmarks[0].status"
+    And the response should contain the value "inspect/drop" at path "$.results.benchmarks[0].id"
+    And the response should contain the value "inspect" at path "$.results.benchmarks[0].provider_id"
+    And the response should contain the value "inspect_evals/drop" at path "$.results.benchmarks[0].additional_info.task"
+    And the response should contain the value "3" at path "$.results.benchmarks[0].additional_info.num_samples_effective"
+    And the benchmark "inspect/drop" in the response should have metric "f1/mean"
+    And the benchmark "inspect/drop" in the response should have metric "f1/stderr"
+    And the response should contain the value "/test_data/tokenizer" at path "$.benchmarks[0].parameters.tokenizer"
+    And the response should contain the value "1" at path "$.benchmarks[0].parameters.task_args.fewshot"
+    And the response should contain the value "false" at path "$.benchmarks[0].parameters.task_args.fewshot_shuffle"
+    When I send a DELETE request to "/api/v1/evaluations/jobs/{id}?hard_delete=true"
+    Then the response code should be 204

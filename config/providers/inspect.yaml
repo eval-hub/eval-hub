@@ -869,6 +869,22 @@ benchmarks:
     tags: [reasoning, math, inspect-evals]
 
   # Knowledge & reasoning
+  - id: inspect/drop
+    name: DROP
+    description: Reading comprehension questions that require discrete reasoning over paragraphs.
+    category: reasoning
+    domains: [knowledge_and_reasoning]
+    tasks: [reasoning]
+    modalities: [text]
+    evaluation_targets: [model]
+    metrics: [f1/mean, f1/stderr]
+    primary_score:
+      metric: f1/mean
+      lower_is_better: false
+    dataset_size: 9535
+    num_few_shot: 3
+    tags: [reasoning, reading-comprehension, inspect-evals]
+
   - id: inspect/mmlu
     name: MMLU
     description: Massive Multitask Language Understanding — 57 academic subjects.
