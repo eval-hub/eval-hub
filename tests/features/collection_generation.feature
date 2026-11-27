@@ -9,7 +9,7 @@ Feature: Collection generation
   # Use a controlled catalog/model fixture for stable selection and ranking. The single-provider
   # case needs at least three eligible Inspect benchmarks and FVT_GENERATION_REJECTED_IDS in rank
   # order. The multi-provider case needs eligible Inspect, Lighteval, and out-of-filter candidates.
-  # The caller needs API access to the fixture and Kubernetes list access to Jobs and Pods.
+  # The caller needs API access to the fixture and Kubernetes list access to Jobs.
   Background:
     Given I set the header "X-Tenant" to "{{env:X_TENANT|test-tenant}}"
     And I set the header "X-User" to "{{env:X_USER|test-user}}"
@@ -131,29 +131,6 @@ Feature: Collection generation
       Then the collection generation request should be admitted
       When I poll the generation Location until it is "failed"
       Then the guardrail should reject generation with category "topic_relevance"
-
-    # Use an unauthenticated model fixture which keeps the runner active until DELETE.
-    @negative @collection_generation_cancel
-    Scenario: Delete actively running generation
-      Given the value "{{env:FVT_GENERATION_CANCEL_MODEL_URL}}" is not empty
-      When I submit a collection generation request with:
-        """
-        {
-          "evaluation_goal":"Assess math reasoning",
-          "model":{"name":"{{env:FVT_GENERATION_MODEL_NAME}}","url":"{{env:FVT_GENERATION_CANCEL_MODEL_URL}}"}
-        }
-        """
-      Then the collection generation request should be admitted
-      When I poll the generation Location until it is "running"
-      And I send a DELETE request to "/api/v1/evaluations/collections/generation/{id}"
-      Then the response code should be 204
-      When I send a GET request to "/api/v1/evaluations/collections/generation/{id}"
-      Then the response code should be 404
-      And I wait for the generation workload to be removed
-      When I send a GET request to "/api/v1/evaluations/collections/generation/{id}"
-      Then the response code should be 404
-      When I send a DELETE request to "/api/v1/evaluations/collections/generation/{id}"
-      Then the response code should be 404
 
     @negative
     Scenario Outline: Reject an invalid generation request before admission

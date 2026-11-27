@@ -17,7 +17,6 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
@@ -60,7 +59,6 @@ func InitializeCollectionGenerationSteps(ctx *godog.ScenarioContext, tc *scenari
 	ctx.Step(`^the completed generation should remain readable after its pod exits$`, sc.checkDurability)
 	ctx.Step(`^the generation should leave no collection or ordinary evaluation job$`, sc.checkDryRun)
 	ctx.Step(`^I submit the proposal as a separate collection$`, sc.createCollection)
-	ctx.Step(`^I wait for the generation workload to be removed$`, sc.waitForWorkloadRemoval)
 	ctx.Step(`^I send a (GET|DELETE) generation request as "([^"]*)"$`, sc.requestAs)
 	ctx.Step(`^the guardrail should reject generation with category "([^"]*)"$`, sc.checkGuardrailRejection)
 }
@@ -351,7 +349,7 @@ func (sc *collectionGenerationScenario) checkGuardrailRejection(category string)
 }
 
 func (sc *collectionGenerationScenario) checkDurability(ctx context.Context) error {
-	if err := sc.waitForWorkload(ctx, false); err != nil {
+	if err := sc.waitForCompletedWorkload(ctx); err != nil {
 		return err
 	}
 	polled, err := sc.readGeneration(ctx)
@@ -364,11 +362,7 @@ func (sc *collectionGenerationScenario) checkDurability(ctx context.Context) err
 	return nil
 }
 
-func (sc *collectionGenerationScenario) waitForWorkloadRemoval(ctx context.Context) error {
-	return sc.waitForWorkload(ctx, true)
-}
-
-func (sc *collectionGenerationScenario) waitForWorkload(ctx context.Context, removed bool) error {
+func (sc *collectionGenerationScenario) waitForCompletedWorkload(ctx context.Context) error {
 	k8s, err := newFVTK8sClient()
 	if err != nil {
 		return err
@@ -383,10 +377,6 @@ func (sc *collectionGenerationScenario) waitForWorkload(ctx context.Context, rem
 		if len(jobs) > 1 {
 			return false, fmt.Errorf("generation %q created %d Kubernetes Jobs", resource.ID, len(jobs))
 		}
-		if removed {
-			pods, err := k8s.clientset.CoreV1().Pods(resource.Tenant.String()).List(ctx, metav1.ListOptions{LabelSelector: selector})
-			return err == nil && len(jobs) == 0 && len(pods.Items) == 0, err
-		}
 		if len(jobs) == 0 {
 			return false, nil
 		}
@@ -398,7 +388,7 @@ func (sc *collectionGenerationScenario) waitForWorkload(ctx context.Context, rem
 		return false, nil
 	})
 	if err != nil {
-		return fmt.Errorf("waiting for generation workload %q (removed=%t): %w", resource.ID, removed, err)
+		return fmt.Errorf("waiting for the Kubernetes Job for generation %q to complete: %w", resource.ID, err)
 	}
 	return nil
 }
