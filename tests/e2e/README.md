@@ -45,7 +45,7 @@ and reports runtime image provenance.
 
 ## Full curated-collection disconnected run
 
-`TestCuratedCollectionsAirgap` defines 24 matrix cases for benchmark entries in
+`TestCuratedCollectionsAirgap` defines 23 matrix cases for benchmark entries in
 the nine currently curated collections. The number of cases run depends on the
 deployed adapter selection, available catalog entries, and required credentials.
 It checks the matrix against

@@ -76,7 +76,6 @@ var curatedBenchmarkMatrix = []curatedBenchmarkCase{
 	{collectionID: "knowledge-reasoning-v1", providerID: "lighteval", benchmarkID: "math_500"},
 	{collectionID: "multimodal-v1", providerID: "inspect", benchmarkID: "inspect/docvqa"},
 	{collectionID: "safety-ethical-principles-v1", providerID: "lm_evaluation_harness", benchmarkID: "toxigen"},
-	{collectionID: "safety-ethical-principles-v1", providerID: "lm_evaluation_harness", benchmarkID: "ethics_cm"},
 	{collectionID: "safety-ethical-principles-v1", providerID: "lm_evaluation_harness", benchmarkID: "bigbench_hhh_alignment_multiple_choice"},
 	{collectionID: "tool-use-v1", providerID: "inspect", benchmarkID: "inspect/bfcl", occurrence: 0},
 	{collectionID: "tool-use-v1", providerID: "inspect", benchmarkID: "inspect/bfcl", occurrence: 1},
@@ -85,8 +84,8 @@ var curatedBenchmarkMatrix = []curatedBenchmarkCase{
 }
 
 func TestCuratedBenchmarkMatrixComplete(t *testing.T) {
-	if len(curatedBenchmarkMatrix) != 24 {
-		t.Fatalf("curated matrix has %d rows, want 24", len(curatedBenchmarkMatrix))
+	if len(curatedBenchmarkMatrix) != 23 {
+		t.Fatalf("curated matrix has %d rows, want 23", len(curatedBenchmarkMatrix))
 	}
 	collections := make(map[string]int)
 	seen := make(map[string]struct{}, len(curatedBenchmarkMatrix))

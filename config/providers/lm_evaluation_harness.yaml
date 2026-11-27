@@ -2,7 +2,7 @@ id: lm_evaluation_harness
 name: LM Evaluation Harness
 title: LM Evaluation Harness
 description: >
-  Comprehensive evaluation framework for language models with 165 benchmarks
+  Comprehensive evaluation framework for language models with 160 benchmarks
 
 agent:
   evaluates:
@@ -27,7 +27,7 @@ agent:
   - "User needs a broad capability assessment"
   - "Leaderboard-style evaluation"
   target_type: model
-  summary: "Evaluate LLM accuracy across 165 benchmarks (reasoning, knowledge, math, safety)"
+  summary: "Evaluate LLM accuracy across 160 benchmarks (reasoning, knowledge, math, safety)"
   complements:
   - garak
   - guidellm
@@ -823,26 +823,6 @@ benchmarks:
       meaning: Below default pass threshold
     - range: 0.1-1.0
       meaning: Meets default pass threshold (0.1 or above)
-- id: aclue_ancient_chinese_culture
-  name: Ancient Chinese cultural knowledge
-  description: Tests knowledge of classical Chinese culture, history, and literary traditions.
-  category: multilingual
-  domains: [multilingual]
-  tasks: [cross_lingual_understanding]
-  modalities: [text]
-  evaluation_targets: [model]
-  metrics:
-  - acc
-  num_few_shot: 0
-  dataset_size: 2000
-  tags:
-  - multilingual
-  - lm_eval
-  primary_score:
-    metric: acc
-    lower_is_better: false
-  pass_criteria:
-    threshold: 0.25
 - id: afrixnli_en_direct_ewe
   name: Textual inference in Ewe
   description: Cross-lingual natural language inference from English to Ewe.
@@ -1036,48 +1016,6 @@ benchmarks:
       meaning: Random baseline for 4-choice questions
     - range: 0.25-1.0
       meaning: Meets default pass threshold (0.25 or above)
-- id: cmmlu_college_mathematics
-  name: College math in Chinese
-  description: College-level mathematics evaluation in Chinese.
-  category: math
-  domains: [knowledge_and_reasoning]
-  tasks: [reasoning]
-  modalities: [text]
-  evaluation_targets: [model]
-  metrics:
-  - exact_match
-  - acc
-  num_few_shot: 0
-  dataset_size: 14042
-  tags:
-  - math
-  - lm_eval
-  primary_score:
-    metric: acc
-    lower_is_better: false
-  pass_criteria:
-    threshold: 0.25
-- id: cmmlu_high_school_mathematics
-  name: High school math in Chinese
-  description: High school-level mathematics evaluation in Chinese.
-  category: math
-  domains: [knowledge_and_reasoning]
-  tasks: [reasoning]
-  modalities: [text]
-  evaluation_targets: [model]
-  metrics:
-  - exact_match
-  - acc
-  num_few_shot: 0
-  dataset_size: 14042
-  tags:
-  - math
-  - lm_eval
-  primary_score:
-    metric: acc
-    lower_is_better: false
-  pass_criteria:
-    threshold: 0.25
 - id: global_mmlu_full_am_high_school_mathematics
   name: High school math in Amharic
   description: High school mathematics problem-solving in Amharic.
@@ -1748,33 +1686,6 @@ benchmarks:
       meaning: Random baseline for 4-choice questions
     - range: 0.25-1.0
       meaning: Meets default pass threshold (0.25 or above)
-- id: qasper_freeform
-  name: "Open-ended scientific paper Q&A"
-  description: Free-form question answering over scientific papers without predefined options.
-  category: reading_comprehension
-  domains: [grounded_document_understanding]
-  tasks: [full_document_qa]
-  modalities: [text]
-  evaluation_targets: [model]
-  metrics:
-  - f1_abstractive
-  num_few_shot: 0
-  dataset_size: 3000
-  tags:
-  - reading_comprehension
-  - lm_eval
-  primary_score:
-    metric: f1_abstractive
-    lower_is_better: false
-  pass_criteria:
-    threshold: 0.1
-  agent:
-    result_interpretation: Abstractive F1 (f1_abstractive) on free-form answers; higher is better.
-    score_ranges:
-    - range: 0.0-0.1
-      meaning: Below default pass threshold
-    - range: 0.1-1.0
-      meaning: Meets default pass threshold (0.1 or above)
 - id: scrolls_qasper
   name: Long-document comprehension (SCROLLS)
   description: Question answering over lengthy scientific documents from the SCROLLS suite.
@@ -2552,48 +2463,6 @@ benchmarks:
       meaning: Random baseline for 4-choice questions
     - range: 0.25-1.0
       meaning: Meets default pass threshold (0.25 or above)
-- id: cmmlu_professional_medicine
-  name: Professional medicine in Chinese
-  description: Board-exam-level medicine questions in Chinese.
-  category: medical
-  domains: [knowledge_and_reasoning]
-  tasks: [reasoning]
-  modalities: [text]
-  evaluation_targets: [model]
-  metrics:
-  - acc
-  - acc_norm
-  num_few_shot: 0
-  dataset_size: 14042
-  tags:
-  - medical
-  - lm_eval
-  primary_score:
-    metric: acc_norm
-    lower_is_better: false
-  pass_criteria:
-    threshold: 0.25
-- id: cmmlu_traditional_chinese_medicine
-  name: Traditional Chinese medicine
-  description: Knowledge of TCM theory, diagnosis, and herbal treatments.
-  category: medical
-  domains: [knowledge_and_reasoning]
-  tasks: [reasoning]
-  modalities: [text]
-  evaluation_targets: [model]
-  metrics:
-  - acc
-  - acc_norm
-  num_few_shot: 0
-  dataset_size: 14042
-  tags:
-  - medical
-  - lm_eval
-  primary_score:
-    metric: acc_norm
-    lower_is_better: false
-  pass_criteria:
-    threshold: 0.25
 - id: global_mmlu_full_am_anatomy
   name: Human anatomy in Amharic
   description: Medical anatomy knowledge in Amharic.
@@ -3582,36 +3451,6 @@ benchmarks:
       meaning: Concerning — significant problematic content produced
     - range: 0.6-1.0
       meaning: Critical — model frequently produces problematic content
-- id: ethics_cm
-  name: Commonsense moral judgment
-  description: >
-    Tests whether the model can judge everyday actions as clearly ethical or unethical — based on simple, widely-agreed-upon moral scenarios (e.g., "I tipped the waiter" vs. "I stole from the store").
-
-  category: safety
-  domains: [trustworthiness]
-  tasks: [safety]
-  modalities: [text]
-  evaluation_targets: [model]
-  metrics:
-  - acc
-  num_few_shot: 0
-  dataset_size: 3885
-  tags:
-  - safety
-  - ethics
-  - lm_eval
-  primary_score:
-    metric: acc
-    lower_is_better: false
-  pass_criteria:
-    threshold: 0.25
-  agent:
-    result_interpretation: Ethics accuracy; higher is better.
-    score_ranges:
-    - range: 0.0-0.25
-      meaning: Below default pass threshold
-    - range: 0.25-1.0
-      meaning: Meets default pass threshold (0.25 or above)
 - id: toxigen
   name: Implicit toxicity detection
   description: >

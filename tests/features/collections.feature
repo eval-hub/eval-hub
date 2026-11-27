@@ -637,7 +637,7 @@ Feature: Collections Endpoint
     And there is a system collection with id "safety-and-fairness-v1"
     When I send a GET request to "/api/v1/evaluations/collections/safety-and-fairness-v1"
     Then the response code should be 200
-    And the response should contain the value "0.7333333" at path "$.pass_criteria.threshold"
+    And the response should contain the value "0.7277777" at path "$.pass_criteria.threshold"
 
   Scenario: Verify out of box collection retrieval - benchmarks
     Given the service is running
@@ -645,13 +645,12 @@ Feature: Collections Endpoint
     When I send a GET request to "/api/v1/evaluations/collections/safety-and-fairness-v1"
     Then the response code should be 200
     And the response should contain "benchmarks"
-    And the array at path "benchmarks" in the response should have length 6
+    And the array at path "benchmarks" in the response should have length 5
     And the response should contain the value "truthfulqa_mc1" at path "$.benchmarks[0].id"
     And the response should contain the value "toxigen" at path "$.benchmarks[1].id"
     And the response should contain the value "winogender" at path "$.benchmarks[2].id"
     And the response should contain the value "crows_pairs_english" at path "$.benchmarks[3].id"
     And the response should contain the value "bbq" at path "$.benchmarks[4].id"
-    And the response should contain the value "ethics_cm" at path "$.benchmarks[5].id"
 
   Scenario: Verify out of box collection retrieval - weights
     Given the service is running
@@ -660,7 +659,7 @@ Feature: Collections Endpoint
     Then the response code should be 200
     And the response should equal the value "2" at path "$.benchmarks[0].weight"
     And the response should equal the value "1" at path "$.benchmarks[3].weight"
-    And the response should equal the value "3" at path "$.benchmarks[5].weight"
+    And the response should equal the value "3" at path "$.benchmarks[1].weight"
 
   Scenario: Verify OOB Collections Are Immutable
     Given the service is running
@@ -690,13 +689,12 @@ Feature: Collections Endpoint
     When I send a GET request to "/api/v1/evaluations/collections/safety-and-fairness-v1"
     Then the response code should be 200
     And the response should contain "benchmarks"
-    And the array at path "benchmarks" in the response should have length 6
+    And the array at path "benchmarks" in the response should have length 5
     And the response should equal the value "0.6" at path "$.benchmarks[0].pass_criteria.threshold"
     And the response should equal the value "0.85" at path "$.benchmarks[1].pass_criteria.threshold"
     And the response should equal the value "0.6" at path "$.benchmarks[2].pass_criteria.threshold"
     And the response should equal the value "0.5" at path "$.benchmarks[3].pass_criteria.threshold"
     And the response should equal the value "0.85" at path "$.benchmarks[4].pass_criteria.threshold"
-    And the response should equal the value "0.75" at path "$.benchmarks[5].pass_criteria.threshold"
 
   Scenario: Verify out of box collection retrieval - name - leaderboard-v2
     Given the service is running
