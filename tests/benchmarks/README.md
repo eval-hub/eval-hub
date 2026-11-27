@@ -553,7 +553,6 @@ queued, are described under **Run** above.
 | Inspect `agentdojo` | `ImportError: email-validator is not installed` | Inspect adapter image |
 | Inspect `strong-reject` | `parameters.grader_model requires OPENAI_JUDGE_API_KEY in the adapter environment` | Inspect adapter image that routes `grader_model` through the judge Secret pair |
 | Inspect `gdm-stealth` | sample setup script cannot create `/home/agent` (permission denied) | Task-specific sandbox user or image |
-| Inspect `gdm-self-proliferation` | upstream `secrets.zip` returns HTTP 404 from GitHub | Network access and an inspect-evals release that ships the fixture |
 
 `cybergym` imports the same `inspect_cyber` module as `cybench` and
 `theagentcompany`, but the last full run only observed it `pending` until its

@@ -219,15 +219,14 @@ func minimalFixture(provider, benchmark string) (map[string]any, error) {
 		// These catalog IDs name task families rather than registered Inspect
 		// tasks. Select one representative task without changing the catalog ID.
 		tasks := map[string]string{
-			"inspect/arc":                    "arc_easy",
-			"inspect/mmlu":                   "mmlu_0_shot",
-			"inspect/gpqa":                   "gpqa_diamond",
-			"inspect/wmdp":                   "wmdp_bio",
-			"inspect/sad":                    "sad_facts_llms",
-			"inspect/gdm-stealth":            "gdm_oversight_pattern",
-			"inspect/gdm-self-reasoning":     "gdm_self_reasoning_approved_directories",
-			"inspect/gdm-self-proliferation": "gdm_sp01_e2e",
-			"inspect/cyberseceval-2":         "cyse2_interpreter_abuse",
+			"inspect/arc":                "arc_easy",
+			"inspect/mmlu":               "mmlu_0_shot",
+			"inspect/gpqa":               "gpqa_diamond",
+			"inspect/wmdp":               "wmdp_bio",
+			"inspect/sad":                "sad_facts_llms",
+			"inspect/gdm-stealth":        "gdm_oversight_pattern",
+			"inspect/gdm-self-reasoning": "gdm_self_reasoning_approved_directories",
+			"inspect/cyberseceval-2":     "cyse2_interpreter_abuse",
 		}
 		if task, ok := tasks[benchmark]; ok {
 			p["task"] = "inspect_evals/" + task
