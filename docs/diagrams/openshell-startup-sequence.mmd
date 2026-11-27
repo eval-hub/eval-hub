@@ -1,0 +1,68 @@
+sequenceDiagram
+    autonumber
+    actor A as Cluster / platform administrator
+    participant PL as Platform provisioning service<br/>and guardrail controller
+    participant AS as Agent Sandbox controller<br/>Red Hat build v0.9.0
+    participant I as Identity issuer / token broker
+    participant G as OpenShell gateway v0.1.10<br/>and Kubernetes driver
+    participant O as TrustyAI operator
+    participant CR as EvalHub custom resource
+    participant E as EvalHub API instance
+
+    Note over A,E: Phase 1 - cluster prerequisites, before the EvalHub operator
+    A->>AS: Install Agent Sandbox v0.9.0 in openshift-operators
+    A->>PL: Check OpenShift 4.19+, StorageClass and Kata
+    A->>PL: Create gateway namespace and SA UID range
+    A->>G: Install the pinned chart with the Route hostname in pkiInitJob.serverDnsNames
+    G->>AS: Preflight the supported Agent Sandbox API
+    A->>G: Configure workspace_mode shared and one static sandboxNamespace
+    A->>I: Configure a qualified OIDC issuer with audience, subject and roles_claim
+    G->>I: Validate audience, subject and role claim in RBAC mode
+    A->>PL: Provision sandbox namespace guardrails
+    PL->>PL: SCC/PSA, ResourceQuota, LimitRange, approved storage class
+    PL->>PL: Egress NetworkPolicy baseline and exclusive control
+    A->>G: Publish the baseline policy and template skeleton
+    A->>PL: Distribute the gateway CA bundle
+    PL->>PL: Mount it in the EvalHub namespace so the broker can verify the gateway
+    PL->>PL: Prove Landlock and seccomp probes, egress and admission
+
+    Note over A,E: Phase 2 - the platform publishes the gateway contract
+    PL->>O: Publish openshell-gateway-info with qualified true, operator observes it
+    Note over PL,G: The contract names endpoint, workspaceMode, sandboxNamespace and UID, versions, runtimeClass, storageClass and CA bundle. It never carries an administrator credential.
+
+    Note over A,E: Phase 3 - instance enablement and readiness gates
+    A->>CR: Create EvalHub with spec.sandbox.enabled true
+    A->>CR: Set gatewayRef, profile, template, limits and providerBindings
+    CR->>O: Admission webhook validates the contract, Kata, limits and credentials
+    alt Admission rejects the custom resource
+        O-->>A: Reject the CR, no half-configured instance
+    else Custom resource accepted
+        O->>O: Read the contract ConfigMap named by gatewayRef
+        O->>O: Require qualified true, supported workspaceMode, UID and versions
+        alt Contract missing, malformed or unqualified
+            O->>CR: SandboxGatewayReady False and SandboxNamespaceAttested False
+            Note over O,E: Sandbox dispatch stays off, /api/v1/info reports the reason and ordinary Job evaluations are unchanged
+        else Contract qualified
+            O->>CR: SandboxGatewayReady True and SandboxNamespaceAttested True
+            O->>O: Create instance ServiceAccount, projected token and CA mount
+            O->>I: Resolve the instance gateway identity
+            alt Identity cannot be issued
+                O->>CR: SandboxIdentityReady False, reason IdentityUnavailable
+            else Identity issued
+                O->>CR: SandboxIdentityReady True
+                O->>O: Create and attest the adapter namespace guardrails
+                O->>CR: SandboxAdapterNamespaceReady True
+                loop Every namespace labelled evalhub.trustyai.opendatahub.io/tenant
+                    O->>PL: Request tenant workspace and membership
+                    PL->>G: Ensure workspace, membership, templates and bindings
+                    G->>I: Validate the workspace role claim
+                    PL-->>O: Return the workspace name and immutable UID
+                    O->>CR: SandboxWorkspaceReady True, or SandboxWorkspaceFailed
+                end
+                O->>E: Render the sandbox block in the instance ConfigMap
+                O->>E: Restart the API deployment with the rendered config
+                O->>E: Report sandbox state and reason in /api/v1/info
+                Note over O,E: Every ready condition true means sandbox-required providers may be enabled. Any false condition fails closed with no plain Job fallback.
+            end
+        end
+    end

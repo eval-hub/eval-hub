@@ -1,0 +1,64 @@
+sequenceDiagram
+    autonumber
+    actor U as Client / SDK
+    participant E as EvalHub API / runtime
+    participant O as TrustyAI operator
+    participant P as Platform provisioning<br/>and lifecycle service
+    participant B as Per-job broker
+    participant R as Per-job integration relay
+    participant G as OpenShell gateway / driver
+    participant K as Guardrails / Agent Sandbox controller
+    participant S as Job sandbox, primary evaluator
+    participant C as Child sandbox, optional
+    participant X as Model / judge / data endpoints
+    participant D as MLflow / OCI / tenant results
+
+    U->>E: Submit an evaluation through the async API
+    E->>E: Authorize tenant, resolve provider requirements and profiles
+    alt A sandbox preflight or ready condition fails
+        E-->>U: SandboxUnavailable, no plain Job fallback
+    else All instance sandbox conditions are true
+        E->>E: Persist the job and dispatch intent before any external call
+        E->>O: Create the SandboxedEvaluation with the job ID as idempotency key
+        E-->>U: Return the evaluation ID asynchronously
+        O->>O: Move to Provisioning and confirm workspace and profile are ready
+        O->>B: Create broker Deployment, Service, SA and capability Secret
+        O->>R: Create the relay the same way where the spec needs it
+        Note over B,R: Adapters run in the instance adapter namespace, never in the sandbox namespace or a tenant namespace
+        B->>G: CreateSandbox with request_id from the idempotency key, pinned profile and template
+        G->>G: Validate OIDC audience, subject and workspace role, enforce the profile
+        G->>K: Create the Sandbox resource
+        K->>K: Per-sandbox admission: image, limits, runtime, policy, storage
+        K->>S: Start the workload and supervisor Pods
+        G-->>B: Return gateway-generated sandbox name and ID as ready
+        B-->>O: Report observed state
+        O->>E: Mirror Running and provenance: gateway, workspace, sandbox IDs
+        Note over S: Every sandbox-required benchmark in the job runs in this one primary sandbox and receives only the job-scoped broker capability
+        S->>X: Approved endpoint-bound model, judge and data calls via supervisor
+        opt The provider declares child task environments
+            S->>B: Kubernetes-shaped create, exec, log and attach with job auth
+            B->>B: Reject foreign jobs, kinds, fan-out, depth and TTL
+            B->>G: Create the child with pinned policy and provider bindings
+            G->>K: Submit the child Sandbox on the same admission path
+            K->>C: Start the child sandbox
+        end
+        S->>R: Send job-bound status, events and result artifacts
+        R->>R: Enforce tenant, evaluation and benchmark binding and allowlist
+        R->>E: Deliver authorized evaluation and benchmark updates
+        R->>D: Export results, MLflow runs and OCI artifacts
+        alt Cancellation, absolute deadline or terminal execution
+            U->>E: Cancel the evaluation if not terminal
+            E->>O: Reconcile the cancellation or deadline
+        end
+        O->>O: Freeze child spawning and record the outcome
+        Note over O,G: Teardown order is normative and the tenant workspace is never deleted here
+        O->>B: Revoke the job-bound capability first
+        O->>B: Delete the broker and relay objects
+        B->>G: DeleteSandbox with allow_missing for primary and children
+        G->>K: Terminate workloads, supervisors and job-scoped storage
+        P->>G: Verify sandbox, PVC and job-scoped state absence
+        P-->>O: CleanupComplete with audit evidence, or CleanupBlocked
+        O->>O: Set the cleanup flags and remove the finalizer
+        O->>E: Publish the final outcome, export state and cleanup provenance
+        Note over P,G: The sandbox namespace, tenant workspace, templates and bindings remain for the tenant's other jobs
+    end
