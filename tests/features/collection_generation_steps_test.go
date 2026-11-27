@@ -54,7 +54,6 @@ func InitializeCollectionGenerationSteps(ctx *godog.ScenarioContext, tc *scenari
 		}
 		return nil
 	})
-	ctx.Step(`^the rejected generation benchmarks should be ordered as "([^"]*)"$`, sc.checkRejectedOrder)
 	ctx.Step(`^the generated proposal should select benchmarks from both "([^"]*)" and "([^"]*)"$`, sc.checkSelectedProviders)
 	ctx.Step(`^the completed generation should remain readable after its pod exits$`, sc.checkDurability)
 	ctx.Step(`^the generation should leave no collection or ordinary evaluation job$`, sc.checkDryRun)
@@ -303,21 +302,6 @@ func (sc *collectionGenerationScenario) checkProposal(ctx context.Context) error
 		if err := check(reason.ProviderID, reason.ID, nil); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-func (sc *collectionGenerationScenario) checkRejectedOrder(expected string) error {
-	expected, err := sc.getValue(expected)
-	if err != nil {
-		return err
-	}
-	var ids []string
-	for _, rejection := range sc.completed.Explanation.RejectedBenchmarks {
-		ids = append(ids, rejection.ID)
-	}
-	if strings.Join(ids, ",") != expected {
-		return fmt.Errorf("rejected benchmarks = %v, want %q in ranking order", ids, expected)
 	}
 	return nil
 }

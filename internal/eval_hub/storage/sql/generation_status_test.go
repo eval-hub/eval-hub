@@ -2,6 +2,7 @@ package sql_test
 
 import (
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -144,7 +145,11 @@ func createCatalogProvider(t *testing.T, store abstractions.Storage, tenant api.
 		Resource: api.Resource{ID: id, Tenant: tenant, Owner: owner},
 		ProviderConfig: api.ProviderConfig{
 			Name: "Provider A", Title: "Provider A",
-			Benchmarks: []api.BenchmarkResource{{ID: "bench-a", Name: "Benchmark A"}},
+			Benchmarks: []api.BenchmarkResource{
+				{ID: "bench-a", Name: "Benchmark A"},
+				{ID: "bench-b", Name: "Benchmark B"},
+				{ID: "bench-c", Name: "Benchmark C"},
+			},
 		},
 	}
 	if err := store.CreateProvider(provider); err != nil {
@@ -277,14 +282,26 @@ func testCollectionGenerationCompletionRequiresCallerVisibleCatalog(t *testing.T
 	scoped := store.WithTenant(tenant).WithOwner(owner).WithWorkloadType(workloads.CollectionGeneration)
 	providerID := createCatalogProvider(t, scoped, tenant, owner)
 
+	// The worker supplies the relevance order, which can differ from catalog order.
+	rejected := []api.CollectionGenerationBenchmarkReason{
+		{ProviderID: providerID, ID: "bench-c", Reason: "Relevant but outside the benchmark cap."},
+		{ProviderID: providerID, ID: "bench-b", Reason: "Less relevant to the evaluation goal."},
+	}
 	validID := createRunningGenerationJob(t, scoped, tenant, owner)
-	if err := scoped.UpdateEvaluationJob(validID, proposalEvent(t, providerID, "bench-a", nil)); err != nil {
+	if err := scoped.UpdateEvaluationJob(validID, proposalEvent(t, providerID, "bench-a", rejected)); err != nil {
 		t.Fatalf("complete proposal using visible catalog benchmark: %v", err)
 	}
 	completed, err := scoped.WithWorkloadType(workloads.CollectionGeneration).GetEvaluationJob(validID)
 	if err != nil || completed.Status.State != api.OverallStateCompleted || len(completed.Results.Benchmarks) != 1 ||
 		completed.Status.CollectionGenerationProgress == nil || completed.Status.CollectionGenerationProgress.Phase != "catalog_discovery" {
 		t.Fatalf("completed proposal = (%+v, %v)", completed, err)
+	}
+	proposal, err := generation.ResourceFromJob(completed)
+	if err != nil || proposal.Result == nil {
+		t.Fatalf("read stored generation proposal: (%+v, %v)", proposal, err)
+	}
+	if got := proposal.Result.Explanation.RejectedBenchmarks; !slices.Equal(got, rejected) {
+		t.Fatalf("rejected benchmarks = %+v, want callback order %+v", got, rejected)
 	}
 
 	for _, tc := range []struct {

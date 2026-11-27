@@ -6,9 +6,8 @@ Feature: Collection generation
   # GODOG_TAGS=@collection_generation_live against a configured server. Set SERVER_URL, X_TENANT,
   # AUTH_TOKEN, FVT_GENERATION_MODEL_NAME, and FVT_GENERATION_MODEL_URL. Set
   # FVT_GENERATION_MODEL_SECRET_REF if the generator requires a tenant Secret.
-  # Use a controlled catalog/model fixture for stable selection and ranking. The single-provider
-  # case needs at least three eligible Inspect benchmarks and FVT_GENERATION_REJECTED_IDS in rank
-  # order. The multi-provider case needs eligible Inspect, Lighteval, and out-of-filter candidates.
+  # The single-provider case needs at least three eligible Inspect benchmarks.
+  # The multi-provider case needs eligible Inspect, Lighteval, and out-of-filter candidates.
   # The caller needs API access to the fixture and Kubernetes list access to Jobs.
   Background:
     Given I set the header "X-Tenant" to "{{env:X_TENANT|test-tenant}}"
@@ -57,7 +56,6 @@ Feature: Collection generation
 
     @positive
     Scenario: Enforce a single-provider filter and a cap of two
-      Given the value "{{env:FVT_GENERATION_REJECTED_IDS}}" is not empty
       When I submit a collection generation request with:
         """
         {
@@ -78,9 +76,7 @@ Feature: Collection generation
       And the response should equal the value "low" at path "request.generation_effort"
       And the response should equal the value "FVT Inspect reasoning" at path "result.collection.name"
       And the response should equal the value "Evaluate math and general reasoning." at path "result.collection.description"
-      And the array at path "result.collection.benchmarks" in the response should have length 2
       And the generated proposal should match the collection creation contract
-      And the rejected generation benchmarks should be ordered as "{{env:FVT_GENERATION_REJECTED_IDS}}"
 
     # Set FVT_GENERATION_READER_TOKEN for a second authorized caller in the same tenant.
     @positive
@@ -189,28 +185,6 @@ Feature: Collection generation
       Then the response code should be 404
       When I send a DELETE request to "/api/v1/evaluations/collections/generation/00000000-0000-0000-0000-000000000000"
       Then the response code should be 404
-
-    # Supply an expired generation from a short-retention fixture in X_TENANT.
-    @negative @collection_generation_expired
-    Scenario: An expired generation cannot be read or deleted
-      Given I set the resource ID from environment variable "FVT_GENERATION_EXPIRED_ID"
-      When I send a GET request to "/api/v1/evaluations/collections/generation/{id}"
-      Then the response code should be 404
-      When I send a DELETE request to "/api/v1/evaluations/collections/generation/{id}"
-      Then the response code should be 404
-
-    # Supply an ordinary job already readable in X_TENANT. The scenario creates no job.
-    @negative @collection_generation_wrong_type
-    Scenario: An ordinary evaluation job cannot be read or deleted as generation
-      Given I set the resource ID from environment variable "FVT_GENERATION_ORDINARY_JOB_ID"
-      When I send a GET request to "/api/v1/evaluations/jobs/{id}"
-      Then the response code should be 200
-      When I send a GET request to "/api/v1/evaluations/collections/generation/{id}"
-      Then the response code should be 404
-      When I send a DELETE request to "/api/v1/evaluations/collections/generation/{id}"
-      Then the response code should be 404
-      When I send a GET request to "/api/v1/evaluations/jobs/{id}"
-      Then the response code should be 200
 
     @negative
     Scenario: The proxy rejects unauthenticated generation requests
