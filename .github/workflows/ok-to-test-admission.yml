@@ -1,0 +1,76 @@
+name: ok-to-test label
+
+# Mirrors the `/ok-to-test` admission of a pull request as labels. A new pull request starts with
+# `needs-ok-to-test`. When a user with write access comments `/ok-to-test` on it, this workflow
+# adds `ok-to-test` and clears `needs-ok-to-test`, and the k8s-tests suite starts from the same
+# comment. A comment from anyone else changes nothing.
+#
+# The labels are for reading only: admission is the comment, checked in k8s-tests.yml, so a label
+# added by hand does not start the suite.
+#
+# This runs on pull_request_target for new pull requests and on issue_comment for comments. Neither
+# checks out or runs pull request code: the script reads the event payload and calls the labels and
+# permission APIs, and it comes from this repository's default branch. Keep it that way.
+on:
+  pull_request_target:
+    types: [opened, reopened]
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+jobs:
+  label:
+    name: Track needs-ok-to-test
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Set needs-ok-to-test and ok-to-test from the /ok-to-test comment
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const NEEDS = 'needs-ok-to-test';
+            const OK = 'ok-to-test';
+            const WRITE_ROLES = ['admin', 'maintain', 'write'];
+            const { owner, repo } = context.repo;
+            const payload = context.payload;
+
+            if (context.eventName === 'issue_comment') {
+              // Only a `/ok-to-test` comment on a pull request is an admission.
+              if (!payload.issue.pull_request) return;
+              const firstLine = (payload.comment.body.split('\n')[0] || '').replace(/\s+$/, '');
+              if (firstLine !== '/ok-to-test') return;
+
+              const sender = payload.comment.user.login;
+              const { data: access } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner,
+                repo,
+                username: sender,
+              });
+              if (!WRITE_ROLES.includes(access.permission)) {
+                core.info(`${sender} has ${access.permission} access; #${payload.issue.number} is not admitted`);
+                return;
+              }
+
+              const issue_number = payload.issue.number;
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: [OK] });
+              try {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number, name: NEEDS });
+              } catch (error) {
+                // Already removed by someone else; that is the state we want.
+                if (error.status !== 404) throw error;
+              }
+              core.info(`admitted #${issue_number} for ${sender} (${access.permission} access)`);
+              return;
+            }
+
+            // A new or reopened pull request starts without admission, unless it already has the label.
+            const issue_number = payload.pull_request.number;
+            const { data } = await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number, per_page: 100 });
+            const names = new Set(data.map((label) => label.name));
+            if (!names.has(OK) && !names.has(NEEDS)) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: [NEEDS] });
+              core.info(`added ${NEEDS} to #${issue_number}`);
+            }

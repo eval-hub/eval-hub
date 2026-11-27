@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/maintenance"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/metrics"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/mlflow"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/runtimes"
@@ -133,6 +134,10 @@ func main() {
 		// we do this as no point trying to continue
 		startUpFailed(serviceConfig, err, "Failed to create storage", logger)
 	}
+	resourceJanitor, err := maintenance.StartResourceJanitor(context.Background(), storage, serviceConfig.ResourceJanitor, logger)
+	if err != nil {
+		startUpFailed(serviceConfig, err, "Failed to start resource janitor", logger)
+	}
 	// setup runtime
 	runtime, err := runtimes.NewRuntime(logger, serviceConfig)
 	if err != nil {
@@ -223,6 +228,7 @@ func main() {
 	logger.Info("Shutting down API config watcher...")
 	watcherCancel()
 	<-watcherDone // Wait for Watch() to fully complete
+	resourceJanitor.Stop()
 
 	// Create a context with timeout for graceful shutdown
 	waitForShutdown := 30 * time.Second

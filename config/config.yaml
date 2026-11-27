@@ -22,6 +22,27 @@ env_mappings:
   TLS_CERT_FILE: service.tls_cert_file
   TLS_KEY_FILE: service.tls_key_file
   EVALHUB_TEST_DATA_INIT_TIMEOUT: service.init.test_data_timeout
+  EVALHUB_COLLECTION_GENERATION_RUNNER_IMAGE: generation.runner_image
+  EVALHUB_COLLECTION_GENERATION_RETENTION: generation.retention
+  EVALHUB_RESOURCE_JANITOR_INTERVAL: resource_janitor.interval
+  EVALHUB_GENERATION_LOW_MAX_ITERATIONS: generation.effort_budget.low.max_iterations
+  EVALHUB_GENERATION_LOW_MAX_MODEL_CALLS: generation.effort_budget.low.max_model_calls
+  EVALHUB_GENERATION_LOW_MAX_TOOL_CALLS: generation.effort_budget.low.max_tool_calls
+  EVALHUB_GENERATION_LOW_MAX_TOTAL_TOKENS: generation.effort_budget.low.max_total_tokens
+  EVALHUB_GENERATION_LOW_MAX_OUTPUT_TOKENS: generation.effort_budget.low.max_output_tokens
+  EVALHUB_GENERATION_LOW_MAX_DURATION: generation.effort_budget.low.max_duration
+  EVALHUB_GENERATION_STANDARD_MAX_ITERATIONS: generation.effort_budget.standard.max_iterations
+  EVALHUB_GENERATION_STANDARD_MAX_MODEL_CALLS: generation.effort_budget.standard.max_model_calls
+  EVALHUB_GENERATION_STANDARD_MAX_TOOL_CALLS: generation.effort_budget.standard.max_tool_calls
+  EVALHUB_GENERATION_STANDARD_MAX_TOTAL_TOKENS: generation.effort_budget.standard.max_total_tokens
+  EVALHUB_GENERATION_STANDARD_MAX_OUTPUT_TOKENS: generation.effort_budget.standard.max_output_tokens
+  EVALHUB_GENERATION_STANDARD_MAX_DURATION: generation.effort_budget.standard.max_duration
+  EVALHUB_GENERATION_HIGH_MAX_ITERATIONS: generation.effort_budget.high.max_iterations
+  EVALHUB_GENERATION_HIGH_MAX_MODEL_CALLS: generation.effort_budget.high.max_model_calls
+  EVALHUB_GENERATION_HIGH_MAX_TOOL_CALLS: generation.effort_budget.high.max_tool_calls
+  EVALHUB_GENERATION_HIGH_MAX_TOTAL_TOKENS: generation.effort_budget.high.max_total_tokens
+  EVALHUB_GENERATION_HIGH_MAX_OUTPUT_TOKENS: generation.effort_budget.high.max_output_tokens
+  EVALHUB_GENERATION_HIGH_MAX_DURATION: generation.effort_budget.high.max_duration
   DB_DRIVER: database.driver
   DB_URL: database.url
   MLFLOW_TRACKING_URI: mlflow.tracking_uri
@@ -87,6 +108,9 @@ sidecar:
     # http_timeout: 30s  # per registry HTTP request; also bounds API-service credential lookup
     # ca_cert_path: /etc/pki/ca-trust/source/anchors/registry-ca.crt  # optional
   sidecar_container:
+    # Required for Kubernetes jobs; set to the deployed EvalHub runtime image.
+    # The TrustyAI operator injects this field for managed deployments.
+    # image: registry.example.com/evalhub/evalhub:<tag>
     resources:
       requests:
         cpu: 100m

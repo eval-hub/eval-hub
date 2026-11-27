@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -27,7 +26,7 @@ func assertTestDataEmptyDirSizeLimit(t *testing.T, volumes []corev1.Volume) {
 func TestBuildJobMountsPostProcessorCalibrationPVCs(t *testing.T) {
 	refs := []api.CalibrationDataRef{{PVC: &api.PVCTestDataRef{ClaimName: "calibration-a", SubPath: "datasets/first"}}, {PVC: &api.PVCTestDataRef{ClaimName: "calibration-a", SubPath: "datasets/second"}}, {PVC: &api.PVCTestDataRef{ClaimName: "calibration-b"}}}
 	evaluation := postProcessorPVCJobForEdgeCases(refs)
-	cfg, err := buildJobConfig(evaluation, postprocessing.RuntimeProvider(), &evaluation.Benchmarks[0], 0, nil, nil)
+	cfg, err := buildJobConfig(evaluation, testPostProcessingProvider(t), &evaluation.Benchmarks[0], 0, testJobServiceConfig(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -559,6 +558,27 @@ func TestBuildJobWithModelAuthSecret(t *testing.T) {
 	// Raw secret volume must not be mounted on the adapter container (it belongs to the sidecar).
 	if findVolumeMount(container.VolumeMounts, modelAuthVolumeName) != nil {
 		t.Fatalf("unexpected raw secret mount %s on adapter container; direct-mount path is gone", modelAuthVolumeName)
+	}
+}
+
+func TestBuildGenerationJobDoesNotProjectModelSecretToWorker(t *testing.T) {
+	cfg := &jobConfig{
+		jobID: "generation-job", resourceGUID: "generation-guid", namespace: "default",
+		providerID: "evalhub-collection-generation", benchmarkID: "collection-generation",
+		adapterImage: "generation:latest", defaultEnv: []api.EnvVar{},
+		modelAuthSecretRef: "generator-secret", generationWorkload: true,
+	}
+	job, err := buildJob(cfg, nil)
+	if err != nil {
+		t.Fatalf("buildJob(): %v", err)
+	}
+	adapter := job.Spec.Template.Spec.Containers[0]
+	if findVolumeMount(adapter.VolumeMounts, modelInternalAuthVolumeName) != nil || findVolumeMount(adapter.VolumeMounts, modelAuthVolumeName) != nil {
+		t.Fatal("generation worker must not mount the real or projected model Secret")
+	}
+	sidecar := findContainer(job.Spec.Template.Spec.InitContainers, sidecarContainerName)
+	if sidecar == nil || findVolumeMount(sidecar.VolumeMounts, modelAuthVolumeName) == nil {
+		t.Fatal("sidecar must retain the real model Secret mount")
 	}
 }
 

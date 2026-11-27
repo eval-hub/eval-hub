@@ -6,12 +6,14 @@ const (
 )
 
 type Config struct {
-	Service    *ServiceConfig    `mapstructure:"service"`
-	Database   *map[string]any   `mapstructure:"database"`
-	MLFlow     *MLFlowConfig     `mapstructure:"mlflow,omitempty"`
-	OTEL       *OTELConfig       `mapstructure:"otel,omitempty"`
-	Prometheus *PrometheusConfig `mapstructure:"prometheus,omitempty"`
-	Sidecar    *SidecarConfig    `mapstructure:"sidecar,omitempty"`
+	Service         *ServiceConfig         `mapstructure:"service"`
+	Generation      *GenerationConfig      `mapstructure:"generation,omitempty"`
+	ResourceJanitor *ResourceJanitorConfig `mapstructure:"resource_janitor,omitempty"`
+	Database        *map[string]any        `mapstructure:"database"`
+	MLFlow          *MLFlowConfig          `mapstructure:"mlflow,omitempty"`
+	OTEL            *OTELConfig            `mapstructure:"otel,omitempty"`
+	Prometheus      *PrometheusConfig      `mapstructure:"prometheus,omitempty"`
+	Sidecar         *SidecarConfig         `mapstructure:"sidecar,omitempty"`
 }
 
 // IsOTELEnabled reports whether OpenTelemetry export is turned on in config.

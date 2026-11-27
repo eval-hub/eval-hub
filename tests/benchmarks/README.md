@@ -368,9 +368,12 @@ auth Secret, not URL/key environment placeholders.
 - ATIF: its primary `model` selects `JUDGE_MODEL_NAME` and `JUDGE_BASE_URL`, since
   that primary model scores staged trajectories. This is a primary model override,
   not an auxiliary connection parameter.
-- Garak/Garak KFP intents are outside this contrib change: their existing
-  `intents_models.judge.name`/`.url` bindings remain. `JUDGE_BASE_URL` aliases
-  (`JUDGE_API_BASE`, then `JUDGE_PROXY_URL`) remain for these primary/legacy inputs.
+- Garak intents: `sdg_model` and `intents_models.judge.name` select the models.
+  Configure `sdg_url`/`sdg_api-key` and `judge_url`/`judge_api-key` in
+  `MODEL_AUTH_SECRET_REF` for sidecar routing.
+- Garak KFP intents supplies `sdg_api_base` and `intents_models.judge.url` in
+  its fixture. `JUDGE_BASE_URL` aliases (`JUDGE_API_BASE`, then
+  `JUDGE_PROXY_URL`) also apply to this judge URL.
 
 Role URLs require matching `<role>_api-key` entries, even when copying the same
 real credential. Roles with no separate entries reuse the primary connection.

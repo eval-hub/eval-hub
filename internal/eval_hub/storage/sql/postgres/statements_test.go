@@ -13,6 +13,29 @@ import (
 	"github.com/eval-hub/eval-hub/pkg/api"
 )
 
+func TestSetCollectionGenerationCleanupProtectionIsTenantScopedAndPreservesExpiry(t *testing.T) {
+	factory := NewStatementsFactory(slog.Default())
+	protectedUntil := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+	statement, args := factory.CreateSetCollectionGenerationCleanupProtectionStatement("tenant-a", "job-1", protectedUntil)
+	if !strings.Contains(statement, "cleanup_protected_until = $1") || !strings.Contains(statement, "tenant_id = $3") || strings.Contains(statement, "owner =") || strings.Contains(statement, "expires_at =") {
+		t.Fatalf("unexpected cleanup protection statement: %s", statement)
+	}
+	if !slices.Equal(args, []any{protectedUntil, "job-1", "tenant-a", "collection-generation"}) {
+		t.Fatalf("cleanup protection args = %#v", args)
+	}
+}
+
+func TestDeleteExpiredGenerationStatementSkipsActiveCleanupLeases(t *testing.T) {
+	factory := NewStatementsFactory(slog.Default())
+	statement, args := factory.CreateDeleteExpiredGenerationJobsStatement(time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC), 25)
+	if !strings.Contains(statement, "cleanup_protected_until IS NULL OR cleanup_protected_until <= $5") {
+		t.Fatalf("expiry statement does not honor cleanup lease: %s", statement)
+	}
+	if len(args) != 6 || args[5] != 25 {
+		t.Fatalf("expiry statement args = %#v", args)
+	}
+}
+
 func TestCreateDeleteSystemEntitiesStatement(t *testing.T) {
 	f := NewStatementsFactory(slog.Default())
 	stmt, args := f.CreateDeleteSystemEntitiesStatement(shared.TableProviders)
@@ -251,6 +274,12 @@ func TestCreateEvaluationGetEntityStatementWorkloadFilters(t *testing.T) {
 			wantContains: []string{"WHERE id = $1 AND tenant_id = $2 AND workload_type = $3;"},
 			wantArgs:     []any{"job-1", "tenant-a", string(workloads.Evaluation)},
 		},
+		{
+			name:         "generation lookup excludes expired jobs",
+			query:        shared.EntityQuery{Resource: api.Resource{ID: "job-1", Tenant: "tenant-a"}, WorkloadType: workloads.CollectionGeneration},
+			wantContains: []string{"tenant_id = $2 AND workload_type = $3", "expires_at > CURRENT_TIMESTAMP"},
+			wantArgs:     []any{"job-1", "tenant-a", string(workloads.CollectionGeneration)},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -282,6 +311,31 @@ func TestCreateEvaluationGetEntityStatementWorkloadFilters(t *testing.T) {
 				t.Errorf("FOR UPDATE args = %#v, want %#v", updateArgs, args)
 			}
 		})
+	}
+}
+
+func TestGenerationExpiryIsSetOnlyOnFirstTerminalUpdate(t *testing.T) {
+	factory := NewStatementsFactory(slog.Default())
+	expires := time.Date(2026, 11, 23, 17, 0, 0, 0, time.UTC)
+	statement, args := factory.CreateUpdateEvaluationEntityStatement("tenant", "job", "{}", api.OverallStateCompleted, &expires)
+	if !strings.Contains(statement, "expires_at = COALESCE(expires_at, $3)") || !strings.Contains(statement, "id = $4 AND tenant_id = $5") {
+		t.Fatalf("terminal update = %q", statement)
+	}
+	if !slices.Equal(args, []any{api.OverallStateCompleted, "{}", expires, "job", "tenant"}) {
+		t.Fatalf("terminal update args = %#v", args)
+	}
+	statement, args = factory.CreateUpdateEvaluationEntityStatement("tenant", "job", "{}", api.OverallStateRunning, nil)
+	if strings.Contains(statement, "expires_at") || !slices.Equal(args, []any{api.OverallStateRunning, "{}", "job", "tenant"}) {
+		t.Fatalf("nonterminal update = %q with args %#v", statement, args)
+	}
+}
+
+func TestDeleteCleanedCollectionGenerationJobIncludesTenantAndWorkloadScope(t *testing.T) {
+	factory := NewStatementsFactory(slog.Default())
+	statement, args := factory.CreateDeleteCleanedCollectionGenerationJobStatement("tenant", "job")
+	if !strings.Contains(statement, "id = $1 AND tenant_id = $2 AND workload_type = $3") ||
+		!slices.Equal(args, []any{"job", "tenant", string(workloads.CollectionGeneration)}) {
+		t.Fatalf("finalize cleanup = %q with args %#v", statement, args)
 	}
 }
 

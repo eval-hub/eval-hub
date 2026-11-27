@@ -16,7 +16,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+      uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
       with:
         egress-policy: audit
 
@@ -26,13 +26,13 @@ jobs:
         persist-credentials: false
 
     - name: Set up Go
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
       with:
         go-version-file: "go.mod"
         cache: true
 
     - name: Install uv
-      uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       with:
         # uv tool/package cache only (keys derived from uv lockfiles); Go uses setup-go above.
         enable-cache: true
@@ -112,7 +112,7 @@ jobs:
       actions: read
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+      uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
       with:
         egress-policy: audit
 
@@ -122,7 +122,7 @@ jobs:
         persist-credentials: false
 
     - name: Set up Go
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
       with:
         go-version-file: "go.mod"
         cache: true
@@ -151,6 +151,9 @@ jobs:
       # insecure_skip_verify for a local/dev endpoint with a self-signed
       # certificate; it refuses to do so in FIPS mode (platform.IsFIPS /
       # fips140.Enabled) and the MLflow and OCI callers always pass false.
+      # G118 is excluded only for resource_janitor.go because the janitor owns and calls
+      # its stored cancel function in Stop; G404 is scheduling-only jitter and
+      # does not protect or generate security-sensitive values.
       env:
         # make sure that we use the golang version required by the project
         GOSECGOVERSION: go1.27.3
@@ -168,11 +171,11 @@ jobs:
         args: >-
           -fmt sarif -out gosec-results.sarif -stdout -verbose=text
           -exclude-dir=tests
-          --exclude-rules=internal/eval_hub/runtimes/local/local_runtime\.go:G204;internal/eval_runtime_sidecar/proxy/http_client\.go:G402;internal/eval_hub/runtimes/shared/data_sources\.go:G101
+          --exclude-rules=internal/eval_hub/runtimes/local/local_runtime\.go:G204;internal/eval_runtime_sidecar/proxy/http_client\.go:G402;internal/eval_hub/runtimes/shared/data_sources\.go:G101;internal/eval_hub/maintenance/resource_janitor\.go:G118,G404
           ./...
 
     - name: Upload SARIF file to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+      uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
       if: always()
       with:
         sarif_file: gosec-results.sarif
@@ -192,7 +195,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+      uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
       with:
         egress-policy: audit
 
@@ -226,7 +229,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+      uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2.23.0
       with:
         egress-policy: audit
 
