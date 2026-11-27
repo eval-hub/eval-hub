@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/eval-hub/eval-hub/internal/eval_hub/config"
-	"github.com/eval-hub/eval-hub/internal/eval_hub/postprocessing"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -27,7 +26,7 @@ func assertTestDataEmptyDirSizeLimit(t *testing.T, volumes []corev1.Volume) {
 func TestBuildJobMountsPostProcessorCalibrationPVCs(t *testing.T) {
 	refs := []api.CalibrationDataRef{{PVC: &api.PVCTestDataRef{ClaimName: "calibration-a", SubPath: "datasets/first"}}, {PVC: &api.PVCTestDataRef{ClaimName: "calibration-a", SubPath: "datasets/second"}}, {PVC: &api.PVCTestDataRef{ClaimName: "calibration-b"}}}
 	evaluation := postProcessorPVCJobForEdgeCases(refs)
-	cfg, err := buildJobConfig(evaluation, postprocessing.RuntimeProvider(), &evaluation.Benchmarks[0], 0, nil, nil)
+	cfg, err := buildJobConfig(evaluation, testPostProcessingProvider(t), &evaluation.Benchmarks[0], 0, testJobServiceConfig(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

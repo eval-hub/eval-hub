@@ -42,7 +42,7 @@ func TestBuildJobConfigHardwareProfileOverridesProvider(t *testing.T) {
 		gpuCount:      1,
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, profile)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, testJobServiceConfig(), profile)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestBuildJobConfigWithoutHardwareProfileUnchanged(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, testJobServiceConfig(), nil)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestBuildJobConfigDirectHardwareConfigOverridesProvider(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, testJobServiceConfig(), nil)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestBuildJobConfigDirectHardwareConfigPartialOverride(t *testing.T) {
 		},
 	}
 
-	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, nil, nil)
+	cfg, err := buildJobConfig(evaluation, provider, &evaluation.Benchmarks[0], 0, testJobServiceConfig(), nil)
 	if err != nil {
 		t.Fatalf("buildJobConfig returned error: %v", err)
 	}
