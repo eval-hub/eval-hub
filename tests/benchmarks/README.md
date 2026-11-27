@@ -105,7 +105,65 @@ server source is `scripts/kind-openai-mock.py`; its protocol regression tests
 run with `make test-scripts`. It builds every curated adapter image
 (`ADAPTERS=all`) unless `ADAPTERS` is set, so the discovered providers run
 images from this checkout rather than operator-packaged ones; pass
-`SKIP_BUILD=true` to reuse images that are already built. garak and garak-kfp
+`SKIP_BUILD=true` to reuse images that are already built. A selected adapter
+can also be supplied prebuilt with `ADAPTER_IMAGES`, a comma-separated list of
+`adapter=image` pairs (every adapter must also be selected by `ADAPTERS`), which
+pulls that reference when it is not already present locally and re-tags it into
+the kind-local registry instead of building it:
+`make test-benchmarks-kind ADAPTERS=all ADAPTER_IMAGES='lighteval=quay.io/…@sha256:…'`.
+`make adapter-images` prints that value for the selected adapters from the
+references in `config/providers`, so a run can use the whole set without typing
+each pair: `make test-benchmarks-kind ADAPTER_IMAGES="$(make adapter-images)"`.
+Those images are `linux/amd64` only, so add
+`ADAPTER_IMAGES_PLATFORM=linux/amd64` on an arm64 machine to run them under the
+podman machine's qemu-user-static emulation, or leave them out of
+`ADAPTER_IMAGES` and build them for the host instead (see **Building and pushing
+native images** below).
+
+### Building and pushing native images
+
+Building for the host instead of pulling the published images avoids that
+emulation. `make adapter-images-push` builds the selected adapters from the same
+checkouts `dev-deploy` uses, for the architecture the container runtime reports,
+and pushes them to a registry you own:
+
+```bash
+podman login quay.io
+make adapter-images-push ADAPTER_IMAGE_REGISTRY=quay.io/<your-user>
+```
+
+The target prints the `ADAPTER_IMAGES` value for the images it pushed, so pass
+that value to a run. `SKIP_BUILD=true` reuses the EvalHub and operator images of
+a previous deploy, so a first run has to build those core images. It also reuses
+the selected adapter images instead of pulling them, so every adapter image must
+already be in the local container runtime: an image pushed from another machine
+is missing here, and the run fails with `Required local image is missing` rather
+than pulling it. Pull that reference first (for example
+`podman image pull quay.io/<your-user>/community-inspect:<tag>`), or leave
+`SKIP_BUILD=true` out so the adapter is pulled (or built) as usual:
+
+```bash
+make test-benchmarks-kind ADAPTERS=all \
+  ADAPTER_IMAGES='inspect=quay.io/<your-user>/community-inspect:<tag>,…'
+```
+
+`ADAPTER_IMAGE_REGISTRY` defaults to `quay.io/<the account the container runtime
+is logged in to>` and `ADAPTER_IMAGE_TAG` to `latest`; push a new tag for each
+run rather than re-pushing `latest`, because neither the container runtime nor
+the kind nodes refresh a cached tag. On an arm64 machine the pushed images match
+the kind nodes, so the adapter Pods run natively instead of under
+qemu-user-static — which is how the emulated `inspect` and
+`lm-evaluation-harness` Pods fail (`qemu: uncaught target signal 11 (Segmentation
+fault)`).
+
+`make test-benchmarks-kind-latest` is the shortcut for that whole-set prebuilt
+run: it resolves the pairs with `make adapter-images`, passes them with
+`ADAPTERS=all`, and adds `ADAPTER_IMAGES_PLATFORM=linux/amd64`. The recipe
+captures the pairs in the shell rather than through a make variable reference,
+so a resolution failure stops the run before the deployment starts instead of
+falling back to building every adapter from source.
+
+garak and garak-kfp
 are not curated adapters, so they keep their operator-packaged image. It also
 mints a short-lived service-account token, creates or refreshes the
 dev-deploy-owned mock-auth Secret (failing if a same-named Secret belongs to
