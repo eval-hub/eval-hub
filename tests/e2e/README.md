@@ -31,6 +31,47 @@ published to the kind-local registry. The deployment records the selection,
 image references, source revisions, and air-gap setting in
 `system/evalhub-dev-deploy-manifest`. The test checks the resolved image ID from
 each completed adapter Pod. The manifest contains no credentials.
+
+A selected adapter can be supplied prebuilt instead of built from source, which
+is useful when the adapter images already exist in a registry:
+
+    make dev-deploy AIRGAP=true ADAPTERS=inspect \
+      ADAPTER_IMAGES='inspect=quay.io/evalhub/community-inspect@sha256:...'
+
+`ADAPTER_IMAGES` takes comma-separated `adapter=image` pairs, and each adapter
+must also be selected by `ADAPTERS`. dev-deploy pulls the image into the
+container runtime when it is not already present locally, re-tags it into the
+kind-local registry, and records
+`source.<adapter>.prebuilt=true` plus `source.<adapter>.image` in the manifest
+instead of a build revision. The image checks above still apply, because the
+registry reference, the provider ConfigMap, and the manifest entry are
+identical to a built adapter. The pull runs on the host before the registry
+push, so the adapter pull itself still works with `AIRGAP=true`, which restricts
+egress from evaluation-job pods only. Add `SKIP_BUILD=true` to skip the pull and
+require the adapter images to be present locally. That limits the offline
+behaviour to adapter image resolution; it does not make the whole deployment
+offline. A new `AIRGAP=true` cluster still downloads the pinned Calico manifest,
+and dev-deploy still pulls the images it needs when they are absent: the kind
+node image, `docker.io/library/registry:2`, `python:3.12-slim` for the mock
+target, and `odh-kube-rbac-proxy`, which it clones and builds from source on
+arm64.
+
+`make adapter-images` prints that value for the selected adapters from the
+references the provider configs declare, so a deploy can use the whole set
+without typing each pair. Resolve the list first, so a failure to generate it
+stops the deployment instead of continuing with an empty `ADAPTER_IMAGES`, and
+pin `ADAPTERS=all` on the inner command so an exported narrower selection cannot
+produce a subset of the pairs the deployment builds:
+
+    adapter_images="$(make adapter-images ADAPTERS=all)" &&
+      make dev-deploy AIRGAP=true ADAPTERS=all ADAPTER_IMAGES="$adapter_images"
+
+Those images are published for `linux/amd64` only. On an arm64 machine, add
+`ADAPTER_IMAGES_PLATFORM=linux/amd64` to pull them for emulation through the
+podman machine's qemu-user-static; without it the pull fails with
+`no image found in image index for architecture "arm64"`, and the alternative is
+to leave the adapter out of `ADAPTER_IMAGES` so dev-deploy builds it for arm64.
+
 For `ADAPTERS=all`, leave at least 4 GiB available for LightEval's pod memory
 request in addition to the running service, operator, mocks, and Kubernetes
 components. Increase the container VM's memory if the LightEval pod remains
