@@ -91,13 +91,13 @@ func (c *Client) PushEvaluationCard(ctx context.Context, jobID string, cardJSON 
 	manifestBytes, err := json.Marshal(manifest{
 		SchemaVersion: 2,
 		MediaType:     MediaTypeImageManifest,
-		Config: descriptor{
+		Config: Descriptor{
 			MediaType:   MediaTypeArtifactConfig,
 			Size:        configSize,
 			Digest:      configDigest,
 			Annotations: configAnnotations(jobID),
 		},
-		Layers: []descriptor{{
+		Layers: []Descriptor{{
 			MediaType:   MediaTypeEvaluationCardLayer,
 			Size:        layerSize,
 			Digest:      layerDigest,
@@ -113,10 +113,15 @@ func (c *Client) PushEvaluationCard(ctx context.Context, jobID string, cardJSON 
 	if err != nil {
 		return nil, fmt.Errorf("push manifest: %w", err)
 	}
+	return c.artifactReference(tag, digest), nil
+}
+
+// artifactReference identifies a published manifest in the configured repository.
+func (c *Client) artifactReference(tag, digest string) *api.OCIArtifactReference {
 	return &api.OCIArtifactReference{
 		OCIDigest:    digest,
 		OCIReference: strings.TrimPrefix(strings.TrimPrefix(c.registry, "https://"), "http://") + "/" + c.repository + ":" + tag + "@" + digest,
-	}, nil
+	}
 }
 
 // UploadBlob streams content to the registry using chunked PATCH uploads. The digest is computed
@@ -349,11 +354,16 @@ func (c *Client) completeBlobUpload(ctx context.Context, uploadURL, digest strin
 // putManifest publishes the artifact manifest under the given tag in the target repository.
 // It verifies the registry's SHA-256 digest, falling back to the local digest when the header is absent.
 func (c *Client) putManifest(ctx context.Context, tag string, manifestJSON []byte) (string, error) {
+	return c.putManifestWithMediaType(ctx, tag, manifestJSON, MediaTypeImageManifest)
+}
+
+// putManifestWithMediaType publishes the supplied bytes and verifies the registry digest.
+func (c *Client) putManifestWithMediaType(ctx context.Context, tag string, manifestJSON []byte, mediaType string) (string, error) {
 	req, err := c.newRequestWithBody(ctx, http.MethodPut, c.registryURL("/v2/"+c.repository+"/manifests/"+tag), manifestJSON)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Content-Type", MediaTypeImageManifest)
+	req.Header.Set("Content-Type", mediaType)
 	resp, err := c.do(req)
 	if err != nil {
 		return "", err
@@ -371,6 +381,7 @@ func (c *Client) putManifest(ctx context.Context, tag string, manifestJSON []byt
 		return "", fmt.Errorf("registry manifest digest %q does not match expected %q", digest, expected)
 	}
 	return digest, nil
+
 }
 
 // registryURL joins the configured registry origin with a Distribution API path.
