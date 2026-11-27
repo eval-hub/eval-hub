@@ -2,27 +2,36 @@ type: object
 description: >-
   Optional job-level OCI processing status, artifact references, and signing
   information. Unavailable objects are omitted, including on completed jobs.
-  Status, artifacts, and signing are independently optional. Artifact references
+  Status, artifact references, and signing information may be independently absent.
+  When OCI export is configured, completed and partially_failed evaluations
+  automatically generate and publish the evaluation card and bundle; an absent
+  reference does not indicate that generation is optional. Artifact references
   identify published outputs and are returned by the publisher. The digest in
   each reference is authoritative; a reference may include its publication tag
   as registry/repository:tag@digest, but that tag is informational and may move
   independently of the digest. Changing the tag does not change or invalidate
   the digest-qualified reference.
-  A failed status may still include evaluation_card when publication succeeded
-  but recording completion failed; the reference is valid and its digest is
-  authoritative.
+  Successful publication of evaluation_card and evaluation_bundle normally results
+  in a completed status; a failed status may still retain valid published references
+  if recording completion fails.
   OCI workflows report running once at the start and save available outputs together
   with the final completed or failed status, without intermediate phase writes.
+  Completed and partially_failed evaluations use the same OCI workflow. A bundle
+  failure retains the published card and leaves the evaluation outcome unchanged.
 properties:
   status:
     $ref: ./OCIProcessingStatus.yaml
     description: Optional common OCI workflow status; omit until actual workflow information is available.
   evaluation_card:
     $ref: ./OCIArtifactReference.yaml
-    description: Optional evaluation card artifact; omit until available.
+    description: Published evaluation card reference; omitted until available.
   evaluation_bundle:
     $ref: ./OCIArtifactReference.yaml
-    description: Optional OCI index grouping the evaluation card and benchmark artifacts; omit until available.
+    description: >-
+      Published evaluation bundle reference. The bundle is an OCI index grouping
+      the evaluation card and benchmark artifacts, generated automatically for
+      completed and partially_failed evaluations when OCI export is configured.
+      The reference is omitted until available, including when publication fails.
   signing:
     $ref: ./OCISigningResult.yaml
     description: Optional signing information; omitted when no outcome is available.

@@ -4,7 +4,36 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/eval-hub/eval-hub/pkg/api"
 )
+
+// EvaluationBundleManifestTag constructs a bundle tag, truncating only the prefix
+// to fit the OCI 128-character limit. It validates the entire prefix first.
+// An empty prefix defaults to evaluation-bundle.
+// Bundle publication must use this helper when that workflow is connected.
+func EvaluationBundleManifestTag(jobID, prefix string) (string, error) {
+	if jobID == "" || len(jobID) > 128 {
+		return "", fmt.Errorf("evaluation job id must contain 1 to 128 characters")
+	}
+	if err := api.ValidateOCIExportPrefix(jobID); err != nil {
+		return "", fmt.Errorf("evaluation job id: %w", err)
+	}
+	if err := api.ValidateOCIExportPrefix(prefix); err != nil {
+		return "", err
+	}
+	if prefix == "" {
+		prefix = evaluationBundleArtifactPrefix
+	}
+	allowance := 128 - 1 - len(jobID)
+	if allowance < 1 {
+		return "", fmt.Errorf("evaluation job id leaves no room for an OCI export prefix")
+	}
+	if len(prefix) > allowance {
+		prefix = prefix[:allowance]
+	}
+	return prefix + "-" + jobID, nil
+}
 
 const (
 	// AnnotationEvaluationJobID is the OCI annotation key for the evaluation job identifier.
@@ -12,7 +41,8 @@ const (
 	// AnnotationImageTitle is the standard OCI title annotation used as a human-readable blob/manifest name.
 	AnnotationImageTitle = "org.opencontainers.image.title"
 
-	evaluationCardArtifactPrefix = "evaluation-card"
+	evaluationBundleArtifactPrefix = "evaluation-bundle"
+	evaluationCardArtifactPrefix   = "evaluation-card"
 )
 
 // EvaluationCardManifestTag returns the OCI manifest tag for an evaluation card artifact.
