@@ -10,7 +10,7 @@ func IsOCIExportEnabled(job *EvaluationJobResource) bool {
 	return job != nil && job.Exports != nil && job.Exports.OCI != nil
 }
 
-var ociExportPrefixPattern = regexp.MustCompile(`^[a-zA-Z0-9_][a-zA-Z0-9._-]*$`)
+var ociTagPattern = regexp.MustCompile(`^[a-zA-Z0-9_][a-zA-Z0-9._-]*$`)
 
 // ValidateOCIExportPrefix checks the complete export prefix before any truncation.
 // Empty prefixes are allowed. Length is limited only when constructing the final tag.
@@ -19,8 +19,19 @@ func ValidateOCIExportPrefix(prefix string) error {
 	if prefix == "evaluation-card" {
 		return fmt.Errorf("%q is reserved for evaluation card artifacts", prefix)
 	}
-	if prefix != "" && !ociExportPrefixPattern.MatchString(prefix) {
-		return fmt.Errorf("OCI export prefix must match %s", ociExportPrefixPattern.String())
+	if prefix != "" && !ociTagPattern.MatchString(prefix) {
+		return fmt.Errorf("OCI export prefix must match %s", ociTagPattern.String())
+	}
+	return nil
+}
+
+// ValidateOCIManifestTag checks the length and syntax of a complete OCI tag.
+func ValidateOCIManifestTag(tag string) error {
+	if tag == "" || len(tag) > 128 {
+		return fmt.Errorf("OCI manifest tag must contain 1 to 128 characters")
+	}
+	if !ociTagPattern.MatchString(tag) {
+		return fmt.Errorf("OCI manifest tag must match %s", ociTagPattern.String())
 	}
 	return nil
 }
@@ -74,6 +85,12 @@ type EvaluationOCIResults struct {
 	EvaluationCard   *OCIArtifactReference `json:"evaluation_card,omitempty"`
 	EvaluationBundle *OCIArtifactReference `json:"evaluation_bundle,omitempty"`
 	Signing          *OCISigningResult     `json:"signing,omitempty"`
+}
+
+// EligibleForOCIProcessing reports whether a job has OCI exports configured and
+// a completed or partially failed outcome.
+func EligibleForOCIProcessing(job *EvaluationJobResource) bool {
+	return IsResultsExportEligible(job) && IsOCIExportEnabled(job)
 }
 
 // UpdateOCIResults partially merges OCI workflow status and the card reference in memory.

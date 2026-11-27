@@ -195,6 +195,7 @@ func TestOCIPublisherFactoryNewPublisherValidationErrors(t *testing.T) {
 		factory OCIPublisherFactory
 		job     *api.EvaluationJobResource
 	}{
+		{name: "nil factory", factory: (*ociPublisherFactory)(nil), job: validJob()},
 		{name: "nil job", factory: factory, job: nil},
 		{name: "missing exports", factory: factory, job: &api.EvaluationJobResource{}},
 		{name: "missing oci export", factory: factory, job: &api.EvaluationJobResource{
@@ -215,8 +216,12 @@ func TestOCIPublisherFactoryNewPublisherValidationErrors(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if _, err := tc.factory.NewPublisher(context.Background(), tc.job); err == nil {
+			publisher, err := tc.factory.NewPublisher(context.Background(), tc.job)
+			if err == nil {
 				t.Fatal("expected error")
+			}
+			if publisher != nil {
+				t.Fatalf("returned publisher after validation failure: %v", publisher)
 			}
 		})
 	}
@@ -488,7 +493,7 @@ func TestCredentialResolutionUsesOCIHTTPTimeout(t *testing.T) {
 		{name: "expiry", timeout: time.Millisecond, expire: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			client, err := NewOCIHTTPClient(&config.Config{Sidecar: &config.SidecarConfig{OCI: &config.SidecarOCIConfig{HTTPTimeout: tc.timeout}}}, false, nil)
+			client, err := oci.NewHTTPClient(&config.Config{Sidecar: &config.SidecarConfig{OCI: &config.SidecarOCIConfig{HTTPTimeout: tc.timeout}}}, false, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

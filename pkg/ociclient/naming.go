@@ -9,14 +9,11 @@ import (
 )
 
 // EvaluationBundleManifestTag constructs a bundle tag, truncating only the prefix
-// to fit the OCI 128-character limit. It validates the entire prefix first.
+// to fit the OCI 128-character limit. The evaluation-card reservation applies to
+// the configured prefix. The job ID follows the syntax of a complete tag.
 // An empty prefix defaults to evaluation-bundle.
-// Bundle publication must use this helper when that workflow is connected.
 func EvaluationBundleManifestTag(jobID, prefix string) (string, error) {
-	if jobID == "" || len(jobID) > 128 {
-		return "", fmt.Errorf("evaluation job id must contain 1 to 128 characters")
-	}
-	if err := api.ValidateOCIExportPrefix(jobID); err != nil {
+	if err := api.ValidateOCIManifestTag(jobID); err != nil {
 		return "", fmt.Errorf("evaluation job id: %w", err)
 	}
 	if err := api.ValidateOCIExportPrefix(prefix); err != nil {

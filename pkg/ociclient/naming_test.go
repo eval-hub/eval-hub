@@ -15,6 +15,7 @@ func TestEvaluationBundleManifestTag(t *testing.T) {
 		{name: "explicit default", jobID: uuid, prefix: "evaluation-bundle", want: "evaluation-bundle-" + uuid},
 		{name: "custom", jobID: uuid, prefix: "final", want: "final-" + uuid},
 		{name: "reserved card prefix", jobID: uuid, prefix: "evaluation-card", wantErr: true},
+		{name: "card value as job ID", jobID: "evaluation-card", want: "evaluation-bundle-evaluation-card"},
 		{name: "custom card prefix", jobID: uuid, prefix: "evaluation-card-custom", want: "evaluation-card-custom-" + uuid},
 		{name: "allowed characters", jobID: uuid, prefix: "_AZaz09.-_", want: "_AZaz09.-_-" + uuid},
 		{name: "UUID boundary", jobID: uuid, prefix: strings.Repeat("a", 91), want: strings.Repeat("a", 91) + "-" + uuid},
