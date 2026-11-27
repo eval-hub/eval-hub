@@ -322,6 +322,16 @@ func testGenerationDeleteProtectionIsTenantScopedAndPreservesExpiry(t *testing.T
 	if _, err := generationStore.GetEvaluationJob(job.Resource.ID); err == nil {
 		t.Fatal("successful same-tenant DELETE left the generation record")
 	}
+	lateEvent := &api.StatusEvent{BenchmarkStatusEvent: &api.BenchmarkStatusEvent{
+		ProviderID: generation.ProviderID, ID: generation.BenchmarkID, BenchmarkIndex: 0,
+		Status: api.StateRunning,
+	}}
+	if err := generationStore.UpdateEvaluationJob(job.Resource.ID, lateEvent); err == nil {
+		t.Fatal("late worker event was accepted for the deleted generation")
+	}
+	if _, err := generationStore.GetEvaluationJob(job.Resource.ID); err == nil {
+		t.Fatal("late worker event restored the deleted generation")
+	}
 
 	// A failed cleanup leaves the original terminal expiry intact. The separate
 	// short lease protects only the in-flight cleanup, then retention removes the

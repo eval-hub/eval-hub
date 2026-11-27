@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -594,8 +595,10 @@ func InitializeTestSuite(ctx *godog.TestSuiteContext) {
 	ctx.BeforeSuite(checkModelEndpoint)
 	ctx.BeforeSuite(checkOCIConfiguration)
 
-	// Initialize GPU test suite hooks
-	InitializeGPUTestSuite(ctx)
+	// Generation-only runs use a preconfigured cluster fixture.
+	if len(opts.Paths) != 1 || filepath.Base(opts.Paths[0]) != "collection_generation.feature" {
+		InitializeGPUTestSuite(ctx)
+	}
 
 	ctx.AfterSuite(tidyUpTests)
 }
@@ -667,6 +670,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 
 	// MCP-specific steps
 	InitializeMCPSteps(ctx, tc)
+
+	InitializeCollectionGenerationSteps(ctx, tc)
 
 	// OTEL adapter-log export steps
 	InitializeOTELSteps(ctx, tc)
