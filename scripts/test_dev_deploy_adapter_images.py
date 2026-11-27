@@ -33,8 +33,10 @@ harness, so they pin the contract the deploy relies on:
 Pulling the image, publishing it to the kind-local registry, and recording the
 manifest run against a real container runtime and cluster. `adapter_source_image`
 and `load_adapter_image` are pinned here against a stub runtime, because they
-decide whether a deploy pulls at all and for which platform; publishing and
-manifest recording stay covered by the e2e suite.
+decide whether a deploy pulls at all and for which platform - including whether a
+cached image of another architecture is replaced when ADAPTER_IMAGES_PLATFORM
+asks for a specific one; publishing and manifest recording stay covered by the
+e2e suite.
 """
 
 import os
@@ -170,29 +172,51 @@ PUBLISH_FUNCTIONS = [
     "image_ref",
     "adapter_source_image",
     "require_local_image",
+    "platform_arch",
+    "cached_image_arch",
     "load_adapter_image",
 ]
 
 # The stub answers `image inspect` from a file of present references, reports a
 # configurable architecture for `--format` queries, and records every call, so a
 # case can assert what was pulled, for which platform, and whether a present
-# image was pulled again.
+# image was pulled again. A successful `image pull --platform` records the
+# variant it pulled, so a later inspect reports the architecture the pull left on
+# the reference, the way a real engine replaces the tag.
 RUNTIME_STUB = """#!/usr/bin/env bash
 printf '%s\\n' "$*" >>"${FAKE_RUNTIME_LOG}"
 args=("$@")
 ref="${args[${#args[@]}-1]}"
+state="${FAKE_RUNTIME_STATE:-}"
 case "${args[0]} ${args[1]}" in
   "image inspect")
     grep -qxF -- "$ref" "${FAKE_RUNTIME_PRESENT}" 2>/dev/null || exit 1
     for arg in "${args[@]}"; do
       if [[ "$arg" == --format ]]; then
-        printf '%s\\n' "${FAKE_IMAGE_ARCH:-arm64}"
+        arch="${FAKE_IMAGE_ARCH:-arm64}"
+        if [[ -n "$state" ]]; then
+          recorded="$(awk -v ref="$ref" '$2 == ref { print $1; exit }' "$state" 2>/dev/null || true)"
+          [[ -z "$recorded" ]] || arch="$recorded"
+        fi
+        printf '%s\\n' "$arch"
         exit 0
       fi
     done
     exit 0
     ;;
-  "image pull") exit "${FAKE_PULL_EXIT:-0}" ;;
+  "image pull")
+    status="${FAKE_PULL_EXIT:-0}"
+    if [[ "$status" == 0 && -n "$state" ]]; then
+      previous=""
+      for arg in "${args[@]}"; do
+        if [[ "$previous" == --platform ]]; then
+          printf '%s %s\\n' "${arg#linux/}" "$ref" >>"$state"
+        fi
+        previous="$arg"
+      done
+    fi
+    exit "$status"
+    ;;
   "image tag") exit 0 ;;
   "image push") exit 0 ;;
   "image rm") exit 0 ;;
@@ -282,7 +306,7 @@ class AdapterImagesTestCase(unittest.TestCase):
     def tearDownClass(cls):
         cls.work.cleanup()
 
-    def parse(self, adapters, adapter_images="", environment=None):
+    def parse(self, adapters, adapter_images="", environment=None, shell="bash"):
         """Return (returncode, parsed fields, output) for one selection."""
         env = dict(os.environ)
         # Pin the inputs the harness reads beyond its arguments, so a developer's
@@ -291,7 +315,7 @@ class AdapterImagesTestCase(unittest.TestCase):
         env["IMAGE_TAG"] = "kind-dev"
         env.update(environment or {})
         proc = subprocess.run(
-            ["bash", str(self.harness), adapters, adapter_images],
+            [shell, str(self.harness), adapters, adapter_images],
             capture_output=True,
             text=True,
             env=env,
@@ -554,6 +578,36 @@ class ReferenceFormTests(AdapterImagesTestCase):
                 self.assert_parses("inspect", f"inspect={image}", overrides=f"inspect={image}")
 
 
+class PortabilityTests(AdapterImagesTestCase):
+    """The selection runs under the stock macOS /bin/bash, which is still 3.2.
+
+    `make test-benchmarks-kind-latest` deploys through dev-deploy on a fresh Mac,
+    so the selection has to work under /bin/bash: bash 3.2 treats an empty
+    "${array[@]}" as an unbound variable under `set -u`, which is why
+    adapter_selected is indexed.
+    """
+
+    def system_bash(self):
+        shell = pathlib.Path("/bin/bash")
+        if not shell.exists():
+            self.skipTest("/bin/bash is not available")
+        return str(shell)
+
+    def test_a_selection_runs_under_system_bash(self):
+        code, fields, output = self.parse("all", shell=self.system_bash())
+        self.assertEqual(code, 0, output)
+        self.assertEqual(
+            fields["SELECTED"],
+            "inspect lm-evaluation-harness lighteval ruler ifbench followbench",
+        )
+
+    def test_a_duplicate_is_rejected_under_system_bash(self):
+        code, _, output = self.parse("inspect,inspect", shell=self.system_bash())
+        self.assertNotEqual(code, 0, f"expected a duplicate failure, got: {output}")
+        self.assertIn("duplicate entry 'inspect'", output)
+        self.assertNotIn("unbound variable", output)
+
+
 class PrebuiltImageResolutionTests(unittest.TestCase):
     """adapter_source_image and load_adapter_image decide what is pulled."""
 
@@ -583,10 +637,15 @@ class PrebuiltImageResolutionTests(unittest.TestCase):
         present_file.write_text("".join(f"{ref}\n" for ref in present))
         call_log = self.work_dir / "calls.txt"
         call_log.write_text("")
+        # The pull state lets a case assert what a pull leaves behind for a
+        # later inspect, for example the architecture of a replaced variant.
+        state_file = self.work_dir / "state.txt"
+        state_file.write_text("")
         env = {
             "PATH": str(self.work_dir) + ":" + os.environ["PATH"],
             "FAKE_RUNTIME_PRESENT": str(present_file),
             "FAKE_RUNTIME_LOG": str(call_log),
+            "FAKE_RUNTIME_STATE": str(state_file),
         }
         for key, value in extra_env.items():
             env[key.upper()] = str(value)
@@ -734,6 +793,61 @@ class PrebuiltImageResolutionTests(unittest.TestCase):
             [f"image pull --platform linux/amd64 {override}"],
             calls,
         )
+
+    def test_a_cached_image_of_another_architecture_is_pulled_for_the_platform(self):
+        """A cache hit must not override an explicit ADAPTER_IMAGES_PLATFORM."""
+        override = "quay.io/evalhub/community-inspect:latest"
+        code, _, calls, output = self.run_case(
+            "inspect",
+            f"inspect={override}",
+            "load",
+            present=(override,),
+            FAKE_IMAGE_ARCH="arm64",
+            ADAPTER_IMAGES_PLATFORM="linux/amd64",
+        )
+        self.assertEqual(code, 0, output)
+        self.assertEqual(
+            [call for call in calls if call.startswith("image pull")],
+            [f"image pull --platform linux/amd64 {override}"],
+            calls,
+        )
+        self.assertIn("linux/arm64, not the requested linux/amd64", output)
+
+    def test_a_cached_image_of_the_requested_platform_is_kept(self):
+        override = "quay.io/evalhub/community-inspect:latest"
+        code, _, calls, output = self.run_case(
+            "inspect",
+            f"inspect={override}",
+            "load",
+            present=(override,),
+            FAKE_IMAGE_ARCH="amd64",
+            ADAPTER_IMAGES_PLATFORM="linux/amd64",
+        )
+        self.assertEqual(code, 0, output)
+        self.assertFalse(
+            [call for call in calls if call.startswith("image pull")],
+            f"a matching cached image was pulled again: {calls}",
+        )
+
+    def test_replacing_a_cached_variant_still_warns_about_emulation(self):
+        """The pulled variant is foreign to the nodes, so the warning must fire."""
+        override = "quay.io/evalhub/community-inspect:latest"
+        code, _, calls, output = self.run_case(
+            "inspect",
+            f"inspect={override}",
+            "load",
+            present=(override,),
+            FAKE_IMAGE_ARCH="arm64",
+            ADAPTER_IMAGES_PLATFORM="linux/amd64",
+            FAKE_NODE_ARCH="arm64",
+        )
+        self.assertEqual(code, 0, output)
+        self.assertEqual(
+            [call for call in calls if call.startswith("image pull")],
+            [f"image pull --platform linux/amd64 {override}"],
+            calls,
+        )
+        self.assertIn("run under emulation", output)
 
     def test_a_foreign_architecture_warns_about_emulation(self):
         override = "quay.io/evalhub/community-inspect:latest"

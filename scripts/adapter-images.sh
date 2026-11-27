@@ -21,6 +21,8 @@ EVALHUB_REPO="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 ADAPTERS="${ADAPTERS:-followbench}"
 PROVIDERS_DIR="${ADAPTER_IMAGE_PROVIDERS_DIR:-${EVALHUB_REPO}/config/providers}"
+# Adapters parse_adapters resolved, in the order they were given.
+SELECTED_ADAPTERS=()
 
 # Diagnostics go to stderr: stdout carries only the ADAPTER_IMAGES value.
 log() {
@@ -95,8 +97,25 @@ provider_config_file() {
   esac
 }
 
+# adapter_selected reports whether an adapter is already in the selection, so a
+# duplicated ADAPTERS entry fails instead of emitting the same pair twice.
+#
+# The loop is indexed rather than `for selected in "${SELECTED_ADAPTERS[@]}"`
+# because this runs before the first entry is recorded: bash 3.2, which is what a
+# stock macOS `/bin/bash` provides, treats an empty `"${array[@]}"` as an unbound
+# variable under `set -u` and would abort instead of reporting a duplicate. That
+# would also break `make test-benchmarks-kind-latest`, which substitutes this
+# script's output.
+adapter_selected() {
+  local index
+  for ((index = 0; index < ${#SELECTED_ADAPTERS[@]}; index++)); do
+    [[ "${SELECTED_ADAPTERS[${index}]}" == "$1" ]] && return 0
+  done
+  return 1
+}
+
 parse_adapters() {
-  local requested adapter existing
+  local requested adapter
   local -a requested_adapters=()
 
   ADAPTERS="$(trim_whitespace "$ADAPTERS")"
@@ -113,9 +132,7 @@ parse_adapters() {
     [[ -n "$adapter" ]] || fail "ADAPTERS contains an empty entry. Use one or more supported adapter names."
     provider_config_file "$adapter" >/dev/null ||
       fail "Unsupported adapter '$adapter' in ADAPTERS. Supported values: inspect, lm-evaluation-harness, lighteval, ruler, ifbench, followbench."
-    for existing in "${SELECTED_ADAPTERS[@]}"; do
-      [[ "$existing" == "$adapter" ]] && fail "ADAPTERS contains duplicate entry '$adapter'."
-    done
+    adapter_selected "$adapter" && fail "ADAPTERS contains duplicate entry '$adapter'."
     SELECTED_ADAPTERS+=("$adapter")
   done
 }

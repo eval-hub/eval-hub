@@ -133,9 +133,14 @@ make adapter-images-push ADAPTER_IMAGE_REGISTRY=quay.io/<your-user>
 ```
 
 The target prints the `ADAPTER_IMAGES` value for the images it pushed, so pass
-that value to a run. `SKIP_BUILD=true` also reuses the EvalHub and operator
-images, so it only applies once a previous deploy has built them; a first run
-needs to build those core images:
+that value to a run. `SKIP_BUILD=true` reuses the EvalHub and operator images of
+a previous deploy, so a first run has to build those core images. It also reuses
+the selected adapter images instead of pulling them, so every adapter image must
+already be in the local container runtime: an image pushed from another machine
+is missing here, and the run fails with `Required local image is missing` rather
+than pulling it. Pull that reference first (for example
+`podman image pull quay.io/<your-user>/community-inspect:<tag>`), or leave
+`SKIP_BUILD=true` out so the adapter is pulled (or built) as usual:
 
 ```bash
 make test-benchmarks-kind ADAPTERS=all \

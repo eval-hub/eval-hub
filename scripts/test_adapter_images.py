@@ -16,7 +16,10 @@ no container runtime and no network and pin:
      image-reference validation;
   4. the rejections that keep a wrong pair out of a deploy: an unsupported or
      duplicate adapter, a missing provider file, and a provider without a
-     runtime image.
+     runtime image;
+  5. that it runs under the stock macOS `/bin/bash`, which is still 3.2, because
+     `make test-benchmarks-kind-latest` substitutes this script's output on a
+     fresh Mac and bash 3.2 aborts on an empty `"${array[@]}"` under `set -u`.
 
 The provider YAMLs in config/providers are read directly, so the expected
 references come from the shipped configuration instead of a copy here.
@@ -113,7 +116,7 @@ class AdapterImagesScriptTests(unittest.TestCase):
             )
         return directory
 
-    def run_script(self, adapters, providers_dir=None):
+    def run_script(self, adapters, providers_dir=None, shell="bash"):
         """Run the script once; returns (returncode, stdout, stderr)."""
         env = {
             "PATH": os.environ["PATH"],
@@ -122,7 +125,7 @@ class AdapterImagesScriptTests(unittest.TestCase):
         if adapters is not None:
             env["ADAPTERS"] = adapters
         proc = subprocess.run(
-            ["bash", str(SCRIPT_PATH)],
+            [shell, str(SCRIPT_PATH)],
             capture_output=True,
             text=True,
             env=env,
@@ -242,6 +245,37 @@ class AdapterImagesScriptTests(unittest.TestCase):
             "has no runtime image for adapter 'inspect'",
             providers_dir=providers,
         )
+
+
+class PortabilityTests(AdapterImagesScriptTests):
+    """The script runs under the stock macOS /bin/bash, which is still 3.2.
+
+    `make test-benchmarks-kind-latest` substitutes this script's output on a
+    fresh Mac, so it has to work under /bin/bash: bash 3.2 treats an empty
+    "${array[@]}" as an unbound variable under `set -u`, which is why the
+    duplicate check is indexed.
+    """
+
+    def system_bash(self):
+        shell = pathlib.Path("/bin/bash")
+        if not shell.exists():
+            self.skipTest("/bin/bash is not available")
+        return str(shell)
+
+    def test_all_adapters_are_emitted_under_system_bash(self):
+        code, out, err = self.run_script("all", shell=self.system_bash())
+        self.assertEqual(code, 0, err)
+        expected = ",".join(
+            f"{adapter}={provider_image(adapter)}" for adapter in CURATED_ORDER
+        ) + "\n"
+        self.assertEqual(out, expected, err)
+
+    def test_a_duplicate_is_rejected_under_system_bash(self):
+        code, out, err = self.run_script("inspect,inspect", shell=self.system_bash())
+        self.assertNotEqual(code, 0, f"expected a duplicate failure, got stdout={out!r}")
+        self.assertIn("duplicate entry 'inspect'", err)
+        self.assertNotIn("unbound variable", err)
+        self.assertEqual(out, "")
 
 
 if __name__ == "__main__":

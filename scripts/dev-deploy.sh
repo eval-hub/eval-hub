@@ -116,7 +116,10 @@ Inputs (also accepted as environment variables):
                            qemu-user-static emulation: the adapter Pods then run
                            under emulation and are much slower. Without this
                            input a prebuilt image must match the node platform,
-                           which follows the host.
+                           which follows the host. A locally cached image of
+                           another architecture is pulled again for the
+                           requested platform, so a stale cache cannot override
+                           this input.
   AIRGAP=true              create/use a Calico kind cluster and deny external
                           egress from system-namespace evaluation jobs (default: false)
   CONTAINER_RUNTIME        container engine for image builds, the local registry,
@@ -344,10 +347,17 @@ trim_whitespace() {
   printf '%s' "$value"
 }
 
+# adapter_selected reports whether an adapter is already in the selection, so a
+# duplicated ADAPTERS entry fails instead of building the same image twice.
+#
+# The loop is indexed rather than `for selected in "${SELECTED_ADAPTERS[@]}"`
+# because it runs before the first entry is recorded: bash 3.2, which is what a
+# stock macOS `/bin/bash` provides, treats an empty `"${array[@]}"` as an unbound
+# variable under `set -u`, so the selection would abort on its first adapter.
 adapter_selected() {
-  local requested
-  for requested in "${SELECTED_ADAPTERS[@]}"; do
-    [[ "$requested" == "$1" ]] && return 0
+  local index
+  for ((index = 0; index < ${#SELECTED_ADAPTERS[@]}; index++)); do
+    [[ "${SELECTED_ADAPTERS[${index}]}" == "$1" ]] && return 0
   done
   return 1
 }
@@ -770,6 +780,22 @@ adapter_source_image() {
   image_ref "$(adapter_image_name "$adapter")"
 }
 
+# platform_arch prints the architecture a linux/<arch> platform selects, or
+# nothing when no platform was requested. validate_inputs restricts the value to
+# ^linux/[a-z0-9_]+$, so stripping the prefix is exact.
+platform_arch() {
+  [[ -n "${1:-}" ]] || return 0
+  printf '%s' "${1#linux/}"
+}
+
+# cached_image_arch prints the architecture of an image the container runtime
+# already holds, or nothing when it cannot report one.
+cached_image_arch() {
+  local image="$1" arch
+  arch="$("$CONTAINER_RUNTIME" image inspect --format '{{.Architecture}}' "$image" 2>/dev/null || true)"
+  trim_whitespace "$arch"
+}
+
 # load_adapter_image makes a prebuilt adapter image available without building
 # it. The pull runs on the host engine, before publish_images pushes into the
 # cluster-local registry, so AIRGAP=true (which denies egress from evaluation
@@ -781,13 +807,30 @@ adapter_source_image() {
 # ADAPTER_IMAGES_PLATFORM=linux/amd64 and the podman machine's qemu-user-static:
 # NODE_ARCH then reports that the Pods run under emulation instead of leaving a
 # silent, very slow deployment.
+#
+# A cached reference holds whichever variant was pulled last, so an explicit
+# PLATFORM it does not match pulls the requested variant: without that, an arm64
+# machine with a cached arm64 image would quietly deploy the cached one, ignore
+# the request, and not warn either, because the cached architecture matches the
+# nodes.
 load_adapter_image() {
   local adapter="$1" image="$2" platform="${3:-}" node_arch="${4:-}"
-  local actual
+  local actual requested
+  local pull_required=false
   local -a pull_args=(image pull)
+  requested="$(platform_arch "$platform")"
   if "$CONTAINER_RUNTIME" image inspect "$image" >/dev/null 2>&1; then
-    log PASS "Found prebuilt $adapter image $image"
+    actual="$(cached_image_arch "$image")"
+    if [[ -n "$requested" && -n "$actual" && "$actual" != "$requested" ]]; then
+      log INFO "Cached prebuilt $adapter image $image is linux/$actual, not the requested $platform; pulling $platform to replace it."
+      pull_required=true
+    else
+      log PASS "Found prebuilt $adapter image $image"
+    fi
   else
+    pull_required=true
+  fi
+  if [[ "$pull_required" == true ]]; then
     [[ -z "$platform" ]] || pull_args+=(--platform "$platform")
     log INFO "Pulling prebuilt $adapter image $image${platform:+ for $platform} instead of building it."
     "$CONTAINER_RUNTIME" "${pull_args[@]}" "$image" ||
@@ -795,7 +838,7 @@ load_adapter_image() {
     log PASS "Loaded prebuilt $adapter image $image"
   fi
   if [[ -n "$node_arch" ]]; then
-    actual="$("$CONTAINER_RUNTIME" image inspect --format '{{.Architecture}}' "$image" 2>/dev/null || true)"
+    actual="$(cached_image_arch "$image")"
     if [[ -n "$actual" && "$actual" != "$node_arch" ]]; then
       log WARN "Prebuilt $adapter image $image is linux/$actual but the kind nodes are linux/$node_arch: its Pods run under emulation and are much slower."
     fi
