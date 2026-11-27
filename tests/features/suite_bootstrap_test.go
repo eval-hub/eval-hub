@@ -690,6 +690,8 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 	ctx.Step(`^I wait for the evaluation job status to match "([^"]*)"$`, tc.iWaitForEvaluationJobStatusToMatch)
 
 	// OCI artifact steps
+	ctx.Step(`^the OCI bundle should match the completed job$`, tc.theOCIBundleShouldMatchCompletedJob)
+	ctx.Step(`^the OCI bundle child (\d+) should match the job "([^"]*)" artifact$`, tc.theOCIBundleChildShouldMatchJob)
 	ctx.Step(`^I wait for the OCI export status to be "([^"]*)"$`, tc.iWaitForOCIExportStatus)
 	ctx.Step(`^I fetch the OCI manifest for repository "([^"]*)" and tag "([^"]*)"$`, tc.iFetchOCIManifestByRepoAndTag)
 	ctx.Step(`^I fetch the evaluation card OCI manifest for repository "([^"]*)" and tag "([^"]*)"$`, tc.iFetchOCIEvaluationCardManifestByRepoAndTag)

@@ -93,19 +93,20 @@ func EligibleForOCIProcessing(job *EvaluationJobResource) bool {
 	return IsResultsExportEligible(job) && IsOCIExportEnabled(job)
 }
 
-// UpdateOCIResults partially merges OCI workflow status and the card reference in memory.
+// UpdateOCIResults partially merges OCI workflow status, card, and bundle references in memory.
 // It performs no field validation or workflow enforcement. Storage updates have a
 // stricter contract: UpdateEvaluationJobOCI requires a non-nil, validated status
-// and validation of any supplied card, even though this helper permits card-only updates.
-// A non-nil card intentionally replaces the existing reference (last-write-wins),
-// which supports future evaluation-card regeneration; the current workflow has no
-// regeneration path yet. Replacement updates the stored digest and reference,
-// not the previously published immutable artifact.
-// It initializes missing results and preserves all other
-// fields. A nil status or card means no change to the existing value; if both are
-// nil, results are returned unchanged.
-func UpdateOCIResults(results *EvaluationJobResults, status *OCIProcessingStatus, card *OCIArtifactReference) *EvaluationJobResults {
-	if status == nil && card == nil {
+// and validation of any supplied artifact references, even though this helper
+// permits reference-only updates.
+// A non-nil card or bundle intentionally replaces the existing reference
+// (last-write-wins). Card replacement supports future evaluation-card regeneration;
+// the current workflow has no regeneration path yet. Replacement updates the
+// stored digest and reference, not the previously published immutable artifact.
+// It initializes missing results and preserves all other fields.
+// A nil status, card, or bundle leaves the corresponding value unchanged.
+// If all three are nil, results are returned unchanged.
+func UpdateOCIResults(results *EvaluationJobResults, status *OCIProcessingStatus, card, bundle *OCIArtifactReference) *EvaluationJobResults {
+	if status == nil && card == nil && bundle == nil {
 		return results
 	}
 	if results == nil {
@@ -119,6 +120,9 @@ func UpdateOCIResults(results *EvaluationJobResults, status *OCIProcessingStatus
 	}
 	if card != nil {
 		results.OCI.EvaluationCard = card
+	}
+	if bundle != nil {
+		results.OCI.EvaluationBundle = bundle
 	}
 	return results
 }
