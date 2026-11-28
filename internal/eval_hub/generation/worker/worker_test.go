@@ -81,15 +81,17 @@ func TestRunSpecReportsOnlySafeLifecycleEventsThroughLoopback(t *testing.T) {
 	if err := RunSpec(context.Background(), data, client); err != nil {
 		t.Fatalf("RunSpec(): %v", err)
 	}
-	if len(events) != 2 || events[0].BenchmarkStatusEvent.Status != api.StateRunning || events[1].BenchmarkStatusEvent.Status != api.StateFailed {
+	if len(events) != 3 || events[0].BenchmarkStatusEvent.Status != api.StateRunning ||
+		events[1].BenchmarkStatusEvent.CollectionGenerationProgress.Phase != "guardrails" ||
+		events[2].BenchmarkStatusEvent.Status != api.StateFailed {
 		t.Fatalf("reported lifecycle events = %+v", events)
 	}
-	if len(events[1].BenchmarkStatusEvent.AdditionalInfo) != 1 {
-		t.Fatalf("failure event contains unexpected fields: %+v", events[1].BenchmarkStatusEvent.AdditionalInfo)
+	if len(events[2].BenchmarkStatusEvent.AdditionalInfo) != 1 {
+		t.Fatalf("failure event contains unexpected fields: %+v", events[2].BenchmarkStatusEvent.AdditionalInfo)
 	}
-	failure, ok := events[1].BenchmarkStatusEvent.AdditionalInfo["collection_generation_error"].(map[string]any)
-	if !ok || failure["code"] != "workload_failed" || failure["message"] != "The collection-generation worker failed." {
-		t.Fatalf("failure was not sanitized: %+v", events[1].BenchmarkStatusEvent.AdditionalInfo)
+	failure, ok := events[2].BenchmarkStatusEvent.AdditionalInfo["collection_generation_error"].(map[string]any)
+	if !ok || failure["code"] != "guardrails_unavailable" || failure["message"] != "Generation safety checks are temporarily unavailable." {
+		t.Fatalf("failure was not sanitized: %+v", events[2].BenchmarkStatusEvent.AdditionalInfo)
 	}
 }
 

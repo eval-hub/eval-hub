@@ -29,8 +29,11 @@ const (
 	legacyConfigParameter = "collection_generation_config"
 	RunnerEntrypoint      = "/app/eval-generation-worker"
 	maxConfigBytes        = 64 * 1024
-	maxResultBytes        = 512 * 1024
-	LaunchFailureMessage  = "The collection-generation worker could not be started."
+	// MaxResultBytes bounds the serialized proposal carried by a terminal event.
+	MaxResultBytes = 512 * 1024
+	// MaxRationaleBytes bounds the stored proposal rationale, including runtime guidance.
+	MaxRationaleBytes    = 10_000
+	LaunchFailureMessage = "The collection-generation worker could not be started."
 )
 
 func init() {
@@ -180,7 +183,7 @@ func ValidateResult(request api.CollectionGenerationRequest, result api.Collecti
 	if result.Collection.CurationOrder != 0 {
 		return errors.New("proposal cannot set the server-managed curation order")
 	}
-	if len(result.YAML) > 256*1024 || len(result.Rationale) > 10_000 || len(result.Collection.Benchmarks) == 0 || len(result.Collection.Benchmarks) > request.MaxBenchmarks {
+	if len(result.YAML) > 256*1024 || len(result.Rationale) > MaxRationaleBytes || len(result.Collection.Benchmarks) == 0 || len(result.Collection.Benchmarks) > request.MaxBenchmarks {
 		return errors.New("proposal exceeds size or benchmark limits")
 	}
 	if len(result.Explanation.SelectedBenchmarks) != len(result.Collection.Benchmarks) || len(result.Explanation.RejectedBenchmarks) > 5 || len(result.Actions) > 50 {
@@ -213,13 +216,13 @@ func ValidateResult(request api.CollectionGenerationRequest, result api.Collecti
 	for i, reason := range result.Explanation.SelectedBenchmarks {
 		benchmark := result.Collection.Benchmarks[i]
 		key := reason.ProviderID + "\x00" + reason.ID
-		if key != benchmark.ProviderID+"\x00"+benchmark.ID || strings.TrimSpace(reason.Reason) == "" || len(reason.Reason) > 300 {
+		if key != benchmark.ProviderID+"\x00"+benchmark.ID || strings.TrimSpace(reason.Reason) == "" || utf8.RuneCountInString(reason.Reason) > api.MaxCollectionGenerationReasonLength {
 			return errors.New("selected benchmark explanation does not match the proposal")
 		}
 	}
 	rejected := make(map[string]struct{}, len(result.Explanation.RejectedBenchmarks))
 	for _, reason := range result.Explanation.RejectedBenchmarks {
-		if strings.TrimSpace(reason.ProviderID) == "" || strings.TrimSpace(reason.ID) == "" || strings.TrimSpace(reason.Reason) == "" || len(reason.Reason) > 300 {
+		if strings.TrimSpace(reason.ProviderID) == "" || strings.TrimSpace(reason.ID) == "" || strings.TrimSpace(reason.Reason) == "" || utf8.RuneCountInString(reason.Reason) > api.MaxCollectionGenerationReasonLength {
 			return errors.New("proposal contains an invalid rejected benchmark explanation")
 		}
 		if !providerAllowed(request.ProviderFilter, reason.ProviderID) {
@@ -329,7 +332,7 @@ func ResultFromAdditionalInfo(request api.CollectionGenerationRequest, info map[
 		return api.CollectionGenerationResult{}, errors.New("completed generation event has no proposal result")
 	}
 	raw, err := json.Marshal(rawValue)
-	if err != nil || len(raw) > maxResultBytes {
+	if err != nil || len(raw) > MaxResultBytes {
 		return api.CollectionGenerationResult{}, errors.New("generation proposal is malformed or exceeds the size limit")
 	}
 	var result api.CollectionGenerationResult
@@ -351,7 +354,7 @@ func ResultFromAdditionalInfo(request api.CollectionGenerationRequest, info map[
 		result.Actions[i].Summary = safeActionSummary(result.Actions[i].Name, result.Actions[i].Outcome)
 	}
 	normalized, err := json.Marshal(result)
-	if err != nil || len(normalized) > maxResultBytes {
+	if err != nil || len(normalized) > MaxResultBytes {
 		return api.CollectionGenerationResult{}, errors.New("generation proposal is malformed or exceeds the size limit")
 	}
 	return result, nil

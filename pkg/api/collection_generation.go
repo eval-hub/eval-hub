@@ -7,6 +7,8 @@ const (
 	MaxCollectionGenerationGoalLength = 10_000
 	// MaxCollectionGenerationBenchmarks is the maximum number of benchmarks a proposal may select.
 	MaxCollectionGenerationBenchmarks = 100
+	// MaxCollectionGenerationReasonLength bounds each benchmark explanation in characters.
+	MaxCollectionGenerationReasonLength = 300
 	// DefaultCollectionGenerationBenchmarks is used when max_benchmarks is omitted.
 	DefaultCollectionGenerationBenchmarks = 12
 )

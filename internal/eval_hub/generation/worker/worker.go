@@ -1,6 +1,4 @@
 // Package worker implements the isolated collection-generation workload process.
-// This first runner is deliberately a lifecycle stub: real catalog/model orchestration
-// is supplied by the follow-up generation implementation.
 package worker
 
 import (
@@ -17,7 +15,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/eval-hub/eval-hub/internal/agent/llm"
 	"github.com/eval-hub/eval-hub/internal/eval_hub/generation"
+	"github.com/eval-hub/eval-hub/internal/eval_hub/generation/orchestration"
 	"github.com/eval-hub/eval-hub/pkg/api"
 	"github.com/google/uuid"
 )
@@ -43,8 +43,7 @@ type jobSpec struct {
 	CallbackURL    *string        `json:"callback_url"`
 }
 
-// Run reads the trusted mounted job specification and reports a running state,
-// then a safe failure until the generation orchestration is implemented.
+// Run reads the trusted mounted job specification and runs the workload.
 func Run(ctx context.Context, specPath string, client *http.Client) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -73,6 +72,12 @@ func Run(ctx context.Context, specPath string, client *http.Client) error {
 // RunSpec validates the mounted job identity/configuration and sends only fixed,
 // service-owned lifecycle events through the loopback sidecar.
 func RunSpec(ctx context.Context, data []byte, client *http.Client) error {
+	// RHAI-17753 supplies the deployment-owned safety client. Until it is
+	// configured, the runner cannot send the goal to the model.
+	return runSpec(ctx, data, client, nil)
+}
+
+func runSpec(ctx context.Context, data []byte, client *http.Client, guardrail orchestration.Guardrail) error {
 	if len(data) == 0 || len(data) > maxJobSpecBytes {
 		return errors.New("generation job specification is empty or exceeds the size limit")
 	}
@@ -89,34 +94,77 @@ func RunSpec(ctx context.Context, data []byte, client *http.Client) error {
 	if err != nil {
 		return err
 	}
-	_ = snapshot // The stub validates the immutable snapshot; orchestration consumes it in the next implementation.
 	tenant, err := readPodNamespace()
 	if err != nil {
 		return errors.New("read generation pod namespace")
 	}
-	if client == nil {
-		client = &http.Client{
-			Timeout:       workerTimeout,
-			Transport:     &http.Transport{Proxy: nil},
-			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-		}
-	}
-	startErr := postEvent(ctx, client, endpoint, tenant, api.BenchmarkStatusEvent{
+	sidecarClient := localClient(client)
+	event := api.BenchmarkStatusEvent{
 		ProviderID: generation.ProviderID, ID: generation.BenchmarkID, BenchmarkIndex: 0, Status: api.StateRunning,
-	})
+	}
+	startErr := postEvent(ctx, sidecarClient, endpoint, tenant, event)
 
 	// Always attempt to record terminal state, even if the first callback failed.
-	failure, _ := generation.SafeFailure("workload_failed", "")
+	event.Status = api.StateFailed
+	if startErr == nil {
+		modelHTTP := *sidecarClient
+		modelHTTP.Timeout = snapshot.Limits.MaxDuration
+		model, err := llm.NewClient(llm.Config{BaseURL: spec.Model.URL, HTTPClient: &modelHTTP})
+		if err == nil {
+			var sequence uint64
+			runner := orchestration.Runner{
+				Catalog: sidecarCatalog{client: sidecarClient, base: *endpoint, tenant: tenant},
+				Model:   model, Guardrail: guardrail,
+				Progress: func(ctx context.Context, phase, action string) error {
+					sequence++
+					progress := api.BenchmarkStatusEvent{
+						ProviderID: generation.ProviderID, ID: generation.BenchmarkID, BenchmarkIndex: 0,
+						Status: api.StateRunning,
+						CollectionGenerationProgress: &api.CollectionGenerationProgressEvent{
+							Sequence: sequence, Phase: phase, LastCompletedAction: action,
+						},
+					}
+					return postEvent(ctx, sidecarClient, endpoint, tenant, progress)
+				},
+			}
+			proposal, failure := runner.Run(ctx, snapshot)
+			if failure != nil {
+				event.AdditionalInfo = map[string]any{"collection_generation_error": failure}
+			} else {
+				event.Status = api.StateCompleted
+				event.AdditionalInfo = map[string]any{"collection_generation_result": proposal}
+			}
+		}
+	}
+	if event.AdditionalInfo == nil {
+		failure, _ := generation.SafeFailure("workload_failed", "")
+		event.AdditionalInfo = map[string]any{"collection_generation_error": failure}
+	}
 	terminalCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), workerTimeout)
 	defer cancel()
-	terminalErr := postEvent(terminalCtx, client, endpoint, tenant, api.BenchmarkStatusEvent{
-		ProviderID: generation.ProviderID, ID: generation.BenchmarkID, BenchmarkIndex: 0,
-		Status: api.StateFailed, AdditionalInfo: map[string]any{"collection_generation_error": failure},
-	})
+	terminalErr := postEvent(terminalCtx, sidecarClient, endpoint, tenant, event)
 	if startErr != nil {
 		return fmt.Errorf("report generation start: %w", startErr)
 	}
 	return terminalErr
+}
+
+func localClient(client *http.Client) *http.Client {
+	local := http.Client{Timeout: workerTimeout, Transport: &http.Transport{}}
+	if client != nil {
+		local = *client
+		if local.Transport == nil {
+			local.Transport = &http.Transport{}
+		}
+		if transport, ok := local.Transport.(*http.Transport); ok {
+			transport = transport.Clone()
+			transport.Proxy = nil
+			local.Transport = transport
+		}
+	}
+	local.Jar = nil
+	local.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return &local
 }
 
 func validateSpec(spec jobSpec) (generation.JobConfig, *url.URL, error) {
@@ -179,7 +227,11 @@ func isLoopbackHost(host string) bool {
 
 func postEvent(ctx context.Context, client *http.Client, endpoint *url.URL, tenant string, event api.BenchmarkStatusEvent) error {
 	data, err := json.Marshal(api.StatusEvent{BenchmarkStatusEvent: &event})
-	if err != nil || len(data) > maxEventBytes {
+	limit := maxEventBytes
+	if event.Status == api.StateCompleted {
+		limit += generation.MaxResultBytes
+	}
+	if err != nil || len(data) > limit {
 		return errors.New("generation event is invalid")
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), bytes.NewReader(data))

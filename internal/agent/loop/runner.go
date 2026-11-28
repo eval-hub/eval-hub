@@ -148,6 +148,22 @@ func (r *Runner) Run(parent context.Context, input Input) (Result, error) {
 			if strings.TrimSpace(assistant.Content) == "" {
 				return Result{}, ErrInvalidModelResponse
 			}
+			if input.ReviewFinal != nil {
+				correction, err := input.ReviewFinal(ctx, assistant.Content)
+				if err != nil {
+					return Result{}, err
+				}
+				if err := ctx.Err(); err != nil {
+					return Result{}, budgetOrContextError(parent, err)
+				}
+				if correction != "" {
+					messages = append(messages, Message{Role: RoleUser, Content: correction})
+					if historySize(messages) > r.config.MaxHistoryBytes {
+						return Result{}, ErrInvalidModelResponse
+					}
+					continue
+				}
+			}
 			result.Final = assistant.Content
 			return result, nil
 		}
@@ -359,6 +375,9 @@ func (r *Runner) completeTurn(ctx context.Context, input Input, iteration int, d
 		}
 		result.ModelCalls++
 		r.emit(EventModelCallStarted, result.ModelCalls, "", "started", "Model request started")
+		if err := ctx.Err(); err != nil {
+			return ModelResponse{}, 0, err
+		}
 		response, callErr := r.model.Complete(ctx, request)
 		if callErr == nil {
 			r.emit(EventModelCallCompleted, result.ModelCalls, "", "completed", "Model response received")
