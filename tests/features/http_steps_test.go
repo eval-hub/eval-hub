@@ -260,12 +260,14 @@ func (tc *scenarioConfig) iSendARequestToWithBody(method, path, body string) err
 }
 
 func (tc *scenarioConfig) iSendARequestImpl(method, path, body, caller string) error {
+	return tc.iSendARequestWithContext(context.Background(), method, path, body, caller)
+}
+
+func (tc *scenarioConfig) iSendARequestWithContext(ctx context.Context, method, path, body, caller string) error {
 	endpoint, err := tc.getEndpoint(path)
 	if err != nil {
 		return err
 	}
-	tc.lastURL = endpoint
-	tc.lastMethod = method
 	entity, err := tc.getRequestBody(body)
 	if err != nil {
 		return err
@@ -275,12 +277,17 @@ func (tc *scenarioConfig) iSendARequestImpl(method, path, body, caller string) e
 	} else {
 		tc.logDebug("Sending %s request to %s with body %s\n", method, endpoint, body)
 	}
-	req, err := http.NewRequest(method, endpoint, entity)
+	return tc.sendScenarioRequest(ctx, method, endpoint, entity, isMetricsScrapePath(path))
+}
+
+func (tc *scenarioConfig) sendScenarioRequest(ctx context.Context, method, endpoint string, entity io.Reader, scrapeMetrics bool) error {
+	tc.lastURL = endpoint
+	tc.lastMethod = method
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, entity)
 	if err != nil {
 		tc.logDebug("Failed to create request: %v\n", err)
 		return err
 	}
-	scrapeMetrics := isMetricsScrapePath(path)
 	if !scrapeMetrics {
 		if authToken := os.Getenv("AUTH_TOKEN"); authToken != "" {
 			req.Header.Set("Authorization", "Bearer "+authToken)
@@ -291,7 +298,11 @@ func (tc *scenarioConfig) iSendARequestImpl(method, path, body, caller string) e
 	}
 
 	for k, v := range tc.reqHeaders {
-		req.Header.Set(k, v)
+		if k == "Authorization" && v == "" {
+			req.Header.Del(k)
+		} else {
+			req.Header.Set(k, v)
+		}
 	}
 
 	tc.response, err = tc.apiFeature.client.Do(req)
@@ -351,7 +362,8 @@ func (tc *scenarioConfig) iSendARequestImpl(method, path, body, caller string) e
 			if err != nil {
 				return tc.logError(fmt.Errorf("failed to parse endpoint %s: %w", endpoint, err))
 			}
-			if parsedURL.Query().Get("hard_delete") == "true" {
+			if parsedURL.Query().Get("hard_delete") == "true" ||
+				(assetName == collectionGenerationAsset && tc.response.StatusCode == http.StatusNoContent) {
 				tc.removeAsset(assetName, id)
 			}
 		}
@@ -437,6 +449,8 @@ func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, 
 			hardDelete = true
 		case "collections":
 			url = "evaluations/collections"
+		case collectionGenerationAsset:
+			url = "evaluations/collections/generation"
 		case "providers":
 			url = "evaluations/providers"
 		}
@@ -450,6 +464,12 @@ func (tc *scenarioConfig) assetCleanup(ctx context.Context, sc *godog.Scenario, 
 			err := tc.iSendARequestImpl("DELETE", path, "", "asset cleanup")
 			if err != nil {
 				return ctx, tc.logError(fmt.Errorf("failed to delete asset %s with id '%s': %w", assetName, id, err))
+			}
+			if assetName == collectionGenerationAsset {
+				if code := tc.response.StatusCode; code != http.StatusNoContent && code != http.StatusNotFound {
+					return ctx, tc.logError(fmt.Errorf("failed to clean up generation %q: HTTP %d", id, code))
+				}
+				continue
 			}
 			err = tc.theResponseStatusShouldBe(204)
 			if err != nil {

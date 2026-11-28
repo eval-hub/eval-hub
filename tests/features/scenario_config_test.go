@@ -568,7 +568,14 @@ func (tc *scenarioConfig) extractId(body []byte) (string, error) {
 // Uses [^/?]+ to stop at query strings
 var pathDetails = regexp.MustCompile(`^.*/api/v1/([^/?]+)(?:/([^/?]+))?(?:/([^/?]+))?.*$`)
 
+const collectionGenerationAsset = "collection-generation"
+
+var collectionGenerationPathDetails = regexp.MustCompile(`^.*/api/v1/evaluations/collections/generation(?:/([^/?]+))?(?:\?.*)?$`)
+
 func (tc *scenarioConfig) getAssetDetails(path string) (string, string, string, error) {
+	if matches := collectionGenerationPathDetails.FindStringSubmatch(path); len(matches) == 2 {
+		return "evaluations", collectionGenerationAsset, matches[1], nil
+	}
 	if matches := pathDetails.FindStringSubmatch(path); len(matches) >= 4 {
 		return matches[1], matches[2], matches[3], nil
 	}
