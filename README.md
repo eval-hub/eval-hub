@@ -293,7 +293,77 @@ branches provide the `Dockerfile.lmes-job` used for the LMES adapter image,
 not the default `main` branch. The operator
 checkout is always required. By default, `ADAPTERS` selects only FollowBench,
 so the contrib checkout is needed. Set `ADAPTERS=all` to build all six curated
-adapters, or select a different list. Each repository is searched as a sibling of
+adapters, or select a different list. An adapter can instead be supplied
+prebuilt, which skips its build and its source checkout:
+
+```bash
+make dev-deploy ADAPTERS=inspect \
+  ADAPTER_IMAGES='inspect=quay.io/evalhub/community-inspect@sha256:...'
+```
+
+`ADAPTER_IMAGES` is a comma-separated list of `adapter=image` pairs, and every
+adapter it names must also be selected by `ADAPTERS`. The image is pulled into
+the container runtime when it is not present locally, then re-tagged into the
+kind-local registry under the same `localhost:<port>/evalhub/...` path a built
+adapter image would use, so the rendered provider ConfigMaps, the recorded
+`system/evalhub-dev-deploy-manifest` (which gains
+`source.<adapter>.prebuilt=true` and `source.<adapter>.image`), and the e2e image
+checks are unchanged. A reference that names a local tag this deployment builds
+from source (for example `localhost/evalhub/community-followbench:<IMAGE_TAG>`)
+is rejected before the first build, because that build would replace the prebuilt
+image. The pull happens on the host before the registry push, so
+`AIRGAP=true` still deploys. `SKIP_BUILD=true` skips that pull and requires the
+adapter images to be present locally instead; it does not make the whole
+deployment offline, because dev-deploy still pulls `python:3.12-slim` for the
+mock target and, on arm64, clones and builds `kube-rbac-proxy`. `make
+adapter-images` prints the value for the selected adapters from the references
+the provider configs declare, ready to substitute:
+
+```bash
+make dev-deploy ADAPTERS=all ADAPTER_IMAGES="$(make adapter-images)"
+make adapter-images ADAPTERS=inspect,ruler
+```
+
+The curated community images are published for `linux/amd64` only, so an arm64
+machine (Apple silicon) needs the podman machine's qemu-user-static emulation to
+run them:
+
+```bash
+make dev-deploy ADAPTERS=all ADAPTER_IMAGES="$(make adapter-images)" \
+  ADAPTER_IMAGES_PLATFORM=linux/amd64
+```
+
+The adapter Pods then run under emulation and are much slower, and dev-deploy
+warns which images are foreign to the nodes. To build an adapter natively for the
+host instead, keep it in `ADAPTERS` and leave it out of `ADAPTER_IMAGES`: that
+selection reaches the source-build branch, which is the faster option when you
+only need a few adapters. Dropping an adapter from `ADAPTERS` neither builds nor
+publishes it, so its provider keeps the operator-packaged image.
+
+To build every adapter natively once and reuse the images, `make
+adapter-images-push` builds the selected adapters for the architecture the
+container runtime reports and pushes them to a registry you own, printing the
+`ADAPTER_IMAGES` value for the pushed images:
+
+```bash
+podman login quay.io
+make adapter-images-push ADAPTER_IMAGE_REGISTRY=quay.io/<your-user>
+make dev-deploy ADAPTERS=all ADAPTER_IMAGES='<the printed value>'
+```
+
+`SKIP_BUILD=true` also reuses the EvalHub and operator images, which a first
+deployment still has to build, so leave it off that run and add it to later
+deployments that reuse those images.
+
+`ADAPTER_IMAGE_REGISTRY` defaults to `quay.io/<the account the container runtime
+is logged in to>` and `ADAPTER_IMAGE_TAG` to `latest`; push a new tag per run
+rather than re-pushing `latest`, because a cached tag is reused as-is. The build
+uses the same source checkout, Containerfile, and image name as a source build,
+so a deployment or a benchmark sweep published from the pushed images is
+identical to one built locally.
+
+Each repository is searched as
+a sibling of
 the EvalHub checkout first and then as `<parent>/<repo>` under each
 colon-separated `DEV_REPO_PARENT_PATHS` entry (default `~/code`); set that
 variable when the repositories live elsewhere. The command
@@ -535,71 +605,11 @@ make cross-compile
 make build-wheel
 ```
 
-### Quick local OCI evaluation card check
+### Optional OCI exports
 
-Developers can use `scripts/test-local-oci-export.sh` to simulate a quick OCI evaluation card
-generation during development. It runs an evaluation with the local test adapter,
-downloads the exported card from a local OCI registry, and verifies it against
-the completed job, including the OCI export status and artifact reference.
-No model server is required.
-
-Check `results.oci.status.state` for the OCI export status: `running`, `completed`,
-or `failed`. After a successful export, `results.oci.evaluation_card` provides the
-manifest digest and digest-qualified reference for retrieving the card. An OCI
-export failure leaves the evaluation's completed status and benchmark results intact.
-
-OCI export currently supports evaluation cards. Evaluation bundles, signing,
-and automatic export retries are not currently supported.
-
-Install these dependencies before starting:
-
-- `curl`, `jq`, and `oras`, available on your `PATH`.
-- Go (the version specified in `go.mod`) and `uv` for the service setup.
-- A running container engine: Podman by default, or Docker with `DOCKER=docker`.
-
-From the repository root, start the registry and service:
-
-```sh
-make start-oci-registry
-make start-service
-```
-
-These targets start the registry at `localhost:5001` and build and start the
-service in local mode at `http://localhost:8080`, including the test adapter setup.
-For Docker, use `make start-oci-registry DOCKER=docker`.
-
-Run the check:
-
-```sh
-bash scripts/test-local-oci-export.sh
-```
-
-A successful run prints a verification message and saves these files in
-`./bin/local-oci/` by default:
-
-| File | Contents |
-| --- | --- |
-| `request.json` | Submitted evaluation job request |
-| `created.json` | Job creation response, including the job ID |
-| `job.json` | Latest job status response, with results on completion |
-| `manifest.json` | Exported OCI artifact manifest |
-| `artifact-config.json` | OCI artifact configuration |
-| `evaluation-card-<job-id>.json` | Downloaded evaluation card |
-
-Set `OUTPUT_DIR` to save verification files elsewhere:
-
-```sh
-OUTPUT_DIR=/tmp/local-oci-check bash scripts/test-local-oci-export.sh
-```
-
-When finished, stop the service and remove the registry container:
-
-```sh
-make stop-service
-make stop-oci-registry
-```
-
-If using Docker, use `make stop-oci-registry DOCKER=docker`.
+See [OCI exports](OCI.md) for evaluation cards, benchmark artifacts, evaluation
+bundles, annotation examples, job request and response snippets, and the local
+registry verification walkthrough.
 
 ### Exposing private functions for tests
 

@@ -1,12 +1,44 @@
 package api
 
+import (
+	"fmt"
+	"regexp"
+)
+
 // IsOCIExportEnabled reports whether a job has OCI exports configured.
 func IsOCIExportEnabled(job *EvaluationJobResource) bool {
 	return job != nil && job.Exports != nil && job.Exports.OCI != nil
 }
 
+var ociTagPattern = regexp.MustCompile(`^[a-zA-Z0-9_][a-zA-Z0-9._-]*$`)
+
+// ValidateOCIExportPrefix checks the complete export prefix before any truncation.
+// Empty prefixes are allowed. Length is limited only when constructing the final tag.
+// The exact prefix "evaluation-card" is reserved for evaluation card artifacts.
+func ValidateOCIExportPrefix(prefix string) error {
+	if prefix == "evaluation-card" {
+		return fmt.Errorf("%q is reserved for evaluation card artifacts", prefix)
+	}
+	if prefix != "" && !ociTagPattern.MatchString(prefix) {
+		return fmt.Errorf("OCI export prefix must match %s", ociTagPattern.String())
+	}
+	return nil
+}
+
+// ValidateOCIManifestTag checks the length and syntax of a complete OCI tag.
+func ValidateOCIManifestTag(tag string) error {
+	if tag == "" || len(tag) > 128 {
+		return fmt.Errorf("OCI manifest tag must contain 1 to 128 characters")
+	}
+	if !ociTagPattern.MatchString(tag) {
+		return fmt.Errorf("OCI manifest tag must match %s", ociTagPattern.String())
+	}
+	return nil
+}
+
 // OCISigningConfig selects the signing method and optionally references a key Secret.
-// It retains configuration only; it does not resolve keys or schedule signing.
+// Signing is pending implementation. Settings are accepted and saved with the job,
+// but no secret lookup, key loading, or signing is performed.
 type OCISigningConfig struct {
 	Type      string  `json:"type" validate:"required,oneof=key-pair"`
 	SecretRef *string `json:"secret_ref,omitempty" validate:"omitempty,rfc1123_dns_label"`
@@ -55,19 +87,26 @@ type EvaluationOCIResults struct {
 	Signing          *OCISigningResult     `json:"signing,omitempty"`
 }
 
-// UpdateOCIResults partially merges OCI workflow status and the card reference in memory.
+// EligibleForOCIProcessing reports whether a job has OCI exports configured and
+// a completed or partially failed outcome.
+func EligibleForOCIProcessing(job *EvaluationJobResource) bool {
+	return IsResultsExportEligible(job) && IsOCIExportEnabled(job)
+}
+
+// UpdateOCIResults partially merges OCI workflow status, card, and bundle references in memory.
 // It performs no field validation or workflow enforcement. Storage updates have a
 // stricter contract: UpdateEvaluationJobOCI requires a non-nil, validated status
-// and validation of any supplied card, even though this helper permits card-only updates.
-// A non-nil card intentionally replaces the existing reference (last-write-wins),
-// which supports future evaluation-card regeneration; the current workflow has no
-// regeneration path yet. Replacement updates the stored digest and reference,
-// not the previously published immutable artifact.
-// It initializes missing results and preserves all other
-// fields. A nil status or card means no change to the existing value; if both are
-// nil, results are returned unchanged.
-func UpdateOCIResults(results *EvaluationJobResults, status *OCIProcessingStatus, card *OCIArtifactReference) *EvaluationJobResults {
-	if status == nil && card == nil {
+// and validation of any supplied artifact references, even though this helper
+// permits reference-only updates.
+// A non-nil card or bundle intentionally replaces the existing reference
+// (last-write-wins). Card replacement supports future evaluation-card regeneration;
+// the current workflow has no regeneration path yet. Replacement updates the
+// stored digest and reference, not the previously published immutable artifact.
+// It initializes missing results and preserves all other fields.
+// A nil status, card, or bundle leaves the corresponding value unchanged.
+// If all three are nil, results are returned unchanged.
+func UpdateOCIResults(results *EvaluationJobResults, status *OCIProcessingStatus, card, bundle *OCIArtifactReference) *EvaluationJobResults {
+	if status == nil && card == nil && bundle == nil {
 		return results
 	}
 	if results == nil {
@@ -81,6 +120,9 @@ func UpdateOCIResults(results *EvaluationJobResults, status *OCIProcessingStatus
 	}
 	if card != nil {
 		results.OCI.EvaluationCard = card
+	}
+	if bundle != nil {
+		results.OCI.EvaluationBundle = bundle
 	}
 	return results
 }

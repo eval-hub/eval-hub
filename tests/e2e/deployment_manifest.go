@@ -26,6 +26,11 @@ type deployedAdapter struct {
 	image       string
 	sourceSHA   string
 	sourceDirty string
+	// prebuilt is true when dev-deploy did not build the image but took it from
+	// ADAPTER_IMAGES, in which case sourceSHA is the "prebuilt" marker and image
+	// names the reference that was pulled. The registry reference in image is
+	// the same either way.
+	prebuilt bool
 }
 
 // deploymentManifest is present only for environments created by dev-deploy.
@@ -99,6 +104,7 @@ func discoverDeploymentManifest(
 			image:       configMap.Data["image."+adapterID],
 			sourceSHA:   configMap.Data["source."+adapterID+".revision"],
 			sourceDirty: configMap.Data["source."+adapterID+".dirty"],
+			prebuilt:    configMap.Data["source."+adapterID+".prebuilt"] == "true",
 		}
 		if adapter.image == "" {
 			return deploymentManifest{}, fmt.Errorf("ConfigMap/%s has no image.%s for selected adapter %q",
@@ -218,8 +224,8 @@ func logDeployedAdapter(t *testing.T, manifest deploymentManifest, adapterID str
 		return
 	}
 	adapter := manifest.selectedAdapters[adapterID]
-	t.Logf("dev-deploy selection: adapter=%s image=%s sourceRevision=%s sourceDirty=%s cluster=%s airgap=%t",
-		adapterID, adapter.image, adapter.sourceSHA, adapter.sourceDirty,
+	t.Logf("dev-deploy selection: adapter=%s image=%s prebuilt=%t sourceRevision=%s sourceDirty=%s cluster=%s airgap=%t",
+		adapterID, adapter.image, adapter.prebuilt, adapter.sourceSHA, adapter.sourceDirty,
 		manifest.clusterName, manifest.airgap)
 }
 

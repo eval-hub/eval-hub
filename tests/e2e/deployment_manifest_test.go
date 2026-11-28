@@ -21,8 +21,9 @@ func TestDiscoverDeploymentManifest(t *testing.T) {
 		"source.inspect.revision":                   "abc123",
 		"source.inspect.dirty":                      "false",
 		"image.lm-evaluation-harness":               "localhost:32769/evalhub/community-lmes:kind-local",
-		"source.lm-evaluation-harness.revision":     "def456",
-		"source.lm-evaluation-harness.dirty":        "true",
+		"source.lm-evaluation-harness.revision":     "prebuilt",
+		"source.lm-evaluation-harness.prebuilt":     "true",
+		"source.lm-evaluation-harness.image":        "quay.io/evalhub/community-lmes@sha256:def456",
 		"source.trustyai-service-operator.revision": "operator123",
 		"source.trustyai-service-operator.dirty":    "false",
 	}
@@ -115,6 +116,13 @@ func TestDiscoverDeploymentManifest(t *testing.T) {
 			if inspect.image != validData["image.inspect"] ||
 				inspect.sourceSHA != validData["source.inspect.revision"] || inspect.sourceDirty != "false" {
 				t.Fatalf("Inspect provenance = %+v", inspect)
+			}
+			if inspect.prebuilt {
+				t.Fatal("Inspect was built from source but is recorded as prebuilt")
+			}
+			lmes := got.selectedAdapters["lm-evaluation-harness"]
+			if !lmes.prebuilt || lmes.image != validData["image.lm-evaluation-harness"] {
+				t.Fatalf("prebuilt LMES provenance = %+v", lmes)
 			}
 			if got.operatorRevision != "operator123" || got.operatorDirty != "false" {
 				t.Fatalf("operator provenance = revision %q dirty %q", got.operatorRevision, got.operatorDirty)

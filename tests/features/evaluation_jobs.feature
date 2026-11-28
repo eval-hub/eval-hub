@@ -2102,6 +2102,34 @@ Feature: Evaluation Jobs
     And the MLflow artifact should contain "card_version"
     And the MLflow artifact should contain "schema_version"
 
+  # Disabled pending evaluation bundle validation against an external cluster.
+  @oci @evaluation_bundle @ignore
+  Scenario: Evaluation bundle published when job completes with OCI export configured
+    Given the service is running
+    And OCI is configured
+    When I send a POST request to "/api/v1/evaluations/jobs" with body "file:/evaluation_job_oci_export.json"
+    Then the response code should be 202
+    And the "resource.id" field in the response should be saved as "value:job_id"
+    And I wait for the evaluation job status to be "completed"
+    And I wait for the OCI export status to be "completed"
+    When I send a GET request to "/api/v1/evaluations/jobs/{id}"
+    Then the response code should be 200
+    When I fetch the OCI manifest for repository "{{env:OCI_REPOSITORY|evalhub/test-results}}" and tag "{{env:OCI_TAG|test-v1}}-{{value:job_id}}"
+    Then the OCI bundle should match the completed job
+    And the OCI bundle child 0 should match the job "evaluation-card" artifact
+    And the OCI artifact should be valid JSON
+    And the OCI artifact should contain the value "{{value:job_id}}" at path "$.metadata.evaluation_job_id"
+    And the OCI artifact should contain the value "completed" at path "$.results.status.state"
+    And the OCI artifact should contain the value "arc_easy" at path "$.results.benchmarks[0].id"
+    And the OCI bundle child 1 should match the job "benchmark" artifact
+    Then the OCI artifact should exist
+    And the OCI artifact should be valid JSON
+    And the OCI artifact should contain "benchmark_id"
+    And the OCI artifact should contain "model_name"
+    And the OCI artifact should contain "results"
+    And the OCI artifact should contain "arc_easy"
+    And the OCI artifact should contain the value "{{value:job_id}}" at path "$.id"
+
   @connected
   @hf
   @ignore # https://gitlab.cee.redhat.com/atris/shepard/-/work_items/274 and requires Jenkins variables TEST_DATA_HF_GATED_REPO_ID, TEST_DATA_HF_REVISION, TEST_DATA_HF_SUB_PATH, and TEST_DATA_HF_SECRET_REF

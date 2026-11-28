@@ -231,6 +231,11 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 // createEvaluationJob validates, persists, and launches an already decoded job.
 // HTTP decoding and response formatting belong to the calling API handler.
 func (h *Handlers) createEvaluationJob(ctx *executioncontext.ExecutionContext, evaluation *api.EvaluationJobConfig) (*api.EvaluationJobResource, error) {
+	// Only caller-supplied evaluation exports are bundle prefixes. Post-processing
+	// reuses exports.oci for input access and must preserve its literal/stored tag.
+	if err := validation.ValidateEvaluationOCITag(evaluation); err != nil {
+		return nil, err
+	}
 	id := common.GUID()
 	collection, benchmarks, err := h.prepareEvaluationJob(ctx, evaluation, id)
 	if err != nil {

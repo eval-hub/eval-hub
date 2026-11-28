@@ -94,6 +94,29 @@ AIRGAP ?= false
 # Keep the default lightweight for local deployments. Use ADAPTERS=all when
 # you explicitly want the full curated-adapter image set.
 ADAPTERS ?= followbench
+# Supply a prebuilt image for a selected adapter instead of building it from
+# source, for example
+#   make dev-deploy ADAPTERS=inspect \
+#     ADAPTER_IMAGES='inspect=quay.io/evalhub/community-inspect@sha256:...'
+# The image is pulled into the container runtime (unless SKIP_BUILD=true, which
+# requires it locally) and re-tagged into the kind-local registry, so provider
+# ConfigMaps, the recorded manifest, and the e2e image checks are unchanged. An
+# adapter supplied this way needs no source checkout.
+#
+# ADAPTERS alone decides what dev-deploy builds and publishes. An adapter is
+# built natively from source only while it stays in ADAPTERS and is left out of
+# ADAPTER_IMAGES, so keep it selected and omit it from ADAPTER_IMAGES rather than
+# dropping it from ADAPTERS: an adapter that is not selected is neither built nor
+# published, and its provider keeps the operator-packaged image.
+ADAPTER_IMAGES ?=
+# Platform to pull ADAPTER_IMAGES for, for example linux/amd64. The curated
+# community images are published for linux/amd64 only, so an arm64 machine needs
+#   make dev-deploy ADAPTERS=all ADAPTER_IMAGES="$(make adapter-images)" \
+#     ADAPTER_IMAGES_PLATFORM=linux/amd64
+# with qemu-user-static in the podman machine; the adapter Pods then run under
+# emulation and are much slower. It applies only to adapters in ADAPTER_IMAGES,
+# and without it a prebuilt image must match the node platform (the host's).
+ADAPTER_IMAGES_PLATFORM ?=
 EVALHUB_HOST_PORT ?= 18443
 EVALHUB_NODE_PORT ?= 30443
 EVALHUB_HOST_BIND_ADDRESS ?= 127.0.0.1
@@ -113,6 +136,12 @@ EVALHUB_KUBECONFIG_FILE ?=
 #
 # ADAPTERS=all builds all six curated adapter images. The default builds only
 # FollowBench. Narrow ADAPTERS (comma-separated) to build the adapters you need.
+# ADAPTER_IMAGES supplies a prebuilt image for a selected adapter, which then
+# needs no source checkout; an adapter that is selected but not overridden keeps
+# the requirement listed above, because keeping it in ADAPTERS and out of
+# ADAPTER_IMAGES is the native source build. An adapter absent from ADAPTERS is
+# neither built nor published by dev-deploy, and its provider keeps the
+# operator-packaged image.
 # Nothing is cloned automatically; the
 # lm-evaluation-harness checkout is the fork at
 # https://github.com/opendatahub-io/lm-evaluation-harness.git, checked out on
@@ -125,6 +154,8 @@ CONTAINER_RUNTIME ?=
 dev-deploy: ## Build and deploy the local EvalHub stack to podman/Docker-backed kind (optional air-gap mode)
 	@KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" IMAGE_TAG="$(IMAGE_TAG)" \
 		SKIP_BUILD="$(SKIP_BUILD)" AIRGAP="$(AIRGAP)" ADAPTERS="$(ADAPTERS)" \
+		ADAPTER_IMAGES="$(ADAPTER_IMAGES)" \
+		ADAPTER_IMAGES_PLATFORM="$(ADAPTER_IMAGES_PLATFORM)" \
 		CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" \
 		EVALHUB_HOST_PORT="$(EVALHUB_HOST_PORT)" EVALHUB_NODE_PORT="$(EVALHUB_NODE_PORT)" \
 		EVALHUB_HOST_BIND_ADDRESS="$(EVALHUB_HOST_BIND_ADDRESS)" \
@@ -132,6 +163,74 @@ dev-deploy: ## Build and deploy the local EvalHub stack to podman/Docker-backed 
 
 dev-deploy-help: ## Show dev-deploy inputs and usage
 	@bash scripts/dev-deploy.sh --help
+
+# Echo the ADAPTER_IMAGES value for the selected adapters, using the image
+# reference each provider declares in config/providers (for the curated set:
+# quay.io/evalhub/community-<adapter>:latest, and the pinned
+# quay.io/opendatahub/ta-lmes-job tag for lm-evaluation-harness). Substitute the
+# output directly:
+#
+#   make dev-deploy ADAPTERS=all ADAPTER_IMAGES="$(make adapter-images)"
+#   make test-benchmarks-kind ADAPTER_IMAGES="$(make adapter-images)"
+#
+# The tags are copied as declared, so `latest` stays a floating tag in the
+# output. dev-deploy pulls a supplied image only when the container runtime does
+# not already have that reference, so a cached tag — `latest` included — is
+# reused as-is instead of being refreshed from the registry. No network access,
+# container runtime, or cluster is needed. ADAPTERS behaves as it does for
+# dev-deploy, but this target defaults to the whole curated set: naming one
+# adapter is the exception here.
+ADAPTER_IMAGES_SELECTION ?= $(if $(filter command line environment,$(origin ADAPTERS)),$(ADAPTERS),all)
+
+.PHONY: adapter-images adapter-images-help
+adapter-images: ## Echo ADAPTER_IMAGES from the image references the provider configs declare
+	@ADAPTERS="$(ADAPTER_IMAGES_SELECTION)" bash scripts/adapter-images.sh
+
+adapter-images-help: ## Show the adapter-images inputs and usage
+	@bash scripts/adapter-images.sh --help
+
+# Build the curated adapter images for this machine's own architecture and push
+# them to a registry the caller owns. The published community images are
+# linux/amd64 only, so on an Apple silicon machine dev-deploy can only run them
+# under qemu-user-static: slow, and fatal for the Inspect and LM Evaluation
+# Harness images, which abort their Python subprocesses with
+# "qemu: uncaught target signal 11 (Segmentation fault)". Pushing arm64 builds
+# instead lets the kind nodes run the adapters natively:
+#
+#   podman login quay.io
+#   make adapter-images-push ADAPTER_IMAGE_REGISTRY=quay.io/<your-user>
+#
+# The target prints the ADAPTER_IMAGES value for the images it pushed; pass that
+# (not the printed references of a published registry) to a deployment or a
+# benchmark sweep:
+#
+#   make test-benchmarks-kind ADAPTERS=all \
+#     ADAPTER_IMAGES='inspect=quay.io/<your-user>/community-inspect:latest,...'
+#
+# SKIP_BUILD=true also reuses the EvalHub and operator images, so add it only to
+# a run whose core images a previous dev-deploy already built.
+#
+# ADAPTER_IMAGE_REGISTRY defaults to quay.io/<the account the container runtime
+# is logged in to>, and ADAPTER_IMAGE_TAG to latest; pin the tag for a run you
+# need to reproduce. The build uses the architecture the runtime reports, so a
+# `podman machine --arch amd64` VM still builds amd64. Reusing a tag leaves the
+# kind nodes and the runtime with the image they cached, which dev-deploy does
+# not refresh — push a new tag rather than re-push latest.
+ADAPTER_IMAGE_REGISTRY ?=
+ADAPTER_IMAGE_TAG ?= latest
+
+.PHONY: adapter-images-push adapter-images-push-help
+adapter-images-push: ## Build the adapter images for this machine's architecture and push them to ADAPTER_IMAGE_REGISTRY
+	@ADAPTERS="$(ADAPTER_IMAGES_SELECTION)" \
+		ADAPTER_IMAGE_REGISTRY="$(ADAPTER_IMAGE_REGISTRY)" \
+		ADAPTER_IMAGE_TAG="$(ADAPTER_IMAGE_TAG)" \
+		CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" \
+		DEV_REPO_PARENT_PATHS="$(DEV_REPO_PARENT_PATHS)" \
+		bash scripts/build-adapter-images.sh
+
+adapter-images-push-help: ## Show the adapter-images-push inputs and usage
+	@bash scripts/build-adapter-images.sh --help
+
 
 DELETE_CLUSTER ?= false
 
@@ -472,7 +571,7 @@ FVT_OUTPUT ?= --godog.format=junit:${PWD}/$(BIN_DIR)/junit-fvt-report.xml,pretty
 FVT_TAGS ?= --godog.tags=~@ignore && ~@mlflow && ~@cluster && ~@local_runtime && ~@benchmark_providers
 FVT_CONCURRENCY ?= 1
 
-.PHONY: test-benchmarks test-benchmarks-kind test-benchmarks-kind-deploy test-benchmarks-kind-token-check generate-benchmark-configs
+.PHONY: test-benchmarks test-benchmarks-kind test-benchmarks-kind-latest test-benchmarks-kind-deploy test-benchmarks-kind-token-check generate-benchmark-configs
 BENCHMARK_PARALLEL ?= 2
 BENCHMARK_TIMEOUT ?= 30m
 BENCHMARK_RUN ?= TestBenchmarkSmoke
@@ -512,6 +611,35 @@ test-benchmarks: $(GOTESTSUM) ## Run live benchmark smoke tests (requires SERVER
 # operator-packaged images; SKIP_BUILD=true reuses images that are already
 # built. garak and garak-kfp are not curated adapters, so they keep their
 # operator-packaged image either way.
+#
+# ADAPTERS accepts the full curated list, or any comma-separated subset of it:
+#
+#   inspect  lm-evaluation-harness  lighteval  ruler  ifbench  followbench
+#
+# ADAPTER_IMAGES supplies a prebuilt image for a selected adapter instead of
+# building it, as comma-separated adapter=image pairs. Every adapter named there
+# must also be selected by ADAPTERS; the image is pulled into the container
+# runtime (SKIP_BUILD=true requires it to be present instead) and re-tagged into
+# the kind-local registry under the same localhost:<port>/evalhub/... path a
+# built adapter gets, so provider ConfigMaps, the dev-deploy manifest, and the
+# e2e image checks are unchanged. An adapter supplied prebuilt needs neither the
+# eval-hub-contrib nor the lm-evaluation-harness checkout:
+#
+#   make test-benchmarks-kind ADAPTERS=all
+#   make test-benchmarks-kind ADAPTER_IMAGES="$(make adapter-images)"
+#   make test-benchmarks-kind ADAPTERS=all ADAPTER_IMAGES="$(make adapter-images)" \
+#     ADAPTER_IMAGES_PLATFORM=linux/amd64
+#   make test-benchmarks-kind ADAPTERS=inspect,lm-evaluation-harness \
+#     ADAPTER_IMAGES='inspect=quay.io/evalhub/community-inspect@sha256:...'
+#   make test-benchmarks-kind ADAPTERS=all \
+#     ADAPTER_IMAGES='lighteval=quay.io/evalhub/community-lighteval@sha256:...,ruler=quay.io/evalhub/community-ruler@sha256:...'
+#
+# With ADAPTER_IMAGES empty every selected adapter is built from source. An
+# adapter builds from source only while it stays in ADAPTERS and is omitted from
+# ADAPTER_IMAGES; removing it from ADAPTERS instead builds and publishes nothing
+# for it, so its provider keeps the operator-packaged image. The pairs cover the
+# whole curated list, so any of inspect, lm-evaluation-harness, lighteval, ruler,
+# ifbench, or followbench can be supplied prebuilt.
 #
 # A full run is large, so KIND_BENCHMARK_PARALLEL bounds how many evaluation
 # jobs run at once and KIND_BENCHMARK_TIMEOUT bounds total wall time; lower the
@@ -572,10 +700,13 @@ test-benchmarks-kind-token-check:
 
 # Deploy (or reuse) the kind cluster with the adapter set the benchmark run
 # needs; `make dev-deploy` on its own keeps its smaller ADAPTERS default.
+# ADAPTER_IMAGES passes through, so a run can use prebuilt adapter images;
+# ADAPTER_IMAGES_PLATFORM passes through with it for amd64-only images.
 test-benchmarks-kind-deploy: test-benchmarks-kind-token-check
-	@ADAPTERS="$(KIND_BENCHMARK_ADAPTERS)" $(MAKE) dev-deploy
+	@ADAPTERS="$(KIND_BENCHMARK_ADAPTERS)" ADAPTER_IMAGES="$(ADAPTER_IMAGES)" \
+		ADAPTER_IMAGES_PLATFORM="$(ADAPTER_IMAGES_PLATFORM)" $(MAKE) dev-deploy
 
-test-benchmarks-kind: test-benchmarks-kind-deploy ## Run benchmark smoke tests against the local kind cluster (deploys it first; SKIP_BUILD=true reuses built images)
+test-benchmarks-kind: test-benchmarks-kind-deploy ## Run benchmark smoke tests on kind (deploys first; ADAPTERS=all|inspect,lm-evaluation-harness,lighteval,ruler,ifbench,followbench; ADAPTER_IMAGES=<adapter=image>[,<adapter=image>...]; SKIP_BUILD=true reuses built images)
 	@set -eu; \
 	if [ ! -f "$(KIND_KUBECONFIG)" ]; then \
 		echo "FAIL: private dev-deploy kubeconfig not found: $(KIND_KUBECONFIG). Run make dev-deploy first."; exit 1; \
@@ -619,6 +750,20 @@ test-benchmarks-kind: test-benchmarks-kind-deploy ## Run benchmark smoke tests a
 	BENCHMARK_TIMEOUT="$(KIND_BENCHMARK_TIMEOUT)" \
 	BENCHMARK_RUN="$(KIND_BENCHMARK_RUN)" \
 	$(MAKE) test-benchmarks
+
+# The pairs have to be produced by the recipe shell: `$(make adapter-images)`
+# is a make variable reference (make has no `make` function), so it expands to
+# nothing and the run would silently build every adapter from source and require
+# their checkouts. The escaped substitution captures the value `make
+# adapter-images` prints, and `set -e` aborts the recipe when it fails (for
+# example an unreadable provider config), so the benchmark target never starts
+# with a missing or truncated ADAPTER_IMAGES. `ADAPTERS=all` is pinned on the
+# substitution as well: an inherited ADAPTERS would otherwise resolve a subset of
+# the pairs this run passes with ADAPTERS=all.
+test-benchmarks-kind-latest: ## Run benchmark smoke tests on kind with all curated adapters supplied as the prebuilt images their provider configs declare
+	@set -eu; \
+	adapter_images="$$($(MAKE) --no-print-directory adapter-images ADAPTERS=all)"; \
+	$(MAKE) test-benchmarks-kind ADAPTERS=all ADAPTER_IMAGES="$$adapter_images" ADAPTER_IMAGES_PLATFORM=linux/amd64
 
 generate-benchmark-configs: ## Create missing per-benchmark smoke fixtures from config/providers
 	go run ./tests/benchmarks/generate

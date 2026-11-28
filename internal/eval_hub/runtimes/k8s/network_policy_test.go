@@ -277,6 +277,7 @@ func newNetworkPolicyTestRuntime(clientset *fake.Clientset) *K8sRuntime {
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		helper: &KubernetesHelper{clientset: clientset},
 		serviceConfig: &config.Config{
+			Sidecar: testSidecarConfig(),
 			Service: &config.ServiceConfig{EvalInitImage: "eval-init-image"},
 		},
 	}
