@@ -31,7 +31,7 @@ func TestHandleCreateEvaluationInitializesPendingBenchmarks(t *testing.T) {
 			storage := &collectionRunCountStorage{fakeStorage: &fakeStorage{providerConfigs: map[string]api.ProviderResource{
 				"provider": {ProviderConfig: api.ProviderConfig{Benchmarks: []api.BenchmarkResource{{ID: "repeated"}}}},
 			}}}
-			h := handlers.New(storage, testhelpers.NewValidator(t), scenario.runtime, nil, nil, nil, nil)
+			h := handlers.New(storage, testhelpers.NewValidator(t), scenario.runtime, nil, nil, nil, nil, nil)
 			req := &bodyRequest{
 				MockRequest: createMockRequest("POST", "/api/v1/evaluations/jobs"),
 				body: []byte(`{"name":"timestamps","model":{"name":"test","url":"http://model.example"},"benchmarks":[

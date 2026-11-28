@@ -68,7 +68,7 @@ cleanup-postgres-container:
 
 wait-postgres-container:
 	@for attempt in $$(seq 1 ${POSTGRES_READY_RETRIES}); do \
-		if ${PODMAN} exec ${POSTGRES_CONTAINER_NAME} pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DATABASE_NAME}; then exit 0; fi; \
+		if ${PODMAN} exec ${POSTGRES_CONTAINER_NAME} pg_isready -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -d ${POSTGRES_DATABASE_NAME}; then exit 0; fi; \
 		sleep 1; \
 	done; \
 	echo "PostgreSQL container did not become ready"; \
